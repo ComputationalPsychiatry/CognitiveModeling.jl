@@ -67,3 +67,29 @@ jobs:
         run: julia --color=yes --project=test/ad_and_reactant/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
       - name: Run the tests
         run: julia --color=yes --project=test/ad_and_reactant/${{ matrix.suite }} test/ad_and_reactant/${{ matrix.suite }}/runtests.jl
+  premade:
+    name: PremadeCognitiveModels
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Reports whether this commit breaks the premade models, without failing the build
+    continue-on-error: true
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ComputationalPsychiatry/PremadeCognitiveModels.jl
+          # main and pull requests into main use the premade package's main; everything else uses its dev
+          ref: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'main' || 'dev' }}
+          path: PremadeCognitiveModels.jl
+      # The premade package expects this repo at ../CognitiveModeling.jl
+      - run: mv PremadeCognitiveModels.jl ../PremadeCognitiveModels.jl
+        shell: bash
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Run the premade tests against this commit
+        run: julia --color=yes --project=../PremadeCognitiveModels.jl -e 'using Pkg; Pkg.instantiate(); Pkg.test()'

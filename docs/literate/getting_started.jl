@@ -4,5 +4,3 @@
 # becomes a page like this one when the documentation is built.
 
 using CognitiveModeling
-
-PremadeModels

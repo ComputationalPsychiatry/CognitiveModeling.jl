@@ -7,5 +7,4 @@ using Turing
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")
     include("extensions/runtests.jl")
-    include("premade_models/runtests.jl")
 end

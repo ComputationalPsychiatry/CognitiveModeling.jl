@@ -9,6 +9,8 @@
 
 A Julia package for computational modeling of cognition and behaviour. It is a remake of [ActionModels.jl](https://github.com/ComputationalPsychiatry/ActionModels.jl) and is under development.
 
+Pre-created models live in a separate package, [PremadeCognitiveModels.jl](https://github.com/ComputationalPsychiatry/PremadeCognitiveModels.jl).
+
 ## Development
 
 Work happens on `dev`, and `main` holds released code, so open pull requests against `dev`.
