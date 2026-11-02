@@ -1,0 +1,10 @@
+*.jl.*.cov
+*.jl.cov
+*.jl.mem
+/Manifest*.toml
+/test/ad/Manifest*.toml
+/docs/build/
+/docs/src/generated/
+LocalPreferences.toml
+.DS_Store
+.vscode/
