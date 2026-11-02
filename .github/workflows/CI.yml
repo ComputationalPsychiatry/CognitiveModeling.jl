@@ -43,3 +43,27 @@ jobs:
           files: lcov.info
           use_oidc: true
           fail_ci_if_error: false
+  compatibility:
+    name: Compatibility - ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each suite has its own environment in test/
+        suite:
+          - ad
+          - reactant
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Install the test environment
+        run: julia --color=yes --project=test/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
+      - name: Run the tests
+        run: julia --color=yes --project=test/${{ matrix.suite }} test/${{ matrix.suite }}/runtests.jl

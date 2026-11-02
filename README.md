@@ -2,8 +2,6 @@
 
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/dev/)
 [![CI](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/CI.yml/badge.svg?branch=dev)](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/CI.yml)
-[![AD](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/AD.yml/badge.svg?branch=dev)](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/AD.yml)
-[![Reactant](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/Reactant.yml/badge.svg?branch=dev)](https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/actions/workflows/Reactant.yml)
 [![Coverage](https://codecov.io/gh/ComputationalPsychiatry/CognitiveModeling.jl/branch/dev/graph/badge.svg)](https://codecov.io/gh/ComputationalPsychiatry/CognitiveModeling.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
