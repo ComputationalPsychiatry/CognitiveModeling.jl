@@ -3,9 +3,12 @@ using Test
 using ADTypes
 using DifferentiationInterface: DifferentiationInterface as DI
 using Enzyme: Forward, Reverse, set_runtime_activity
+using FiniteDifferences: central_fdm, grad
 using ForwardDiff: ForwardDiff
 using Mooncake: Mooncake
 using ReverseDiff: ReverseDiff
+
+include("../test_cases.jl")
 
 # Every form of every supported backend. Zygote is left out on purpose, because the
 # package uses for loops.
@@ -22,18 +25,17 @@ const BACKENDS = [
     "Mooncake forward" => AutoMooncakeForward(),
 ]
 
-# Placeholder until the package has real models to check
-placeholder_function(x) = sum(sin, x)
-
 @testset "AD backends" begin
-    x = [0.3, 2.0]
-    reference = cos.(x)
+    @testset "$(case.name)" for case in TEST_CASES
+        (; f, x) = case
+        reference = grad(central_fdm(5, 1), f, x)[1]
 
-    @testset "$name" for (name, backend) in BACKENDS
-        @test DI.gradient(placeholder_function, backend, x) ≈ reference
+        @testset "$name" for (name, backend) in BACKENDS
+            @test DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6
 
-        # Prepare at a different point, so that stale compiled tapes get caught
-        preparation = DI.prepare_gradient(placeholder_function, backend, x .+ 0.25)
-        @test DI.gradient(placeholder_function, preparation, backend, x) ≈ reference
+            # Prepare at a different point, so that stale compiled tapes get caught
+            preparation = DI.prepare_gradient(f, backend, x .+ 0.25)
+            @test DI.gradient(f, preparation, backend, x) ≈ reference rtol = 1.0e-6
+        end
     end
 end

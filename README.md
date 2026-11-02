@@ -24,14 +24,14 @@ Run the main tests:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-The automatic differentiation and Reactant tests each have their own environment:
+The automatic differentiation and Reactant tests each have their own environment, and both check every entry in `test/ad_and_reactant/test_cases.jl`:
 
 ```bash
-julia --project=test/ad -e 'using Pkg; Pkg.instantiate(); include("test/ad/runtests.jl")'
+julia --project=test/ad_and_reactant/ad -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/ad/runtests.jl")'
 ```
 
 ```bash
-julia --project=test/reactant -e 'using Pkg; Pkg.instantiate(); include("test/reactant/runtests.jl")'
+julia --project=test/ad_and_reactant/reactant -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/reactant/runtests.jl")'
 ```
 
 Build the documentation:

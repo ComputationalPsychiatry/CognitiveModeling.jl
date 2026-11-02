@@ -13,8 +13,8 @@ updates:
     # "/" is the workspace root, which also covers test/ and docs/
     directories:
       - "/"
-      - "/test/ad"
-      - "/test/reactant"
+      - "/test/ad_and_reactant/ad"
+      - "/test/ad_and_reactant/reactant"
     target-branch: "dev"
     schedule:
       interval: "weekly"
