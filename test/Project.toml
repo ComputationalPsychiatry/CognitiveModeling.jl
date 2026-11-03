@@ -2,6 +2,7 @@
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
@@ -12,6 +13,7 @@ CognitiveModeling = {path = ".."}
 [compat]
 Aqua = "0.8"
 JET = "0.13"
+Random = "1"
 TOML = "1"
 Test = "1"
 Turing = "0.49"

@@ -6,8 +6,15 @@ using Reactant: Reactant, @jit
 
 include("../test_cases.jl")
 
+# The test cases read their parameters from a vector one number at a time. The package doesn't need this
+Reactant.allowscalar(true)
+
 @testset "Reactant" begin
-    @testset "$(case.name)" for case in TEST_CASES
+    @testset "Reactant extension" begin
+        @test Base.get_extension(CognitiveModeling, :CognitiveModelingReactantExt) isa Module
+    end
+
+    @testset "$(case.name)" for case in filter(case -> case.reactant, TEST_CASES)
         (; f, x) = case
         x_reactant = Reactant.to_rarray(x)
 
