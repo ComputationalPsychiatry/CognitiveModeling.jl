@@ -82,6 +82,20 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     return ModelOutput(ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5)))), (; expected_reward = Vₜ))
 end
 
+# A Rescorla-Wagner model which changes a Vector in its state in place, and copies it when it's saved
+struct LearnsInPlace <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::LearnsInPlace, parameters)
+    return (; expected_rewards = [0.5 * one(parameters.learning_rate), 0.5 * one(parameters.learning_rate)])
+end
+function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
+    V = input.previous_state.expected_rewards
+    α = input.parameters.learning_rate
+    β = input.parameters.inverse_temperature
+    r = input.observation isa NoObservation ? 0.5 : input.observation.reward
+    V[1] += α * (r - V[1])
+    return ModelOutput(ProbabilityAsAction(inv(1 + exp(-β * (V[1] - 0.5)))), input.previous_state; save_state = state -> (; expected_rewards = copy(state.expected_rewards)))
+end
+
 # Sums the expected rewards in the states of a simulation
 function sum_expected_rewards(cognitive_states)
     total = zero(first(cognitive_states).expected_reward)
@@ -180,6 +194,23 @@ function simulate_with_noise_in_model(x, who_starts)
     return sum_expected_rewards(cognitive_states)
 end
 
+# A simulation with a state changed in place, with the parameters from a vector
+function simulate_in_place(x, who_starts)
+    _, _, cognitive_states, _ = simulate(
+        LearnsInPlace(),
+        RewardsWithoutState();
+        who_starts,
+        n_steps = 20,
+        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
+        environment_parameters = (; reward_size = 0.8),
+    )
+    total = zero(x[1])
+    for state in cognitive_states
+        total += state.expected_rewards[1]
+    end
+    return total
+end
+
 # What the AD and Reactant tests check. In each entry,
 # f takes a vector x and returns a number, such as a model's log likelihood for example data.
 # Set reactant = false for what can't run on Reactant. Here that's Xoshiro, which Reactant doesn't support.
@@ -196,4 +227,6 @@ const TEST_CASES = [
     (; name = "simulate without states, agent starts", f = x -> simulate_without_states(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "simulate with noise in the model, environment starts", f = x -> simulate_with_noise_in_model(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = false),
     (; name = "simulate with noise in the model, agent starts", f = x -> simulate_with_noise_in_model(x, AgentStarts()), x = [0.3, 2.0], reactant = false),
+    (; name = "simulate with a state changed in place, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with a state changed in place, agent starts", f = x -> simulate_in_place(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
 ]

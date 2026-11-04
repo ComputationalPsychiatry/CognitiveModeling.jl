@@ -41,13 +41,15 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     return ModelOutput(ChooseWithProbability(0.5), (; expected_reward = V₋₁ + rand(input.rng) - 0.5))
 end
 
-#Changes a Vector in its state in place
-struct LearnsInPlace <: AbstractCognitiveModel end
+#Changes a Vector in its state in place, and saves its state with the function it is given
+struct LearnsInPlace{Tsave_state} <: AbstractCognitiveModel
+    save_state::Tsave_state
+end
 CognitiveModeling.initialize_state(model::LearnsInPlace, parameters) = (; values = [0.5, 0.5])
 function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     values = input.previous_state.values
     values[1] += input.parameters.learning_rate * (input.observation.reward - values[1])
-    return ModelOutput(ChooseWithProbability(0.5), input.previous_state)
+    return ModelOutput(ChooseWithProbability(0.5), input.previous_state; save_state = model.save_state)
 end
 
 #Starts with an integer as its state, which becomes a Float64 from the second timestep
@@ -71,6 +73,14 @@ CognitiveModeling.initialize_state(environment::FixedRewards, parameters) = (; n
 function CognitiveModeling.apply_model(environment::FixedRewards, input::EnvironmentInput)
     n_timesteps = input.previous_state.n_timesteps + 1
     return EnvironmentOutput((; reward = input.parameters.rewards[n_timesteps]), (; n_timesteps))
+end
+
+#Changes a Vector in its state in place, and copies its state when it's saved
+struct CountsInPlace <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::CountsInPlace, parameters) = (; counts = [0])
+function CognitiveModeling.apply_model(environment::CountsInPlace, input::EnvironmentInput)
+    input.previous_state.counts[1] += 1
+    return EnvironmentOutput((; reward = 1.0), input.previous_state; save_state = deepcopy)
 end
 
 #Rewards an action of true, and has nothing to say before the first action
@@ -194,21 +204,28 @@ end
         @test all(action -> action === (; first_choice = false, second_choice = true), actions)
     end
 
-    @testset "A saved history of a state changed in place keeps its values" begin
-        _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(), RewardsWithProbability())
-        @test length(unique(state.values[1] for state in cognitive_states)) > 1
-        @test allunique(objectid(state.values) for state in cognitive_states)
+    @testset "A function which copies the state keeps the saved values of a state changed in place" begin
+        for save_state in (deepcopy, state -> (; values = copy(state.values)))
+            _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(save_state), RewardsWithProbability())
+            @test length(unique(state.values[1] for state in cognitive_states)) > 1
+            @test allunique(objectid(state.values) for state in cognitive_states)
+        end
     end
 
-    @testset "Arrays are copied when saved, whatever holds them, and nothing else is" begin
-        values = [1.0]
-        nested = [[1.0]]
-        reference = Ref(1.0)
-        saved = CognitiveModeling.save_value((; values, nested, inside_tuple = (values,), reference))
-        @test saved.values == values && saved.values !== values
-        @test saved.nested == nested && saved.nested[1] !== nested[1]
-        @test saved.inside_tuple[1] !== values
-        @test saved.reference === reference
+    @testset "Without a function, nothing is copied" begin
+        _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(identity), RewardsWithProbability())
+        @test all(state -> state.values === first(cognitive_states).values, cognitive_states)
+    end
+
+    @testset "An environment can also give a function which copies its state" begin
+        _, _, _, environment_states = simulate_for_test(LearnsRewards(), CountsInPlace())
+        @test [state.counts[1] for state in environment_states] == 1:length(environment_states)
+    end
+
+    @testset "A function can save something else than the state" begin
+        _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(state -> (; first_value = state.values[1])), RewardsWithProbability())
+        @test eltype(cognitive_states) === @NamedTuple{first_value::Float64}
+        @test length(unique(cognitive_states)) > 1
     end
 
     @testset "There must be at least one timestep" begin
@@ -304,11 +321,20 @@ end
     end
 
     @testset "Later simulations don't change the outputs of earlier ones" begin
-        agent = CognitiveAgent(LearnsInPlace(), LEARNING)
+        agent = CognitiveAgent(LearnsInPlace(deepcopy), LEARNING)
         environment = Environment(RewardsWithProbability(), REWARDS)
         _, _, cognitive_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
         last_value = cognitive_states[end].values[1]
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
         @test cognitive_states[end].values[1] == last_value
+    end
+
+    @testset "simulate! continues from the state itself, whatever is saved" begin
+        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING)
+        environment = Environment(RewardsWithProbability(), REWARDS)
+        _, _, first_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
+        @test agent.state.values[1] == first_states[end].first_value
+        _, _, second_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
+        @test agent.state.values[1] == second_states[end].first_value
     end
 end

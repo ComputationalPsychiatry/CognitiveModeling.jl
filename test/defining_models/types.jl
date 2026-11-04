@@ -39,6 +39,20 @@ using Random: Xoshiro, default_rng
         @test EnvironmentOutput(observation, state).new_state === state
     end
 
+    @testset "ModelOutput saves the state as it is unless a function is given" begin
+        @test ModelOutput(0.7).save_state === identity
+        @test ModelOutput(0.7, state).save_state === identity
+        @test ModelOutput(0.7, state; save_state = deepcopy).save_state === deepcopy
+        @test ModelOutput((; choice = 0.7), state; save_state = deepcopy).save_state === deepcopy
+        @test ModelOutput(NoAction(), state; save_state = deepcopy).save_state === deepcopy
+    end
+
+    @testset "EnvironmentOutput saves the state as it is unless a function is given" begin
+        @test EnvironmentOutput(observation).save_state === identity
+        @test EnvironmentOutput(observation, state).save_state === identity
+        @test EnvironmentOutput(observation, state; save_state = deepcopy).save_state === deepcopy
+    end
+
     @testset "The constructors are type stable" begin
         @test @inferred(ModelInput(observation, state, NoAction(), parameters)) isa ModelInput
         @test @inferred(ModelInput(observation, state, NoAction(), parameters, 0.5)) isa ModelInput
@@ -48,7 +62,9 @@ using Random: Xoshiro, default_rng
         @test @inferred(ModelOutput(0.7, state)) isa ModelOutput
         @test @inferred(ModelOutput((; choice = 0.7))) isa ModelOutput
         @test @inferred(ModelOutput(NoAction())) isa ModelOutput
+        @test @inferred(ModelOutput(0.7, state; save_state = deepcopy)) isa ModelOutput
         @test @inferred(EnvironmentOutput(observation)) isa EnvironmentOutput
+        @test @inferred(EnvironmentOutput(observation, state; save_state = deepcopy)) isa EnvironmentOutput
     end
 
     @testset "The types hold their values directly, so they don't allocate" begin

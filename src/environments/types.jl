@@ -46,7 +46,7 @@ function EnvironmentInput(action, previous_state, previous_observation, paramete
 end
 
 """
-    EnvironmentOutput(observation, new_state=(;))
+    EnvironmentOutput(observation, new_state=(;); save_state=identity)
 
 The outputs of an environment model for a single timestep.
 
@@ -57,15 +57,19 @@ Each argument is kept in a field of the same name, such as `output.observation`.
   observes nothing.
 - `new_state=(;)`: the state of the environment after this timestep, which is the
   `previous_state` of the next one.
+- `save_state=identity`: the function which is applied to `new_state` when a simulation
+  saves it. An environment which changes an object in its state in place must give a
+  function which copies it, as described in [`ModelOutput`](@ref).
 """
-struct EnvironmentOutput{Tobservation, Tstate}
+struct EnvironmentOutput{Tobservation, Tstate, Tsave_state}
     observation::Tobservation
     new_state::Tstate
+    save_state::Tsave_state
 end
 
-#Sets the new state to an empty NamedTuple if it isn't specified
-function EnvironmentOutput(observation)
-    return EnvironmentOutput(observation, (;))
+#Sets the new state to an empty NamedTuple if it isn't specified, and saves it as it is unless a function is given
+function EnvironmentOutput(observation, new_state = (;); save_state = identity)
+    return EnvironmentOutput(observation, new_state, save_state)
 end
 
 """

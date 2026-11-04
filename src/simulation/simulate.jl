@@ -23,36 +23,15 @@ end
 
 ## Saving outputs ##
 """
-    save_value(value)
-
-Return a version of `value` to keep in a saved history, with copies of any arrays in it.
-
-Without this, every saved state of a model which changes an array in place would share that
-one array, and they would all show its final values. Other mutable objects are saved as they
-are.
-"""
-function save_value(value)
-    return value
-end
-
-#Anything that holds several values is saved value by value, which makes a new array of an array
-function save_value(value::Union{AbstractArray, Tuple, NamedTuple})
-    return map(save_value, value)
-end
-
-"""
     initialize_storage(first_value, n_steps)
 
 Create the vector for saving one kind of output, using the first value to set its type.
 """
 function initialize_storage(first_value, n_steps)
 
-    #Save the first value
-    saved_value = save_value(first_value)
-
     #Create the vector and put the value in it
-    storage = Vector{typeof(saved_value)}(undef, n_steps)
-    storage[1] = saved_value
+    storage = Vector{typeof(first_value)}(undef, n_steps)
+    storage[1] = first_value
 
     return storage
 end
@@ -67,19 +46,16 @@ vector which can hold both types, and that vector is returned instead.
 """
 function store_output!(storage::Vector{T}, value, t) where {T}
 
-    #Save the value
-    saved_value = save_value(value)
-
     #If it has the type of the vector, which the compiler can usually see, store it
-    if saved_value isa T
-        storage[t] = saved_value
+    if value isa T
+        storage[t] = value
         return storage
     end
 
     #Otherwise, move the outputs so far to a wider vector which can hold both types
-    wider_storage = Vector{Union{T, typeof(saved_value)}}(undef, length(storage))
+    wider_storage = Vector{Union{T, typeof(value)}}(undef, length(storage))
     copyto!(wider_storage, 1, storage, 1, t - 1)
-    wider_storage[t] = saved_value
+    wider_storage[t] = value
 
     return wider_storage
 end
@@ -102,7 +78,8 @@ end
 """
     collect_timestep_outputs(environment_output, cognitive_output, action)
 
-Collect the outputs of a timestep in a `NamedTuple`.
+Collect the outputs of a timestep in a `NamedTuple`, with each state both as it is, which
+the next timestep starts from, and as it is saved.
 
 This is its own function so that if an output can have two types, like an observation or
 [`NoObservation`](@ref), the compiler can split the call and get a concrete type for each.
@@ -113,6 +90,8 @@ function collect_timestep_outputs(environment_output, cognitive_output, action)
         action,
         cognitive_state = cognitive_output.new_state,
         environment_state = environment_output.new_state,
+        saved_cognitive_state = cognitive_output.save_state(cognitive_output.new_state),
+        saved_environment_state = environment_output.save_state(environment_output.new_state),
     )
 end
 
@@ -191,7 +170,8 @@ end
                             outputs, who_starts, model, environment, cognitive_parameters,
                             environment_parameters, rng, timestep_sizes, n_steps)
 
-Run the timesteps after the first, and return the vectors with the outputs of all timesteps.
+Run the timesteps after the first, and return the vectors with the outputs of all timesteps,
+followed by the outputs of the last timestep.
 
 This is its own function so that it's compiled for the types of the first outputs.
 """
@@ -206,12 +186,54 @@ function run_remaining_timesteps(observations, actions, cognitive_states, enviro
         #Store trial outputs
         observations = store_output!(observations, outputs.observation, t)
         actions = store_output!(actions, outputs.action, t)
-        cognitive_states = store_output!(cognitive_states, outputs.cognitive_state, t)
-        environment_states = store_output!(environment_states, outputs.environment_state, t)
+        cognitive_states = store_output!(cognitive_states, outputs.saved_cognitive_state, t)
+        environment_states = store_output!(environment_states, outputs.saved_environment_state, t)
     end
 
-    #Return stored outputs
-    return observations, actions, cognitive_states, environment_states
+    #Return stored outputs, and the last ones for continuing from
+    return observations, actions, cognitive_states, environment_states, outputs
+end
+
+"""
+    run_timesteps(previous_outputs, who_starts, model, environment, cognitive_parameters,
+                  environment_parameters, rng, timestep_sizes, n_steps)
+
+Run all timesteps starting from `previous_outputs`, and return the vectors with the outputs
+of all timesteps, followed by the outputs of the last timestep.
+
+[`simulate!`](@ref) continues from the last outputs instead of from what was saved, because
+`save_state` can return anything, and because the next simulation can change a state in
+place.
+"""
+function run_timesteps(previous_outputs, who_starts, model, environment, cognitive_parameters, environment_parameters, rng, timestep_sizes, n_steps)
+
+    #The first timestep sets the types of the storage, so there must be at least one
+    n_steps >= 1 || throw(ArgumentError("n_steps must be at least 1, but it is $n_steps."))
+
+    #A vector of timestep sizes must have one size for each timestep
+    if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_steps
+        throw(DimensionMismatch("timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and n_steps is $n_steps."))
+    end
+
+    #Run the first timestep outside the loop, since its inputs can have other types than all the rest
+    outputs = timestep(who_starts, model, environment, cognitive_parameters, environment_parameters, rng, get_timestep_size(timestep_sizes, 1), previous_outputs)
+
+    #Initialize storage for outputs, and run the remaining timesteps
+    return run_remaining_timesteps(
+        initialize_storage(outputs.observation, n_steps),
+        initialize_storage(outputs.action, n_steps),
+        initialize_storage(outputs.saved_cognitive_state, n_steps),
+        initialize_storage(outputs.saved_environment_state, n_steps),
+        outputs,
+        who_starts,
+        model,
+        environment,
+        cognitive_parameters,
+        environment_parameters,
+        rng,
+        timestep_sizes,
+        n_steps,
+    )
 end
 
 """
@@ -295,10 +317,11 @@ The return type is concrete as long as the types of the outputs don't change bet
 timesteps. If they do, like an observation that is sometimes [`NoObservation`](@ref), the
 vector for that output holds a `Union` of the types, and the simulation is a little slower.
 
-Arrays in saved values are copies, so a history of states that `model` changes in place
-keeps its values. Other mutable objects, such as a mutable struct or a `Dict`, are saved as
-they are, so `model` must return new ones instead of changing them in place, or all the
-saved states show the final values.
+Nothing is copied when outputs are saved. A model or environment which changes an object in
+its state in place, instead of returning a new one, must give a `save_state` function to
+[`ModelOutput`](@ref) or [`EnvironmentOutput`](@ref), or all the saved states show the final
+values, with no error. Observations and actions have no such function, so they must be new
+objects on each timestep.
 
 Short simulations can be compiled with Reactant, if the action distributions work with
 traced numbers, which those from Distributions.jl don't. Compile a function that takes a
@@ -321,14 +344,6 @@ function simulate(
         previous_observation = NoObservation(),
     )
 
-    #The first timestep sets the types of the storage, so there must be at least one
-    n_steps >= 1 || throw(ArgumentError("n_steps must be at least 1, but it is $n_steps."))
-
-    #A vector of timestep sizes must have one size for each timestep
-    if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_steps
-        throw(DimensionMismatch("timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and n_steps is $n_steps."))
-    end
-
     #Collect what was left from before the first timestep
     previous_outputs = (;
         observation = previous_observation,
@@ -337,25 +352,11 @@ function simulate(
         environment_state = previous_environment_state,
     )
 
-    #Run the first timestep outside the loop, since its inputs can have other types than all the rest
-    outputs = timestep(who_starts, model, environment, cognitive_parameters, environment_parameters, rng, get_timestep_size(timestep_sizes, 1), previous_outputs)
+    #Run the timesteps
+    observations, actions, cognitive_states, environment_states, _ = run_timesteps(previous_outputs, who_starts, model, environment, cognitive_parameters, environment_parameters, rng, timestep_sizes, n_steps)
 
-    #Initialize storage for outputs, and run the remaining timesteps
-    return run_remaining_timesteps(
-        initialize_storage(outputs.observation, n_steps),
-        initialize_storage(outputs.action, n_steps),
-        initialize_storage(outputs.cognitive_state, n_steps),
-        initialize_storage(outputs.environment_state, n_steps),
-        outputs,
-        who_starts,
-        model,
-        environment,
-        cognitive_parameters,
-        environment_parameters,
-        rng,
-        timestep_sizes,
-        n_steps,
-    )
+    #Return stored outputs
+    return observations, actions, cognitive_states, environment_states
 end
 
 """
@@ -422,27 +423,22 @@ function simulate!(
         rng::AbstractRNG = default_rng(),
     )
 
-    #Run the simulation from where the agent and the environment are
-    observations, actions, cognitive_states, environment_states = simulate(
-        agent.model,
-        environment.model;
-        who_starts,
-        n_steps,
-        timestep_sizes,
-        rng,
-        cognitive_parameters = agent.parameters,
-        environment_parameters = environment.parameters,
-        previous_state = agent.state,
-        previous_action = agent.previous_action,
-        previous_environment_state = environment.state,
-        previous_observation = environment.previous_observation,
+    #Collect where the agent and the environment are
+    previous_outputs = (;
+        observation = environment.previous_observation,
+        action = agent.previous_action,
+        cognitive_state = agent.state,
+        environment_state = environment.state,
     )
 
-    #Update agent and environment states, with copies so that the next simulation can't change the saved ones
-    agent.state = save_value(cognitive_states[end])
-    agent.previous_action = actions[end]
-    environment.state = save_value(environment_states[end])
-    environment.previous_observation = observations[end]
+    #Run the timesteps
+    observations, actions, cognitive_states, environment_states, last_outputs = run_timesteps(previous_outputs, who_starts, agent.model, environment.model, agent.parameters, environment.parameters, rng, timestep_sizes, n_steps)
+
+    #Update agent and environment
+    agent.state = last_outputs.cognitive_state
+    agent.previous_action = last_outputs.action
+    environment.state = last_outputs.environment_state
+    environment.previous_observation = last_outputs.observation
 
     #Return stored outputs
     return observations, actions, cognitive_states, environment_states

@@ -80,7 +80,7 @@ function ModelInput(observation, previous_state, previous_action, parameters, ti
 end
 
 """
-    ModelOutput(action_distribution, new_state=(;))
+    ModelOutput(action_distribution, new_state=(;); save_state=identity)
 
 The outputs of a model for a single timestep, which [`apply_model`](@ref) returns.
 
@@ -94,6 +94,13 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   [`NoAction`](@ref).
 - `new_state=(;)`: the state of the model after this timestep, which is the
   `previous_state` of the next one.
+- `save_state=identity`: the function which is applied to `new_state` when a simulation
+  saves it. By default nothing is copied, so a model which changes an object in its state in
+  place must give a function which copies it. Otherwise all the saved states show the final
+  values, with no error. `deepcopy` works for any state, but gives wrong gradients with
+  ReverseDiff.jl, also with no error. A function which copies only what changes, such as
+  `state -> (; values = copy(state.values))`, is faster and works with ReverseDiff.jl too.
+  `copy` itself doesn't work on a `NamedTuple`.
 
 # Examples
 ```jldoctest
@@ -112,24 +119,30 @@ julia> keys(ModelOutput(Bernoulli(0.7)).action_distribution)
 
 julia> keys(ModelOutput((; choice = Bernoulli(0.7))).action_distribution)
 (:choice,)
+
+julia> output = ModelOutput(Bernoulli(0.7), (; values = [0.5]); save_state = deepcopy);
+
+julia> output.save_state(output.new_state).values === output.new_state.values
+false
 ```
 """
-struct ModelOutput{Taction, Tstate}
+struct ModelOutput{Taction, Tstate, Tsave_state}
     action_distribution::Taction
     new_state::Tstate
+    save_state::Tsave_state
 
     #Keeps action distributions that are already in a NamedTuple, and models without actions
-    function ModelOutput(action_distribution::Union{NamedTuple, NoAction}, new_state)
-        return new{typeof(action_distribution), typeof(new_state)}(action_distribution, new_state)
+    function ModelOutput(action_distribution::Union{NamedTuple, NoAction}, new_state, save_state)
+        return new{typeof(action_distribution), typeof(new_state), typeof(save_state)}(action_distribution, new_state, save_state)
     end
 end
 
 #Puts a single action distribution in a NamedTuple
-function ModelOutput(action_distribution, new_state)
-    return ModelOutput((; action = action_distribution), new_state)
+function ModelOutput(action_distribution, new_state, save_state)
+    return ModelOutput((; action = action_distribution), new_state, save_state)
 end
 
-#Sets the new state to an empty NamedTuple if it isn't specified
-function ModelOutput(action_distribution)
-    return ModelOutput(action_distribution, (;))
+#Sets the new state to an empty NamedTuple if it isn't specified, and saves it as it is unless a function is given
+function ModelOutput(action_distribution, new_state = (;); save_state = identity)
+    return ModelOutput(action_distribution, new_state, save_state)
 end
