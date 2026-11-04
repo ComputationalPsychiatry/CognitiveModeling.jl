@@ -23,9 +23,13 @@ CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOu
         @test CognitiveModeling.initialize_state(model, (;)) === (;)
         @test CognitiveModeling.initialize_state(EnvironmentWithoutMethods(), (;)) === (;)
         @test isempty(CognitiveModeling.default_parameters(model))
-        @test isempty(CognitiveModeling.get_parameters(model))
-        @test isempty(CognitiveModeling.get_states(model))
-        @test isempty(CognitiveModeling.get_observations(model))
-        @test isempty(CognitiveModeling.get_actions(model))
+    end
+
+    @testset "A missing method for listing names gives an informative error" begin
+        model = ModelWithoutMethods()
+        @test_throws "CognitiveModeling.get_parameters(model::ModelWithoutMethods)" CognitiveModeling.get_parameters(model)
+        @test_throws "CognitiveModeling.get_states(model::ModelWithoutMethods)" CognitiveModeling.get_states(model)
+        @test_throws "CognitiveModeling.get_observations(model::ModelWithoutMethods)" CognitiveModeling.get_observations(model)
+        @test_throws "CognitiveModeling.get_actions(model::ModelWithoutMethods)" CognitiveModeling.get_actions(model)
     end
 end

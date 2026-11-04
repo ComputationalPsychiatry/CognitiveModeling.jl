@@ -9,10 +9,23 @@ struct ModelWithFields{T} <: AbstractCognitiveModel
     prior::T
 end
 
+#Says that it has no observations, which is different from not saying anything
+struct ModelWithoutObservations <: AbstractCognitiveModel end
+CognitiveModeling.get_observations(model::ModelWithoutObservations) = ()
+
+#Gets its states from its supertype
+abstract type FamilyOfModels <: AbstractCognitiveModel end
+CognitiveModeling.get_states(model::FamilyOfModels) = (:shared_state,)
+struct ModelInFamily <: FamilyOfModels end
+
 @testset "Utility functions" begin
     @testset "get_attributes collects the attributes, and is type stable" begin
         attributes = @inferred CognitiveModeling.get_attributes(ModelWithAttributes())
         @test attributes == (parameters = (:learning_rate, :action_noise), states = (:expected_reward,), observations = (:reward,), actions = (:choice,))
+    end
+
+    @testset "get_attributes throws an error if a method is missing" begin
+        @test_throws "get_parameters" CognitiveModeling.get_attributes(ModelWithFields(4, 0.5))
     end
 
     @testset "The REPL shows a summary of the model" begin
@@ -23,7 +36,9 @@ end
             States: expected_reward
             Observations: reward
             Actions: choice"""
-        @test occursin("States: none", repr("text/plain", ModelWithFields(4, 0.5)))
+        @test occursin("States: not specified", repr("text/plain", ModelWithFields(4, 0.5)))
+        @test occursin("Observations: none", repr("text/plain", ModelWithoutObservations()))
+        @test occursin("States: shared_state", repr("text/plain", ModelInFamily()))
     end
 
     @testset "Everywhere else a model is printed on one line, with its fields" begin

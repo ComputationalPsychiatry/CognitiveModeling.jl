@@ -97,10 +97,11 @@ end
 Return the names of the parameters of `model`, such as `(:learning_rate, :action_noise)`.
 
 # Implementation
-The default is an empty list.
+This throws an error unless the model adds a method. A model without parameters returns
+`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
 """
 function get_parameters(model::AbstractCognitiveModel)
-    return ()
+    error("There is no get_parameters method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_parameters(model::$(typeof(model))) to list its parameters.")
 end
 
 """
@@ -109,10 +110,11 @@ end
 Return the names of the states of `model`, such as `(:expected_reward,)`.
 
 # Implementation
-The default is an empty list.
+This throws an error unless the model adds a method. A model without states returns
+`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
 """
 function get_states(model::AbstractCognitiveModel)
-    return ()
+    error("There is no get_states method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_states(model::$(typeof(model))) to list its states.")
 end
 
 """
@@ -121,10 +123,11 @@ end
 Return the names of the observations that `model` receives, such as `(:reward,)`.
 
 # Implementation
-The default is an empty list.
+This throws an error unless the model adds a method. A model without observations returns
+`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
 """
 function get_observations(model::AbstractCognitiveModel)
-    return ()
+    error("There is no get_observations method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_observations(model::$(typeof(model))) to list its observations.")
 end
 
 """
@@ -133,8 +136,10 @@ end
 Return the names of the actions that `model` produces, such as `(:choice,)`.
 
 # Implementation
-The default is an empty list.
+This throws an error unless the model adds a method. A single action which the model doesn't
+name is called `:action` by [`ModelOutput`](@ref), and a model without actions returns `()`.
+[`simulate`](@ref) doesn't use this function, so a model can run without it.
 """
 function get_actions(model::AbstractCognitiveModel)
-    return ()
+    error("There is no get_actions method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_actions(model::$(typeof(model))) to list its actions.")
 end
