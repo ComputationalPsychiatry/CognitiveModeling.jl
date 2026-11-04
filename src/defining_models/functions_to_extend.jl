@@ -1,4 +1,4 @@
-## Functions that a user must implement for their model ##
+## Functions that a model must implement ##
 
 """
     apply_model(model::AbstractCognitiveModel, input::ModelInput)::ModelOutput
@@ -7,12 +7,13 @@ Run a single timestep of `model`. Usually this involves updating cognitive state
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. Anything
-random should be sampled from `input.rng`, so that a simulation can be reproduced.
+random should be sampled from `input.rng`, so that a simulation can be reproduced. 
+If states are mutated in place, a prepare_state_for_saving method must be added.
+For use within PPLs, there may be special constraints - see the documentation for the specific PPL for details.
 
 # Examples
 ```jldoctest
 using CognitiveModeling
-using CognitiveModeling: ModelInput, ModelOutput
 using Distributions: BernoulliLogit
 
 struct RescorlaWagner <: AbstractCognitiveModel end
@@ -37,7 +38,7 @@ function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
     #Softmax function, instantiated as a Bernoulli logit distribution
     Pₜ = BernoulliLogit(β * (Vₜ - 0.5))
 
-    return ModelOutput(Pₜ, (; expected_reward = Vₜ))
+    return ModelOutput((; choice = Pₜ), (; expected_reward = Vₜ))
 end
 
 parameters = (; learning_rate = 0.1, inverse_temperature = 2.0)
@@ -57,11 +58,12 @@ end
 """
     initialize_state(model::AbstractCognitiveModel, parameters)
 
-Create the state that `model` has before its first timestep, which can depend on
+Create the initial state that `model` has before its first timestep, which can depend on
 `parameters`.
 
 # Implementation
-The default is an empty `NamedTuple`, so only models with a state need to add a method.
+Every model must add a method of this function, which throws an error otherwise. A model
+without a state returns an empty `NamedTuple`, `(;)`.
 
 # Examples
 ```jldoctest
@@ -76,7 +78,78 @@ julia> CognitiveModeling.initialize_state(RescorlaWagner(), (; initial_value = 0
 ```
 """
 function initialize_state(model::AbstractCognitiveModel, parameters)
-    return (;)
+    error("There is no initialize_state method for a model of type $(typeof(model)). Each model must define CognitiveModeling.initialize_state(model::$(typeof(model)), parameters), which returns (;) if the model has no state.")
+end
+
+"""
+    attribute_names(model::AbstractCognitiveModel)::ModelAttributes
+
+Return the names of the parameters, states, observations and actions of `model`, in a
+[`ModelAttributes`](@ref).
+
+The names define the model, so they must match what the model uses. The parameters are the
+names that [`apply_model`](@ref) and [`initialize_state`](@ref) read from the parameters.
+The states are the names in the state that `initialize_state` returns and in `new_state`,
+which `apply_model` reads from `input.previous_state`. The observations are the names that
+`apply_model` reads from `input.observation`, and the actions are the names in
+`action_distribution`, which are also those in `input.previous_action`. Nothing checks that
+they match while the model runs.
+
+# Implementation
+Every model must add a method of this function, which throws an error otherwise. A model
+without one kind of attribute gives `()` for it. [`simulate`](@ref) doesn't use the names,
+so a model can be tried before they are written.
+
+# Examples
+```jldoctest
+julia> struct RescorlaWagner <: AbstractCognitiveModel end
+
+julia> function CognitiveModeling.attribute_names(model::RescorlaWagner)
+           return ModelAttributes(;
+               parameters = (:learning_rate, :inverse_temperature),
+               states = :expected_reward,
+               observations = :reward,
+               actions = :choice,
+           )
+       end;
+
+julia> CognitiveModeling.attribute_names(RescorlaWagner()).parameters
+(:learning_rate, :inverse_temperature)
+```
+"""
+function attribute_names(model::AbstractCognitiveModel)
+    error("There is no attribute_names method for a model of type $(typeof(model)). Each model must define CognitiveModeling.attribute_names(model::$(typeof(model))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.")
+end
+
+## Functions that a model can implement ##
+
+"""
+    prepare_state_for_saving(model::AbstractCognitiveModel, state)
+
+Return what a simulation saves of `state`, as it is about to save it. The state that the
+next timestep starts from isn't affected.
+
+# Implementation
+A model can add a method of this function. The default returns `state` as it is, so nothing
+is copied. A model which changes an object in its state in place must add a method which
+copies it, or all the saved states show the final values, with no error.
+
+# Examples
+```jldoctest
+julia> struct LearnsInPlace <: AbstractCognitiveModel end
+
+julia> function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state)
+           return (; values = copy(state.values))
+       end;
+
+julia> state = (; values = [0.5, 0.5]);
+
+julia> CognitiveModeling.prepare_state_for_saving(LearnsInPlace(), state).values === state.values
+false
+```
+"""
+function prepare_state_for_saving(model::AbstractCognitiveModel, state)
+    return state
 end
 
 """
@@ -85,61 +158,9 @@ end
 Return the default parameter values of `model`, such as `(; learning_rate = 0.1)`.
 
 # Implementation
-By default there are no default values.
+A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
+there are no default values.
 """
 function default_parameters(model::AbstractCognitiveModel)
     return (;)
-end
-
-"""
-    get_parameters(model::AbstractCognitiveModel)
-
-Return the names of the parameters of `model`, such as `(:learning_rate, :action_noise)`.
-
-# Implementation
-This throws an error unless the model adds a method. A model without parameters returns
-`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
-"""
-function get_parameters(model::AbstractCognitiveModel)
-    error("There is no get_parameters method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_parameters(model::$(typeof(model))) to list its parameters.")
-end
-
-"""
-    get_states(model::AbstractCognitiveModel)
-
-Return the names of the states of `model`, such as `(:expected_reward,)`.
-
-# Implementation
-This throws an error unless the model adds a method. A model without states returns
-`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
-"""
-function get_states(model::AbstractCognitiveModel)
-    error("There is no get_states method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_states(model::$(typeof(model))) to list its states.")
-end
-
-"""
-    get_observations(model::AbstractCognitiveModel)
-
-Return the names of the observations that `model` receives, such as `(:reward,)`.
-
-# Implementation
-This throws an error unless the model adds a method. A model without observations returns
-`()`. [`simulate`](@ref) doesn't use this function, so a model can run without it.
-"""
-function get_observations(model::AbstractCognitiveModel)
-    error("There is no get_observations method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_observations(model::$(typeof(model))) to list its observations.")
-end
-
-"""
-    get_actions(model::AbstractCognitiveModel)
-
-Return the names of the actions that `model` produces, such as `(:choice,)`.
-
-# Implementation
-This throws an error unless the model adds a method. A single action which the model doesn't
-name is called `:action` by [`ModelOutput`](@ref), and a model without actions returns `()`.
-[`simulate`](@ref) doesn't use this function, so a model can run without it.
-"""
-function get_actions(model::AbstractCognitiveModel)
-    error("There is no get_actions method for a model of type $(typeof(model)). A model must define CognitiveModeling.get_actions(model::$(typeof(model))) to list its actions.")
 end

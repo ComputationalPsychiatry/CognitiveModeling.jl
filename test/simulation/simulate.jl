@@ -14,12 +14,13 @@ CognitiveModeling.initialize_state(model::LearnsRewards, parameters) = (; expect
 function CognitiveModeling.apply_model(model::LearnsRewards, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     Vₜ = input.observation isa NoObservation ? V₋₁ : V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
-    return ModelOutput(ChooseWithProbability(Vₜ), (; expected_reward = Vₜ))
+    return ModelOutput((; choice = ChooseWithProbability(Vₜ)), (; expected_reward = Vₜ))
 end
 
 #Has no state
 struct OnlyChooses <: AbstractCognitiveModel end
-CognitiveModeling.apply_model(model::OnlyChooses, input::ModelInput) = ModelOutput(ChooseWithProbability(0.7))
+CognitiveModeling.initialize_state(model::OnlyChooses, parameters) = (;)
+CognitiveModeling.apply_model(model::OnlyChooses, input::ModelInput) = ModelOutput((; choice = ChooseWithProbability(0.7)))
 
 #Has no actions
 struct OnlyLearns <: AbstractCognitiveModel end
@@ -31,6 +32,7 @@ end
 
 #Has two named actions
 struct TwoChoices <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::TwoChoices, parameters) = (;)
 CognitiveModeling.apply_model(model::TwoChoices, input::ModelInput) = ModelOutput((; first_choice = ChooseWithProbability(0.0), second_choice = ChooseWithProbability(1.0)))
 
 #Has noise in its state update
@@ -38,18 +40,19 @@ struct LearnsWithNoise <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters) = (; expected_reward = 0.5)
 function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
-    return ModelOutput(ChooseWithProbability(0.5), (; expected_reward = V₋₁ + rand(input.rng) - 0.5))
+    return ModelOutput((; choice = ChooseWithProbability(0.5)), (; expected_reward = V₋₁ + rand(input.rng) - 0.5))
 end
 
-#Changes a Vector in its state in place, and saves its state with the function it is given
-struct LearnsInPlace{Tsave_state} <: AbstractCognitiveModel
-    save_state::Tsave_state
+#Changes a Vector in its state in place, and prepares its state for saving with the function it is given
+struct LearnsInPlace{Tprepare_state} <: AbstractCognitiveModel
+    prepare_state::Tprepare_state
 end
+CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state) = model.prepare_state(state)
 CognitiveModeling.initialize_state(model::LearnsInPlace, parameters) = (; values = [0.5, 0.5])
 function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     values = input.previous_state.values
     values[1] += input.parameters.learning_rate * (input.observation.reward - values[1])
-    return ModelOutput(ChooseWithProbability(0.5), input.previous_state; save_state = model.save_state)
+    return ModelOutput((; choice = ChooseWithProbability(0.5)), input.previous_state)
 end
 
 #Starts with an integer as its state, which becomes a Float64 from the second timestep
@@ -58,11 +61,12 @@ CognitiveModeling.initialize_state(model::StartsWithInteger, parameters) = (; ex
 function CognitiveModeling.apply_model(model::StartsWithInteger, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     Vₜ = input.observation isa NoObservation ? V₋₁ : V₋₁ + 0.5 * (input.observation.reward - V₋₁)
-    return ModelOutput(ChooseWithProbability(0.5), (; expected_reward = Vₜ))
+    return ModelOutput((; choice = ChooseWithProbability(0.5)), (; expected_reward = Vₜ))
 end
 
 #Gives rewards with a fixed probability, whatever the agent does
 struct RewardsWithProbability <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::RewardsWithProbability, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsWithProbability, input::EnvironmentInput)
     return EnvironmentOutput((; reward = float(rand(input.rng) < input.parameters.reward_probability)))
 end
@@ -80,14 +84,16 @@ struct CountsInPlace <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::CountsInPlace, parameters) = (; counts = [0])
 function CognitiveModeling.apply_model(environment::CountsInPlace, input::EnvironmentInput)
     input.previous_state.counts[1] += 1
-    return EnvironmentOutput((; reward = 1.0), input.previous_state; save_state = deepcopy)
+    return EnvironmentOutput((; reward = 1.0), input.previous_state)
 end
+CognitiveModeling.prepare_state_for_saving(environment::CountsInPlace, state) = deepcopy(state)
 
 #Rewards an action of true, and has nothing to say before the first action
 struct RewardsTrue <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::RewardsTrue, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsTrue, input::EnvironmentInput)
     input.action isa NoAction && return EnvironmentOutput(NoObservation())
-    return EnvironmentOutput((; reward = float(input.action.action)))
+    return EnvironmentOutput((; reward = float(input.action.choice)))
 end
 
 #Gives no observation on every 5th timestep
@@ -101,19 +107,35 @@ end
 
 #Saves the timestep size it gets in its state
 struct SavesTimestepSize <: AbstractCognitiveModel end
-CognitiveModeling.apply_model(model::SavesTimestepSize, input::ModelInput) = ModelOutput(ChooseWithProbability(0.5), (; timestep_size = input.timestep_size))
+CognitiveModeling.initialize_state(model::SavesTimestepSize, parameters) = (;)
+CognitiveModeling.apply_model(model::SavesTimestepSize, input::ModelInput) = ModelOutput((; choice = ChooseWithProbability(0.5)), (; timestep_size = input.timestep_size))
 
 #Gives the timestep size it gets as its observation
 struct ObservesTimestepSize <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::ObservesTimestepSize, parameters) = (;)
 CognitiveModeling.apply_model(environment::ObservesTimestepSize, input::EnvironmentInput) = EnvironmentOutput((; timestep_size = input.timestep_size))
 
 #Returns a tuple instead of a ModelOutput
 struct ReturnsTuple <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::ReturnsTuple, parameters) = (;)
 CognitiveModeling.apply_model(model::ReturnsTuple, input::ModelInput) = (ChooseWithProbability(0.5), (;))
 
 #Returns the observation instead of an EnvironmentOutput
 struct ReturnsObservation <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::ReturnsObservation, parameters) = (;)
 CognitiveModeling.apply_model(environment::ReturnsObservation, input::EnvironmentInput) = (; reward = 1.0)
+
+#Have a method for the initial state, but none for a timestep
+struct OnlyInitializesState <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::OnlyInitializesState, parameters) = (;)
+struct EnvironmentOnlyInitializesState <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::EnvironmentOnlyInitializesState, parameters) = (;)
+
+#Have a method for a timestep, but none for the initial state, so they must be given a state
+struct NeedsGivenState <: AbstractCognitiveModel end
+CognitiveModeling.apply_model(model::NeedsGivenState, input::ModelInput) = ModelOutput((; choice = ChooseWithProbability(0.5)), input.previous_state)
+struct EnvironmentNeedsGivenState <: AbstractEnvironmentModel end
+CognitiveModeling.apply_model(environment::EnvironmentNeedsGivenState, input::EnvironmentInput) = EnvironmentOutput((; reward = 1.0), input.previous_state)
 
 const LEARNING = (; learning_rate = 0.5)
 const REWARDS = (; reward_probability = 0.8)
@@ -141,11 +163,11 @@ end
     @testset "The environment responds to the agent's actions" begin
         #The environment sees the action of the same timestep
         observations, actions, _, _ = simulate_for_test(OnlyChooses(), RewardsTrue(); who_starts = AgentStarts())
-        @test [observation.reward for observation in observations] == [float(action.action) for action in actions]
+        @test [observation.reward for observation in observations] == [float(action.choice) for action in actions]
         #The environment sees the action of the timestep before, and nothing on the first
         observations, actions, _, _ = simulate_for_test(OnlyChooses(), RewardsTrue(); who_starts = EnvironmentStarts())
         @test observations[1] === NoObservation()
-        @test [observation.reward for observation in observations[2:end]] == [float(action.action) for action in actions[1:(end - 1)]]
+        @test [observation.reward for observation in observations[2:end]] == [float(action.choice) for action in actions[1:(end - 1)]]
     end
 
     @testset "The same seed gives the same simulation, for the model and the environment" begin
@@ -194,9 +216,9 @@ end
         @test eltype(cognitive_states) <: NamedTuple
     end
 
-    @testset "A single action is named action" begin
+    @testset "A single action keeps the name the model gave it" begin
         _, actions, _, _ = simulate_for_test(OnlyChooses(), RewardsWithProbability(); cognitive_parameters = (;))
-        @test actions isa Vector{@NamedTuple{action::Bool}}
+        @test actions isa Vector{@NamedTuple{choice::Bool}}
     end
 
     @testset "Each of several named actions is sampled" begin
@@ -204,25 +226,25 @@ end
         @test all(action -> action === (; first_choice = false, second_choice = true), actions)
     end
 
-    @testset "A function which copies the state keeps the saved values of a state changed in place" begin
-        for save_state in (deepcopy, state -> (; values = copy(state.values)))
-            _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(save_state), RewardsWithProbability())
+    @testset "A method which copies the state keeps the saved values of a state changed in place" begin
+        for prepare_state in (deepcopy, state -> (; values = copy(state.values)))
+            _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(prepare_state), RewardsWithProbability())
             @test length(unique(state.values[1] for state in cognitive_states)) > 1
             @test allunique(objectid(state.values) for state in cognitive_states)
         end
     end
 
-    @testset "Without a function, nothing is copied" begin
+    @testset "A method which does nothing copies nothing" begin
         _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(identity), RewardsWithProbability())
         @test all(state -> state.values === first(cognitive_states).values, cognitive_states)
     end
 
-    @testset "An environment can also give a function which copies its state" begin
+    @testset "An environment can also have a method which copies its state" begin
         _, _, _, environment_states = simulate_for_test(LearnsRewards(), CountsInPlace())
         @test [state.counts[1] for state in environment_states] == 1:length(environment_states)
     end
 
-    @testset "A function can save something else than the state" begin
+    @testset "A method can save something else than the state" begin
         _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(state -> (; first_value = state.values[1])), RewardsWithProbability())
         @test eltype(cognitive_states) === @NamedTuple{first_value::Float64}
         @test length(unique(cognitive_states)) > 1
@@ -234,8 +256,16 @@ end
     end
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "Each model must define" simulate_for_test(ModelWithoutMethods(), RewardsWithProbability())
-        @test_throws "Each environment model must define" simulate_for_test(LearnsRewards(), EnvironmentWithoutMethods())
+        @test_throws "Each model must define CognitiveModeling.apply_model" simulate_for_test(OnlyInitializesState(), RewardsWithProbability())
+        @test_throws "Each environment model must define CognitiveModeling.apply_model" simulate_for_test(LearnsRewards(), EnvironmentOnlyInitializesState())
+    end
+
+    @testset "A missing method for the initial state gives an informative error, unless a state is given" begin
+        @test_throws "Each model must define CognitiveModeling.initialize_state" simulate_for_test(NeedsGivenState(), RewardsWithProbability())
+        @test_throws "Each environment model must define CognitiveModeling.initialize_state" simulate_for_test(LearnsRewards(), EnvironmentNeedsGivenState())
+        _, _, cognitive_states, environment_states = simulate(NeedsGivenState(), EnvironmentNeedsGivenState(); who_starts = EnvironmentStarts(), n_steps = 2, cognitive_parameters = (;), environment_parameters = (;), previous_state = (; value = 1.0), previous_environment_state = (; value = 2.0))
+        @test cognitive_states == [(; value = 1.0), (; value = 1.0)]
+        @test environment_states == [(; value = 2.0), (; value = 2.0)]
     end
 
     @testset "A timestep method which returns the wrong type gives an informative error" begin
@@ -336,5 +366,174 @@ end
         @test agent.state.values[1] == first_states[end].first_value
         _, _, second_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
         @test agent.state.values[1] == second_states[end].first_value
+    end
+
+    @testset "An agent and an environment need a method for the initial state, unless a state is given" begin
+        @test_throws "Each model must define CognitiveModeling.initialize_state" CognitiveAgent(NeedsGivenState(), (;))
+        @test_throws "Each environment model must define CognitiveModeling.initialize_state" Environment(EnvironmentNeedsGivenState(), (;))
+        @test CognitiveAgent(NeedsGivenState(), (;), (; value = 1.0), NoAction()).state == (; value = 1.0)
+        @test Environment(EnvironmentNeedsGivenState(), (;), (; value = 2.0), NoObservation()).state == (; value = 2.0)
+    end
+
+    @testset "An error in a timestep method gives the same errors as in simulate" begin
+        agent = CognitiveAgent(ReturnsTuple(), (;))
+        environment = Environment(RewardsWithProbability(), REWARDS)
+        @test_throws "model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 1)
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        environment = Environment(ReturnsObservation(), (;))
+        @test_throws "environment model of type ReturnsObservation must return a CognitiveModeling.EnvironmentOutput" simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 1)
+    end
+end
+
+@testset "simulate! on a single observation" begin
+    @testset "It updates the agent and returns the sampled action" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        action = simulate!(agent, (; reward = 1.0); rng = Xoshiro(1))
+        @test action isa @NamedTuple{choice::Bool}
+        @test agent.previous_action === action
+        @test agent.state == (; expected_reward = 0.75)
+    end
+
+    @testset "Several in a row give the same as a simulation with the same observations" begin
+        rewards = [1.0, 0.0, 1.0, 1.0]
+        one_simulation = simulate(LearnsRewards(), FixedRewards(); who_starts = EnvironmentStarts(), n_steps = 4, cognitive_parameters = LEARNING, environment_parameters = (; rewards), rng = Xoshiro(9))
+
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        rng = Xoshiro(9)
+        actions = [simulate!(agent, (; reward); rng) for reward in rewards]
+
+        @test actions == one_simulation[2]
+        @test agent.state == one_simulation[3][end]
+    end
+
+    @testset "The same seed gives the same action" begin
+        action_with_seed(seed) = [simulate!(CognitiveAgent(LearnsRewards(), LEARNING), (; reward = 1.0); rng = Xoshiro(seed)) for _ in 1:20]
+        @test action_with_seed(3) == action_with_seed(3)
+        @test action_with_seed(3) != action_with_seed(4)
+    end
+
+    @testset "The observation can be left out" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        simulate!(agent, NoObservation())
+        @test agent.state == (; expected_reward = 0.5)
+    end
+
+    @testset "The model gets the size of the timestep" begin
+        agent = CognitiveAgent(SavesTimestepSize(), (;))
+        #The default is the integer 1
+        simulate!(agent, NoObservation())
+        @test agent.state.timestep_size === 1
+        simulate!(agent, NoObservation(); timestep_size = 0.5)
+        @test agent.state.timestep_size === 0.5
+    end
+
+    @testset "It works without actions, and with several actions" begin
+        @test simulate!(CognitiveAgent(OnlyLearns(), LEARNING), (; reward = 1.0)) === NoAction()
+        @test simulate!(CognitiveAgent(TwoChoices(), (;)), NoObservation()) === (; first_choice = false, second_choice = true)
+    end
+
+    @testset "An error in the timestep method gives the same errors as in simulate" begin
+        @test_throws "model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(CognitiveAgent(ReturnsTuple(), (;)), NoObservation())
+        @test_throws "Each model must define CognitiveModeling.apply_model" simulate!(CognitiveAgent(OnlyInitializesState(), (;)), NoObservation())
+    end
+end
+
+@testset "The history of an agent" begin
+    @testset "It starts where the agent starts" begin
+        history = CognitiveAgent(LearnsRewards(), LEARNING).history
+        @test history isa CognitiveModeling.AgentHistory
+        @test history.observations == [NoObservation()]
+        @test history.actions == [NoAction()]
+        @test history.states == [(; expected_reward = 0.5)]
+        #Also if the state and the previous action are given
+        history = CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), (; choice = true)).history
+        @test history.observations == [NoObservation()]
+        @test history.actions == [(; choice = true)]
+        @test history.states == [(; expected_reward = 0.25)]
+    end
+
+    @testset "It is saved by default, and can be turned off" begin
+        @test CognitiveAgent(LearnsRewards(), LEARNING).save_history === true
+        @test CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), NoAction()).save_history === true
+        @test CognitiveAgent(LearnsRewards(), LEARNING; save_history = false).save_history === false
+        @test CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), NoAction(); save_history = false).save_history === false
+    end
+
+    @testset "It adds what simulate! returns" begin
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            agent = CognitiveAgent(LearnsRewards(), LEARNING)
+            environment = Environment(RewardsWithProbability(), REWARDS)
+            rng = Xoshiro(9)
+            first_part = simulate!(agent, environment; who_starts, n_steps = 3, rng)
+            second_part = simulate!(agent, environment; who_starts, n_steps = 2, rng)
+
+            @test agent.history.observations == vcat(NoObservation(), first_part[1], second_part[1])
+            @test agent.history.actions == vcat(NoAction(), first_part[2], second_part[2])
+            @test agent.history.states == vcat((; expected_reward = 0.5), first_part[3], second_part[3])
+        end
+    end
+
+    @testset "It adds what happens on a single observation" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        first_action = simulate!(agent, (; reward = 1.0))
+        second_action = simulate!(agent, NoObservation())
+
+        @test agent.history.observations == [NoObservation(), (; reward = 1.0), NoObservation()]
+        @test agent.history.actions == [NoAction(), first_action, second_action]
+        @test agent.history.states == [(; expected_reward = 0.5), (; expected_reward = 0.75), (; expected_reward = 0.75)]
+    end
+
+    @testset "A single observation and an environment can be used on the same agent" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        environment = Environment(RewardsWithProbability(), REWARDS)
+        simulate!(agent, (; reward = 1.0))
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
+        simulate!(agent, (; reward = 0.0))
+        @test length(agent.history.observations) == length(agent.history.actions) == length(agent.history.states) == 6
+        @test agent.history.states[end] == agent.state
+    end
+
+    @testset "It stays empty without save_history" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = false)
+        environment = Environment(RewardsWithProbability(), REWARDS)
+        simulate!(agent, (; reward = 1.0))
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
+        @test isempty(agent.history.observations)
+        @test isempty(agent.history.actions)
+        @test isempty(agent.history.states)
+        #The agent is still updated
+        @test agent.state != (; expected_reward = 0.5)
+    end
+
+    @testset "It keeps the values of a state changed in place, with a method which copies it" begin
+        for prepare_state in (deepcopy, state -> (; values = copy(state.values)))
+            agent = CognitiveAgent(LearnsInPlace(prepare_state), LEARNING)
+            environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0]))
+            simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
+            simulate!(agent, (; reward = 1.0))
+            #The initial state is copied by the same method
+            @test [state.values[1] for state in agent.history.states] == [0.5, 0.75, 0.375, 0.6875]
+            @test allunique(objectid(state.values) for state in agent.history.states)
+        end
+    end
+
+    @testset "It saves what the method gives, also of the initial state" begin
+        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING)
+        simulate!(agent, (; reward = 1.0))
+        @test agent.history.states == [(; first_value = 0.5), (; first_value = 0.75)]
+    end
+
+    @testset "The initial state is the same object as the agent's, with a method which does nothing" begin
+        agent = CognitiveAgent(LearnsInPlace(identity), LEARNING)
+        @test agent.history.states[1].values === agent.state.values
+    end
+
+    @testset "Later simulations don't change it" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        environment = Environment(RewardsWithProbability(), REWARDS)
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
+        states_so_far = copy(agent.history.states)
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
+        @test agent.history.states[1:4] == states_so_far
     end
 end

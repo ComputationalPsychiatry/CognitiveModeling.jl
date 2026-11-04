@@ -1,8 +1,8 @@
 using CognitiveModeling
-using CognitiveModeling: ModelInput, ModelOutput, EnvironmentInput, EnvironmentOutput
+using CognitiveModeling: EnvironmentInput, EnvironmentOutput
 using Test
 
-# Load the packages that trigger extensions, so that the code quality checks can see the extensions
+#Packages that trigger extensions
 using Turing
 
 @testset "CognitiveModeling.jl" begin

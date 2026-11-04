@@ -4,10 +4,10 @@
 Supertype for cognitive models.
 
 # Implementation
-Create a subtype and add a method of [`apply_model`](@ref) for it. A model can also add
-methods of [`initialize_state`](@ref), [`default_parameters`](@ref),
-[`get_parameters`](@ref), [`get_states`](@ref), [`get_observations`](@ref) and
-[`get_actions`](@ref).
+Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
+[`attribute_names`](@ref) for it. A model can also add methods of
+[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`turing_apply_model`](@ref).
 """
 abstract type AbstractCognitiveModel end
 
@@ -41,17 +41,15 @@ Each argument is kept in a field of the same name, such as `input.observation`.
 - `observation`: what the model observes on this timestep, or [`NoObservation`](@ref).
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
-- `previous_action`: the action from the previous timestep, or [`NoAction`](@ref). A single
-  action is in a `NamedTuple`, as in `input.previous_action.action`.
-- `parameters`: the parameters of the model.
+- `previous_action`: the actions from the previous timestep, in a `NamedTuple` with the
+  names the model gave them, as in `input.previous_action.choice`, or [`NoAction`](@ref).
+- `parameters`: the cognitive parameters of the model. Will generally be a NamedTuple. 
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
   is random, so that a simulation can be reproduced.
 
 # Examples
 ```jldoctest
-julia> using CognitiveModeling: ModelInput
-
 julia> observation = (; reward = 1.0);
 
 julia> state = (; expected_reward = 0.5);
@@ -74,75 +72,91 @@ struct ModelInput{Tobservation, Tstate, Taction, Tparameters, Ttimestep_size, Tr
     rng::Trng
 end
 
-#Sets the timestep size to 1 and the generator to the default one if they aren't specified. An integer keeps Float32 models in Float32
+#Sets the timestep size to 1 and the generator to the default one if they aren't specified.
 function ModelInput(observation, previous_state, previous_action, parameters, timestep_size = 1)
     return ModelInput(observation, previous_state, previous_action, parameters, timestep_size, default_rng())
 end
 
 """
-    ModelOutput(action_distribution, new_state=(;); save_state=identity)
+    ModelOutput(action_distribution, new_state=(;))
 
 The outputs of a model for a single timestep, which [`apply_model`](@ref) returns.
 
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
 # Arguments
-- `action_distribution`: what the action on this timestep is sampled from. It can be
-  anything that works with `rand`, such as a distribution from Distributions.jl, and is put
-  in a `NamedTuple` as `(; action = action_distribution)`. Several actions can be given as a
-  `NamedTuple`, which names them and samples each of them, and a model without actions gives
-  [`NoAction`](@ref).
-- `new_state=(;)`: the state of the model after this timestep, which is the
+- `action_distribution::Union{NamedTuple, NoAction}`: what the actions on this timestep are
+  sampled from, in a `NamedTuple` with one entry for each action, such as
+  `(; choice = Bernoulli(0.7))`. Each entry can be anything that works with `rand`, such as
+  a distribution from Distributions.jl, and the sampled actions keep the names. A model
+  without actions gives [`NoAction`](@ref).
+- `new_state=(;)`: the cognitive state of the model after this timestep, which is the
   `previous_state` of the next one.
-- `save_state=identity`: the function which is applied to `new_state` when a simulation
-  saves it. By default nothing is copied, so a model which changes an object in its state in
-  place must give a function which copies it. Otherwise all the saved states show the final
-  values, with no error. `deepcopy` works for any state, but gives wrong gradients with
-  ReverseDiff.jl, also with no error. A function which copies only what changes, such as
-  `state -> (; values = copy(state.values))`, is faster and works with ReverseDiff.jl too.
-  `copy` itself doesn't work on a `NamedTuple`.
 
 # Examples
 ```jldoctest
-julia> using CognitiveModeling: ModelOutput
-
 julia> using Distributions: Bernoulli
 
-julia> ModelOutput(Bernoulli(0.7), (; expected_reward = 0.5)).new_state
+julia> ModelOutput((; choice = Bernoulli(0.7)), (; expected_reward = 0.5)).new_state
 (expected_reward = 0.5,)
 
-julia> ModelOutput(Bernoulli(0.7)).new_state
+julia> ModelOutput((; choice = Bernoulli(0.7))).new_state
 NamedTuple()
 
-julia> keys(ModelOutput(Bernoulli(0.7)).action_distribution)
-(:action,)
-
-julia> keys(ModelOutput((; choice = Bernoulli(0.7))).action_distribution)
-(:choice,)
-
-julia> output = ModelOutput(Bernoulli(0.7), (; values = [0.5]); save_state = deepcopy);
-
-julia> output.save_state(output.new_state).values === output.new_state.values
-false
+julia> ModelOutput(NoAction()).action_distribution
+NoAction()
 ```
 """
-struct ModelOutput{Taction, Tstate, Tsave_state}
+struct ModelOutput{Taction, Tstate}
     action_distribution::Taction
     new_state::Tstate
-    save_state::Tsave_state
 
-    #Keeps action distributions that are already in a NamedTuple, and models without actions
-    function ModelOutput(action_distribution::Union{NamedTuple, NoAction}, new_state, save_state)
-        return new{typeof(action_distribution), typeof(new_state), typeof(save_state)}(action_distribution, new_state, save_state)
+    #Only takes named action distributions, or no action, so that the model names every action
+    function ModelOutput(action_distribution::Union{NamedTuple, NoAction}, new_state = (;))
+        return new{typeof(action_distribution), typeof(new_state)}(action_distribution, new_state)
     end
 end
 
-#Puts a single action distribution in a NamedTuple
-function ModelOutput(action_distribution, new_state, save_state)
-    return ModelOutput((; action = action_distribution), new_state, save_state)
+"""
+    ModelAttributes(; parameters, states, observations, actions)
+
+The names of the attributes of a model, which [`attribute_names`](@ref) returns.
+
+Each argument is a `Tuple` of `Symbol`s, and is kept in a field of the same name, such as
+`attributes.parameters`. A single `Symbol` is put in a tuple, and a `Vector` of them is made
+into one. All four must be given, and `()` means that the model has none of that kind.
+
+# Examples
+```jldoctest
+julia> attributes = ModelAttributes(;
+           parameters = (:learning_rate, :inverse_temperature),
+           states = :expected_reward,
+           observations = [:reward],
+           actions = (),
+       )
+ModelAttributes
+Parameters: learning_rate, inverse_temperature
+States: expected_reward
+Observations: reward
+Actions: none
+
+julia> attributes.states
+(:expected_reward,)
+```
+"""
+struct ModelAttributes{Tparameters <: Tuple{Vararg{Symbol}}, Tstates <: Tuple{Vararg{Symbol}}, Tobservations <: Tuple{Vararg{Symbol}}, Tactions <: Tuple{Vararg{Symbol}}}
+    parameters::Tparameters
+    states::Tstates
+    observations::Tobservations
+    actions::Tactions
 end
 
-#Sets the new state to an empty NamedTuple if it isn't specified, and saves it as it is unless a function is given
-function ModelOutput(action_distribution, new_state = (;); save_state = identity)
-    return ModelOutput(action_distribution, new_state, save_state)
+#Takes the names by keyword, and puts a single name or a vector of names in a tuple
+function ModelAttributes(; parameters, states, observations, actions)
+    return ModelAttributes(as_name_tuple(parameters), as_name_tuple(states), as_name_tuple(observations), as_name_tuple(actions))
 end
+
+#Names are kept in a tuple of symbols
+as_name_tuple(names::Tuple{Vararg{Symbol}}) = names
+as_name_tuple(name::Symbol) = (name,)
+as_name_tuple(names::AbstractVector{Symbol}) = Tuple(names)

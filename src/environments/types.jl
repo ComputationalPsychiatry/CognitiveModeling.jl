@@ -4,9 +4,10 @@
 Supertype for environment models, which give a cognitive model its observations.
 
 # Implementation
-Create a subtype and add a method of `apply_model` for it, which takes an
-[`EnvironmentInput`](@ref) and returns an [`EnvironmentOutput`](@ref). An environment model
-with a state also adds a method of `initialize_state`.
+Create a subtype and add methods of [`apply_model`](@ref) and [`initialize_state`](@ref) for
+it. The method of `apply_model` takes an [`EnvironmentInput`](@ref) and returns an
+[`EnvironmentOutput`](@ref). An environment model can also add a method of
+[`prepare_state_for_saving`](@ref).
 
 See also [`simulate`](@ref), which has an example.
 """
@@ -21,8 +22,9 @@ Everything an environment model needs to run a single timestep.
 Each argument is kept in a field of the same name, such as `input.action`.
 
 # Arguments
-- `action`: the action that the environment responds to, or [`NoAction`](@ref) if there is
-  none yet. A single action is in a `NamedTuple`, as in `input.action.action`.
+- `action`: the actions that the environment responds to, in a `NamedTuple` with the names
+  the cognitive model gave them, as in `input.action.choice`, or [`NoAction`](@ref) if there
+  are none yet.
 - `previous_state`: the state of the environment after the previous timestep.
 - `previous_observation`: the observation from the previous timestep, or
   [`NoObservation`](@ref).
@@ -46,7 +48,7 @@ function EnvironmentInput(action, previous_state, previous_observation, paramete
 end
 
 """
-    EnvironmentOutput(observation, new_state=(;); save_state=identity)
+    EnvironmentOutput(observation, new_state=(;))
 
 The outputs of an environment model for a single timestep.
 
@@ -57,19 +59,15 @@ Each argument is kept in a field of the same name, such as `output.observation`.
   observes nothing.
 - `new_state=(;)`: the state of the environment after this timestep, which is the
   `previous_state` of the next one.
-- `save_state=identity`: the function which is applied to `new_state` when a simulation
-  saves it. An environment which changes an object in its state in place must give a
-  function which copies it, as described in [`ModelOutput`](@ref).
 """
-struct EnvironmentOutput{Tobservation, Tstate, Tsave_state}
+struct EnvironmentOutput{Tobservation, Tstate}
     observation::Tobservation
     new_state::Tstate
-    save_state::Tsave_state
 end
 
-#Sets the new state to an empty NamedTuple if it isn't specified, and saves it as it is unless a function is given
-function EnvironmentOutput(observation, new_state = (;); save_state = identity)
-    return EnvironmentOutput(observation, new_state, save_state)
+#Sets the new state to an empty NamedTuple if it isn't specified
+function EnvironmentOutput(observation)
+    return EnvironmentOutput(observation, (;))
 end
 
 """
@@ -94,33 +92,4 @@ end
 #Starts the environment from its initial state, with no previous observation
 function Environment(model::AbstractEnvironmentModel, parameters)
     return Environment(model, parameters, initialize_state(model, parameters), NoObservation())
-end
-
-"""
-    apply_model(environment, input::EnvironmentInput)::EnvironmentOutput
-
-Run a single timestep of `environment`: update its state and give the next observation.
-
-# Implementation
-Every environment model must add a method of this function, which throws an error otherwise.
-Anything random should be sampled from `input.rng`, so that a simulation can be reproduced.
-
-See also [`simulate`](@ref), which has an example.
-"""
-function apply_model(environment::AbstractEnvironmentModel, input)
-    error("There is no apply_model method for an environment model of type $(typeof(environment)) with an input of type $(typeof(input)). Each environment model must define CognitiveModeling.apply_model(environment::$(typeof(environment)), input::CognitiveModeling.EnvironmentInput).")
-end
-
-"""
-    initialize_state(environment::AbstractEnvironmentModel, parameters)
-
-Create the state that `environment` has before its first timestep, which can depend on
-`parameters`.
-
-# Implementation
-The default is an empty `NamedTuple`, so only environment models with a state need to add a
-method.
-"""
-function initialize_state(model::AbstractEnvironmentModel, parameters)
-    return (;)
 end

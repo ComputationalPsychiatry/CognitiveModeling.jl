@@ -1,19 +1,12 @@
 ## Sampling actions ##
 """
-    sample_action(rng, action_distribution)
+    sample_action(rng, action_distributions)
 
-Sample an action from the object that a model returned.
-
-Several actions in a `NamedTuple` are sampled one by one, and a model without actions keeps
+Sample each action in the `NamedTuple` that a model returned. A model without actions keeps
 [`NoAction`](@ref).
 """
-function sample_action(rng, action_distribution)
-    return rand(rng, action_distribution)
-end
-
-#Sample each action separately
 function sample_action(rng, action_distributions::NamedTuple)
-    return map(action_distribution -> sample_action(rng, action_distribution), action_distributions)
+    return map(action_distribution -> rand(rng, action_distribution), action_distributions)
 end
 
 #Models without actions have nothing to sample
@@ -76,7 +69,8 @@ function get_timestep_size(timestep_size, t)
 end
 
 """
-    collect_timestep_outputs(environment_output, cognitive_output, action)
+    collect_timestep_outputs(environment_output, cognitive_output, action, model,
+                             environment)
 
 Collect the outputs of a timestep in a `NamedTuple`, with each state both as it is, which
 the next timestep starts from, and as it is saved.
@@ -84,14 +78,14 @@ the next timestep starts from, and as it is saved.
 This is its own function so that if an output can have two types, like an observation or
 [`NoObservation`](@ref), the compiler can split the call and get a concrete type for each.
 """
-function collect_timestep_outputs(environment_output, cognitive_output, action)
+function collect_timestep_outputs(environment_output, cognitive_output, action, model, environment)
     return (;
         observation = environment_output.observation,
         action,
         cognitive_state = cognitive_output.new_state,
         environment_state = environment_output.new_state,
-        saved_cognitive_state = cognitive_output.save_state(cognitive_output.new_state),
-        saved_environment_state = environment_output.save_state(environment_output.new_state),
+        saved_cognitive_state = prepare_state_for_saving(model, cognitive_output.new_state),
+        saved_environment_state = prepare_state_for_saving(environment, environment_output.new_state),
     )
 end
 
@@ -139,7 +133,7 @@ This is always inlined, because a call here makes the loop several times slower.
     #Sample action
     action = sample_action(rng, cognitive_output.action_distribution)
 
-    return collect_timestep_outputs(environment_output, cognitive_output, action)
+    return collect_timestep_outputs(environment_output, cognitive_output, action, model, environment)
 end
 
 """
@@ -162,7 +156,7 @@ This is always inlined, because a call here makes the loop several times slower.
     #Update the environment
     environment_output = check_output(@inline(apply_model(environment, EnvironmentInput(action, previous.environment_state, previous.observation, environment_parameters, timestep_size, rng))), environment)
 
-    return collect_timestep_outputs(environment_output, cognitive_output, action)
+    return collect_timestep_outputs(environment_output, cognitive_output, action, model, environment)
 end
 
 """
@@ -202,8 +196,8 @@ Run all timesteps starting from `previous_outputs`, and return the vectors with 
 of all timesteps, followed by the outputs of the last timestep.
 
 [`simulate!`](@ref) continues from the last outputs instead of from what was saved, because
-`save_state` can return anything, and because the next simulation can change a state in
-place.
+[`prepare_state_for_saving`](@ref) can return anything, and because the next simulation can
+change a state in place.
 """
 function run_timesteps(previous_outputs, who_starts, model, environment, cognitive_parameters, environment_parameters, rng, timestep_sizes, n_steps)
 
@@ -269,7 +263,7 @@ See also [`simulate!`](@ref), which continues from where the last simulation end
 # Examples
 ```jldoctest
 using CognitiveModeling
-using CognitiveModeling: ModelInput, ModelOutput, EnvironmentInput, EnvironmentOutput
+using CognitiveModeling: EnvironmentInput, EnvironmentOutput
 using Distributions: BernoulliLogit
 
 #A cognitive model which learns the expected reward
@@ -282,11 +276,15 @@ end
 function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     Vₜ = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
-    return ModelOutput(BernoulliLogit(Vₜ - 0.5), (; expected_reward = Vₜ))
+    return ModelOutput((; choice = BernoulliLogit(Vₜ - 0.5)), (; expected_reward = Vₜ))
 end
 
 #An environment which gives a reward with a fixed probability, whatever the agent does
 struct BernoulliRewards <: AbstractEnvironmentModel end
+
+function CognitiveModeling.initialize_state(environment::BernoulliRewards, parameters)
+    return (;)
+end
 
 function CognitiveModeling.apply_model(environment::BernoulliRewards, input::EnvironmentInput)
     reward = float(rand(input.rng) < input.parameters.reward_probability)
@@ -318,9 +316,9 @@ timesteps. If they do, like an observation that is sometimes [`NoObservation`](@
 vector for that output holds a `Union` of the types, and the simulation is a little slower.
 
 Nothing is copied when outputs are saved. A model or environment which changes an object in
-its state in place, instead of returning a new one, must give a `save_state` function to
-[`ModelOutput`](@ref) or [`EnvironmentOutput`](@ref), or all the saved states show the final
-values, with no error. Observations and actions have no such function, so they must be new
+its state in place, instead of returning a new one, must add a method of
+[`prepare_state_for_saving`](@ref), or all the saved states show the final values, with no
+error. Observations and actions have no such function, so they must be new
 objects on each timestep.
 
 Short simulations can be compiled with Reactant, if the action distributions work with
@@ -363,7 +361,8 @@ end
     simulate!(agent::CognitiveAgent, environment::Environment; <keyword arguments>)
 
 Simulate `agent` interacting with `environment` from where they are, update them both, and
-return the same vectors as [`simulate`](@ref).
+return the same vectors as [`simulate`](@ref). If `agent.save_history` is true, the
+observations, actions and states are also added to `agent.history`.
 
 Use the same `who_starts` on each call, so that each simulation continues the last one.
 
@@ -381,13 +380,17 @@ the return type matters, or if most calls are for a single timestep.
 # Examples
 ```jldoctest
 using CognitiveModeling
-using CognitiveModeling: ModelInput, ModelOutput, EnvironmentInput, EnvironmentOutput
+using CognitiveModeling: EnvironmentInput, EnvironmentOutput
 using Distributions: Bernoulli
 
 struct RandomChoices <: AbstractCognitiveModel end
 
+function CognitiveModeling.initialize_state(model::RandomChoices, parameters)
+    return (;)
+end
+
 function CognitiveModeling.apply_model(model::RandomChoices, input::ModelInput)
-    return ModelOutput(Bernoulli(0.5))
+    return ModelOutput((; choice = Bernoulli(0.5)))
 end
 
 struct TimestepCounter <: AbstractEnvironmentModel end
@@ -440,6 +443,101 @@ function simulate!(
     environment.state = last_outputs.environment_state
     environment.previous_observation = last_outputs.observation
 
+    #Add to the agent's history
+    if agent.save_history
+        append!(agent.history.observations, observations)
+        append!(agent.history.actions, actions)
+        append!(agent.history.states, cognitive_states)
+    end
+
     #Return stored outputs
     return observations, actions, cognitive_states, environment_states
+end
+
+"""
+    run_cognitive_model(model, observation, previous_state, previous_action, parameters,
+                        timestep_size, rng)
+
+Run a timestep of `model` without an environment, and return its output and the action
+sampled from it.
+
+This is its own function so that it's compiled for the types in the agent's untyped fields,
+which makes [`simulate!`](@ref) on a single observation several times faster.
+"""
+function run_cognitive_model(model, observation, previous_state, previous_action, parameters, timestep_size, rng)
+
+    #Run timestep of cognitive model
+    output = check_output(@inline(apply_model(model, ModelInput(observation, previous_state, previous_action, parameters, timestep_size, rng))), model)
+
+    #Sample action
+    action = sample_action(rng, output.action_distribution)
+
+    return output, action
+end
+
+"""
+    simulate!(agent::CognitiveAgent, observation; timestep_size=1, rng=default_rng())
+
+Run a single timestep of `agent` on `observation`, update it, and return the sampled action.
+If `agent.save_history` is true, the observation, action and state are also added to
+`agent.history`.
+
+The action is in a `NamedTuple` with the name the model gave it, as in `action.choice`, as
+for [`simulate`](@ref).
+
+# Arguments
+- `agent::CognitiveAgent`: the agent to update.
+- `observation`: what the agent observes on this timestep, or [`NoObservation`](@ref).
+- `timestep_size=1`: how much time this timestep covers.
+- `rng::AbstractRNG=default_rng()`: the random number generator to sample from.
+
+# Examples
+```jldoctest
+using CognitiveModeling
+using Distributions: Bernoulli
+
+struct RescorlaWagner <: AbstractCognitiveModel end
+
+function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
+    return (; expected_reward = 0.5)
+end
+
+function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
+    V₋₁ = input.previous_state.expected_reward
+    Vₜ = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
+    return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))
+end
+
+agent = CognitiveAgent(RescorlaWagner(), (; learning_rate = 0.5))
+
+simulate!(agent, (; reward = 1.0))
+simulate!(agent, (; reward = 1.0))
+
+agent.history.states
+
+# output
+
+3-element Vector{Any}:
+ (expected_reward = 0.5,)
+ (expected_reward = 0.75,)
+ (expected_reward = 0.875,)
+```
+"""
+function simulate!(agent::CognitiveAgent, observation; timestep_size = 1, rng::AbstractRNG = default_rng())
+
+    #Run the timestep
+    output, action = run_cognitive_model(agent.model, observation, agent.state, agent.previous_action, agent.parameters, timestep_size, rng)
+
+    #Update the agent
+    agent.state = output.new_state
+    agent.previous_action = action
+
+    #Add to the agent's history
+    if agent.save_history
+        push!(agent.history.observations, observation)
+        push!(agent.history.actions, action)
+        push!(agent.history.states, prepare_state_for_saving(agent.model, output.new_state))
+    end
+
+    return action
 end
