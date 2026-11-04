@@ -4,15 +4,15 @@
 
 Sample an action from the object that a model returned.
 
-Several actions in a `Tuple` or `NamedTuple` are sampled one by one, and a model without
-actions keeps [`NoAction`](@ref).
+Several actions in a `NamedTuple` are sampled one by one, and a model without actions keeps
+[`NoAction`](@ref).
 """
 function sample_action(rng, action_distribution)
     return rand(rng, action_distribution)
 end
 
-#Sample each action separately, because rand on a tuple would just pick one of the objects
-function sample_action(rng, action_distributions::Union{Tuple, NamedTuple})
+#Sample each action separately
+function sample_action(rng, action_distributions::NamedTuple)
     return map(action_distribution -> sample_action(rng, action_distribution), action_distributions)
 end
 

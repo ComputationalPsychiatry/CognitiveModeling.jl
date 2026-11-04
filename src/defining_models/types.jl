@@ -11,7 +11,6 @@ methods of [`initialize_state`](@ref), [`default_parameters`](@ref),
 """
 abstract type AbstractCognitiveModel end
 
-#Q: Is this better than using "nothing" for trials where there was no input or observation? Give pros and cons
 #Types for cases where there is no observation or action
 
 """

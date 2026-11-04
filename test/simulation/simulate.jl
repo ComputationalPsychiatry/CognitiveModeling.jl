@@ -33,10 +33,6 @@ end
 struct TwoChoices <: AbstractCognitiveModel end
 CognitiveModeling.apply_model(model::TwoChoices, input::ModelInput) = ModelOutput((; first_choice = ChooseWithProbability(0.0), second_choice = ChooseWithProbability(1.0)))
 
-#Has two actions in a tuple
-struct TupleOfChoices <: AbstractCognitiveModel end
-CognitiveModeling.apply_model(model::TupleOfChoices, input::ModelInput) = ModelOutput((ChooseWithProbability(0.0), ChooseWithProbability(1.0)))
-
 #Has noise in its state update
 struct LearnsWithNoise <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters) = (; expected_reward = 0.5)
@@ -196,11 +192,6 @@ end
     @testset "Each of several named actions is sampled" begin
         _, actions, _, _ = simulate_for_test(TwoChoices(), RewardsWithProbability(); cognitive_parameters = (;))
         @test all(action -> action === (; first_choice = false, second_choice = true), actions)
-    end
-
-    @testset "A tuple counts as one action, with each of its parts sampled" begin
-        _, actions, _, _ = simulate_for_test(TupleOfChoices(), RewardsWithProbability(); cognitive_parameters = (;))
-        @test all(action -> action === (; action = (false, true)), actions)
     end
 
     @testset "A saved history of a state changed in place keeps its values" begin
