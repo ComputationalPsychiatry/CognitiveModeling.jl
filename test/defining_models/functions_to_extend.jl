@@ -6,8 +6,8 @@ struct ModelWithUnannotatedInput <: AbstractCognitiveModel end
 CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOutput((; choice = 0.7))
 
 @testset "Functions to extend" begin
-    model_input = ModelInput(NoObservation(), (;), NoAction(), (;))
-    environment_input = EnvironmentInput(NoAction(), (;), NoObservation(), (;))
+    model_input = ModelInput(NoObservation(), (;), (; choice = NoAction()), (;))
+    environment_input = EnvironmentInput((; choice = NoAction()), (;), NoObservation(), (;))
 
     @testset "A missing timestep method gives an informative error" begin
         @test_throws "CognitiveModeling.apply_model(model::ModelWithoutMethods, input::CognitiveModeling.ModelInput)" CognitiveModeling.apply_model(ModelWithoutMethods(), model_input)

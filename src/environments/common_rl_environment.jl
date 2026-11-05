@@ -18,9 +18,10 @@ its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
 gives, the reward that `act!` returned, and whether the episode has ended. Before the first
-action, and on the timestep after an episode ended, the environment is at its initial
-observation, with `reset!` in the second case, so the reward is `missing` and nothing is
-done with the action. The model must have exactly one action, which is given to `act!`.
+action, when the action is [`NoAction`](@ref), and on the timestep after an episode ended,
+the environment is at its initial observation, with `reset!` in the second case, so the
+reward is `missing` and nothing is done with the action. The model must have exactly one
+action, which is given to `act!`.
 Use [`EnvironmentStarts`](@ref), so that the model observes before it acts.
 
 # Examples
@@ -49,6 +50,7 @@ Base.rand(rng::AbstractRNG, action::Always) = action.value
 struct PullsFirstArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsFirstArm, input::ModelInput) = ModelOutput((; arm = Always(1)))
+CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = :arm)
 
 observations, actions, _, _ = simulate(
     PullsFirstArm(),
@@ -57,6 +59,7 @@ observations, actions, _, _ = simulate(
     n_steps = 4,
     cognitive_parameters = (;),
     environment_parameters = (;),
+    save_history = SaveHistory(SaveEverything()),
 )
 
 foreach(println, observations)

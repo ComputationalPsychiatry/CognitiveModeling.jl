@@ -29,7 +29,7 @@ CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; para
 struct RewardsFollowActions <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsFollowActions, parameters) = (; n_timesteps = 0)
 function CognitiveModeling.apply_model(environment::RewardsFollowActions, input::EnvironmentInput)
-    action = input.action isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
     n_timesteps = input.previous_state.n_timesteps + 1
     return EnvironmentOutput((; reward = input.parameters.reward_size * action), (; n_timesteps))
 end
@@ -52,12 +52,13 @@ function CognitiveModeling.apply_model(model::LearnsOverTime, input::ModelInput)
     Vₜ = V₋₁ + (1 - exp(-α * input.timestep_size)) * (r - V₋₁)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
+CognitiveModeling.attribute_names(model::LearnsOverTime) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
 
 # An environment whose reward grows with the time that passes
 struct RewardsGrowOverTime <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsGrowOverTime, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsGrowOverTime, input::EnvironmentInput)
-    action = input.action isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action * input.timestep_size))
 end
 
@@ -67,10 +68,11 @@ CognitiveModeling.initialize_state(model::ChoosesWithoutState, parameters) = (;)
 function CognitiveModeling.apply_model(model::ChoosesWithoutState, input::ModelInput)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-input.parameters.inverse_temperature)))))
 end
+CognitiveModeling.attribute_names(model::ChoosesWithoutState) = ModelAttributes(; parameters = :inverse_temperature, states = (), observations = :reward, actions = :choice)
 struct RewardsWithoutState <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithoutState, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsWithoutState, input::EnvironmentInput)
-    action = input.action isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action))
 end
 
@@ -85,6 +87,7 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     Vₜ = V₋₁ + α * (r - V₋₁) + α * 0.1 * (rand(input.rng) - 0.5)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
+CognitiveModeling.attribute_names(model::LearnsWithNoise) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
 
 # A Rescorla-Wagner model which changes a Vector in its state in place, and copies it when it's saved
 struct LearnsInPlace <: AbstractCognitiveModel end
@@ -120,6 +123,7 @@ function simulate_deterministic(x, who_starts)
         n_steps = 20,
         cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
         environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -136,6 +140,7 @@ function simulate_sampled(x, who_starts)
         cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
         environment_parameters = (; reward_probability = 0.8),
         rng = Xoshiro(1),
+        save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -151,6 +156,7 @@ function simulate_with_timestep_sizes(x, who_starts)
         timestep_sizes = TIMESTEP_SIZES,
         cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
         environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -165,6 +171,7 @@ function simulate_timestep_sizes_from_vector(x, who_starts)
         timestep_sizes = x,
         cognitive_parameters = (; learning_rate = 0.3, inverse_temperature = 2.0),
         environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -178,6 +185,7 @@ function simulate_without_states(x, who_starts)
         n_steps = 20,
         cognitive_parameters = (; inverse_temperature = x[1]),
         environment_parameters = (; reward_size = x[2]),
+        save_history = SaveHistory(SaveEverything()),
     )
     total = zero(first(observations).reward)
     for observation in observations
@@ -196,6 +204,7 @@ function simulate_with_noise_in_model(x, who_starts)
         cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
         environment_parameters = (; reward_size = 0.8),
         rng = Xoshiro(1),
+        save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -209,6 +218,7 @@ function simulate_in_place(x, who_starts)
         n_steps = 20,
         cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
         environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(SaveEverything()),
     )
     total = zero(x[1])
     for state in cognitive_states
@@ -255,7 +265,7 @@ end
 
 # The states read back from the history of an agent, with the parameters from a vector
 function read_history_after_environment(x, who_starts)
-    agent = CognitiveAgent(LearnsRewards{ProbabilityAsAction}(), (; learning_rate = x[1], inverse_temperature = x[2]))
+    agent = CognitiveAgent(LearnsRewards{ProbabilityAsAction}(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
     environment = Environment(RewardsFollowActions(), (; reward_size = 0.8))
     simulate!(agent, environment; who_starts, n_steps = 20)
     return sum_expected_rewards(agent.history.states[2:end])
@@ -263,7 +273,7 @@ end
 
 # The states read back from the history of an agent with a state changed in place, with the parameters from a vector
 function read_history_in_place(x)
-    agent = CognitiveAgent(LearnsInPlace(), (; learning_rate = x[1], inverse_temperature = x[2]))
+    agent = CognitiveAgent(LearnsInPlace(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
     for reward in (1.0, 0.0, 1.0, 1.0, 0.0)
         simulate!(agent, (; reward))
     end

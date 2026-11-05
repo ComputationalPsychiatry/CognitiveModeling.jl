@@ -42,10 +42,11 @@ CognitiveModeling.attribute_names(model::PullsArm) = ModelAttributes(; parameter
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Always(1), second = Always(2)))
+CognitiveModeling.attribute_names(model::PullsTwoArms) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = (:first, :second))
 
 #Shortens the calls below
-function run_bandit(env, model = PullsArm(); n_steps = 7, cognitive_parameters = (; arm = 1), keywords...)
-    return simulate(model, CommonRLEnvironment(env); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), keywords...)
+function run_bandit(env, model = PullsArm(); n_steps = 7, cognitive_parameters = (; arm = 1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+    return simulate(model, CommonRLEnvironment(env); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), save_history, save_environment_history, keywords...)
 end
 
 @testset "CommonRLInterface extension" begin
@@ -97,7 +98,7 @@ end
     @testset "simulate! continues with the same environment object" begin
         env = CountingBandit(0, 0)
         environment = Environment(CommonRLEnvironment(env), (;))
-        agent = CognitiveAgent(PullsArm(), (; arm = 1))
+        agent = CognitiveAgent(PullsArm(), (; arm = 1); save_history = SaveHistory(SaveEverything()))
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
         @test environment.state === env
         @test env.pulls == 1

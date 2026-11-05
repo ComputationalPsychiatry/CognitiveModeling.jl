@@ -19,7 +19,7 @@ end
 Turing.@model function run_timesteps_as_submodels(model, rewards)
     state = (; total = 0.0)
     for t in eachindex(rewards)
-        input = ModelInput((; reward = rewards[t]), state, NoAction(), (;))
+        input = ModelInput((; reward = rewards[t]), state, (; choice = NoAction()), (;))
         output ~ to_submodel(prefix(turing_apply_model(model, input), @varname(timestep[t])), false)
         state = output.new_state
     end
@@ -29,7 +29,7 @@ end
 @testset "Turing extension" begin
     @test Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt) isa Module
 
-    input = ModelInput((; reward = 1.0), (; total = 0.5), NoAction(), (;))
+    input = ModelInput((; reward = 1.0), (; total = 0.5), (; choice = NoAction()), (;))
 
     @testset "The default gives what apply_model returns" begin
         output = turing_apply_model(OnlyNormalFunction(), input)()

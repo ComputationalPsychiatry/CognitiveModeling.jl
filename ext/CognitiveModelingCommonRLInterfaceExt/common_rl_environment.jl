@@ -7,9 +7,10 @@ end
 #Gives the initial observation before the first action and after an episode has ended, and acts otherwise
 function CognitiveModeling.apply_model(environment::CommonRLEnvironment, input::EnvironmentInput)
     env = input.previous_state
+    action = single_action(input.action)
 
     #Before the first action, the environment is at its initial observation
-    if input.action isa NoAction
+    if action isa NoAction
         return EnvironmentOutput(initial_observation(env), env)
     end
 
@@ -20,7 +21,7 @@ function CognitiveModeling.apply_model(environment::CommonRLEnvironment, input::
     end
 
     #Take the model's action, and give what follows from it
-    reward = act!(env, single_action(input.action))
+    reward = act!(env, action)
     return EnvironmentOutput((; observation = observe(env), reward, terminated = terminated(env)), env)
 end
 

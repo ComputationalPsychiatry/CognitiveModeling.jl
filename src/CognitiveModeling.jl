@@ -27,6 +27,6 @@ export simulate, simulate!
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, turing_apply_model
-public AgentHistory
+public AgentHistory, EnvironmentHistory
 
 end

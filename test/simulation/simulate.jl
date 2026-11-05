@@ -29,7 +29,7 @@ struct OnlyLearns <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::OnlyLearns, parameters) = (; expected_reward = 0.5)
 function CognitiveModeling.apply_model(model::OnlyLearns, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
-    return ModelOutput(NoAction(), (; expected_reward = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)))
+    return ModelOutput((;), (; expected_reward = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)))
 end
 CognitiveModeling.attribute_names(model::OnlyLearns) = ModelAttributes(; parameters = :learning_rate, states = :expected_reward, observations = :reward, actions = ())
 
@@ -46,6 +46,7 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     V₋₁ = input.previous_state.expected_reward
     return ModelOutput((; choice = ChooseWithProbability(0.5)), (; expected_reward = V₋₁ + rand(input.rng) - 0.5))
 end
+CognitiveModeling.attribute_names(model::LearnsWithNoise) = ModelAttributes(; parameters = (), states = :expected_reward, observations = (), actions = :choice)
 
 #Changes a Vector in its state in place, and prepares its state for saving with the function it is given
 struct LearnsInPlace{Tprepare_state} <: AbstractCognitiveModel
@@ -68,6 +69,7 @@ function CognitiveModeling.apply_model(model::StartsWithInteger, input::ModelInp
     Vₜ = input.observation isa NoObservation ? V₋₁ : V₋₁ + 0.5 * (input.observation.reward - V₋₁)
     return ModelOutput((; choice = ChooseWithProbability(0.5)), (; expected_reward = Vₜ))
 end
+CognitiveModeling.attribute_names(model::StartsWithInteger) = ModelAttributes(; parameters = (), states = :expected_reward, observations = :reward, actions = :choice)
 
 #Has two states, so that one of them can be selected for saving
 struct LearnsAndCounts <: AbstractCognitiveModel end
@@ -106,6 +108,12 @@ function CognitiveModeling.apply_model(model::RejectsHighLearningRates, input::M
     input.parameters.learning_rate > 1 && throw(InvalidParametersError("The learning rate must be at most 1."))
     return ModelOutput((; choice = ChooseWithProbability(0.5)))
 end
+CognitiveModeling.attribute_names(model::RejectsHighLearningRates) = ModelAttributes(; parameters = :learning_rate, states = (), observations = (), actions = :choice)
+
+#Has no names, so it can't be simulated
+struct WithoutNames <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::WithoutNames, parameters) = (;)
+CognitiveModeling.apply_model(model::WithoutNames, input::ModelInput) = ModelOutput((; choice = ChooseWithProbability(0.5)))
 
 #Gives rewards with a fixed probability, whatever the agent does
 struct RewardsWithProbability <: AbstractEnvironmentModel end
@@ -135,7 +143,7 @@ CognitiveModeling.prepare_state_for_saving(environment::CountsInPlace, state) = 
 struct RewardsTrue <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsTrue, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsTrue, input::EnvironmentInput)
-    input.action isa NoAction && return EnvironmentOutput(NoObservation())
+    input.action.choice isa NoAction && return EnvironmentOutput(NoObservation())
     return EnvironmentOutput((; reward = float(input.action.choice)))
 end
 
@@ -188,8 +196,8 @@ const LEARNING = (; learning_rate = 0.5)
 const REWARDS = (; reward_probability = 0.8)
 
 #Shortens the calls below
-function simulate_for_test(model, environment; who_starts = EnvironmentStarts(), n_steps = 50, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1), keywords...)
-    return simulate(model, environment; who_starts, n_steps, cognitive_parameters, environment_parameters, rng, keywords...)
+function simulate_for_test(model, environment; who_starts = EnvironmentStarts(), n_steps = 50, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+    return simulate(model, environment; who_starts, n_steps, cognitive_parameters, environment_parameters, rng, save_history, save_environment_history, keywords...)
 end
 
 @testset "simulate" begin
@@ -229,7 +237,7 @@ end
 
     @testset "The return type is known and the loop doesn't allocate" begin
         rng = Xoshiro(1)
-        run_simulation(who_starts, n_steps) = simulate(LearnsRewards(), RewardsWithProbability(); who_starts, n_steps, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng)
+        run_simulation(who_starts, n_steps) = simulate(LearnsRewards(), RewardsWithProbability(); who_starts, n_steps, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng, save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
         for who_starts in (EnvironmentStarts(), AgentStarts())
             @test @inferred(run_simulation(who_starts, 10)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
@@ -259,7 +267,7 @@ end
         @test eltype(cognitive_states) === typeof((;))
         @test eltype(environment_states) === typeof((;))
         _, actions, cognitive_states, _ = simulate_for_test(OnlyLearns(), RewardsWithProbability())
-        @test eltype(actions) === NoAction
+        @test eltype(actions) === typeof((;))
         @test eltype(cognitive_states) <: NamedTuple
     end
 
@@ -288,7 +296,7 @@ end
     @testset "save_history selects what is saved of each kind" begin
         fixed_rewards = (; rewards = [1.0, 0.0, 1.0])
         run_with(; keywords...) = simulate_for_test(LearnsAndCounts(), FixedRewards(); n_steps = 3, environment_parameters = fixed_rewards, keywords...)
-        #Everything is saved by default
+        #The helper saves everything, which selecting everything also does
         everything = run_with()
         @test run_with(; save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything())) == everything
         @test everything[3] == [(; expected_reward = 0.75, n_timesteps = 1), (; expected_reward = 0.375, n_timesteps = 2), (; expected_reward = 0.6875, n_timesteps = 3)]
@@ -309,14 +317,29 @@ end
         @test all(==(fill((;), 3)), run_with(; save_history = SaveHistory(), save_environment_history = SaveHistory()))
     end
 
-    @testset "NoObservation and NoAction are saved as they are, whatever is selected" begin
+    @testset "Nothing is saved by default" begin
+        @test all(==(fill((;), 3)), simulate(LearnsRewards(), RewardsWithProbability(); who_starts = EnvironmentStarts(), n_steps = 3, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1)))
+    end
+
+    @testset "NoObservation is saved as it is, whatever is selected, and a model without actions saves empty NamedTuples" begin
         observations, actions, _, _ = simulate_for_test(OnlyChooses(), RewardsTrue(); n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), save_history = SaveHistory(; observations = :reward, actions = :choice))
         @test observations[1] === NoObservation()
         @test observations[2] == (; reward = float(actions[1].choice))
-        for save_history in (SaveHistory(; actions = :choice), SaveHistory(SaveEverything()))
+        for save_history in (SaveHistory(; actions = ()), SaveHistory(SaveEverything()))
             _, actions, _, _ = simulate_for_test(OnlyLearns(), RewardsWithProbability(); n_steps = 3, save_history)
-            @test actions == fill(NoAction(), 3)
+            @test actions == fill((;), 3)
         end
+    end
+
+    @testset "The action before the first timestep has every action as NoAction" begin
+        @test CognitiveModeling.initial_action(LearnsRewards()) === (; choice = NoAction())
+        @test CognitiveModeling.initial_action(OnlyLearns()) === (;)
+        #The names are in the type, so it is inferred
+        @test @inferred(CognitiveModeling.initial_action(TwoChoices())) === (; first_choice = NoAction(), second_choice = NoAction())
+        @test CognitiveAgent(TwoChoices(), (;)).previous_action === (; first_choice = NoAction(), second_choice = NoAction())
+        #The environment receives it on the first timestep when it starts
+        observations, _, _, _ = simulate_for_test(OnlyChooses(), RewardsTrue(); n_steps = 2, cognitive_parameters = (;), environment_parameters = (;))
+        @test observations[1] === NoObservation()
     end
 
     @testset "A state isn't prepared for saving when none of it is saved" begin
@@ -379,7 +402,7 @@ end
     @testset "A missing method for the initial state gives an informative error, unless a state is given" begin
         @test_throws "Each model must define CognitiveModeling.initialize_state" simulate_for_test(NeedsGivenState(), RewardsWithProbability())
         @test_throws "Each environment model must define CognitiveModeling.initialize_state" simulate_for_test(LearnsRewards(), EnvironmentNeedsGivenState())
-        _, _, cognitive_states, environment_states = simulate(NeedsGivenState(), EnvironmentNeedsGivenState(); who_starts = EnvironmentStarts(), n_steps = 2, cognitive_parameters = (;), environment_parameters = (;), previous_state = (; value = 1.0), previous_environment_state = (; value = 2.0))
+        _, _, cognitive_states, environment_states = simulate(NeedsGivenState(), EnvironmentNeedsGivenState(); who_starts = EnvironmentStarts(), n_steps = 2, cognitive_parameters = (;), environment_parameters = (;), previous_state = (; value = 1.0), previous_environment_state = (; value = 2.0), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
         @test cognitive_states == [(; value = 1.0), (; value = 1.0)]
         @test environment_states == [(; value = 2.0), (; value = 2.0)]
     end
@@ -394,7 +417,7 @@ end
     @testset "The model and the environment both get the size of each timestep" begin
         get_sizes(outputs) = [output.timestep_size for output in outputs]
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            run_with_sizes(; keywords...) = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(1), keywords...)
+            run_with_sizes(; keywords...) = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
             #The default is the integer 1
             observations, _, cognitive_states, _ = run_with_sizes()
             @test get_sizes(observations) == [1, 1, 1] && eltype(get_sizes(observations)) === Int
@@ -420,7 +443,7 @@ end
 
     @testset "Timestep sizes keep the return type known" begin
         rng = Xoshiro(1)
-        run_simulation(timestep_sizes) = simulate(LearnsRewards(), RewardsWithProbability(); who_starts = EnvironmentStarts(), n_steps = 3, timestep_sizes, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng)
+        run_simulation(timestep_sizes) = simulate(LearnsRewards(), RewardsWithProbability(); who_starts = EnvironmentStarts(), n_steps = 3, timestep_sizes, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng, save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
         for timestep_sizes in (1, 0.5, [0.5, 2.0, 0.25], 1:3)
             @test @inferred(run_simulation(timestep_sizes)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(timestep_sizes)
@@ -431,10 +454,10 @@ end
 @testset "simulate!" begin
     @testset "Two simulations in a row give the same as one long one" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            one_simulation = simulate(LearnsRewards(), RewardsTrue(); who_starts, n_steps = 60, cognitive_parameters = LEARNING, environment_parameters = (;), rng = Xoshiro(9))
+            one_simulation = simulate(LearnsRewards(), RewardsTrue(); who_starts, n_steps = 60, cognitive_parameters = LEARNING, environment_parameters = (;), rng = Xoshiro(9), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
 
-            agent = CognitiveAgent(LearnsRewards(), LEARNING)
-            environment = Environment(RewardsTrue(), (;))
+            agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
+            environment = Environment(RewardsTrue(), (;); save_history = SaveHistory(SaveEverything()))
             rng = Xoshiro(9)
             first_part = simulate!(agent, environment; who_starts, n_steps = 25, rng)
             second_part = simulate!(agent, environment; who_starts, n_steps = 35, rng)
@@ -452,10 +475,10 @@ end
     @testset "Timestep sizes in two simulations in a row give the same as in one long one" begin
         sizes = [0.5, 2.0, 0.25, 1.5, 3.0]
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            one_simulation = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 5, timestep_sizes = sizes, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(9))
+            one_simulation = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 5, timestep_sizes = sizes, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(9), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
 
-            agent = CognitiveAgent(SavesTimestepSize(), (;))
-            environment = Environment(ObservesTimestepSize(), (;))
+            agent = CognitiveAgent(SavesTimestepSize(), (;); save_history = SaveHistory(SaveEverything()))
+            environment = Environment(ObservesTimestepSize(), (;); save_history = SaveHistory(SaveEverything()))
             rng = Xoshiro(9)
             first_part = simulate!(agent, environment; who_starts, n_steps = 2, timestep_sizes = sizes[1:2], rng)
             second_part = simulate!(agent, environment; who_starts, n_steps = 3, timestep_sizes = sizes[3:5], rng)
@@ -467,7 +490,7 @@ end
     end
 
     @testset "Later simulations don't change the outputs of earlier ones" begin
-        agent = CognitiveAgent(LearnsInPlace(deepcopy), LEARNING)
+        agent = CognitiveAgent(LearnsInPlace(deepcopy), LEARNING; save_history = SaveHistory(SaveEverything()))
         environment = Environment(RewardsWithProbability(), REWARDS)
         _, _, cognitive_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
         last_value = cognitive_states[end].values[1]
@@ -476,7 +499,7 @@ end
     end
 
     @testset "simulate! continues from the state itself, whatever is saved" begin
-        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING)
+        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING; save_history = SaveHistory(SaveEverything()))
         environment = Environment(RewardsWithProbability(), REWARDS)
         _, _, first_states, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
         @test agent.state.values[1] == first_states[end].first_value
@@ -491,27 +514,29 @@ end
         agent = CognitiveAgent(HasDefaults(), (; initial_value = 0.9))
         @test agent.parameters == (; learning_rate = 0.1, initial_value = 0.9)
         @test agent.state == (; expected_reward = 0.9)
-        @test CognitiveAgent(HasDefaults(), (; learning_rate = 0.3), (; expected_reward = 0.2), NoAction()).parameters == (; learning_rate = 0.3, initial_value = 0.5)
+        @test CognitiveAgent(HasDefaults(), (; learning_rate = 0.3), (; expected_reward = 0.2), (; choice = NoAction())).parameters == (; learning_rate = 0.3, initial_value = 0.5)
         #A model without defaults keeps the parameters as they are
         @test CognitiveAgent(LearnsRewards(), LEARNING).parameters === LEARNING
     end
 
     @testset "An agent checks the names of the parameters and the state against attribute_names" begin
         @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but attribute_names lists the parameters of a model of type HasDefaults as (:learning_rate, :initial_value)" CognitiveAgent(HasDefaults(), (; noise = 0.1))
-        @test_throws "The state is named (:value,), but attribute_names lists the states of a model of type HasDefaults as (:expected_reward,)" CognitiveAgent(HasDefaults(), (;), (; value = 0.5), NoAction())
+        @test_throws "The state is named (:value,), but attribute_names lists the states of a model of type HasDefaults as (:expected_reward,)" CognitiveAgent(HasDefaults(), (;), (; value = 0.5), (; choice = NoAction()))
+        @test_throws "must be a NamedTuple with the actions that attribute_names lists" CognitiveAgent(HasDefaults(), (;), (; expected_reward = 0.5), NoAction())
+        @test_throws "must be a NamedTuple with the actions that attribute_names lists" CognitiveAgent(HasDefaults(), (;), (; expected_reward = 0.5), (; bet = true))
         #The order of the names doesn't matter
         @test CognitiveAgent(HasDefaults(), (; initial_value = 0.5, learning_rate = 0.1)).parameters.learning_rate == 0.1
         #A state that isn't a NamedTuple isn't checked
-        @test CognitiveAgent(HasDefaults(), (;), [0.5], NoAction()).state == [0.5]
-        #A model without names can't be an agent, though it can be simulated
-        @test_throws "Each model must define CognitiveModeling.attribute_names" CognitiveAgent(StartsWithInteger(), (;))
-        @test simulate_for_test(StartsWithInteger(), RewardsWithProbability(); cognitive_parameters = (;)) isa Tuple
+        @test CognitiveAgent(HasDefaults(), (;), [0.5], (; choice = NoAction())).state == [0.5]
+        #A model without names can't be simulated or be an agent
+        @test_throws "Each model must define CognitiveModeling.attribute_names" CognitiveAgent(WithoutNames(), (;))
+        @test_throws "Each model must define CognitiveModeling.attribute_names" simulate_for_test(WithoutNames(), RewardsWithProbability(); cognitive_parameters = (;))
     end
 
     @testset "An agent and an environment need a method for the initial state, unless a state is given" begin
         @test_throws "Each model must define CognitiveModeling.initialize_state" CognitiveAgent(NeedsGivenState(), (;))
         @test_throws "Each environment model must define CognitiveModeling.initialize_state" Environment(EnvironmentNeedsGivenState(), (;))
-        @test CognitiveAgent(NeedsGivenState(), (;), (; value = 1.0), NoAction()).state == (; value = 1.0)
+        @test CognitiveAgent(NeedsGivenState(), (;), (; value = 1.0), (; choice = NoAction())).state == (; value = 1.0)
         @test Environment(EnvironmentNeedsGivenState(), (;), (; value = 2.0), NoObservation()).state == (; value = 2.0)
     end
 
@@ -536,7 +561,7 @@ end
 
     @testset "Several in a row give the same as a simulation with the same observations" begin
         rewards = [1.0, 0.0, 1.0, 1.0]
-        one_simulation = simulate(LearnsRewards(), FixedRewards(); who_starts = EnvironmentStarts(), n_steps = 4, cognitive_parameters = LEARNING, environment_parameters = (; rewards), rng = Xoshiro(9))
+        one_simulation = simulate(LearnsRewards(), FixedRewards(); who_starts = EnvironmentStarts(), n_steps = 4, cognitive_parameters = LEARNING, environment_parameters = (; rewards), rng = Xoshiro(9), save_history = SaveHistory(SaveEverything()))
 
         agent = CognitiveAgent(LearnsRewards(), LEARNING)
         rng = Xoshiro(9)
@@ -568,7 +593,7 @@ end
     end
 
     @testset "It works without actions, and with several actions" begin
-        @test simulate!(CognitiveAgent(OnlyLearns(), LEARNING), (; reward = 1.0)) === NoAction()
+        @test simulate!(CognitiveAgent(OnlyLearns(), LEARNING), (; reward = 1.0)) === (;)
         @test simulate!(CognitiveAgent(TwoChoices(), (;)), NoObservation()) === (; first_choice = false, second_choice = true)
     end
 
@@ -580,27 +605,27 @@ end
 
 @testset "The history of an agent" begin
     @testset "It starts where the agent starts" begin
-        history = CognitiveAgent(LearnsRewards(), LEARNING).history
+        history = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything())).history
         @test history isa CognitiveModeling.AgentHistory
         @test history.observations == [NoObservation()]
-        @test history.actions == [NoAction()]
+        @test history.actions == [(; choice = NoAction())]
         @test history.states == [(; expected_reward = 0.5)]
         #Also if the state and the previous action are given
-        history = CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), (; choice = true)).history
+        history = CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), (; choice = true); save_history = SaveHistory(SaveEverything())).history
         @test history.observations == [NoObservation()]
         @test history.actions == [(; choice = true)]
         @test history.states == [(; expected_reward = 0.25)]
     end
 
-    @testset "Everything is saved by default, and a SaveHistory selects what is" begin
-        @test CognitiveAgent(LearnsRewards(), LEARNING).save_history === SaveHistory(SaveEverything())
-        @test CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), NoAction()).save_history === SaveHistory(SaveEverything())
-        @test Environment(RewardsWithProbability(), REWARDS).save_history === SaveHistory(SaveEverything())
-        @test Environment(RewardsWithProbability(), REWARDS, (;), NoObservation()).save_history === SaveHistory(SaveEverything())
+    @testset "Nothing is saved by default, and a SaveHistory selects what is" begin
+        @test CognitiveAgent(LearnsRewards(), LEARNING).save_history === SaveHistory()
+        @test CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), (; choice = NoAction())).save_history === SaveHistory()
+        @test Environment(RewardsWithProbability(), REWARDS).save_history === SaveHistory()
+        @test Environment(RewardsWithProbability(), REWARDS, (;), NoObservation()).save_history === SaveHistory()
         save_history = SaveHistory(; states = :n_timesteps)
         agent = CognitiveAgent(LearnsAndCounts(), LEARNING; save_history)
         @test agent.save_history === save_history
-        @test CognitiveAgent(LearnsAndCounts(), LEARNING, (; expected_reward = 0.25, n_timesteps = 0), NoAction(); save_history).save_history === save_history
+        @test CognitiveAgent(LearnsAndCounts(), LEARNING, (; expected_reward = 0.25, n_timesteps = 0), (; choice = NoAction()); save_history).save_history === save_history
         #The history starts with what is selected
         @test agent.history.observations == [(;)]
         @test agent.history.actions == [(;)]
@@ -628,30 +653,30 @@ end
 
     @testset "It adds what simulate! returns" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            agent = CognitiveAgent(LearnsRewards(), LEARNING)
+            agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
             environment = Environment(RewardsWithProbability(), REWARDS)
             rng = Xoshiro(9)
             first_part = simulate!(agent, environment; who_starts, n_steps = 3, rng)
             second_part = simulate!(agent, environment; who_starts, n_steps = 2, rng)
 
             @test agent.history.observations == vcat(NoObservation(), first_part[1], second_part[1])
-            @test agent.history.actions == vcat(NoAction(), first_part[2], second_part[2])
+            @test agent.history.actions == vcat((; choice = NoAction()), first_part[2], second_part[2])
             @test agent.history.states == vcat((; expected_reward = 0.5), first_part[3], second_part[3])
         end
     end
 
     @testset "It adds what happens on a single observation" begin
-        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
         first_action = simulate!(agent, (; reward = 1.0))
         second_action = simulate!(agent, NoObservation())
 
         @test agent.history.observations == [NoObservation(), (; reward = 1.0), NoObservation()]
-        @test agent.history.actions == [NoAction(), first_action, second_action]
+        @test agent.history.actions == [(; choice = NoAction()), first_action, second_action]
         @test agent.history.states == [(; expected_reward = 0.5), (; expected_reward = 0.75), (; expected_reward = 0.75)]
     end
 
     @testset "A single observation and an environment can be used on the same agent" begin
-        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
         environment = Environment(RewardsWithProbability(), REWARDS)
         simulate!(agent, (; reward = 1.0))
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
@@ -660,8 +685,8 @@ end
         @test agent.history.states[end] == agent.state
     end
 
-    @testset "It stays empty when nothing is selected" begin
-        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory())
+    @testset "It stays empty by default" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING)
         environment = Environment(RewardsWithProbability(), REWARDS)
         simulate!(agent, (; reward = 1.0))
         _, _, cognitive_states, environment_states = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
@@ -676,7 +701,7 @@ end
 
     @testset "It keeps the values of a state changed in place, with a method which copies it" begin
         for prepare_state in (deepcopy, state -> (; values = copy(state.values)))
-            agent = CognitiveAgent(LearnsInPlace(prepare_state), LEARNING)
+            agent = CognitiveAgent(LearnsInPlace(prepare_state), LEARNING; save_history = SaveHistory(SaveEverything()))
             environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0]))
             simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
             simulate!(agent, (; reward = 1.0))
@@ -687,22 +712,45 @@ end
     end
 
     @testset "It saves what the method gives, also of the initial state" begin
-        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING)
+        agent = CognitiveAgent(LearnsInPlace(state -> (; first_value = state.values[1])), LEARNING; save_history = SaveHistory(SaveEverything()))
         simulate!(agent, (; reward = 1.0))
         @test agent.history.states == [(; first_value = 0.5), (; first_value = 0.75)]
     end
 
     @testset "The initial state is the same object as the agent's, with a method which does nothing" begin
-        agent = CognitiveAgent(LearnsInPlace(identity), LEARNING)
+        agent = CognitiveAgent(LearnsInPlace(identity), LEARNING; save_history = SaveHistory(SaveEverything()))
         @test agent.history.states[1].values === agent.state.values
     end
 
     @testset "Later simulations don't change it" begin
-        agent = CognitiveAgent(LearnsRewards(), LEARNING)
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
         environment = Environment(RewardsWithProbability(), REWARDS)
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
         states_so_far = copy(agent.history.states)
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3)
         @test agent.history.states[1:4] == states_so_far
+    end
+
+    @testset "The environment has a history too, with the same observations and actions" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
+        environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]); save_history = SaveHistory(SaveEverything()))
+        @test environment.history isa CognitiveModeling.EnvironmentHistory
+        @test environment.history.observations == [NoObservation()]
+        @test environment.history.actions == [(;)]
+        @test environment.history.states == [(; n_timesteps = 0)]
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1))
+        @test environment.history.observations == agent.history.observations
+        @test environment.history.actions[2:end] == agent.history.actions[2:end]
+        @test environment.history.states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2), (; n_timesteps = 3)]
+        #Its selection is its own
+        environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]); save_history = SaveHistory(; states = :n_timesteps))
+        simulate!(CognitiveAgent(LearnsRewards(), LEARNING), environment; who_starts = EnvironmentStarts(), n_steps = 2)
+        @test environment.history.observations == fill((;), 3)
+        @test environment.history.actions == fill((;), 3)
+        @test environment.history.states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2)]
+        #It stays empty by default
+        environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]))
+        simulate!(CognitiveAgent(LearnsRewards(), LEARNING), environment; who_starts = EnvironmentStarts(), n_steps = 2)
+        @test isempty(environment.history.observations) && isempty(environment.history.actions) && isempty(environment.history.states)
     end
 end

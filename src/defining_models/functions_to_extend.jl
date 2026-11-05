@@ -42,7 +42,7 @@ function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
 end
 
 parameters = (; learning_rate = 0.1, inverse_temperature = 2.0)
-input = ModelInput((; reward = 1.0), (; expected_reward = 0.5), NoAction(), parameters)
+input = ModelInput((; reward = 1.0), (; expected_reward = 0.5), (; choice = NoAction()), parameters)
 
 CognitiveModeling.apply_model(RescorlaWagner(), input).new_state
 
@@ -97,9 +97,10 @@ they match while the model runs.
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
-without one kind of attribute gives `()` for it. [`simulate`](@ref) doesn't use the names,
-so a model can be tried with it before they are written, while a [`CognitiveAgent`](@ref)
-checks its parameters and state against them.
+without one kind of attribute gives `()` for it. [`simulate`](@ref) uses the action names
+for the action before the first timestep, so a model needs them before it can be simulated,
+and a [`CognitiveAgent`](@ref) checks its parameters, previous action and state against
+them.
 
 # Examples
 ```jldoctest

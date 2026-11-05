@@ -24,8 +24,9 @@ struct NoObservation end
 """
     NoAction()
 
-Stand-in for an action when there is none, such as the previous action on the first
-timestep. A model without actions gives this as its action distribution.
+Stand-in for an action that isn't taken on a timestep, as one entry of the actions
+`NamedTuple`, such as `(; choice = NoAction())`. Before the first timestep, every action is
+`NoAction()`.
 """
 struct NoAction end
 
@@ -42,7 +43,8 @@ Each argument is kept in a field of the same name, such as `input.observation`.
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
 - `previous_action`: the actions from the previous timestep, in a `NamedTuple` with the
-  names the model gave them, as in `input.previous_action.choice`, or [`NoAction`](@ref).
+  names the model gave them, as in `input.previous_action.choice`. Before the first
+  timestep, each of them is [`NoAction`](@ref).
 - `parameters`: the cognitive parameters of the model. Will generally be a NamedTuple. 
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
@@ -56,10 +58,12 @@ julia> state = (; expected_reward = 0.5);
 
 julia> parameters = (; learning_rate = 0.1);
 
-julia> ModelInput(observation, state, NoAction(), parameters).timestep_size
+julia> previous_action = (; choice = NoAction());
+
+julia> ModelInput(observation, state, previous_action, parameters).timestep_size
 1
 
-julia> ModelInput(observation, state, NoAction(), parameters, 0.5).timestep_size
+julia> ModelInput(observation, state, previous_action, parameters, 0.5).timestep_size
 0.5
 ```
 """
@@ -85,11 +89,12 @@ The outputs of a model for a single timestep, which [`apply_model`](@ref) return
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
 # Arguments
-- `action_distribution::Union{NamedTuple, NoAction}`: what the actions on this timestep are
-  sampled from, in a `NamedTuple` with one entry for each action, such as
-  `(; choice = Bernoulli(0.7))`. Each entry can be anything that works with `rand`, such as
-  a distribution from Distributions.jl, and the sampled actions keep the names. A model
-  without actions gives [`NoAction`](@ref).
+- `action_distribution::NamedTuple`: what the actions on this timestep are sampled from, in
+  a `NamedTuple` with one entry for each action, such as `(; choice = Bernoulli(0.7))`.
+  Each entry can be anything that works with `rand`, such as a distribution from
+  Distributions.jl, and the sampled actions keep the names. An action that isn't taken on
+  this timestep is [`NoAction`](@ref), and a model without actions gives an empty
+  `NamedTuple`, `(;)`.
 - `new_state=(;)`: the cognitive state of the model after this timestep, which is the
   `previous_state` of the next one.
 
@@ -103,7 +108,7 @@ julia> ModelOutput((; choice = Bernoulli(0.7)), (; expected_reward = 0.5)).new_s
 julia> ModelOutput((; choice = Bernoulli(0.7))).new_state
 NamedTuple()
 
-julia> ModelOutput(NoAction()).action_distribution
+julia> ModelOutput((; choice = NoAction(), bet = Bernoulli(0.2))).action_distribution.choice
 NoAction()
 ```
 """
@@ -111,8 +116,8 @@ struct ModelOutput{Taction, Tstate}
     action_distribution::Taction
     new_state::Tstate
 
-    #Only takes named action distributions, or no action, so that the model names every action
-    function ModelOutput(action_distribution::Union{NamedTuple, NoAction}, new_state = (;))
+    #Only takes named action distributions, so that the model names every action
+    function ModelOutput(action_distribution::NamedTuple, new_state = (;))
         return new{typeof(action_distribution), typeof(new_state)}(action_distribution, new_state)
     end
 end
@@ -122,7 +127,8 @@ end
 
 The names of the attributes of a model, which [`attribute_names`](@ref) returns.
 
-Each argument is a `Tuple` of `Symbol`s, and is kept in a field of the same name, such as
+Each argument is a `Tuple` of `Symbol`s, which is kept in the type, so that the names are
+known at compile time, and read as a property of the same name, such as
 `attributes.parameters`. A single `Symbol` is put in a tuple, and a `Vector` of them is made
 into one. All four must be given, and `()` means that the model has none of that kind.
 
@@ -144,22 +150,34 @@ julia> attributes.states
 (:expected_reward,)
 ```
 """
-struct ModelAttributes{Tparameters <: Tuple{Vararg{Symbol}}, Tstates <: Tuple{Vararg{Symbol}}, Tobservations <: Tuple{Vararg{Symbol}}, Tactions <: Tuple{Vararg{Symbol}}}
-    parameters::Tparameters
-    states::Tstates
-    observations::Tobservations
-    actions::Tactions
-end
+struct ModelAttributes{Tparameters, Tstates, Tobservations, Tactions} end
 
-#Takes the names by keyword, and puts a single name or a vector of names in a tuple
+#Takes the names by keyword, puts a single name or a vector of names in a tuple, and keeps them in the type
 function ModelAttributes(; parameters, states, observations, actions)
-    return ModelAttributes(as_tuple_of_names(parameters), as_tuple_of_names(states), as_tuple_of_names(observations), as_tuple_of_names(actions))
+    return ModelAttributes{as_tuple_of_names(parameters), as_tuple_of_names(states), as_tuple_of_names(observations), as_tuple_of_names(actions)}()
 end
 
 #Names are kept in a tuple of symbols
 as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
 as_tuple_of_names(name::Symbol) = (name,)
 as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
+
+#Reads the names in the type as properties
+function Base.getproperty(attributes::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}, name::Symbol) where {Tparameters, Tstates, Tobservations, Tactions}
+    if name === :parameters
+        return Tparameters
+    elseif name === :states
+        return Tstates
+    elseif name === :observations
+        return Tobservations
+    elseif name === :actions
+        return Tactions
+    else
+        throw(FieldError(typeof(attributes), name))
+    end
+end
+
+Base.propertynames(::ModelAttributes) = (:parameters, :states, :observations, :actions)
 
 """
     InvalidParametersError(message)

@@ -12,11 +12,14 @@ function has_attribute_names(model::AbstractCognitiveModel)
     return which(attribute_names, (typeof(model),)).sig != Tuple{typeof(attribute_names), AbstractCognitiveModel}
 end
 
-#Throw an informative error if the names of the parameters, or of a NamedTuple state, aren't those in attribute_names
-function check_names_match(model::AbstractCognitiveModel, parameters, state)
+#Throw an informative error if the names of the parameters, the previous action or a NamedTuple state aren't those in attribute_names
+function check_names_match(model::AbstractCognitiveModel, parameters, state, previous_action)
     attributes = check_attribute_names(attribute_names(model), model)
     if !issetequal(keys(parameters), attributes.parameters)
         throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of a model of type $(typeof(model)) as $(attributes.parameters)."))
+    end
+    if !(previous_action isa NamedTuple && issetequal(keys(previous_action), attributes.actions))
+        throw(ArgumentError("The previous action is $previous_action, but it must be a NamedTuple with the actions that attribute_names lists for a model of type $(typeof(model)), $(attributes.actions)."))
     end
     if state isa NamedTuple && !issetequal(keys(state), attributes.states)
         throw(ArgumentError("The state is named $(keys(state)), but attribute_names lists the states of a model of type $(typeof(model)) as $(attributes.states)."))
