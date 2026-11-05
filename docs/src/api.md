@@ -21,14 +21,14 @@ so use them with the package's name, as in `CognitiveModeling.apply_model`.
 ```@docs
 CognitiveModeling.apply_model(::CognitiveModeling.AbstractCognitiveModel, ::Any)
 CognitiveModeling.initialize_state(::CognitiveModeling.AbstractCognitiveModel, ::Any)
-CognitiveModeling.attribute_names
+CognitiveModeling.attribute_names(::CognitiveModeling.AbstractCognitiveModel)
 ```
 
 ### Functions that a model can implement
 
 ```@docs
 CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractCognitiveModel, ::Any)
-CognitiveModeling.default_parameters
+CognitiveModeling.default_parameters(::CognitiveModeling.AbstractCognitiveModel)
 CognitiveModeling.turing_apply_model
 ```
 
@@ -37,12 +37,14 @@ CognitiveModeling.turing_apply_model
 ```@docs
 CognitiveModeling.apply_model(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
 CognitiveModeling.initialize_state(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
+CognitiveModeling.attribute_names(::CognitiveModeling.AbstractEnvironmentModel)
 ```
 
 ### Functions that an environment model can implement
 
 ```@docs
 CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
+CognitiveModeling.default_parameters(::CognitiveModeling.AbstractEnvironmentModel)
 ```
 
 ### Display
@@ -50,7 +52,7 @@ CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractEnvironme
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["defining_models/utility_functions.jl"]
+Pages = ["defining_models/utility_functions.jl", "environments/utility_functions.jl"]
 ```
 
 ## Internals

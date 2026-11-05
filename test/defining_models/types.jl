@@ -38,6 +38,14 @@ using Random: Xoshiro, default_rng
         @test ModelOutput((; choice = 0.7), state).new_state === state
     end
 
+    @testset "EnvironmentOutput only takes named observations" begin
+        @test EnvironmentOutput(observation).observation === observation
+        @test EnvironmentOutput((;)).observation === (;)
+        @test EnvironmentOutput((; reward = NoObservation())).observation === (; reward = NoObservation())
+        @test_throws MethodError EnvironmentOutput(NoObservation())
+        @test_throws MethodError EnvironmentOutput(1.0)
+    end
+
     @testset "EnvironmentOutput sets the new state to an empty NamedTuple if it isn't specified" begin
         @test EnvironmentOutput(observation).new_state === (;)
         @test EnvironmentOutput(observation, state).new_state === state

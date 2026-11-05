@@ -4,10 +4,10 @@
 Supertype for environment models, which give a cognitive model its observations.
 
 # Implementation
-Create a subtype and add methods of [`apply_model`](@ref) and [`initialize_state`](@ref) for
-it. The method of `apply_model` takes an [`EnvironmentInput`](@ref) and returns an
-[`EnvironmentOutput`](@ref). An environment model can also add a method of
-[`prepare_state_for_saving`](@ref).
+Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
+[`attribute_names`](@ref) for it. The method of `apply_model` takes an
+[`EnvironmentInput`](@ref) and returns an [`EnvironmentOutput`](@ref). An environment model
+can also add methods of [`prepare_state_for_saving`](@ref) and [`default_parameters`](@ref).
 
 See also [`simulate`](@ref), which has an example.
 """
@@ -26,7 +26,8 @@ Each argument is kept in a field of the same name, such as `input.action`.
   the cognitive model gave them, as in `input.action.choice`. Before the first action, each
   of them is [`NoAction`](@ref).
 - `previous_state`: the state of the environment after the previous timestep.
-- `previous_observation`: the observation from the previous timestep, or
+- `previous_observation`: the observation from the previous timestep, in a `NamedTuple` with
+  the names the environment gave them. Before the first observation, each of them is
   [`NoObservation`](@ref).
 - `parameters`: the parameters of the environment model.
 - `timestep_size=1`: how much time this timestep covers.
@@ -55,17 +56,19 @@ The outputs of an environment model for a single timestep.
 Each argument is kept in a field of the same name, such as `output.observation`.
 
 # Arguments
-- `observation`: what the cognitive model observes, or [`NoObservation`](@ref) if it
-  observes nothing.
+- `observation::NamedTuple`: what the cognitive model observes, in a `NamedTuple` with one
+  entry for each observation, such as `(; reward = 1.0)`. An observation that isn't made on
+  this timestep is [`NoObservation`](@ref), and an environment model without observations
+  gives an empty `NamedTuple`, `(;)`.
 - `new_state=(;)`: the state of the environment after this timestep, which is the
   `previous_state` of the next one.
 """
 struct EnvironmentOutput{Tobservation, Tstate}
     observation::Tobservation
     new_state::Tstate
-end
 
-#Sets the new state to an empty NamedTuple if it isn't specified
-function EnvironmentOutput(observation)
-    return EnvironmentOutput(observation, (;))
+    #Only takes named observations, so that the environment model names every observation
+    function EnvironmentOutput(observation::NamedTuple, new_state = (;))
+        return new{typeof(observation), typeof(new_state)}(observation, new_state)
+    end
 end

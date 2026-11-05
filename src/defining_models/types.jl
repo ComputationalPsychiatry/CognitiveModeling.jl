@@ -16,8 +16,9 @@ abstract type AbstractCognitiveModel end
 """
     NoObservation()
 
-Stand-in for the observation on a timestep where a model observes nothing, such as the first
-timestep when the agent starts.
+Stand-in for an observation that isn't made on a timestep, as one entry of the observations
+`NamedTuple`, such as `(; reward = NoObservation())`. Before the first observation, every
+observation is `NoObservation()`, such as on the first timestep when the agent starts.
 """
 struct NoObservation end
 
@@ -39,7 +40,10 @@ Everything a model needs to run a single timestep, which [`apply_model`](@ref) r
 Each argument is kept in a field of the same name, such as `input.observation`.
 
 # Arguments
-- `observation`: what the model observes on this timestep, or [`NoObservation`](@ref).
+- `observation`: what the model observes on this timestep, in a `NamedTuple` with the names
+  the environment gave them, as in `input.observation.reward`. An observation that isn't
+  made on this timestep is [`NoObservation`](@ref), which every observation is on the first
+  timestep when the agent starts.
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
 - `previous_action`: the actions from the previous timestep, in a `NamedTuple` with the
@@ -126,6 +130,9 @@ end
     ModelAttributes(; parameters, states, observations, actions)
 
 The names of the attributes of a model, which [`attribute_names`](@ref) returns.
+
+An environment model returns one too, where the observations are those it gives and the
+actions those it receives, the other way round from a cognitive model.
 
 Each argument is a `Tuple` of `Symbol`s, which is kept in the type, so that the names are
 known at compile time, and read as a property of the same name, such as

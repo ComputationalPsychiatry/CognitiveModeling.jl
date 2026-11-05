@@ -5,19 +5,19 @@ function CognitiveModeling.initialize_state(environment::CommonRLEnvironment, pa
 end
 
 #Gives the initial observation before the first action and after an episode has ended, and acts otherwise
-function CognitiveModeling.apply_model(environment::CommonRLEnvironment, input::EnvironmentInput)
+function CognitiveModeling.apply_model(environment::CommonRLEnvironment{Tenv, action_name}, input::EnvironmentInput) where {Tenv, action_name}
     env = input.previous_state
-    action = single_action(input.action)
+    action = getproperty(input.action, action_name)
 
     #Before the first action, the environment is at its initial observation
     if action isa NoAction
-        return EnvironmentOutput(initial_observation(env), env)
+        return EnvironmentOutput(observation_at_start(env), env)
     end
 
     #After an episode has ended, start a new one
     if terminated(env)
         reset!(env)
-        return EnvironmentOutput(initial_observation(env), env)
+        return EnvironmentOutput(observation_at_start(env), env)
     end
 
     #Take the model's action, and give what follows from it
@@ -31,12 +31,6 @@ function CognitiveModeling.prepare_state_for_saving(environment::CommonRLEnviron
 end
 
 #The observation at the start of an episode, where there is no reward yet
-function initial_observation(env)
-    return (; observation = observe(env), reward = missing, terminated = false)
-end
-
-#The one action that act! receives
-function single_action(action::NamedTuple)
-    length(action) == 1 || throw(ArgumentError("A CommonRLEnvironment gives a model's only action to act!, so the model must have exactly one action, but it has $(length(action)): $(join(keys(action), ", "))."))
-    return only(action)
+function observation_at_start(env)
+    return (; observation = observe(env), reward = NoObservation(), terminated = false)
 end

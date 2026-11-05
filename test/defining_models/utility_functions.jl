@@ -25,6 +25,17 @@ struct ModelInFamily <: FamilyOfModels end
 struct ReturnsNamedTupleOfNames <: AbstractCognitiveModel end
 CognitiveModeling.attribute_names(model::ReturnsNamedTupleOfNames) = (; parameters = (:noise,), states = (), observations = (), actions = ())
 
+#Environment models with names, without them, and with names that aren't a ModelAttributes
+struct EnvironmentWithAttributes <: AbstractEnvironmentModel end
+function CognitiveModeling.attribute_names(environment::EnvironmentWithAttributes)
+    return ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = :choice)
+end
+struct EnvironmentWithFields <: AbstractEnvironmentModel
+    n_arms::Int
+end
+struct EnvironmentReturnsNamedTupleOfNames <: AbstractEnvironmentModel end
+CognitiveModeling.attribute_names(environment::EnvironmentReturnsNamedTupleOfNames) = (; parameters = (), states = (), observations = (:reward,), actions = ())
+
 @testset "Utility functions" begin
     @testset "The REPL shows a summary of the model with its names" begin
         @test repr("text/plain", ModelWithAttributes()) == """
@@ -39,13 +50,28 @@ CognitiveModeling.attribute_names(model::ReturnsNamedTupleOfNames) = (; paramete
         @test occursin("States: shared_state", repr("text/plain", ModelInFamily()))
     end
 
+    @testset "The REPL shows a summary of an environment model with its names" begin
+        @test repr("text/plain", EnvironmentWithAttributes()) == """
+            -- Environment model --
+            Type: EnvironmentWithAttributes
+            Parameters: reward_probability
+            States: none
+            Observations: reward
+            Actions: choice"""
+        @test occursin("Attributes: not specified", repr("text/plain", EnvironmentWithFields(2)))
+        @test string(EnvironmentWithFields(2)) == "EnvironmentWithFields(2)"
+    end
+
     @testset "A vector of models without names is shown without an error" begin
         @test occursin("ModelWithFields{Float64}(4, 0.5)", repr("text/plain", [ModelWithFields(4, 0.5)]))
+        @test occursin("EnvironmentWithFields(2)", repr("text/plain", [EnvironmentWithFields(2)]))
     end
 
     @testset "Names that aren't a ModelAttributes give an informative error" begin
         @test_throws "must return a ModelAttributes" repr("text/plain", ReturnsNamedTupleOfNames())
         @test_throws "must return a ModelAttributes" CognitiveModeling.check_attribute_names(CognitiveModeling.attribute_names(ReturnsNamedTupleOfNames()), ReturnsNamedTupleOfNames())
+        @test_throws "The attribute_names method of an environment model of type EnvironmentReturnsNamedTupleOfNames must return a ModelAttributes" repr("text/plain", EnvironmentReturnsNamedTupleOfNames())
+        @test_throws "must return a ModelAttributes" CognitiveModeling.check_attribute_names(CognitiveModeling.attribute_names(EnvironmentReturnsNamedTupleOfNames()), EnvironmentReturnsNamedTupleOfNames())
     end
 
     @testset "The REPL shows the names in a ModelAttributes on one line each" begin

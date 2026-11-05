@@ -20,7 +20,7 @@ function CognitiveModeling.apply_model(model::LearnsRewards{Taction}, input::Mod
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    Vₜ = input.observation isa NoObservation ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
+    Vₜ = input.observation.reward isa NoObservation ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
     return ModelOutput((; choice = Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
 CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
@@ -33,6 +33,7 @@ function CognitiveModeling.apply_model(environment::RewardsFollowActions, input:
     n_timesteps = input.previous_state.n_timesteps + 1
     return EnvironmentOutput((; reward = input.parameters.reward_size * action), (; n_timesteps))
 end
+CognitiveModeling.attribute_names(environment::RewardsFollowActions) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = :reward, actions = :choice)
 
 # An environment whose reward is sampled
 struct SampledRewards <: AbstractEnvironmentModel end
@@ -40,6 +41,7 @@ CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;
 function CognitiveModeling.apply_model(environment::SampledRewards, input::EnvironmentInput)
     return EnvironmentOutput((; reward = float(rand(input.rng) < input.parameters.reward_probability)))
 end
+CognitiveModeling.attribute_names(environment::SampledRewards) = ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = ())
 
 # A Rescorla-Wagner model which learns more the more time passes. It learns on the first timestep too, so that every size counts
 struct LearnsOverTime <: AbstractCognitiveModel end
@@ -48,7 +50,7 @@ function CognitiveModeling.apply_model(model::LearnsOverTime, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + (1 - exp(-α * input.timestep_size)) * (r - V₋₁)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
@@ -61,6 +63,7 @@ function CognitiveModeling.apply_model(environment::RewardsGrowOverTime, input::
     action = input.action.choice isa NoAction ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action * input.timestep_size))
 end
+CognitiveModeling.attribute_names(environment::RewardsGrowOverTime) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
 
 # A model and an environment which leave out their states
 struct ChoosesWithoutState <: AbstractCognitiveModel end
@@ -75,6 +78,7 @@ function CognitiveModeling.apply_model(environment::RewardsWithoutState, input::
     action = input.action.choice isa NoAction ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action))
 end
+CognitiveModeling.attribute_names(environment::RewardsWithoutState) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
 
 # A model whose state update has noise in it
 struct LearnsWithNoise <: AbstractCognitiveModel end
@@ -83,7 +87,7 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + α * (r - V₋₁) + α * 0.1 * (rand(input.rng) - 0.5)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
@@ -98,7 +102,7 @@ function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     V = input.previous_state.expected_rewards
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
     V[1] += α * (r - V[1])
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (V[1] - 0.5))))), input.previous_state)
 end

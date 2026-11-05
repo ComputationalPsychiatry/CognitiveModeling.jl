@@ -12,17 +12,37 @@ function has_attribute_names(model::AbstractCognitiveModel)
     return which(attribute_names, (typeof(model),)).sig != Tuple{typeof(attribute_names), AbstractCognitiveModel}
 end
 
+#Whether a name is among other names, and whether every name in a tuple is. Both unrolled over the names, so that the compiler decides them from the names alone when it knows them, which it doesn't for issubset and issetequal with more than one name
+has_name(name::Symbol, names::Tuple{}) = false
+has_name(name::Symbol, names::Tuple) = name === first(names) || has_name(name, Base.tail(names))
+has_every_name(names::Tuple{}, other_names::Tuple) = true
+has_every_name(names::Tuple, other_names::Tuple) = has_name(first(names), other_names) && has_every_name(Base.tail(names), other_names)
+
+#Whether two tuples of names have the same names, in any order
+function same_names(names, other_names)
+    return has_every_name(names, other_names) && has_every_name(other_names, names)
+end
+
 #Throw an informative error if the names of the parameters, the previous action or a NamedTuple state aren't those in attribute_names
 function check_names_match(model::AbstractCognitiveModel, parameters, state, previous_action)
     attributes = check_attribute_names(attribute_names(model), model)
-    if !issetequal(keys(parameters), attributes.parameters)
+    if !same_names(keys(parameters), attributes.parameters)
         throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of a model of type $(typeof(model)) as $(attributes.parameters)."))
     end
-    if !(previous_action isa NamedTuple && issetequal(keys(previous_action), attributes.actions))
+    if !(previous_action isa NamedTuple && same_names(keys(previous_action), attributes.actions))
         throw(ArgumentError("The previous action is $previous_action, but it must be a NamedTuple with the actions that attribute_names lists for a model of type $(typeof(model)), $(attributes.actions)."))
     end
-    if state isa NamedTuple && !issetequal(keys(state), attributes.states)
+    if state isa NamedTuple && !same_names(keys(state), attributes.states)
         throw(ArgumentError("The state is named $(keys(state)), but attribute_names lists the states of a model of type $(typeof(model)) as $(attributes.states)."))
+    end
+    return nothing
+end
+
+#Throw an informative error if an observation given to a model isn't a NamedTuple with every observation that attribute_names lists
+function check_observation_names(model::AbstractCognitiveModel, observation)
+    attributes = check_attribute_names(attribute_names(model), model)
+    if !(observation isa NamedTuple && has_every_name(attributes.observations, keys(observation)))
+        throw(ArgumentError("The observation is $observation, but it must be a NamedTuple with the observations that attribute_names lists for a model of type $(typeof(model)), $(attributes.observations)."))
     end
     return nothing
 end

@@ -97,10 +97,12 @@ they match while the model runs.
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
-without one kind of attribute gives `()` for it. [`simulate`](@ref) uses the action names
-for the action before the first timestep, so a model needs them before it can be simulated,
-and a [`CognitiveAgent`](@ref) checks its parameters, previous action and state against
-them.
+without one kind of attribute gives `()` for it. [`simulate`](@ref) and
+[`CognitiveAgent`](@ref) use the action names for the action before the first timestep, and
+check the parameters, the previous action and a `NamedTuple` state against the names. A
+simulation with an environment also checks that the two fit together: the environment must
+give every observation the model lists, and the model must give every action the environment
+lists.
 
 # Examples
 ```jldoctest
@@ -158,7 +160,7 @@ end
     default_parameters(model::AbstractCognitiveModel)
 
 Return the default parameter values of `model`, such as `(; learning_rate = 0.1)`, which
-[`CognitiveAgent`](@ref) uses for the parameters it isn't given.
+[`CognitiveAgent`](@ref) and [`simulate`](@ref) use for the parameters they aren't given.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so

@@ -1,8 +1,9 @@
 """
-    CommonRLEnvironment(env)
+    CommonRLEnvironment(env; action_name)
 
 An environment model around an environment from CommonRLInterface.jl, which needs
-CommonRLInterface.jl to be loaded.
+CommonRLInterface.jl to be loaded. `action_name` is the name of the cognitive model's action
+that `act!` receives, such as `:arm`.
 
 Environments from POMDPs.jl and ReinforcementLearning.jl can be used through it, with
 `convert(CommonRLInterface.AbstractEnv, x)`, which POMDPTools.jl defines for a `POMDP` or
@@ -20,9 +21,10 @@ Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `
 gives, the reward that `act!` returned, and whether the episode has ended. Before the first
 action, when the action is [`NoAction`](@ref), and on the timestep after an episode ended,
 the environment is at its initial observation, with `reset!` in the second case, so the
-reward is `missing` and nothing is done with the action. The model must have exactly one
-action, which is given to `act!`.
-Use [`EnvironmentStarts`](@ref), so that the model observes before it acts.
+reward is [`NoObservation`](@ref) and nothing is done with the action. Its
+[`attribute_names`](@ref) are these three observations, the one action, no parameters and no
+states, since the environment object isn't a `NamedTuple`. Use [`EnvironmentStarts`](@ref),
+so that the model observes before it acts.
 
 # Examples
 ```jldoctest
@@ -54,7 +56,7 @@ CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; para
 
 observations, actions, _, _ = simulate(
     PullsFirstArm(),
-    CommonRLEnvironment(Bandit(0));
+    CommonRLEnvironment(Bandit(0); action_name = :arm);
     who_starts = EnvironmentStarts(),
     n_steps = 4,
     cognitive_parameters = (;),
@@ -66,12 +68,22 @@ foreach(println, observations)
 
 # output
 
-(observation = 0, reward = missing, terminated = false)
+(observation = 0, reward = NoObservation(), terminated = false)
 (observation = 1, reward = 1.0, terminated = false)
 (observation = 2, reward = 1.0, terminated = true)
-(observation = 0, reward = missing, terminated = false)
+(observation = 0, reward = NoObservation(), terminated = false)
 ```
 """
-struct CommonRLEnvironment{Tenv} <: AbstractEnvironmentModel
+struct CommonRLEnvironment{Tenv, action_name} <: AbstractEnvironmentModel
     env::Tenv
+end
+
+#Takes the name of the action by keyword, and keeps it in the type, so that reading the action by name costs nothing
+function CommonRLEnvironment(env; action_name::Symbol)
+    return CommonRLEnvironment{typeof(env), action_name}(env)
+end
+
+#The observations are always the same three, the action is the one named, and the environment object isn't a NamedTuple, so there are no named states
+function attribute_names(::CommonRLEnvironment{Tenv, action_name}) where {Tenv, action_name}
+    return ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = action_name)
 end

@@ -6,8 +6,8 @@ struct ModelWithUnannotatedInput <: AbstractCognitiveModel end
 CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOutput((; choice = 0.7))
 
 @testset "Functions to extend" begin
-    model_input = ModelInput(NoObservation(), (;), (; choice = NoAction()), (;))
-    environment_input = EnvironmentInput((; choice = NoAction()), (;), NoObservation(), (;))
+    model_input = ModelInput((; reward = NoObservation()), (;), (; choice = NoAction()), (;))
+    environment_input = EnvironmentInput((; choice = NoAction()), (;), (; reward = NoObservation()), (;))
 
     @testset "A missing timestep method gives an informative error" begin
         @test_throws "CognitiveModeling.apply_model(model::ModelWithoutMethods, input::CognitiveModeling.ModelInput)" CognitiveModeling.apply_model(ModelWithoutMethods(), model_input)
@@ -26,6 +26,7 @@ CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOu
     @testset "The defaults of the other functions" begin
         model = ModelWithoutMethods()
         @test isempty(CognitiveModeling.default_parameters(model))
+        @test isempty(CognitiveModeling.default_parameters(EnvironmentWithoutMethods()))
         #Preparing a state for saving does nothing to it
         state = (; values = [0.5])
         @test CognitiveModeling.prepare_state_for_saving(model, state) === state
@@ -34,6 +35,7 @@ CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOu
 
     @testset "A missing method for the names gives an informative error" begin
         @test_throws "CognitiveModeling.attribute_names(model::ModelWithoutMethods)" CognitiveModeling.attribute_names(ModelWithoutMethods())
+        @test_throws "CognitiveModeling.attribute_names(environment::EnvironmentWithoutMethods)" CognitiveModeling.attribute_names(EnvironmentWithoutMethods())
     end
 
     @testset "The functions to extend are public, but not exported" begin

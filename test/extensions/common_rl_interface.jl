@@ -32,44 +32,52 @@ Base.rand(rng::AbstractRNG, action::Always) = action.value
 
 #Pulls the arm in its parameters, and keeps the last reward in its state
 struct PullsArm <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::PullsArm, parameters) = (; last_reward = missing)
+CognitiveModeling.initialize_state(model::PullsArm, parameters) = (; last_reward = NoObservation())
 function CognitiveModeling.apply_model(model::PullsArm, input::ModelInput)
     return ModelOutput((; arm = Always(input.parameters.arm)), (; last_reward = input.observation.reward))
 end
 CognitiveModeling.attribute_names(model::PullsArm) = ModelAttributes(; parameters = :arm, states = :last_reward, observations = (:observation, :reward, :terminated), actions = :arm)
 
-#Has two actions, which the environment can't take
+#Has two actions, of which the environment takes the one named, and lists only the reward
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Always(1), second = Always(2)))
-CognitiveModeling.attribute_names(model::PullsTwoArms) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = (:first, :second))
+CognitiveModeling.attribute_names(model::PullsTwoArms) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = (:first, :second))
 
 #Shortens the calls below
-function run_bandit(env, model = PullsArm(); n_steps = 7, cognitive_parameters = (; arm = 1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
-    return simulate(model, CommonRLEnvironment(env); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), save_history, save_environment_history, keywords...)
+function run_bandit(env, model = PullsArm(); action_name = :arm, n_steps = 7, cognitive_parameters = (; arm = 1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+    return simulate(model, CommonRLEnvironment(env; action_name); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), save_history, save_environment_history, keywords...)
 end
 
 @testset "CommonRLInterface extension" begin
     @test Base.get_extension(CognitiveModeling, :CognitiveModelingCommonRLInterfaceExt) isa Module
 
+    @testset "The name of the action is required, and kept in the type with the names" begin
+        environment = CommonRLEnvironment(PlainBandit(0); action_name = :arm)
+        @test environment isa CommonRLEnvironment{PlainBandit, :arm}
+        @test CognitiveModeling.attribute_names(environment) === ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = :arm)
+        @test_throws UndefKeywordError CommonRLEnvironment(PlainBandit(0))
+        @test occursin("Actions: arm", repr("text/plain", environment))
+    end
+
     @testset "The environment object is reset and used as the state" begin
         env = CountingBandit(2, 0)
-        @test CognitiveModeling.initialize_state(CommonRLEnvironment(env), (;)) === env
+        @test CognitiveModeling.initialize_state(CommonRLEnvironment(env; action_name = :arm), (;)) === env
         @test env.pulls == 0
     end
 
     @testset "The reward and the end of the episode are in the observation" begin
         observations, actions, cognitive_states, _ = run_bandit(CountingBandit(0, 0))
         #The first observation has no reward, since nothing has been done yet
-        @test isequal(observations[1], (; observation = 0, reward = missing, terminated = false))
+        @test observations[1] === (; observation = 0, reward = NoObservation(), terminated = false)
         @test observations[2] == (; observation = 1, reward = 1.0, terminated = false)
         @test observations[4] == (; observation = 3, reward = 1.0, terminated = true)
         #The episode after a terminated one starts from the initial observation, again without a reward
-        @test isequal(observations[5], (; observation = 0, reward = missing, terminated = false))
+        @test observations[5] === (; observation = 0, reward = NoObservation(), terminated = false)
         @test observations[6] == (; observation = 1, reward = 1.0, terminated = false)
         #The model gets the actions it took and the rewards
         @test all(action -> action === (; arm = 1), actions)
-        @test isequal([state.last_reward for state in cognitive_states], [missing, 1.0, 1.0, 1.0, missing, 1.0, 1.0])
+        @test [state.last_reward for state in cognitive_states] == [NoObservation(), 1.0, 1.0, 1.0, NoObservation(), 1.0, 1.0]
         #The second arm doesn't pay
         observations, _, _, _ = run_bandit(CountingBandit(0, 0); cognitive_parameters = (; arm = 2))
         @test observations[2] == (; observation = 1, reward = 0.0, terminated = false)
@@ -97,7 +105,8 @@ end
 
     @testset "simulate! continues with the same environment object" begin
         env = CountingBandit(0, 0)
-        environment = Environment(CommonRLEnvironment(env), (;))
+        environment = Environment(CommonRLEnvironment(env; action_name = :arm), (;))
+        @test environment.previous_observation === (; observation = NoObservation(), reward = NoObservation(), terminated = NoObservation())
         agent = CognitiveAgent(PullsArm(), (; arm = 1); save_history = SaveHistory(SaveEverything()))
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
         @test environment.state === env
@@ -106,7 +115,11 @@ end
         @test [observation.observation for observation in observations] == [2, 3, 0]
     end
 
-    @testset "A model with several actions gives an informative error" begin
-        @test_throws "must have exactly one action, but it has 2: first, second" run_bandit(CountingBandit(0, 0), PullsTwoArms())
+    @testset "The action named is the one given to act!, and the model must have it" begin
+        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :second, cognitive_parameters = (;))
+        @test observations[2] == (; observation = 1, reward = 0.0, terminated = false)
+        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :first, cognitive_parameters = (;))
+        @test observations[2] == (; observation = 1, reward = 1.0, terminated = false)
+        @test_throws "lists the actions (:lever,), but a model of type PullsTwoArms gives (:first, :second). The model must give every action the environment lists." run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :lever, cognitive_parameters = (;))
     end
 end

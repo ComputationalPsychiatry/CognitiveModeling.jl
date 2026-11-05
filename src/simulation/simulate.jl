@@ -20,19 +20,40 @@ function sample_action(rng, ::NoAction)
     return NoAction()
 end
 
+## Starting a simulation ##
+"""
+    full_parameters(model, parameters)
+
+Return `parameters` with the values from [`default_parameters`](@ref) of `model` for the
+parameters it doesn't have. `model` can also be an environment model.
+"""
+function full_parameters(model, parameters)
+    return merge(default_parameters(model), parameters)
+end
+
 """
     initial_action(model)
+    initial_observation(model)
 
-Return the action before the first timestep: a `NamedTuple` with the action names from
-[`attribute_names`](@ref), each [`NoAction`](@ref).
+Return the action or the observation before the first timestep: a `NamedTuple` with the
+action or observation names from [`attribute_names`](@ref) of `model`, which can also be an
+environment model, each [`NoAction`](@ref) or [`NoObservation`](@ref).
 """
-function initial_action(model::AbstractCognitiveModel)
+function initial_action(model::Union{AbstractCognitiveModel, AbstractEnvironmentModel})
     return no_actions(check_attribute_names(attribute_names(model), model))
 end
 
-#Builds the NamedTuple from the names in the type, so that it is known at compile time
+function initial_observation(model::Union{AbstractCognitiveModel, AbstractEnvironmentModel})
+    return no_observations(check_attribute_names(attribute_names(model), model))
+end
+
+#Build the NamedTuples from the names in the type, so that they are known at compile time
 function no_actions(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
     return NamedTuple{Tactions}(map(_ -> NoAction(), Tactions))
+end
+
+function no_observations(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
+    return NamedTuple{Tobservations}(map(_ -> NoObservation(), Tobservations))
 end
 
 ## Saving outputs ##
@@ -93,7 +114,7 @@ state_selection(::SaveHistory{Tobservations, Tactions, Tstates}) where {Tobserva
 
 Return what a [`SaveHistory`](@ref) selects of `x`: `x` itself for [`SaveEverything`](@ref),
 an empty `NamedTuple` for no names, and the named entries of a `NamedTuple` for a tuple of
-names. [`NoObservation`](@ref) is returned as it is.
+names.
 """
 select_names(x, ::Val{SaveEverything()}) = x
 select_names(x, ::Val{()}) = (;)
@@ -102,11 +123,33 @@ select_names(x, ::Val{()}) = (;)
 function select_names(x, ::Val{names}) where {names}
     if x isa NamedTuple
         return NamedTuple{names}(x)
-    elseif x isa NoObservation
-        return x
     else
         error("A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). Use SaveEverything() or () for this kind of attribute.")
     end
+end
+
+"""
+    check_selection_names(save_history, model)
+
+Throw an informative error if `save_history` selects an observation or an action by name that
+[`attribute_names`](@ref) of `model`, which can also be an environment model, doesn't list,
+since a history starts from those names. The states aren't checked, because
+[`prepare_state_for_saving`](@ref) can save anything.
+"""
+function check_selection_names(save_history::SaveHistory, model)
+    attributes = check_attribute_names(attribute_names(model), model)
+    check_selected_names(save_history.observations, attributes.observations, "observations", model)
+    check_selected_names(save_history.actions, attributes.actions, "actions", model)
+    return nothing
+end
+
+#Everything can always be selected, and names must be among those the model lists
+check_selected_names(::SaveEverything, names, kind, model) = nothing
+function check_selected_names(selection::Tuple, names, kind, model)
+    if !has_every_name(selection, names)
+        throw(ArgumentError("The SaveHistory selects the $kind $selection, but attribute_names lists the $kind of $(describe_model(model)) as $names. A history can only select observations and actions that the model lists."))
+    end
+    return nothing
 end
 
 """
@@ -158,8 +201,9 @@ Collect the outputs of a timestep in a `NamedTuple`, each both as it is, which t
 timestep starts from, and as it is saved, which `save_history` and
 `save_environment_history` select.
 
-This is its own function so that if an output can have two types, like an observation or
-[`NoObservation`](@ref), the compiler can split the call and get a concrete type for each.
+This is its own function so that if an output can have two types, like an observation with
+an entry that is sometimes [`NoObservation`](@ref), the compiler can split the call and get a
+concrete type for each.
 """
 function collect_timestep_outputs(environment_output, cognitive_output, action, model, environment, save_history, save_environment_history)
     return (;
@@ -343,6 +387,12 @@ Each element is what happened on that timestep, and the states are those after i
 `save_history` and `save_environment_history` select what is kept of each element, which is
 nothing by default: give `SaveHistory(SaveEverything())` to keep everything.
 
+Parameters that aren't given take the values in [`default_parameters`](@ref). The names of
+the parameters, the states, the previous action and the previous observation must be those
+in [`attribute_names`](@ref), and `environment` must give every observation `model` lists
+and `model` every action `environment` lists, or an `ArgumentError` is thrown before the
+first timestep.
+
 # Arguments
 - `model::AbstractCognitiveModel`: the cognitive model.
 - `environment::AbstractEnvironmentModel`: the environment model.
@@ -352,17 +402,23 @@ nothing by default: give `SaveHistory(SaveEverything())` to keep everything.
 - `timestep_sizes=1`: how much time each timestep covers, which both `model` and
   `environment` receive. A vector has one size for each timestep, so its length must be
   `n_steps`. Anything else is the size of every timestep.
-- `cognitive_parameters::NamedTuple`: the parameters of `model`.
-- `environment_parameters::NamedTuple`: the parameters of `environment`.
+- `cognitive_parameters::NamedTuple`: the parameters of `model`, with its default values
+  for those that aren't given.
+- `environment_parameters::NamedTuple`: the parameters of `environment`, with its default
+  values for those that aren't given.
 - `rng::AbstractRNG=default_rng()`: the random number generator to sample actions from,
   which `model` and `environment` also receive in their inputs.
-- `previous_state=initialize_state(model, cognitive_parameters)`: the state of `model`
-  before the first timestep. A state that `model` changes in place will be changed.
+- `previous_state=initialize_state(model, ...)`: the state of `model` before the first
+  timestep, by default its initial state from the full parameters. A state that `model`
+  changes in place will be changed.
 - `previous_action=initial_action(model)`: the action before the first timestep. By default
   every action is [`NoAction`](@ref), with the names from [`attribute_names`](@ref).
-- `previous_environment_state=initialize_state(environment, environment_parameters)`: the
-  state of `environment` before the first timestep.
-- `previous_observation=NoObservation()`: the observation before the first timestep.
+- `previous_environment_state=initialize_state(environment, ...)`: the state of
+  `environment` before the first timestep, by default its initial state from the full
+  parameters.
+- `previous_observation=initial_observation(environment)`: the observation before the first
+  timestep. By default every observation is [`NoObservation`](@ref), with the names from
+  `attribute_names` of `environment`.
 - `save_history::SaveHistory=SaveHistory()`: which observations, actions and states of
   `model` are saved, by name. Nothing is saved by default, and
   `SaveHistory(SaveEverything())` saves everything. See [`SaveHistory`](@ref).
@@ -406,6 +462,10 @@ function CognitiveModeling.apply_model(environment::BernoulliRewards, input::Env
     return EnvironmentOutput((; reward))
 end
 
+function CognitiveModeling.attribute_names(environment::BernoulliRewards)
+    return ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = ())
+end
+
 observations, actions, cognitive_states, environment_states = simulate(
     RescorlaWagner(),
     BernoulliRewards();
@@ -428,8 +488,9 @@ cognitive_states
 
 # Extended help
 The return type is concrete as long as the types of the outputs don't change between
-timesteps. If they do, like an observation that is sometimes [`NoObservation`](@ref), the
-vector for that output holds a `Union` of the types, and the simulation is a little slower.
+timesteps. If they do, like an observation with an entry that is sometimes
+[`NoObservation`](@ref), the vector for that output holds a `Union` of the types, and the
+simulation is a little slower.
 
 Nothing is copied when outputs are saved. A model or environment which changes an object in
 its state in place, instead of returning a new one, must add a method of
@@ -452,13 +513,22 @@ function simulate(
         cognitive_parameters::NamedTuple,
         environment_parameters::NamedTuple,
         rng::AbstractRNG = default_rng(),
-        previous_state = initialize_state(model, cognitive_parameters),
+        previous_state = initialize_state(model, full_parameters(model, cognitive_parameters)),
         previous_action = initial_action(model),
-        previous_environment_state = initialize_state(environment, environment_parameters),
-        previous_observation = NoObservation(),
+        previous_environment_state = initialize_state(environment, full_parameters(environment, environment_parameters)),
+        previous_observation = initial_observation(environment),
         save_history::SaveHistory = SaveHistory(),
         save_environment_history::SaveHistory = SaveHistory(),
     )
+
+    #Fill in the default parameters
+    cognitive_parameters = full_parameters(model, cognitive_parameters)
+    environment_parameters = full_parameters(environment, environment_parameters)
+
+    #Check the names of everything against attribute_names, and that the model and the environment fit together
+    check_names_match(model, cognitive_parameters, previous_state, previous_action)
+    check_names_match(environment, environment_parameters, previous_environment_state, previous_observation)
+    check_names_fit(model, environment)
 
     #Collect what was left from before the first timestep
     previous_outputs = (;
@@ -484,7 +554,8 @@ observations, actions and states, and what `environment.save_history` selects of
 environment's states. What the two select is also added to `agent.history` and
 `environment.history`, unless a selection is empty.
 
-Use the same `who_starts` on each call, so that each simulation continues the last one.
+Use the same `who_starts` on each call, so that each simulation continues the last one. The
+agent's model and the environment's must fit together, as for `simulate`.
 
 Reading the agent's untyped fields costs a dynamic dispatch on each call, which makes the
 return type unknown to the compiler. The loop inside is still fully typed. Use `simulate` if
@@ -527,6 +598,10 @@ function CognitiveModeling.apply_model(model::TimestepCounter, input::Environmen
     return EnvironmentOutput((; n_timesteps), (; n_timesteps))
 end
 
+function CognitiveModeling.attribute_names(model::TimestepCounter)
+    return ModelAttributes(; parameters = (), states = :n_timesteps, observations = :n_timesteps, actions = ())
+end
+
 agent = CognitiveAgent(RandomChoices(), (;))
 environment = Environment(TimestepCounter(), (;))
 
@@ -548,6 +623,9 @@ function simulate!(
         timestep_sizes = 1,
         rng::AbstractRNG = default_rng(),
     )
+
+    #Check that the model and the environment fit together
+    check_names_fit(agent.model, environment.model)
 
     #Collect where the agent and the environment are
     previous_outputs = (;
@@ -590,12 +668,16 @@ end
 
 Run a timestep of `model` without an environment, and return its new state, the action
 sampled from its output, and what `save_history` selects of the observation, the action and
-the state, in a `NamedTuple`.
+the state, in a `NamedTuple`. The observation must have the names that `model` lists.
 
 This is its own function so that it's compiled for the types in the agent's untyped fields,
-which makes [`simulate!`](@ref) on a single observation several times faster.
+which makes [`simulate!`](@ref) on a single observation several times faster, and makes the
+check of the observation's names cost nothing.
 """
 function run_cognitive_model(model, observation, previous_state, previous_action, parameters, timestep_size, rng, save_history)
+
+    #Check that the observation has the names the model lists
+    check_observation_names(model, observation)
 
     #Run timestep of cognitive model
     output = check_model_output(@inline(apply_model(model, ModelInput(observation, previous_state, previous_action, parameters, timestep_size, rng))), model)
@@ -620,11 +702,13 @@ What `agent.save_history` selects of the observation, the action and the state i
 `agent.history`.
 
 The action is in a `NamedTuple` with the name the model gave it, as in `action.choice`, as
-for [`simulate`](@ref).
+for [`simulate`](@ref). The observation must be a `NamedTuple` with every observation the
+model lists in [`attribute_names`](@ref), or an `ArgumentError` is thrown.
 
 # Arguments
 - `agent::CognitiveAgent`: the agent to update.
-- `observation`: what the agent observes on this timestep, or [`NoObservation`](@ref).
+- `observation::NamedTuple`: what the agent observes on this timestep, such as
+  `(; reward = 1.0)`. An observation that isn't made is [`NoObservation`](@ref).
 - `timestep_size=1`: how much time this timestep covers.
 - `rng::AbstractRNG=default_rng()`: the random number generator to sample from.
 
