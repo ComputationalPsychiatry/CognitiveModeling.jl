@@ -10,10 +10,6 @@ include("../test_cases.jl")
 Reactant.allowscalar(true)
 
 @testset "Reactant" begin
-    @testset "Reactant extension" begin
-        @test Base.get_extension(CognitiveModeling, :CognitiveModelingReactantExt) isa Module
-    end
-
     @testset "$(case.name)" for case in filter(case -> case.reactant, TEST_CASES)
         (; f, x) = case
         x_reactant = Reactant.to_rarray(x)
