@@ -8,7 +8,7 @@
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "environments/common_rl_environment.jl", "simulation/types.jl", "simulation/simulate.jl"]
+Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "environments/common_rl_environment.jl", "simulation/types.jl", "simulation/simulate.jl", "inference/types.jl", "inference/turing_models.jl"]
 ```
 
 ## Defining models and environments
@@ -62,5 +62,5 @@ These are only used inside the package, and can change without notice.
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["simulation/simulate.jl"]
+Pages = ["simulation/simulate.jl", "inference/utility_functions.jl"]
 ```

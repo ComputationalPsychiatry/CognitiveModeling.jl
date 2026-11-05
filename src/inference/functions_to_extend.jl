@@ -2,15 +2,19 @@
 
 """
     turing_apply_model(model::AbstractCognitiveModel, input::ModelInput)
+    turing_apply_model(environment::AbstractEnvironmentModel, input::EnvironmentInput)
 
 Create a Turing.jl model for a single timestep of `model`, to be used as a submodel, which
-returns a [`ModelOutput`](@ref). This needs Turing.jl to be loaded.
+returns a [`ModelOutput`](@ref), or of `environment`, which returns an
+[`EnvironmentOutput`](@ref). This needs Turing.jl to be loaded.
 
 # Implementation
 A model can add a method of this function. The default calls [`apply_model`](@ref). A
 model which samples within a timestep needs to add a method, however; or if any other
 changes are desired within Turing. It must sample with `~` instead of from `input.rng`.
 Otherwise the model has a different log density each time it is evaluated, with no error.
+The same holds for an environment model, which fitting uses to fill in observations that
+are [`MissingObservation`](@ref) in the data.
 
 # Examples
 ```julia

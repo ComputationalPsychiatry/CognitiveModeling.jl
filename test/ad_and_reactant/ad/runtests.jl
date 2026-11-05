@@ -2,25 +2,31 @@ using CognitiveModeling
 using Test
 using ADTypes
 using DifferentiationInterface: DifferentiationInterface as DI
-using Enzyme: Forward, Reverse, set_runtime_activity
+using Enzyme: Const, Forward, Reverse, set_runtime_activity
 using FiniteDifferences: central_fdm, grad
 using ForwardDiff: ForwardDiff
 using Mooncake: Mooncake
 using ReverseDiff: ReverseDiff
 
 include("../test_cases.jl")
+include("../turing_cases.jl")
+
+# The Turing.jl cases only run here, since the Reactant suite doesn't load Turing.jl
+const ALL_CASES = vcat(TEST_CASES, TURING_CASES)
 
 # Every form of every supported backend. Zygote is left out on purpose, because the
-# package uses for loops.
+# package uses for loops. The functions are marked constant for Enzyme, as Turing.jl does,
+# because the derivative data is in x alone: a Turing.jl model's function holds a VarInfo
+# which is written during evaluation, which Enzyme otherwise refuses as not read-only.
 const BACKENDS = [
     "ForwardDiff" => AutoForwardDiff(),
     "ForwardDiff, chunk size 1" => AutoForwardDiff(; chunksize = 1),
     "ReverseDiff" => AutoReverseDiff(),
     "ReverseDiff, compiled tape" => AutoReverseDiff(; compile = true),
-    "Enzyme forward" => AutoEnzyme(; mode = Forward),
-    "Enzyme reverse" => AutoEnzyme(; mode = Reverse),
-    "Enzyme forward, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Forward)),
-    "Enzyme reverse, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Reverse)),
+    "Enzyme forward" => AutoEnzyme(; mode = Forward, function_annotation = Const),
+    "Enzyme reverse" => AutoEnzyme(; mode = Reverse, function_annotation = Const),
+    "Enzyme forward, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Forward), function_annotation = Const),
+    "Enzyme reverse, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Reverse), function_annotation = Const),
     "Mooncake reverse" => AutoMooncake(),
     "Mooncake forward" => AutoMooncakeForward(),
 ]
@@ -48,6 +54,27 @@ const KNOWN_FAILURES = [
             "reading the history of an agent, agent starts",
         ],
     ),
+    (;
+        bug = "Enzyme without runtime activity throws an EnzymeRuntimeActivityError on Turing.jl models, which Turing.jl documents as needing runtime activity",
+        backends = ["Enzyme forward", "Enzyme reverse"],
+        cases = [
+            "turing session, environment starts",
+            "turing session, agent starts",
+            "turing session with imputed actions",
+            "turing session with an environment",
+            "turing session with noise in each timestep",
+        ],
+    ),
+    (;
+        bug = "Enzyme reverse with runtime activity throws an EnzymeNonScalarReturnException from its rule for building a struct of unknown type, when a NamedTuple is built from a data column which holds MissingAction or MissingObservation",
+        backends = ["Enzyme reverse, runtime activity"],
+        cases = ["turing session with imputed actions", "turing session with an environment"],
+    ),
+    (;
+        bug = "Enzyme forward with runtime activity gives wrong gradients, with no error, for a session where an environment fills in missing observations",
+        backends = ["Enzyme forward, runtime activity"],
+        cases = ["turing session with an environment"],
+    ),
 ]
 
 is_known_failure(case_name, backend_name) = any(failure -> backend_name in failure.backends && case_name in failure.cases, KNOWN_FAILURES)
@@ -55,12 +82,12 @@ is_known_failure(case_name, backend_name) = any(failure -> backend_name in failu
 @testset "AD backends" begin
     @testset "Every known failure names test cases and backends that exist" begin
         for failure in KNOWN_FAILURES
-            @test all(name -> any(case -> case.name == name, TEST_CASES), failure.cases)
+            @test all(name -> any(case -> case.name == name, ALL_CASES), failure.cases)
             @test all(name -> any(backend -> first(backend) == name, BACKENDS), failure.backends)
         end
     end
 
-    @testset "$(case.name)" for case in TEST_CASES
+    @testset "$(case.name)" for case in ALL_CASES
         (; f, x) = case
         reference = grad(central_fdm(5, 1), f, x)[1]
 

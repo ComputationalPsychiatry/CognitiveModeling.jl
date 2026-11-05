@@ -96,6 +96,30 @@ function store_output!(storage::Vector{T}, value, t) where {T}
 end
 
 """
+    push_output!(storage, value)
+
+Add `value` at the end of `storage`, and return the vector. As for [`store_output!`](@ref), a
+value that doesn't fit the type of `storage` moves the outputs so far to a wider vector,
+which is returned instead. Starting from `Vector{Union{}}()` lets the first value set the
+type.
+"""
+function push_output!(storage::Vector{T}, value) where {T}
+
+    #If it has the type of the vector, add it
+    if value isa T
+        push!(storage, value)
+        return storage
+    end
+
+    #Otherwise, move the outputs so far to a wider vector which can hold both types
+    wider_storage = Vector{Union{T, typeof(value)}}(undef, length(storage) + 1)
+    copyto!(wider_storage, 1, storage, 1, length(storage))
+    wider_storage[end] = value
+
+    return wider_storage
+end
+
+"""
     observation_selection(save_history)
     action_selection(save_history)
     state_selection(save_history)
