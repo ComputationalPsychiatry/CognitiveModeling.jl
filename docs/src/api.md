@@ -8,12 +8,13 @@
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
+Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "simulation/types.jl", "simulation/simulate.jl"]
 ```
 
 ## Defining models and environments
 
-These are what a model or an environment is written with. They aren't public for now, so
-use them with the package's name, as in `CognitiveModeling.apply_model`.
+These are what a model or an environment is written with. They are public, but not exported,
+so use them with the package's name, as in `CognitiveModeling.apply_model`.
 
 ### Functions that a model must implement
 
@@ -44,12 +45,12 @@ CognitiveModeling.initialize_state(::CognitiveModeling.AbstractEnvironmentModel,
 CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
 ```
 
-### Types and display
+### Display
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["defining_models/utility_functions.jl", "environments/types.jl"]
+Pages = ["defining_models/utility_functions.jl"]
 ```
 
 ## Internals

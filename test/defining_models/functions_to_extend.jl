@@ -35,4 +35,11 @@ CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input) = ModelOu
     @testset "A missing method for the names gives an informative error" begin
         @test_throws "CognitiveModeling.attribute_names(model::ModelWithoutMethods)" CognitiveModeling.attribute_names(ModelWithoutMethods())
     end
+
+    @testset "The functions to extend are public, but not exported" begin
+        for name in (:apply_model, :initialize_state, :attribute_names, :prepare_state_for_saving, :default_parameters, :turing_apply_model)
+            @test Base.ispublic(CognitiveModeling, name)
+            @test !Base.isexported(CognitiveModeling, name)
+        end
+    end
 end

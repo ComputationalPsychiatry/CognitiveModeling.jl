@@ -1,4 +1,3 @@
-using CognitiveModeling: EnvironmentInput, EnvironmentOutput
 using Random: AbstractRNG, Xoshiro
 
 # An action that is its own probability instead of a sample. It makes the simulation deterministic,
@@ -24,6 +23,7 @@ function CognitiveModeling.apply_model(model::LearnsRewards{Taction}, input::Mod
     Vₜ = input.observation isa NoObservation ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
     return ModelOutput((; choice = Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
+CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
 
 # An environment whose reward depends on the action, and which has a state
 struct RewardsFollowActions <: AbstractEnvironmentModel end
@@ -100,6 +100,7 @@ function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (V[1] - 0.5))))), input.previous_state)
 end
 CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state) = (; expected_rewards = copy(state.expected_rewards))
+CognitiveModeling.attribute_names(model::LearnsInPlace) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_rewards, observations = :reward, actions = :choice)
 
 # Sums the expected rewards in the states of a simulation
 function sum_expected_rewards(cognitive_states)
@@ -124,8 +125,8 @@ function simulate_deterministic(x, who_starts)
 end
 
 # A simulation with sampled actions and rewards from a seeded generator, with the parameters from a vector.
-# Enzyme reverse gives wrong gradients here when the agent starts, with no error. That is a bug to report to Enzyme,
-# so those tests are left failing until it is fixed. The number of timesteps is a constant because that's part of what triggers it
+# Enzyme reverse gives wrong gradients here when the agent starts, with no error, which is a bug in Enzyme: see
+# KNOWN_FAILURES in ad/runtests.jl. The number of timesteps is a constant because that's part of what triggers it
 function simulate_sampled(x, who_starts)
     _, _, cognitive_states, _ = simulate(
         LearnsRewards{SampledAction}(),
@@ -216,10 +217,25 @@ function simulate_in_place(x, who_starts)
     return total
 end
 
-# An agent simulated with an environment, with or without its history, with the parameters from a vector.
+# A simulation which saves only the state of the model, with the parameters from a vector
+function simulate_with_selection(x, who_starts)
+    _, _, cognitive_states, _ = simulate(
+        LearnsRewards{ProbabilityAsAction}(),
+        RewardsFollowActions();
+        who_starts,
+        n_steps = 20,
+        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
+        environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(; states = :expected_reward),
+        save_environment_history = SaveHistory(),
+    )
+    return sum_expected_rewards(cognitive_states)
+end
+
+# An agent simulated with an environment, saving all or some of what happens, with the parameters from a vector.
 # Both Enzyme forms with runtime activity fail here, and in read_history_after_environment, because the state starts as
-# a constant: forward gives wrong gradients with no error, and reverse throws an error. That is a bug to report to
-# Enzyme, so those tests are left failing until it is fixed
+# a constant: forward gives wrong gradients with no error, and reverse throws an error, which is a bug in Enzyme: see
+# KNOWN_FAILURES in ad/runtests.jl
 function simulate_agent_with_environment(x, who_starts, save_history)
     agent = CognitiveAgent(LearnsRewards{ProbabilityAsAction}(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history)
     environment = Environment(RewardsFollowActions(), (; reward_size = 0.8))
@@ -276,12 +292,14 @@ const TEST_CASES = [
     (; name = "simulate with noise in the model, agent starts", f = x -> simulate_with_noise_in_model(x, AgentStarts()), x = [0.3, 2.0], reactant = false),
     (; name = "simulate with a state changed in place, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "simulate with a state changed in place, agent starts", f = x -> simulate_in_place(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! with a history, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), true), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! with a history, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), true), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! without a history, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), false), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! without a history, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), false), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! on single observations, with a history", f = x -> simulate_agent_on_observations(x, true), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! on single observations, without a history", f = x -> simulate_agent_on_observations(x, false), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with a selection of what is saved, environment starts", f = x -> simulate_with_selection(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with a selection of what is saved, agent starts", f = x -> simulate_with_selection(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! with a history, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! with a history, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! saving only the states, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! saving only the states, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! on single observations, with a history", f = x -> simulate_agent_on_observations(x, SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate! on single observations, without a history", f = x -> simulate_agent_on_observations(x, SaveHistory()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent, environment starts", f = x -> read_history_after_environment(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent, agent starts", f = x -> read_history_after_environment(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent with a state changed in place", f = read_history_in_place, x = [0.3, 2.0], reactant = true),

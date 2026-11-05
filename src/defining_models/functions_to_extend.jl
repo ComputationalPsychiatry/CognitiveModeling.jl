@@ -98,7 +98,8 @@ they match while the model runs.
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
 without one kind of attribute gives `()` for it. [`simulate`](@ref) doesn't use the names,
-so a model can be tried before they are written.
+so a model can be tried with it before they are written, while a [`CognitiveAgent`](@ref)
+checks its parameters and state against them.
 
 # Examples
 ```jldoctest
@@ -155,7 +156,8 @@ end
 """
     default_parameters(model::AbstractCognitiveModel)
 
-Return the default parameter values of `model`, such as `(; learning_rate = 0.1)`.
+Return the default parameter values of `model`, such as `(; learning_rate = 0.1)`, which
+[`CognitiveAgent`](@ref) uses for the parameters it isn't given.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so

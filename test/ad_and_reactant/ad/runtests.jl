@@ -25,17 +25,57 @@ const BACKENDS = [
     "Mooncake forward" => AutoMooncakeForward(),
 ]
 
+# Gradients that are wrong or throw because of a bug in a backend, which the package doesn't
+# work around. Their tests are marked broken, so that the suite passes while the bug is there,
+# and a fix shows up as an unexpected pass. Each entry has the bug, the backends and the
+# test cases it hits. The documentation page on automatic differentiation lists the same
+# bugs, so update both together.
+const KNOWN_FAILURES = [
+    (;
+        bug = "Enzyme reverse gives wrong gradients, with no error, through a loop that draws from a Xoshiro",
+        backends = ["Enzyme reverse", "Enzyme reverse, runtime activity"],
+        cases = ["simulate with sampling, agent starts"],
+    ),
+    (;
+        bug = "Enzyme with runtime activity gives wrong gradients (forward) or throws (reverse) when a state read from an untyped field starts as a constant",
+        backends = ["Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
+        cases = [
+            "simulate! with a history, environment starts",
+            "simulate! with a history, agent starts",
+            "simulate! saving only the states, environment starts",
+            "simulate! saving only the states, agent starts",
+            "reading the history of an agent, environment starts",
+            "reading the history of an agent, agent starts",
+        ],
+    ),
+]
+
+is_known_failure(case_name, backend_name) = any(failure -> backend_name in failure.backends && case_name in failure.cases, KNOWN_FAILURES)
+
 @testset "AD backends" begin
+    @testset "Every known failure names test cases and backends that exist" begin
+        for failure in KNOWN_FAILURES
+            @test all(name -> any(case -> case.name == name, TEST_CASES), failure.cases)
+            @test all(name -> any(backend -> first(backend) == name, BACKENDS), failure.backends)
+        end
+    end
+
     @testset "$(case.name)" for case in TEST_CASES
         (; f, x) = case
         reference = grad(central_fdm(5, 1), f, x)[1]
 
         @testset "$name" for (name, backend) in BACKENDS
-            @test DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6
+            if is_known_failure(case.name, name)
+                # Broken until the bug is fixed, which then shows up as an unexpected pass
+                @test_broken DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6
+                @test_broken DI.gradient(f, DI.prepare_gradient(f, backend, x .+ 0.25), backend, x) ≈ reference rtol = 1.0e-6
+            else
+                @test DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6
 
-            # Prepare at a different point, so that stale compiled tapes get caught
-            preparation = DI.prepare_gradient(f, backend, x .+ 0.25)
-            @test DI.gradient(f, preparation, backend, x) ≈ reference rtol = 1.0e-6
+                # Prepare at a different point, so that stale compiled tapes get caught
+                preparation = DI.prepare_gradient(f, backend, x .+ 0.25)
+                @test DI.gradient(f, preparation, backend, x) ≈ reference rtol = 1.0e-6
+            end
         end
     end
 end

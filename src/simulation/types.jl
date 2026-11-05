@@ -1,9 +1,104 @@
 """
+    SaveEverything()
+
+Marker for saving every attribute of a kind, used in [`SaveHistory`](@ref).
+"""
+struct SaveEverything end
+
+"""
+    SaveHistory(; observations=(), actions=(), states=())
+    SaveHistory(SaveEverything())
+
+Which observations, actions and states a simulation saves, by name.
+
+Each argument is the names of that kind to save, in a `Tuple` of `Symbol`s, a single
+`Symbol` or a `Vector` of them, or [`SaveEverything`](@ref) for all of them. A kind that
+isn't given saves nothing, so `SaveHistory()` saves nothing, and
+`SaveHistory(SaveEverything())` saves everything. The selections are kept in the type, so
+that selecting costs nothing in a simulation, and are read as properties, such as
+`save_history.states`.
+
+Saving some names of a kind gives a `NamedTuple` with those names on each timestep, which
+only works when the value is a `NamedTuple`, and saving none gives an empty one, `(;)`, for
+any value. [`NoObservation`](@ref) and [`NoAction`](@ref) are saved as they are. For an
+environment, only `states` is used, because its observations and the actions it receives
+are saved with the agent's.
+
+See also [`CognitiveAgent`](@ref), [`Environment`](@ref) and [`simulate`](@ref), which take
+one.
+
+# Examples
+```jldoctest
+julia> save_history = SaveHistory(; actions = :choice, states = (:expected_reward, :surprise))
+SaveHistory
+Observations: none
+Actions: choice
+States: expected_reward, surprise
+
+julia> save_history.states
+(:expected_reward, :surprise)
+
+julia> SaveHistory(SaveEverything()).observations
+SaveEverything()
+```
+"""
+struct SaveHistory{Tobservations, Tactions, Tstates} end
+
+#Takes the names by keyword, and puts each selection in the type
+function SaveHistory(; observations = (), actions = (), states = ())
+    return SaveHistory{as_selection(observations), as_selection(actions), as_selection(states)}()
+end
+
+#Saves everything of every kind
+function SaveHistory(::SaveEverything)
+    return SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), states = SaveEverything())
+end
+
+#A selection is a tuple of symbols, or the marker for everything
+as_selection(names::Tuple{Vararg{Symbol}}) = names
+as_selection(name::Symbol) = (name,)
+as_selection(names::AbstractVector{Symbol}) = Tuple(names)
+as_selection(::SaveEverything) = SaveEverything()
+
+#Reads the selections in the type as properties
+function Base.getproperty(save_history::SaveHistory{Tobservations, Tactions, Tstates}, name::Symbol) where {Tobservations, Tactions, Tstates}
+    if name === :observations
+        return Tobservations
+    elseif name === :actions
+        return Tactions
+    elseif name === :states
+        return Tstates
+    else
+        throw(FieldError(typeof(save_history), name))
+    end
+end
+
+Base.propertynames(::SaveHistory) = (:observations, :actions, :states)
+
+#Shows the selections on one line each in the REPL and notebooks
+function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
+    print(io, "SaveHistory")
+    for (kind, selection) in (("Observations", save_history.observations), ("Actions", save_history.actions), ("States", save_history.states))
+        print(io, "\n", kind, ": ")
+        if selection isa SaveEverything
+            print(io, "everything")
+        elseif isempty(selection)
+            print(io, "none")
+        else
+            join(io, selection, ", ")
+        end
+    end
+    return nothing
+end
+
+"""
     AgentHistory(observations, actions, states)
 
 What has happened to a [`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
 
-Each argument is kept in a field of the same name, such as `history.actions`.
+Each argument is kept in a field of the same name, such as `history.actions`. The agent's
+[`SaveHistory`](@ref) selects what is kept of each observation, action and state, and when
+it selects nothing at all, the vectors stay empty.
 
 # Arguments
 - `observations::Vector{Any}`: the observations, starting with [`NoObservation`](@ref).
@@ -20,40 +115,83 @@ struct AgentHistory
 end
 
 """
-    CognitiveAgent(model, parameters; save_history=true)
-    CognitiveAgent(model, parameters, state, previous_action; save_history=true)
+    CognitiveAgent(model, parameters; save_history=SaveHistory(SaveEverything()))
+    CognitiveAgent(model, parameters, state, previous_action;
+                   save_history=SaveHistory(SaveEverything()))
 
 An instantiated cognitive model with its parameters and current state, which [`simulate!`](@ref) can
 update iteratively.
 
-The state defaults to the output of [`initialize_state`](@ref), and the previous action to
-[`NoAction`](@ref).
+Parameters that aren't given take the values in [`default_parameters`](@ref). The state
+defaults to the output of [`initialize_state`](@ref) with the full parameters, and the
+previous action to [`NoAction`](@ref). The model must have a method of
+[`attribute_names`](@ref), and the names of the parameters, and of the state when it is a
+`NamedTuple`, must be those it lists, or an error is thrown.
 
-If `save_history` is true, `agent.history` holds an [`AgentHistory`](@ref) with where the
-agent started and everything that happens to it. If it is false, the vectors in
-`agent.history` stay empty.
+`agent.history` holds an [`AgentHistory`](@ref) with where the agent started and everything
+that happens to it, as selected by `save_history`, a [`SaveHistory`](@ref). With
+`SaveHistory()`, which selects nothing, the vectors in `agent.history` stay empty.
 
 See also [`Environment`](@ref).
 """
-mutable struct CognitiveAgent{Tmodel <: AbstractCognitiveModel, Tparameters}
+mutable struct CognitiveAgent{Tmodel <: AbstractCognitiveModel, Tparameters, Tsave_history <: SaveHistory}
     model::Tmodel
     parameters::Tparameters
     #Not typed, because they can change type, for example from NoAction() to a Bool
     state::Any
     previous_action::Any
     history::AgentHistory
-    save_history::Bool
+    save_history::Tsave_history
 end
 
 #Starts the agent from its initial state, with no previous action
-function CognitiveAgent(model::AbstractCognitiveModel, parameters; save_history::Bool = true)
+function CognitiveAgent(model::AbstractCognitiveModel, parameters; save_history::SaveHistory = SaveHistory(SaveEverything()))
+    parameters = merge(default_parameters(model), parameters)
     return CognitiveAgent(model, parameters, initialize_state(model, parameters), NoAction(); save_history)
 end
 
-#Starts the history where the agent starts, if it is to be saved
-function CognitiveAgent(model::AbstractCognitiveModel, parameters, state, previous_action; save_history::Bool = true)
-    history = save_history ? AgentHistory(Any[NoObservation()], Any[previous_action], Any[prepare_state_for_saving(model, state)]) : AgentHistory(Any[], Any[], Any[])
+#Fills in the default parameters, checks the names, and starts the history where the agent starts, with what is selected of it
+function CognitiveAgent(model::AbstractCognitiveModel, parameters, state, previous_action; save_history::SaveHistory = SaveHistory(SaveEverything()))
+    parameters = merge(default_parameters(model), parameters)
+    check_names_match(model, parameters, state)
+    if saves_nothing(save_history)
+        history = AgentHistory(Any[], Any[], Any[])
+    else
+        history = AgentHistory(Any[select_names(NoObservation(), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))])
+    end
     return CognitiveAgent(model, parameters, state, previous_action, history, save_history)
+end
+
+"""
+    Environment(model, parameters; save_history=SaveHistory(SaveEverything()))
+    Environment(model, parameters, state, previous_observation;
+                save_history=SaveHistory(SaveEverything()))
+
+An environment model with its parameters and current state, which [`simulate!`](@ref) can
+update iteratively.
+
+The state defaults to the output of `initialize_state`, and the previous observation to
+[`NoObservation`](@ref). `save_history` is a [`SaveHistory`](@ref) which selects what
+`simulate!` saves of the states, and only its `states` is used.
+
+See also [`CognitiveAgent`](@ref).
+"""
+mutable struct Environment{Tmodel <: AbstractEnvironmentModel, Tparameters, Tsave_history <: SaveHistory}
+    model::Tmodel
+    parameters::Tparameters
+    state::Any
+    previous_observation::Any
+    save_history::Tsave_history
+end
+
+#Starts the environment from its initial state, with no previous observation
+function Environment(model::AbstractEnvironmentModel, parameters; save_history::SaveHistory = SaveHistory(SaveEverything()))
+    return Environment(model, parameters, initialize_state(model, parameters), NoObservation(), save_history)
+end
+
+#Starts the environment from a given state and previous observation
+function Environment(model::AbstractEnvironmentModel, parameters, state, previous_observation; save_history::SaveHistory = SaveHistory(SaveEverything()))
+    return Environment(model, parameters, state, previous_observation, save_history)
 end
 
 """

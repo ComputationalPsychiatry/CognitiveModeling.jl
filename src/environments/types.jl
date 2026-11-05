@@ -69,27 +69,3 @@ end
 function EnvironmentOutput(observation)
     return EnvironmentOutput(observation, (;))
 end
-
-"""
-    Environment(model, parameters)
-    Environment(model, parameters, state, previous_observation)
-
-An environment model with its parameters and current state, which [`simulate!`](@ref) can
-update iteratively.
-
-The state defaults to the output of `initialize_state`, and the previous observation to
-[`NoObservation`](@ref).
-
-See also [`CognitiveAgent`](@ref).
-"""
-mutable struct Environment{Tmodel <: AbstractEnvironmentModel, Tparameters}
-    model::Tmodel
-    parameters::Tparameters
-    state::Any
-    previous_observation::Any
-end
-
-#Starts the environment from its initial state, with no previous observation
-function Environment(model::AbstractEnvironmentModel, parameters)
-    return Environment(model, parameters, initialize_state(model, parameters), NoObservation())
-end

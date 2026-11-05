@@ -81,4 +81,12 @@ using Random: Xoshiro, default_rng
     @testset "ModelAttributes is type stable from tuples and symbols" begin
         @test @inferred(ModelAttributes(; parameters = (:learning_rate,), states = :expected_reward, observations = (), actions = (:choice,))) isa ModelAttributes
     end
+
+    @testset "InvalidParametersError has a default message, and takes another" begin
+        @test InvalidParametersError() isa Exception
+        @test sprint(showerror, InvalidParametersError()) == "InvalidParametersError: Model parameters are not valid, possibly dependent on observations, actions and states."
+        @test sprint(showerror, InvalidParametersError("The learning rate must be between 0 and 1.")) == "InvalidParametersError: The learning rate must be between 0 and 1."
+        @test InvalidParametersError("The learning rate must be between 0 and 1.").message == "The learning rate must be between 0 and 1."
+        @test_throws InvalidParametersError throw(InvalidParametersError())
+    end
 end

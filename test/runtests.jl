@@ -1,5 +1,4 @@
 using CognitiveModeling
-using CognitiveModeling: EnvironmentInput, EnvironmentOutput
 using Test
 
 #Packages that trigger extensions

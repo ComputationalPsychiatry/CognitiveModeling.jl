@@ -23,6 +23,7 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Tutorials" => ["generated/getting_started.md"],
+        "Automatic differentiation and Reactant" => "ad_and_reactant.md",
         "API" => "api.md",
     ],
 )

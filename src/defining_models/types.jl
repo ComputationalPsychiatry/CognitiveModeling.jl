@@ -153,10 +153,51 @@ end
 
 #Takes the names by keyword, and puts a single name or a vector of names in a tuple
 function ModelAttributes(; parameters, states, observations, actions)
-    return ModelAttributes(as_name_tuple(parameters), as_name_tuple(states), as_name_tuple(observations), as_name_tuple(actions))
+    return ModelAttributes(as_tuple_of_names(parameters), as_tuple_of_names(states), as_tuple_of_names(observations), as_tuple_of_names(actions))
 end
 
 #Names are kept in a tuple of symbols
-as_name_tuple(names::Tuple{Vararg{Symbol}}) = names
-as_name_tuple(name::Symbol) = (name,)
-as_name_tuple(names::AbstractVector{Symbol}) = Tuple(names)
+as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
+as_tuple_of_names(name::Symbol) = (name,)
+as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
+
+"""
+    InvalidParametersError(message)
+    InvalidParametersError()
+
+An error for a model to throw from [`apply_model`](@ref) or [`initialize_state`](@ref) when
+its parameters aren't valid, as in `throw(InvalidParametersError())`.
+
+The default message says that the parameters are not valid, possibly dependent on the
+observations, actions and states, and a model can give a more specific one. A simulation
+stops with it as with any other error, and fitting can catch it to give the parameters a
+probability of zero, so a model should throw this rather than an ordinary error when the
+parameters are the problem.
+
+# Examples
+```jldoctest
+julia> try
+           throw(InvalidParametersError())
+       catch error
+           sprint(showerror, error)
+       end
+"InvalidParametersError: Model parameters are not valid, possibly dependent on observations, actions and states."
+
+julia> sprint(showerror, InvalidParametersError("The learning rate must be between 0 and 1."))
+"InvalidParametersError: The learning rate must be between 0 and 1."
+```
+"""
+struct InvalidParametersError <: Exception
+    message::String
+end
+
+#The default message says what the error means
+function InvalidParametersError()
+    return InvalidParametersError("Model parameters are not valid, possibly dependent on observations, actions and states.")
+end
+
+#Prints the message when the error isn't caught
+function Base.showerror(io::IO, error::InvalidParametersError)
+    print(io, "InvalidParametersError: ", error.message)
+    return nothing
+end
