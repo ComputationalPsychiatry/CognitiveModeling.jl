@@ -8,7 +8,7 @@
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "simulation/types.jl", "simulation/simulate.jl"]
+Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "environments/common_rl_environment.jl", "simulation/types.jl", "simulation/simulate.jl"]
 ```
 
 ## Defining models and environments

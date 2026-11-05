@@ -3,6 +3,7 @@ using Test
 
 #Packages that trigger extensions
 using Turing
+using CommonRLInterface
 
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")

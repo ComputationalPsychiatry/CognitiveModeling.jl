@@ -10,6 +10,7 @@ include("defining_models/functions_to_extend.jl")
 include("defining_models/utility_functions.jl")
 include("environments/types.jl")
 include("environments/functions_to_extend.jl")
+include("environments/common_rl_environment.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
 include("inference/functions_to_extend.jl")
@@ -18,7 +19,7 @@ include("inference/functions_to_extend.jl")
 export AbstractCognitiveModel, AbstractEnvironmentModel
 export NoObservation, NoAction
 export ModelInput, ModelOutput, ModelAttributes, InvalidParametersError
-export EnvironmentInput, EnvironmentOutput
+export EnvironmentInput, EnvironmentOutput, CommonRLEnvironment
 export CognitiveAgent, Environment, AgentStarts, EnvironmentStarts
 export SaveHistory, SaveEverything
 export simulate, simulate!

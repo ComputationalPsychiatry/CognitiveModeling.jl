@@ -1,5 +1,6 @@
 [deps]
 CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+CommonRLInterface = "d842c3ba-07a1-494f-bbec-f5741b0a3e98"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
@@ -8,6 +9,7 @@ Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 CognitiveModeling = {path = ".."}
 
 [compat]
+CommonRLInterface = "0.3"
 Distributions = "0.25"
 Documenter = "1"
 Literate = "2"
