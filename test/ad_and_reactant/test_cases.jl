@@ -109,6 +109,14 @@ end
 CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state) = (; expected_rewards = copy(state.expected_rewards))
 CognitiveModeling.attribute_names(model::LearnsInPlace) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_rewards, observations = :reward, actions = :choice)
 
+# The same model, which copies its state with deepcopy when it's saved. ReverseDiff v1.18.7 gives zero gradients through
+# deepcopy of a container of tracked numbers, which is fixed on its master branch: see KNOWN_FAILURES in ad/runtests.jl
+struct LearnsInPlaceWithDeepcopy <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters) = CognitiveModeling.initialize_state(LearnsInPlace(), parameters)
+CognitiveModeling.apply_model(model::LearnsInPlaceWithDeepcopy, input::ModelInput) = CognitiveModeling.apply_model(LearnsInPlace(), input)
+CognitiveModeling.prepare_state_for_saving(model::LearnsInPlaceWithDeepcopy, state) = deepcopy(state)
+CognitiveModeling.attribute_names(model::LearnsInPlaceWithDeepcopy) = CognitiveModeling.attribute_names(LearnsInPlace())
+
 # Sums the expected rewards in the states of a simulation
 function sum_expected_rewards(cognitive_states)
     total = zero(first(cognitive_states).expected_reward)
@@ -214,9 +222,9 @@ function simulate_with_noise_in_model(x, who_starts)
 end
 
 # A simulation with a state changed in place, with the parameters from a vector
-function simulate_in_place(x, who_starts)
+function simulate_in_place(x, who_starts, model = LearnsInPlace())
     _, _, cognitive_states, _ = simulate(
-        LearnsInPlace(),
+        model,
         RewardsWithoutState();
         who_starts,
         n_steps = 20,
@@ -276,8 +284,8 @@ function read_history_after_environment(x, who_starts)
 end
 
 # The states read back from the history of an agent with a state changed in place, with the parameters from a vector
-function read_history_in_place(x)
-    agent = CognitiveAgent(LearnsInPlace(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
+function read_history_in_place(x, model = LearnsInPlace())
+    agent = CognitiveAgent(model, (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
     for reward in (1.0, 0.0, 1.0, 1.0, 0.0)
         simulate!(agent, (; reward))
     end
@@ -317,4 +325,7 @@ const TEST_CASES = [
     (; name = "reading the history of an agent, environment starts", f = x -> read_history_after_environment(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent, agent starts", f = x -> read_history_after_environment(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent with a state changed in place", f = read_history_in_place, x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with a state saved with deepcopy, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with a state saved with deepcopy, agent starts", f = x -> simulate_in_place(x, AgentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
+    (; name = "reading the history of an agent with a state saved with deepcopy", f = x -> read_history_in_place(x, LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
 ]

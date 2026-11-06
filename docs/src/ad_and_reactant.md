@@ -5,11 +5,14 @@ compiled with Reactant. Every commit is tested against every form of each backen
 cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, with sampled
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
 states, with a state changed in place, with a selection of what is saved, and agents
-simulated with an environment or on single observations, with and without a history. The
-AD suite also differentiates the log density of Turing.jl models of a session, in
+simulated with an environment or on single observations, with and without a history, and
+with a state saved with `deepcopy`. A separate suite in `test/ad_and_reactant/turing`, with
+its own environment, differentiates the log density of Turing.jl models of a session, in
 `test/ad_and_reactant/turing_cases.jl`: with the agent or the environment starting, with
 imputed actions, with an environment filling in observations, and with a model which samples
-within each timestep. Every gradient is compared with finite differences. Zygote isn't supported, because the package
+within each timestep. That keeps the package's own code tested without Turing.jl, since the
+backends work without it and with other probabilistic programming languages. Every gradient
+is compared with finite differences. Zygote isn't supported, because the package
 uses for loops.
 
 | Backend | Forms tested |
@@ -23,12 +26,14 @@ uses for loops.
 ## Known failures
 
 These are bugs in the backends, which the package doesn't work around. Their tests are
-marked broken in `test/ad_and_reactant/ad/runtests.jl`, so that the suite passes while the
-bug is there, and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3,
-Enzyme 0.13.218, Mooncake 0.5.67, Turing 0.49.0 and DynamicPPL 0.42.14.
+marked broken in `test/ad_and_reactant/ad/runtests.jl` and `turing/runtests.jl`, so that
+the suites pass while the bug is there, and a fix shows up as an unexpected pass. Last
+checked with Julia 1.13.3, ReverseDiff 1.18.7, Enzyme 0.13.218, Mooncake 0.5.67, Turing
+0.49.0 and DynamicPPL 0.42.14.
 
 | Backend | When | What happens | Status |
 |---|---|---|---|
+| ReverseDiff, with and without a compiled tape | `prepare_state_for_saving` using `deepcopy`, or `deepcopy` of any container which holds a tracked number | zero gradients, no error | fixed on ReverseDiff's master branch on 2026-11-06, not yet released after v1.18.7 |
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reproduced without the package, to be reported |
@@ -46,10 +51,6 @@ missing data.
 
 These aren't failures of the package's own code, but a model can run into them.
 
-- **ReverseDiff and `deepcopy`:** `deepcopy` of anything that holds a tracked number cuts it
-  off the tape, so both forms of ReverseDiff give zero gradients, with no error. A method of
-  `prepare_state_for_saving` which uses `deepcopy` has this problem, so copy only what
-  changes, such as `copy(state.values)`.
 - **Enzyme reverse and `SVector` states:** updating an `SVector` in a state with `setindex`
   gives wrong gradients for some sizes, with no error. A `Vector` changed in place or by
   broadcasting is right.
