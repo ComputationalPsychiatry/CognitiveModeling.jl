@@ -37,6 +37,12 @@ julia --project=test/ad_and_reactant/ad -e 'using Pkg; Pkg.instantiate(); includ
 julia --project=test/ad_and_reactant/reactant -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/reactant/runtests.jl")'
 ```
 
+Automatic differentiation of the Turing.jl extension is tested in an environment of its own, with its own cases:
+
+```bash
+julia --project=test/ad_and_reactant/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/extensions/turing/runtests.jl")'
+```
+
 Build the documentation:
 
 ```bash

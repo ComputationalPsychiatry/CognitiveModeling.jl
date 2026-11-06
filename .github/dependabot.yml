@@ -15,6 +15,7 @@ updates:
       - "/"
       - "/test/ad_and_reactant/ad"
       - "/test/ad_and_reactant/reactant"
+      - "/test/ad_and_reactant/extensions/turing"
     target-branch: "dev"
     schedule:
       interval: "weekly"

@@ -6,14 +6,15 @@ cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, 
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
 states, with a state changed in place, with a selection of what is saved, and agents
 simulated with an environment or on single observations, with and without a history, and
-with a state saved with `deepcopy`. A separate suite in `test/ad_and_reactant/turing`, with
-its own environment, differentiates the log density of Turing.jl models of a session, in
-`test/ad_and_reactant/turing_cases.jl`: with the agent or the environment starting, with
-imputed actions, with an environment filling in observations, and with a model which samples
-within each timestep. That keeps the package's own code tested without Turing.jl, since the
-backends work without it and with other probabilistic programming languages. Every gradient
-is compared with finite differences. Zygote isn't supported, because the package
-uses for loops.
+with a state saved with `deepcopy`. Code in the package's extensions is differentiated in
+suites of its own, one for each extension in `test/ad_and_reactant/extensions`, each with
+its own environment. The one in `extensions/turing` differentiates the log density of
+Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
+starting, with imputed actions, with an environment filling in observations, and with a
+model which samples within each timestep. That keeps the package's own code tested without
+Turing.jl, since the backends work without it and with other probabilistic programming
+languages. Every gradient is compared with finite differences. Zygote isn't supported,
+because the package uses for loops.
 
 | Backend | Forms tested |
 |---|---|
@@ -26,10 +27,10 @@ uses for loops.
 ## Known failures
 
 These are bugs in the backends, which the package doesn't work around. Their tests are
-marked broken in `test/ad_and_reactant/ad/runtests.jl` and `turing/runtests.jl`, so that
-the suites pass while the bug is there, and a fix shows up as an unexpected pass. Last
-checked with Julia 1.13.3, ReverseDiff 1.18.7, Enzyme 0.13.218, Mooncake 0.5.67, Turing
-0.49.0 and DynamicPPL 0.42.14.
+marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
+`test/ad_and_reactant/extensions/turing`, so that the suites pass while the bug is there,
+and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, ReverseDiff
+1.18.7, Enzyme 0.13.218, Mooncake 0.5.67, Turing 0.49.0 and DynamicPPL 0.42.14.
 
 | Backend | When | What happens | Status |
 |---|---|---|---|

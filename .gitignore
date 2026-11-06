@@ -2,7 +2,7 @@
 *.jl.cov
 *.jl.mem
 /Manifest*.toml
-/test/ad_and_reactant/*/Manifest*.toml
+/test/ad_and_reactant/**/Manifest*.toml
 /docs/build/
 /docs/src/generated/
 LocalPreferences.toml

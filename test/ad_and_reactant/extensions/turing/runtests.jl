@@ -9,9 +9,9 @@ using Mooncake: Mooncake
 using ReverseDiff: ReverseDiff
 using Turing
 
-include("../turing_cases.jl")
+include("turing_cases.jl")
 
-# Every form of every supported backend, as in ad/runtests.jl. The functions are marked constant
+# Every form of every supported backend, as in ../../ad/runtests.jl. The functions are marked constant
 # for Enzyme, as Turing.jl does, because the derivative data is in x alone: the function holds a
 # VarInfo which is written during evaluation, which Enzyme otherwise refuses as not read-only.
 const BACKENDS = [

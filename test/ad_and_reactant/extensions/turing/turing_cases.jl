@@ -1,11 +1,11 @@
 using Turing
 using Turing.DynamicPPL: LogDensityFunction, LogDensityProblems
 
-# Test cases for the log density of Turing.jl models of a session, which only the AD suite runs,
-# since Turing.jl isn't loaded by the Reactant suite. Each case differentiates the log density
-# the way a sampler does: through a LogDensityFunction made once, with the parameters and the
-# latents in one vector in the order of the model. The parameters have flat priors, so the log
-# density is the session's own.
+# Test cases for the log density of Turing.jl models of a session, which only this suite runs,
+# since Turing.jl isn't loaded by the AD and Reactant suites of the package itself. Each case
+# differentiates the log density the way a sampler does: through a LogDensityFunction made
+# once, with the parameters and the latents in one vector in the order of the model. The
+# parameters have flat priors, so the log density is the session's own.
 
 # A Rescorla-Wagner model with a softmax choice, which does nothing with NoObservation
 struct TuringRescorlaWagner <: AbstractCognitiveModel end

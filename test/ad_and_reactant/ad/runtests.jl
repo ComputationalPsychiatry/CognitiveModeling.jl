@@ -11,8 +11,8 @@ using ReverseDiff: ReverseDiff
 include("../test_cases.jl")
 
 # Every form of every supported backend. Zygote is left out on purpose, because the
-# package uses for loops. The Turing.jl models have their own suite in ../turing, so that
-# the package is tested without Turing.jl here.
+# package uses for loops. The Turing.jl models have their own suite in
+# ../extensions/turing, so that the package is tested without Turing.jl here.
 const BACKENDS = [
     "ForwardDiff" => AutoForwardDiff(),
     "ForwardDiff, chunk size 1" => AutoForwardDiff(; chunksize = 1),
