@@ -4,17 +4,17 @@ Simulations can be differentiated with ForwardDiff, ReverseDiff, Enzyme and Moon
 compiled with Reactant. Every commit is tested against every form of each backend, on the
 cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, with sampled
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
-states, with a state changed in place, with a selection of what is saved, and agents
-simulated with an environment or on single observations, with and without a history, and
-with a state saved with `deepcopy`. Code in the package's extensions is differentiated in
-suites of its own, one for each extension in `test/ad_and_reactant/extensions`, each with
-its own environment. The one in `extensions/turing` differentiates the log density of
-Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
-starting, with imputed actions, with an environment filling in observations, and with a
-model which samples within each timestep. That keeps the package's own code tested without
-Turing.jl, since the backends work without it and with other probabilistic programming
-languages. Every gradient is compared with finite differences. Zygote isn't supported,
-because the package uses for loops.
+states, with a state changed in place, with a selection of what is saved, with maps of names
+between the model and the environment, and agents simulated with an environment or on single
+observations, with and without a history, and with a state saved with `deepcopy`. Code in
+the package's extensions is differentiated in suites of its own, one for each extension in
+`test/ad_and_reactant/extensions`, each with its own environment. The one in
+`extensions/turing` differentiates the log density of Turing.jl models of a session, in its
+`turing_cases.jl`: with the agent or the environment starting, with imputed actions, with an
+environment filling in observations, and with a model which samples within each timestep.
+That keeps the package's own code tested without Turing.jl, since the backends work without
+it and with other probabilistic programming languages. Every gradient is compared with
+finite differences. Zygote isn't supported, because the package uses for loops.
 
 | Backend | Forms tested |
 |---|---|

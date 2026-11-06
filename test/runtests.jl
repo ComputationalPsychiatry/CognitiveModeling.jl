@@ -1,9 +1,9 @@
 using CognitiveModeling
 using Test
 
-#Packages that trigger extensions
+#Packages that trigger extensions. CommonRLInterface.jl exports a reset! of its own, so only its name is brought in
 using Turing
-using CommonRLInterface
+using CommonRLInterface: CommonRLInterface
 
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")

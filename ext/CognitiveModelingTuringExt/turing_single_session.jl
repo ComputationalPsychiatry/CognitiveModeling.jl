@@ -8,31 +8,37 @@ function CognitiveModeling.turing_single_session(
         environment::Union{Nothing, AbstractEnvironmentModel} = nothing,
         environment_parameters = (;),
         timestep_sizes = 1,
+        impute_missing_actions::Bool = true,
         save_history::SaveHistory = SaveHistory(),
         catch_invalid_parameters::Bool = false,
-        previous_state = initialize_state(model, full_parameters(model, parameters)),
+        previous_state = initialize_state(model, merge_default_parameters(model, parameters)),
         previous_action = initial_action(model),
         previous_observation = initial_observation(environment === nothing ? model : environment),
-        previous_environment_state = environment === nothing ? nothing : initialize_state(environment, full_parameters(environment, environment_parameters)),
+        previous_environment_state = environment === nothing ? nothing : initialize_state(environment, merge_default_parameters(environment, environment_parameters)),
     )
 
     #Fill in the default parameters, and check the names of everything against attribute_names
-    parameters = full_parameters(model, parameters)
-    check_names_match(model, parameters, previous_state, previous_action)
+    parameters = merge_default_parameters(model, parameters)
+    check_match_attribute_names(model, parameters, previous_state, previous_action)
     n_timesteps = check_data(model, observations, actions)
     if environment === nothing
         if any(column -> any(value -> value isa MissingObservation, column), values(observations))
             throw(ArgumentError("The observations have entries that are MissingObservation(), but no environment was given to fill them in."))
         end
     else
-        environment_parameters = full_parameters(environment, environment_parameters)
-        check_names_match(environment, environment_parameters, previous_environment_state, previous_observation)
+        environment_parameters = merge_default_parameters(environment, environment_parameters)
+        check_match_attribute_names(environment, environment_parameters, previous_environment_state, previous_observation)
         check_names_fit(model, environment)
     end
 
     #A vector of timestep sizes must have one size for each timestep
     if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_timesteps
         throw(DimensionMismatch("timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and the data has $n_timesteps timesteps."))
+    end
+
+    #Missing actions that aren't imputed are passed on as actions that weren't taken
+    if !impute_missing_actions
+        actions = without_missing_actions(actions)
     end
 
     #The recorded actions are scored at the end

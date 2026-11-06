@@ -24,7 +24,7 @@ function same_names(names, other_names)
 end
 
 #Throw an informative error if the names of the parameters, the previous action or a NamedTuple state aren't those in attribute_names
-function check_names_match(model::AbstractCognitiveModel, parameters, state, previous_action)
+function check_match_attribute_names(model::AbstractCognitiveModel, parameters, state, previous_action)
     attributes = check_attribute_names(attribute_names(model), model)
     if !same_names(keys(parameters), attributes.parameters)
         throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of a model of type $(typeof(model)) as $(attributes.parameters)."))
@@ -45,6 +45,24 @@ function check_observation_names(model::AbstractCognitiveModel, observation)
         throw(ArgumentError("The observation is $observation, but it must be a NamedTuple with the observations that attribute_names lists for a model of type $(typeof(model)), $(attributes.observations)."))
     end
     return nothing
+end
+
+#The action and the observation before the first timestep: a NamedTuple with the action or observation names that attribute_names lists for the model, each NoAction() or NoObservation()
+function initial_action(model::AbstractCognitiveModel)
+    return no_actions(check_attribute_names(attribute_names(model), model))
+end
+
+function initial_observation(model::AbstractCognitiveModel)
+    return no_observations(check_attribute_names(attribute_names(model), model))
+end
+
+#Build the NamedTuples from the names in the type, so that they are known at compile time
+function no_actions(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
+    return NamedTuple{Tactions}(map(_ -> NoAction(), Tactions))
+end
+
+function no_observations(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
+    return NamedTuple{Tobservations}(map(_ -> NoObservation(), Tobservations))
 end
 
 #Print a line for each kind of attribute, with none if there are no names of that kind

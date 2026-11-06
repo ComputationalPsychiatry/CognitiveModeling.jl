@@ -228,8 +228,29 @@ struct EnvironmentNeedsGivenState <: AbstractEnvironmentModel end
 CognitiveModeling.apply_model(environment::EnvironmentNeedsGivenState, input::EnvironmentInput) = EnvironmentOutput((; reward = 1.0), input.previous_state)
 CognitiveModeling.attribute_names(environment::EnvironmentNeedsGivenState) = ModelAttributes(; parameters = (), states = :value, observations = :reward, actions = ())
 
+#Rewards a lever of true with a payoff, and gives a cue: the same as RewardsTrue, under other names than the models use
+struct PaysForLever <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::PaysForLever, parameters) = (;)
+function CognitiveModeling.apply_model(environment::PaysForLever, input::EnvironmentInput)
+    input.action.lever isa NoAction && return EnvironmentOutput((; payoff = NoObservation(), cue = 2))
+    return EnvironmentOutput((; payoff = float(input.action.lever), cue = 2))
+end
+CognitiveModeling.attribute_names(environment::PaysForLever) = ModelAttributes(; parameters = (), states = (), observations = (:payoff, :cue), actions = :lever)
+
+#Gives payoffs with a fixed probability, whatever the lever is, so that its outputs always have the same types
+struct PaysWithProbability <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::PaysWithProbability, parameters) = (;)
+function CognitiveModeling.apply_model(environment::PaysWithProbability, input::EnvironmentInput)
+    return EnvironmentOutput((; payoff = float(rand(input.rng) < input.parameters.reward_probability), cue = 2))
+end
+CognitiveModeling.attribute_names(environment::PaysWithProbability) = ModelAttributes(; parameters = :reward_probability, states = (), observations = (:payoff, :cue), actions = :lever)
+
 const LEARNING = (; learning_rate = 0.5)
 const REWARDS = (; reward_probability = 0.8)
+
+#The maps between the names of LearnsRewards and those of PaysForLever and PaysWithProbability
+const PAYOFF_AS_REWARD = NameMap(:payoff => :reward)
+const CHOICE_AS_LEVER = NameMap(:choice => :lever)
 
 #As many names as a large model has, for checking that comparing them costs nothing
 const MANY_NAMES = Tuple(Symbol(:state_, i) for i in 1:65)
@@ -641,8 +662,8 @@ end
         #Each compiles to a single statement which returns nothing, however many names there are
         folds(f, argument_types...) = length(only(code_typed(f, argument_types))[1].code) == 1
         @test folds(CognitiveModeling.check_names_fit, LearnsRewards, RewardsAndCues)
-        @test folds(CognitiveModeling.check_names_match, LearnsAndCounts, typeof(LEARNING), typeof((; expected_reward = 0.5, n_timesteps = 0)), typeof((; choice = NoAction())))
-        @test folds(CognitiveModeling.check_names_match, RewardsAndCues, typeof((;)), typeof((;)), typeof((; reward = NoObservation(), cue = NoObservation())))
+        @test folds(CognitiveModeling.check_match_attribute_names, LearnsAndCounts, typeof(LEARNING), typeof((; expected_reward = 0.5, n_timesteps = 0)), typeof((; choice = NoAction())))
+        @test folds(CognitiveModeling.check_match_attribute_names, RewardsAndCues, typeof((;)), typeof((;)), typeof((; reward = NoObservation(), cue = NoObservation())))
         @test folds(CognitiveModeling.check_observation_names, LearnsRewards, typeof((; reward = 1.0, cue = 2)))
         @test folds(() -> CognitiveModeling.same_names(MANY_NAMES, MANY_NAMES_REVERSED))
         @test CognitiveModeling.same_names(MANY_NAMES, MANY_NAMES_REVERSED)
@@ -662,6 +683,83 @@ end
         @test_throws "The environment must give every observation the model lists." simulate!(CognitiveAgent(LearnsRewards(), LEARNING), Environment(OnlyCues(), (;)); who_starts = EnvironmentStarts(), n_steps = 2)
         @test_throws "The model must give every action the environment lists." simulate!(CognitiveAgent(OnlyLearns(), LEARNING), Environment(RewardsTrue(), (;)); who_starts = EnvironmentStarts(), n_steps = 2)
         @test simulate!(CognitiveAgent(LearnsRewards(), LEARNING), Environment(RewardsAndCues(), (;)); who_starts = EnvironmentStarts(), n_steps = 2) isa Tuple
+    end
+
+    @testset "Maps of names let a model and an environment with other names be used together" begin
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            #The same simulation as with an environment which uses the model's names
+            same_names = simulate_for_test(LearnsRewards(), RewardsTrue(); who_starts, environment_parameters = (;), rng = Xoshiro(5))
+            mapped = simulate_for_test(LearnsRewards(), PaysForLever(); who_starts, environment_parameters = (;), rng = Xoshiro(5), observation_map = PAYOFF_AS_REWARD, action_map = CHOICE_AS_LEVER)
+            @test isequal(mapped, same_names)
+            #The observations are returned as the model received them, without the cue, and the actions as it gave them
+            @test keys(mapped[1][end]) == (:reward,)
+            @test keys(mapped[2][end]) == (:choice,)
+        end
+        #Without the maps, the two don't fit
+        @test_throws "The environment must give every observation the model lists. A NameMap as observation_map can rename them." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;))
+        @test_throws "The model must give every action the environment lists. A NameMap as action_map can rename them." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = PAYOFF_AS_REWARD)
+    end
+
+    @testset "A map selects what the receiver gets" begin
+        #Without a map, the model receives everything the environment gives
+        observations, _, _, _ = simulate_for_test(LearnsRewards(), RewardsAndCues(); n_steps = 2, environment_parameters = (;))
+        @test observations == fill((; reward = 1.0, cue = 2), 2)
+        #With one, only what the map takes
+        observations, _, _, _ = simulate_for_test(LearnsRewards(), RewardsAndCues(); n_steps = 2, environment_parameters = (;), observation_map = NameMap(:reward))
+        @test observations == fill((; reward = 1.0), 2)
+        #An environment receives only the actions the map takes, here the second of two
+        observations, actions, _, _ = simulate_for_test(TwoChoices(), RewardsTrue(); n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), action_map = NameMap(:second_choice => :choice))
+        @test [observation.reward for observation in observations] == [NoObservation(), 1.0, 1.0]
+        @test actions == fill((; first_choice = false, second_choice = true), 3)
+        observations, _, _, _ = simulate_for_test(TwoChoices(), RewardsTrue(); n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), action_map = NameMap(:first_choice => :choice))
+        @test [observation.reward for observation in observations] == [NoObservation(), 0.0, 0.0]
+    end
+
+    @testset "A map must take names that are given, and give exactly the names the receiver lists" begin
+        @test_throws "The observation_map takes the observations (:prize,), but an environment model of type PaysForLever gives (:payoff, :cue). A map can only take observations the environment gives." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = NameMap(:prize => :reward), action_map = CHOICE_AS_LEVER)
+        @test_throws "The observation_map gives the observations (:reward, :cue), but a model of type LearnsRewards lists (:reward,). A map must give exactly the observations the model lists." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = NameMap(:payoff => :reward, :cue), action_map = CHOICE_AS_LEVER)
+        @test_throws "The observation_map gives the observations (:cue,), but a model of type LearnsRewards lists (:reward,)." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = NameMap(:cue), action_map = CHOICE_AS_LEVER)
+        @test_throws "The action_map takes the actions (:press,), but a model of type LearnsRewards gives (:choice,). A map can only take actions the model gives." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = PAYOFF_AS_REWARD, action_map = NameMap(:press => :lever))
+        @test_throws "The action_map gives the actions (:choice,), but an environment model of type PaysForLever lists (:lever,). A map must give exactly the actions the environment lists." simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = PAYOFF_AS_REWARD, action_map = NameMap(:choice))
+        #Only a NameMap is taken
+        @test_throws TypeError simulate_for_test(LearnsRewards(), PaysForLever(); environment_parameters = (;), observation_map = (:payoff => :reward,))
+    end
+
+    @testset "Maps keep the return type known and the loop free of allocations, and their checks cost nothing" begin
+        rng = Xoshiro(1)
+        run_simulation(who_starts, n_steps) = simulate(LearnsRewards(), PaysWithProbability(); who_starts, n_steps, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng, save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), observation_map = PAYOFF_AS_REWARD, action_map = CHOICE_AS_LEVER)
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            @test @inferred(run_simulation(who_starts, 10)) isa Tuple
+            JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
+            run_simulation(who_starts, 10)
+            #As without maps: 8 bytes each for an observation and a state, and 1 for an action
+            extra_bytes = @allocated(run_simulation(who_starts, 20_000)) - @allocated(run_simulation(who_starts, 10_000))
+            @test extra_bytes <= 18 * 10_000
+        end
+        folds(f, argument_types...) = length(only(code_typed(f, argument_types))[1].code) == 1
+        @test folds(CognitiveModeling.check_names_fit, LearnsRewards, PaysForLever, typeof(PAYOFF_AS_REWARD), typeof(CHOICE_AS_LEVER))
+    end
+
+    @testset "With maps, each history has the names of its own side" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
+        environment = Environment(PaysForLever(), (;); save_history = SaveHistory(SaveEverything()))
+        observations, actions, _, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, rng = Xoshiro(1), observation_map = PAYOFF_AS_REWARD, action_map = CHOICE_AS_LEVER)
+        #The agent's are the ones returned, under the model's names
+        @test agent.history.observations[2:end] == observations
+        @test agent.history.actions[2:end] == actions
+        @test all(observation -> keys(observation) == (:reward,), agent.history.observations)
+        @test all(action -> keys(action) == (:choice,), agent.history.actions)
+        #The environment's are the same values, under its own names, with the cue the model didn't receive
+        @test all(observation -> keys(observation) == (:payoff, :cue), environment.history.observations)
+        @test all(action -> keys(action) == (:lever,), environment.history.actions)
+        @test isequal([observation.payoff for observation in environment.history.observations], [observation.reward for observation in agent.history.observations])
+        @test [action.lever for action in environment.history.actions[2:end]] == [action.choice for action in actions]
+        #Where they are left for the next simulation, each side has its own names too
+        @test keys(environment.previous_observation) == (:payoff, :cue)
+        @test keys(agent.previous_action) == (:choice,)
+        @test simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2, observation_map = PAYOFF_AS_REWARD, action_map = CHOICE_AS_LEVER) isa Tuple
+        #simulate! checks the maps too
+        @test_throws "A map must give exactly the observations the model lists." simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2, observation_map = NameMap(:cue), action_map = CHOICE_AS_LEVER)
     end
 
     @testset "An error in a timestep method gives the same errors as in simulate" begin
@@ -902,5 +1000,70 @@ end
         environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]))
         simulate!(CognitiveAgent(LearnsRewards(), LEARNING), environment; who_starts = EnvironmentStarts(), n_steps = 2)
         @test isempty(environment.history.observations) && isempty(environment.history.actions) && isempty(environment.history.states)
+    end
+end
+
+@testset "reset!" begin
+    @testset "An agent goes back to where a new one starts, with a new history" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
+        environment = Environment(RewardsTrue(), (;))
+        first_run = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 5, rng = Xoshiro(2))
+        history = agent.history
+        @test reset!(agent) === agent
+        @test agent.state === (; expected_reward = 0.5)
+        @test agent.previous_action === (; choice = NoAction())
+        @test agent.parameters === LEARNING
+        #The history is a new one, and the one from before is as it was
+        @test agent.history !== history
+        @test length(history.states) == 6
+        @test agent.history.observations == [(; reward = NoObservation())]
+        @test agent.history.actions == [(; choice = NoAction())]
+        @test agent.history.states == [(; expected_reward = 0.5)]
+        #With the environment reset too, the same simulation runs again
+        reset!(environment)
+        @test isequal(simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 5, rng = Xoshiro(2)), first_run)
+    end
+
+    @testset "An agent keeps its parameters and its selection, and gets a new state object" begin
+        agent = CognitiveAgent(HasDefaults(), (; learning_rate = 0.3); save_history = SaveHistory(; states = SaveEverything()))
+        parameters = agent.parameters
+        simulate!(agent, (; reward = 1.0))
+        reset!(agent)
+        @test agent.parameters === parameters
+        @test agent.save_history === SaveHistory(; states = SaveEverything())
+        @test agent.history.observations == [(;)] && length(agent.history.states) == 1
+        #A state that is changed in place is made again
+        agent = CognitiveAgent(LearnsInPlace(deepcopy), LEARNING)
+        values = agent.state.values
+        simulate!(agent, (; reward = 1.0))
+        reset!(agent)
+        @test agent.state.values == [0.5, 0.5]
+        @test agent.state.values !== values
+        #A history that saves nothing stays empty
+        @test isempty(agent.history.observations) && isempty(agent.history.actions) && isempty(agent.history.states)
+    end
+
+    @testset "An agent that was given a state of its own goes back to the initial state" begin
+        agent = CognitiveAgent(LearnsRewards(), LEARNING, (; expected_reward = 0.25), (; choice = true))
+        reset!(agent)
+        @test agent.state === (; expected_reward = 0.5)
+        @test agent.previous_action === (; choice = NoAction())
+    end
+
+    @testset "An environment goes back to where a new one starts, with a new history" begin
+        environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]); save_history = SaveHistory(SaveEverything()))
+        simulate!(CognitiveAgent(LearnsRewards(), LEARNING), environment; who_starts = EnvironmentStarts(), n_steps = 2)
+        history = environment.history
+        @test reset!(environment) === environment
+        @test environment.state === (; n_timesteps = 0)
+        @test environment.previous_observation === (; reward = NoObservation())
+        @test environment.history !== history
+        @test length(history.states) == 3
+        @test environment.history.observations == [(; reward = NoObservation())]
+        @test environment.history.actions == [(;)]
+        @test environment.history.states == [(; n_timesteps = 0)]
+        #It can then be simulated from the start again
+        observations, _, _, _ = simulate!(CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything())), environment; who_starts = EnvironmentStarts(), n_steps = 3)
+        @test observations == [(; reward = 1.0), (; reward = 0.0), (; reward = 1.0)]
     end
 end

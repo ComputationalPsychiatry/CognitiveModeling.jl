@@ -1,7 +1,7 @@
 """
-    CommonRLEnvironment(env; action_name)
+    CommonRLEnvironment(rl_env; action_name)
 
-An environment model around an environment from CommonRLInterface.jl, which needs
+An environment model around `rl_env`, an environment from CommonRLInterface.jl, which needs
 CommonRLInterface.jl to be loaded. `action_name` is the name of the cognitive model's action
 that `act!` receives, such as `:arm`.
 
@@ -9,22 +9,26 @@ Environments from POMDPs.jl and ReinforcementLearning.jl can be used through it,
 `convert(CommonRLInterface.AbstractEnv, x)`, which POMDPTools.jl defines for a `POMDP` or
 `MDP` and ReinforcementLearningBase.jl for its environments.
 
-The environment object is the state: `initialize_state` resets it with `reset!` and returns
-it, every timestep changes it in place with `act!` and passes it on as the new state, and
-`prepare_state_for_saving` copies it, with `clone` if the environment provides it and with
-`deepcopy` otherwise. A method of `prepare_state_for_saving` for a `CommonRLEnvironment`
-with a specific environment type can save something lighter. The parameters aren't used,
-and neither is the random number generator, since an environment of CommonRLInterface.jl has
-its own randomness.
+`rl_env` itself is the state: `initialize_state` resets it with CommonRLInterface.jl's
+`reset!` and returns it, every timestep changes it in place with `act!` and passes it on as
+the new state, and `prepare_state_for_saving` copies it, with `clone` if it provides it and
+with `deepcopy` otherwise. A method of `prepare_state_for_saving` for a
+`CommonRLEnvironment` with a specific type of `rl_env` can save something lighter. The
+parameters aren't used, and neither is the random number generator, since an environment of
+CommonRLInterface.jl has its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
 gives, the reward that `act!` returned, and whether the episode has ended. Before the first
-action, when the action is [`NoAction`](@ref), and on the timestep after an episode ended,
-the environment is at its initial observation, with `reset!` in the second case, so the
-reward is [`NoObservation`](@ref) and nothing is done with the action. Its
-[`attribute_names`](@ref) are these three observations, the one action, no parameters and no
-states, since the environment object isn't a `NamedTuple`. Use [`EnvironmentStarts`](@ref),
-so that the model observes before it acts.
+action, when the action is [`NoAction`](@ref), the environment is at its initial
+observation, so the reward is [`NoObservation`](@ref) and nothing is done with the action.
+Its [`attribute_names`](@ref) are these three observations, the one action, no parameters
+and no states, since `rl_env` isn't a `NamedTuple`. Use [`EnvironmentStarts`](@ref), so
+that the model observes before it acts.
+
+An episode that has ended isn't started again: an action after the timestep where
+`terminated` is `true` throws an error, so simulate no further than that. A new call of
+[`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref) of an
+[`Environment`](@ref), since both reset `rl_env` through `initialize_state`.
 
 # Examples
 ```jldoctest
@@ -36,11 +40,11 @@ using Random: AbstractRNG
 mutable struct Bandit <: CommonRLInterface.AbstractEnv
     pulls::Int
 end
-CommonRLInterface.reset!(env::Bandit) = (env.pulls = 0; nothing)
-CommonRLInterface.actions(env::Bandit) = 1:2
-CommonRLInterface.observe(env::Bandit) = env.pulls
-CommonRLInterface.act!(env::Bandit, arm) = (env.pulls += 1; arm == 1 ? 1.0 : 0.0)
-CommonRLInterface.terminated(env::Bandit) = env.pulls == 2
+CommonRLInterface.reset!(rl_env::Bandit) = (rl_env.pulls = 0; nothing)
+CommonRLInterface.actions(rl_env::Bandit) = 1:2
+CommonRLInterface.observe(rl_env::Bandit) = rl_env.pulls
+CommonRLInterface.act!(rl_env::Bandit, arm) = (rl_env.pulls += 1; arm == 1 ? 1.0 : 0.0)
+CommonRLInterface.terminated(rl_env::Bandit) = rl_env.pulls == 2
 
 #An action that is always the same
 struct Always{T}
@@ -58,7 +62,7 @@ observations, actions, _, _ = simulate(
     PullsFirstArm(),
     CommonRLEnvironment(Bandit(0); action_name = :arm);
     who_starts = EnvironmentStarts(),
-    n_steps = 4,
+    n_steps = 3,
     cognitive_parameters = (;),
     environment_parameters = (;),
     save_history = SaveHistory(SaveEverything()),
@@ -71,19 +75,18 @@ foreach(println, observations)
 (observation = 0, reward = NoObservation(), terminated = false)
 (observation = 1, reward = 1.0, terminated = false)
 (observation = 2, reward = 1.0, terminated = true)
-(observation = 0, reward = NoObservation(), terminated = false)
 ```
 """
-struct CommonRLEnvironment{Tenv, action_name} <: AbstractEnvironmentModel
-    env::Tenv
+struct CommonRLEnvironment{Trl_env, action_name} <: AbstractEnvironmentModel
+    rl_env::Trl_env
 end
 
 #Takes the name of the action by keyword, and keeps it in the type, so that reading the action by name costs nothing
-function CommonRLEnvironment(env; action_name::Symbol)
-    return CommonRLEnvironment{typeof(env), action_name}(env)
+function CommonRLEnvironment(rl_env; action_name::Symbol)
+    return CommonRLEnvironment{typeof(rl_env), action_name}(rl_env)
 end
 
-#The observations are always the same three, the action is the one named, and the environment object isn't a NamedTuple, so there are no named states
-function attribute_names(::CommonRLEnvironment{Tenv, action_name}) where {Tenv, action_name}
+#The observations are always the same three, the action is the one named, and rl_env isn't a NamedTuple, so there are no named states
+function attribute_names(::CommonRLEnvironment{Trl_env, action_name}) where {Trl_env, action_name}
     return ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = action_name)
 end

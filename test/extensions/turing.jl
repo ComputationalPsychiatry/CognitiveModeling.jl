@@ -107,6 +107,15 @@ Turing.@model function CognitiveModeling.turing_apply_model(model::NoisySessionM
 end
 CognitiveModeling.attribute_names(model::NoisySessionModel) = ModelAttributes(; parameters = :noise_scale, states = :expected_reward, observations = :reward, actions = :choice)
 
+#Repeats its previous choice with a probability of 0.9, and chooses at random when there is none
+struct RepeatsPreviousChoice <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::RepeatsPreviousChoice, parameters) = (;)
+function CognitiveModeling.apply_model(model::RepeatsPreviousChoice, input::ModelInput)
+    previous = input.previous_action.choice
+    return ModelOutput((; choice = Bernoulli(previous isa NoAction ? 0.5 : previous ? 0.9 : 0.1)))
+end
+CognitiveModeling.attribute_names(model::RepeatsPreviousChoice) = ModelAttributes(; parameters = (), states = (), observations = (), actions = :choice)
+
 #Throws the error for invalid parameters when the learning rate is above 1
 struct RejectsHighLearningRate <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RejectsHighLearningRate, parameters) = (; expected_reward = 0.5)
@@ -245,6 +254,39 @@ end
         #A single missing action keeps the types of the rest known
         single = session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), (; reward = [1.0, 0.0]), (; choice = [0.2, MissingAction()], bet = [1.0, 1.5]))
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), single))) == [@varname(timestep[2].choice.imputed)]
+    end
+
+    @testset "Missing actions that aren't imputed are passed on as NoAction, with nothing sampled" begin
+        rewards = (; reward = [1.0, 0.0, 1.0, 1.0])
+        actions = (; choice = [0.2, MissingAction(), 0.4, MissingAction()], bet = [1.0, 1.5, MissingAction(), 0.8])
+        model = session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), rewards, actions; impute_missing_actions = false, save_history = SaveHistory(; actions = SaveEverything()))
+        @test isempty(keys(rand(Xoshiro(1), model)))
+        #Only the recorded actions are scored
+        V = 0.5
+        expected = 0.0
+        for t in 1:4
+            V = V + 0.3 * (rewards.reward[t] - V)
+            actions.choice[t] isa MissingAction || (expected += logpdf(Normal(V, 1.0), actions.choice[t]))
+            actions.bet[t] isa MissingAction || (expected += logpdf(Normal(2V, 0.5), actions.bet[t]))
+        end
+        @test logjoint(model, (;)) ≈ expected
+        @test logprior(model, (;)) == 0
+        #The same as data which has NoAction there
+        with_no_action = (; choice = [0.2, NoAction(), 0.4, NoAction()], bet = [1.0, 1.5, NoAction(), 0.8])
+        @test logjoint(model, (;)) ≈ logjoint(session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), rewards, with_no_action), (;))
+        #The returned actions have NoAction for them
+        @test returned(model, (;)).actions == [(; choice = 0.2, bet = 1.0), (; choice = NoAction(), bet = 1.5), (; choice = 0.4, bet = NoAction()), (; choice = NoAction(), bet = 0.8)]
+
+        #The model receives NoAction as its previous action after a missing one, so here it chooses at random again
+        choices = (; choice = [true, MissingAction(), true])
+        @test logjoint(session_for_test(RepeatsPreviousChoice(), (;), (;), choices; impute_missing_actions = false), (;)) ≈ 2 * log(0.5)
+        #When it is imputed, the model receives the imputed action
+        imputed = Dict(@varname(timestep[2].choice.imputed) => true)
+        @test (@test_logs match_mode = :any logjoint(session_for_test(RepeatsPreviousChoice(), (;), (;), choices), imputed)) ≈ log(0.5) + 2 * log(0.9)
+
+        #The environment receives NoAction too: RewardsPreviousChoice gives 0.5 for it, and the previous choice otherwise
+        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 3)), choices; impute_missing_actions = false, environment = RewardsPreviousChoice(), save_history = SaveHistory(; observations = SaveEverything()))
+        @test returned(model, (;)).observations == [(; reward = 0.5), (; reward = 1.0), (; reward = 0.5)]
     end
 
     @testset "A missing observation is filled in by the environment, which runs on every timestep" begin

@@ -5,8 +5,9 @@
 
 Stand-in for an action that was taken on a timestep but isn't in the data, as one entry of
 the actions `NamedTuple`, such as `(; choice = MissingAction())`. Fitting imputes it by
-sampling it from the model's action distribution on that timestep. [`NoAction`](@ref) is
-different: it says that the model took no action on that timestep.
+sampling it from the model's action distribution on that timestep, or passes it on as
+[`NoAction`](@ref) when it is told not to impute. `NoAction` itself is different: it says
+that the model took no action on that timestep.
 """
 struct MissingAction end
 

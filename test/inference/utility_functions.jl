@@ -41,6 +41,17 @@ end
         @test CognitiveModeling.recorded_actions((;)) === (;)
     end
 
+    @testset "Missing actions can be replaced by NoAction, which leaves the recorded ones as they are" begin
+        replaced = CognitiveModeling.without_missing_actions(actions)
+        @test replaced.choice == [true, NoAction(), false, NoAction(), true]
+        @test replaced.bet == [NoAction(), NoAction(), 1.0, 2.0, NoAction()]
+        @test CognitiveModeling.recorded_actions(replaced) == CognitiveModeling.recorded_actions(actions)
+        #The columns of the data aren't changed, and columns without missing actions keep their type
+        @test actions.choice[2] === MissingAction()
+        @test CognitiveModeling.without_missing_actions((; choice = [true, false])).choice isa Vector{Bool}
+        @test CognitiveModeling.without_missing_actions((;)) === (;)
+    end
+
     @testset "is_recorded" begin
         @test CognitiveModeling.is_recorded(1.0) && CognitiveModeling.is_recorded(true)
         @test !CognitiveModeling.is_recorded(MissingAction()) && !CognitiveModeling.is_recorded(NoAction())

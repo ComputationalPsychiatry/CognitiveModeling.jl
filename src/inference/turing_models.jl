@@ -31,7 +31,8 @@ than scoring each timestep on its own.
   fills in.
 - `actions::NamedTuple`: the actions in the data, in the same form, with exactly the actions
   the model lists. An action that was taken but not recorded is [`MissingAction`](@ref), and
-  is imputed. An action that wasn't taken is [`NoAction`](@ref), and isn't scored.
+  is imputed unless `impute_missing_actions` is `false`. An action that wasn't taken is
+  [`NoAction`](@ref), and isn't scored.
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
   observation of the same timestep, `EnvironmentStarts()`, or on the observation of the
   timestep before, `AgentStarts()`, as in [`simulate`](@ref). It has no default, because a
@@ -43,6 +44,10 @@ than scoring each timestep on its own.
   only used where the data has none. Without it, the data can't have missing observations.
 - `environment_parameters::NamedTuple=(;)`: the parameters of `environment`.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
+- `impute_missing_actions::Bool=true`: whether an action that is `MissingAction()` is
+  imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
+  passed on as `NoAction()` instead: `model` receives `NoAction()` as that previous action
+  on the next timestep, and `environment` as the action it responds to.
 - `save_history::SaveHistory=SaveHistory()`: which observations, actions and states are
   returned, by name. The returned actions and observations are those the model received,
   with the imputed and filled in values.
@@ -56,9 +61,9 @@ than scoring each timestep on its own.
   `previous_environment_state`: where the session starts, with the same defaults as in
   `simulate`.
 
-An action that is `MissingAction()` is a latent variable named after its timestep and
-action, such as `timestep[3].choice.imputed`, with the model's action distribution on that
-timestep as its distribution. The sampler must handle its type: a continuous action can be
+An imputed action is a latent variable named after its timestep and action, such as
+`timestep[3].choice.imputed`, with the model's action distribution on that timestep as its
+distribution. The sampler must handle its type: a continuous action can be
 sampled with NUTS, a discrete one needs a sampler for discrete variables. Any latent variable
 in a session, imputed or from a model which samples within a timestep, makes evaluating the
 model much slower in the current version of DynamicPPL.jl.

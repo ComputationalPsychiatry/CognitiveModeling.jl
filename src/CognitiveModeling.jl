@@ -25,8 +25,8 @@ export NoObservation, NoAction, MissingObservation, MissingAction
 export ModelInput, ModelOutput, ModelAttributes, InvalidParametersError
 export EnvironmentInput, EnvironmentOutput, CommonRLEnvironment
 export CognitiveAgent, Environment, AgentStarts, EnvironmentStarts
-export SaveHistory, SaveEverything
-export simulate, simulate!, turing_single_session
+export SaveHistory, SaveEverything, NameMap
+export simulate, simulate!, reset!, turing_single_session
 
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names

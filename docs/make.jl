@@ -22,7 +22,7 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
-        "Tutorials" => ["generated/getting_started.md", "generated/cognitive_abm_with_agents.md"],
+        "Tutorials" => ["generated/getting_started.md", "generated/cognitive_abm_with_agents.md", "generated/interfacing_with_common_rl.md"],
         "Automatic differentiation and Reactant" => "ad_and_reactant.md",
         "API" => "api.md",
     ],

@@ -35,6 +35,16 @@ function CognitiveModeling.apply_model(environment::RewardsFollowActions, input:
 end
 CognitiveModeling.attribute_names(environment::RewardsFollowActions) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = :reward, actions = :choice)
 
+# The same environment under other names than the model's, with an observation the model doesn't list
+struct PayoffsFollowLevers <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters) = (; n_timesteps = 0)
+function CognitiveModeling.apply_model(environment::PayoffsFollowLevers, input::EnvironmentInput)
+    action = input.action.lever isa NoAction ? 0.5 : input.action.lever
+    n_timesteps = input.previous_state.n_timesteps + 1
+    return EnvironmentOutput((; payoff = input.parameters.reward_size * action, n_timesteps), (; n_timesteps))
+end
+CognitiveModeling.attribute_names(environment::PayoffsFollowLevers) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = (:payoff, :n_timesteps), actions = :lever)
+
 # An environment whose reward is sampled
 struct SampledRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;)
@@ -124,6 +134,22 @@ function sum_expected_rewards(cognitive_states)
         total += state.expected_reward
     end
     return total
+end
+
+# The same simulation with an environment under other names, which maps of names pass on
+function simulate_with_name_maps(x, who_starts)
+    _, _, cognitive_states, _ = simulate(
+        LearnsRewards{ProbabilityAsAction}(),
+        PayoffsFollowLevers();
+        who_starts,
+        n_steps = 20,
+        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
+        environment_parameters = (; reward_size = 0.8),
+        save_history = SaveHistory(SaveEverything()),
+        observation_map = NameMap(:payoff => :reward),
+        action_map = NameMap(:choice => :lever),
+    )
+    return sum_expected_rewards(cognitive_states)
 end
 
 # A simulation which is deterministic, with the parameters from a vector
@@ -328,4 +354,6 @@ const TEST_CASES = [
     (; name = "simulate with a state saved with deepcopy, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
     (; name = "simulate with a state saved with deepcopy, agent starts", f = x -> simulate_in_place(x, AgentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
     (; name = "reading the history of an agent with a state saved with deepcopy", f = x -> read_history_in_place(x, LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with maps of names, environment starts", f = x -> simulate_with_name_maps(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate with maps of names, agent starts", f = x -> simulate_with_name_maps(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
 ]

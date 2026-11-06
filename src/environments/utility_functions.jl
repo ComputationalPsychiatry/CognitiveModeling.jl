@@ -13,7 +13,7 @@ function has_attribute_names(environment::AbstractEnvironmentModel)
 end
 
 #Throw an informative error if the names of the parameters, the previous observation or a NamedTuple state aren't those in attribute_names
-function check_names_match(environment::AbstractEnvironmentModel, parameters, state, previous_observation)
+function check_match_attribute_names(environment::AbstractEnvironmentModel, parameters, state, previous_observation)
     attributes = check_attribute_names(attribute_names(environment), environment)
     if !same_names(keys(parameters), attributes.parameters)
         throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of an environment model of type $(typeof(environment)) as $(attributes.parameters)."))
@@ -27,19 +27,40 @@ function check_names_match(environment::AbstractEnvironmentModel, parameters, st
     return nothing
 end
 
+#The action and the observation before the first timestep, with the names that attribute_names lists for the environment model
+function initial_action(environment::AbstractEnvironmentModel)
+    return no_actions(check_attribute_names(attribute_names(environment), environment))
+end
+
+function initial_observation(environment::AbstractEnvironmentModel)
+    return no_observations(check_attribute_names(attribute_names(environment), environment))
+end
+
 #How a model or an environment model is named in error messages
 describe_model(model::AbstractCognitiveModel) = "a model of type $(typeof(model))"
 describe_model(environment::AbstractEnvironmentModel) = "an environment model of type $(typeof(environment))"
 
-#Throw an informative error if the environment doesn't give every observation the model lists, or the model doesn't give every action the environment lists
-function check_names_fit(model::AbstractCognitiveModel, environment::AbstractEnvironmentModel)
+#Throw an informative error if the model doesn't receive every observation it lists, or the environment every action it lists, directly or through a NameMap for each
+function check_names_fit(model::AbstractCognitiveModel, environment::AbstractEnvironmentModel, observation_map = nothing, action_map = nothing)
     model_attributes = check_attribute_names(attribute_names(model), model)
     environment_attributes = check_attribute_names(attribute_names(environment), environment)
-    if !has_every_name(model_attributes.observations, environment_attributes.observations)
-        throw(ArgumentError("A model of type $(typeof(model)) lists the observations $(model_attributes.observations), but an environment model of type $(typeof(environment)) gives $(environment_attributes.observations). The environment must give every observation the model lists."))
+    check_observations_fit(model, environment, model_attributes.observations, environment_attributes.observations, observation_map)
+    check_actions_fit(model, environment, model_attributes.actions, environment_attributes.actions, action_map)
+    return nothing
+end
+
+#Without a map, the environment must give every observation the model lists
+function check_observations_fit(model, environment, model_names, environment_names, ::Nothing)
+    if !has_every_name(model_names, environment_names)
+        throw(ArgumentError("A model of type $(typeof(model)) lists the observations $model_names, but an environment model of type $(typeof(environment)) gives $environment_names. The environment must give every observation the model lists. A NameMap as observation_map can rename them."))
     end
-    if !has_every_name(environment_attributes.actions, model_attributes.actions)
-        throw(ArgumentError("An environment model of type $(typeof(environment)) lists the actions $(environment_attributes.actions), but a model of type $(typeof(model)) gives $(model_attributes.actions). The model must give every action the environment lists."))
+    return nothing
+end
+
+#Without a map, the model must give every action the environment lists
+function check_actions_fit(model, environment, model_names, environment_names, ::Nothing)
+    if !has_every_name(environment_names, model_names)
+        throw(ArgumentError("An environment model of type $(typeof(environment)) lists the actions $environment_names, but a model of type $(typeof(model)) gives $model_names. The model must give every action the environment lists. A NameMap as action_map can rename them."))
     end
     return nothing
 end

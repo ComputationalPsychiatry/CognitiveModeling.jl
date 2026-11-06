@@ -45,6 +45,17 @@ function recorded_actions(actions::NamedTuple{names}) where {names}
 end
 
 """
+    without_missing_actions(actions)
+
+Return `actions`, a `NamedTuple` with one vector per action, with every
+[`MissingAction`](@ref) replaced by [`NoAction`](@ref), for a session where a missing action
+is passed on as an action that wasn't taken instead of being imputed.
+"""
+function without_missing_actions(actions::NamedTuple)
+    return map(column -> map(action -> action isa MissingAction ? NoAction() : action, column), actions)
+end
+
+"""
     row(columns, t)
 
 Return the `NamedTuple` of the values at timestep `t` of `columns`, a `NamedTuple` of vectors

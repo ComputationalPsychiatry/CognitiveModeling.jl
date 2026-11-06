@@ -21,8 +21,9 @@ such as `save_history.states`.
 Saving some names of a kind gives a `NamedTuple` with those names on each timestep, which
 only works when the value is a `NamedTuple`, and saving none gives an empty one, `(;)`, for
 any value. For an environment, the states are its own, and the observations and actions are
-the same as the agent's, which [`simulate!`](@ref) adds to the environment's history too,
-while [`simulate`](@ref) only uses its states.
+those it gave and received, which are the agent's unless a [`NameMap`](@ref) selects or
+renames them. [`simulate!`](@ref) adds them to the environment's history too, while
+[`simulate`](@ref) only uses its states.
 
 See also [`CognitiveAgent`](@ref), [`Environment`](@ref) and [`simulate`](@ref), which take
 one.
@@ -92,9 +93,61 @@ function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
 end
 
 """
+    NameMap(names...)
+
+Which outputs of one side of a simulation the other side receives, and under which names.
+
+Each argument is `:given => :received`, for an output which the receiver lists under
+another name, or a single `Symbol`, for one which keeps its name. Outputs that aren't in the
+map aren't passed on, and each name can only be there once. The names are kept in the type,
+so that a map costs nothing in a simulation.
+
+[`simulate`](@ref) and [`simulate!`](@ref) take one as `observation_map`, from the
+observations the environment model gives to those the cognitive model lists, and one as
+`action_map`, from the actions the cognitive model gives to those the environment model
+lists. A model and an environment which name things differently can then be used together,
+and the map says which outputs the receiver gets: it must give exactly the names the
+receiver lists in [`attribute_names`](@ref).
+
+# Examples
+```jldoctest
+julia> NameMap(:payoff => :reward, :cue)
+NameMap(:payoff => :reward, :cue)
+
+julia> NameMap(:payoff => :reward, :cue => :reward)
+ERROR: ArgumentError: A NameMap can only give each name once, but it gives (:reward, :reward).
+[...]
+```
+"""
+struct NameMap{Tgiven, Treceived} end
+
+#Takes the names one by one, and puts those given and those received in the type
+function NameMap(names::Union{Symbol, Pair{Symbol, Symbol}}...)
+    given = map(given_name, names)
+    received = map(received_name, names)
+    allunique(given) || throw(ArgumentError("A NameMap can only take each name once, but it takes $given."))
+    allunique(received) || throw(ArgumentError("A NameMap can only give each name once, but it gives $received."))
+    return NameMap{given, received}()
+end
+
+#A single name is received under the name it is given with
+given_name(name::Symbol) = name
+given_name(names::Pair{Symbol, Symbol}) = first(names)
+received_name(name::Symbol) = name
+received_name(names::Pair{Symbol, Symbol}) = last(names)
+
+#Shows the map as it is written
+function Base.show(io::IO, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceived}
+    print(io, "NameMap(")
+    join(io, (given === received ? repr(given) : string(repr(given), " => ", repr(received)) for (given, received) in zip(Tgiven, Treceived)), ", ")
+    print(io, ")")
+    return nothing
+end
+
+"""
     AgentHistory(observations, actions, states)
 
-What has happened to a [`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
+The history of states, actions and observations for a [`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
 
 Each argument is kept in a field of the same name, such as `history.actions`. The agent's
 [`SaveHistory`](@ref) selects what is kept of each observation, action and state, and when
@@ -119,7 +172,7 @@ end
     CognitiveAgent(model, parameters; save_history=SaveHistory())
     CognitiveAgent(model, parameters, state, previous_action; save_history=SaveHistory())
 
-An instantiated cognitive model with its parameters and current state, which [`simulate!`](@ref) can
+An instantiated cognitive model with its parameters, current state, and previous action, which [`simulate!`](@ref) can
 update iteratively.
 
 Parameters that aren't given take the values in [`default_parameters`](@ref). The state
@@ -148,21 +201,34 @@ end
 
 #Starts the agent from its initial state, with no action taken yet
 function CognitiveAgent(model::AbstractCognitiveModel, parameters; save_history::SaveHistory = SaveHistory())
-    parameters = full_parameters(model, parameters)
+    parameters = merge_default_parameters(model, parameters)
     return CognitiveAgent(model, parameters, initialize_state(model, parameters), initial_action(model); save_history)
 end
 
 #Fills in the default parameters, checks the names, and starts the history where the agent starts, with what is selected of it
 function CognitiveAgent(model::AbstractCognitiveModel, parameters, state, previous_action; save_history::SaveHistory = SaveHistory())
-    parameters = full_parameters(model, parameters)
-    check_names_match(model, parameters, state, previous_action)
-    check_selection_names(save_history, model)
-    if saves_nothing(save_history)
-        history = AgentHistory(Any[], Any[], Any[])
-    else
-        history = AgentHistory(Any[select_names(initial_observation(model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))])
-    end
+
+    #Fill in the default parameters
+    parameters = merge_default_parameters(model, parameters)
+
+    #Check that the parameters, the state and the previous action have the names the model lists
+    check_match_attribute_names(model, parameters, state, previous_action)
+
+    #Check that the observations and actions selected for the history are among those the model lists
+    check_savehistory_selection_names(save_history, model)
+
+    #Start the history from where the agent starts
+    history = starting_history(model, state, previous_action, save_history)
+
     return CognitiveAgent(model, parameters, state, previous_action, history, save_history)
+end
+
+#The history of an agent which starts in a state and after an action: what is selected of where it starts, or empty vectors when nothing is selected
+function starting_history(model::AbstractCognitiveModel, state, previous_action, save_history::SaveHistory)
+    if saves_nothing(save_history)
+        return AgentHistory(Any[], Any[], Any[])
+    end
+    return AgentHistory(Any[select_names(initial_observation(model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))])
 end
 
 """
@@ -172,8 +238,9 @@ What has happened to an [`Environment`](@ref), which [`simulate!`](@ref) adds to
 
 Each argument is kept in a field of the same name, such as `history.states`. The
 environment's [`SaveHistory`](@ref) selects what is kept of each observation, action and
-state, and when it selects nothing at all, the vectors stay empty. The observations and
-actions are the same as in the agent's history.
+state, and when it selects nothing at all, the vectors stay empty. The observations are
+those the environment gave and the actions those it received, which are the same as in the
+agent's history unless a [`NameMap`](@ref) selects or renames them.
 
 # Arguments
 - `observations::Vector{Any}`: the observations the environment gave, starting with its
@@ -224,21 +291,105 @@ end
 
 #Starts the environment from its initial state, with no observation given yet
 function Environment(model::AbstractEnvironmentModel, parameters; save_history::SaveHistory = SaveHistory())
-    parameters = full_parameters(model, parameters)
+    parameters = merge_default_parameters(model, parameters)
     return Environment(model, parameters, initialize_state(model, parameters), initial_observation(model); save_history)
 end
 
 #Fills in the default parameters, checks the names, and starts the history where the environment starts, with what is selected of it
 function Environment(model::AbstractEnvironmentModel, parameters, state, previous_observation; save_history::SaveHistory = SaveHistory())
-    parameters = full_parameters(model, parameters)
-    check_names_match(model, parameters, state, previous_observation)
-    check_selection_names(save_history, model)
-    if saves_nothing(save_history)
-        history = EnvironmentHistory(Any[], Any[], Any[])
-    else
-        history = EnvironmentHistory(Any[select_names(previous_observation, observation_selection(save_history))], Any[select_names(initial_action(model), action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))])
-    end
+
+    #Fill in the default parameters
+    parameters = merge_default_parameters(model, parameters)
+
+    #Check that the parameters, the state and the previous observation have the names the environment model lists
+    check_match_attribute_names(model, parameters, state, previous_observation)
+
+    #Check that the observations and actions selected for the history are among those the environment model lists
+    check_savehistory_selection_names(save_history, model)
+
+    #Start the history from where the environment starts
+    history = starting_history(model, state, previous_observation, save_history)
+
     return Environment(model, parameters, state, previous_observation, history, save_history)
+end
+
+#The history of an environment which starts in a state and after an observation: what is selected of where it starts, or empty vectors when nothing is selected
+function starting_history(model::AbstractEnvironmentModel, state, previous_observation, save_history::SaveHistory)
+    if saves_nothing(save_history)
+        return EnvironmentHistory(Any[], Any[], Any[])
+    end
+    return EnvironmentHistory(Any[select_names(previous_observation, observation_selection(save_history))], Any[select_names(initial_action(model), action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))])
+end
+
+"""
+    reset!(agent::CognitiveAgent)
+    reset!(environment::Environment)
+
+Put `agent` or `environment` back to where a new one starts, and return it.
+
+The state becomes the output of [`initialize_state`](@ref) with the parameters it has. The
+previous action of an agent has every action as [`NoAction`](@ref) again, and the previous
+observation of an environment every observation as [`NoObservation`](@ref). The history is
+a new one which starts from there, so a history that was read before the reset, as in
+`history = agent.history`, is kept as it was. The model, the parameters and the
+[`SaveHistory`](@ref) stay the same.
+
+An agent or an environment that was created with a state, a previous action or a previous
+observation of its own doesn't return to those. Create a new one for that.
+
+CommonRLInterface.jl and ReinforcementLearning.jl export a `reset!` of their own. When one
+of them is loaded with `using` as well, write `CognitiveModeling.reset!`.
+
+# Examples
+```jldoctest
+using CognitiveModeling
+using Distributions: Bernoulli
+
+struct RescorlaWagner <: AbstractCognitiveModel end
+
+function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
+    return (; expected_reward = 0.5)
+end
+
+function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
+    V₋₁ = input.previous_state.expected_reward
+    Vₜ = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
+    return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))
+end
+
+function CognitiveModeling.attribute_names(model::RescorlaWagner)
+    return ModelAttributes(; parameters = :learning_rate, states = :expected_reward, observations = :reward, actions = :choice)
+end
+
+agent = CognitiveAgent(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
+
+simulate!(agent, (; reward = 1.0))
+simulate!(agent, (; reward = 1.0))
+reset!(agent)
+
+agent.state, agent.previous_action, agent.history.states
+
+# output
+
+((expected_reward = 0.5,), (choice = NoAction(),), Any[(expected_reward = 0.5,)])
+```
+"""
+function reset! end
+
+#Starts the agent again from its initial state, with no action taken yet and a new history
+function reset!(agent::CognitiveAgent)
+    agent.state = initialize_state(agent.model, agent.parameters)
+    agent.previous_action = initial_action(agent.model)
+    agent.history = starting_history(agent.model, agent.state, agent.previous_action, agent.save_history)
+    return agent
+end
+
+#Starts the environment again from its initial state, with no observation given yet and a new history
+function reset!(environment::Environment)
+    environment.state = initialize_state(environment.model, environment.parameters)
+    environment.previous_observation = initial_observation(environment.model)
+    environment.history = starting_history(environment.model, environment.state, environment.previous_observation, environment.save_history)
+    return environment
 end
 
 """
