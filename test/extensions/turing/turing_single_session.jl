@@ -142,12 +142,12 @@ end
             expected, states = session_by_hand(SESSION_REWARDS.reward, SESSION_CHOICES.choice, 0.3, 2.0, who_starts)
             @test logjoint(model, (;)) ≈ expected
             @test loglikelihood(model, (;)) ≈ expected
-            #There are no latents, and what is returned is what happened
+            #There are no latents, and what is returned is what happened, after timestep 0 with where the session started
             @test isempty(keys(rand(Xoshiro(1), model)))
             history = returned(model, (;))
-            @test [state.expected_reward for state in history.states] ≈ states
-            @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
-            @test history.observations == [(; reward) for reward in SESSION_REWARDS.reward]
+            @test [state.expected_reward for state in history.states] ≈ [0.5; states]
+            @test history.actions == [(; choice = BeforeFirstTimestep()), ((; choice) for choice in SESSION_CHOICES.choice)...]
+            @test history.observations == [(; reward = BeforeFirstTimestep()), ((; reward) for reward in SESSION_REWARDS.reward)...]
         end
     end
 
@@ -165,20 +165,27 @@ end
     end
 
     @testset "save_history selects what is returned, and nothing by default" begin
+        #Timestep 0 and the five timesteps
         history = returned(session_for_test(), (;))
-        @test history.observations == fill((;), 5) && history.actions == fill((;), 5) && history.states == fill((;), 5)
+        @test history.observations == fill((;), 6) && history.actions == fill((;), 6) && history.states == fill((;), 6)
         history = returned(session_for_test(; save_history = SaveHistory(; states = :expected_reward, actions = :choice)), (;))
-        @test history.observations == fill((;), 5)
+        @test history.observations == fill((;), 6)
+        @test history.actions == [(; choice = BeforeFirstTimestep()), ((; choice) for choice in SESSION_CHOICES.choice)...]
+        @test history.states[1:2] == [(; expected_reward = 0.5), (; expected_reward = 0.65)]
+        #Without timestep 0, element t is timestep t
+        history = returned(session_for_test(; save_history = SaveHistory(; states = :expected_reward, actions = :choice, save_initial_values = false)), (;))
         @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
-        @test history.states[1] == (; expected_reward = 0.65)
+        @test history.states[1] == (; expected_reward = 0.65) && length(history.states) == 5
         @test_throws FieldError returned(session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), SESSION_REWARDS, (; choice = ones(5), bet = ones(5)); save_history = SaveHistory(; observations = :cue)), (;))
     end
 
     @testset "The sizes of the timesteps are returned when anything is saved, and are empty otherwise" begin
-        @test returned(session_for_test(; save_history = SaveHistory(; states = :expected_reward)), (;)).timestep_sizes == fill(1, 5)
-        @test returned(session_for_test(; timestep_sizes = 0.5, save_history = SaveHistory(; actions = SaveEverything())), (;)).timestep_sizes == fill(0.5, 5)
+        #They start with BeforeFirstTimestep for timestep 0
+        @test isequal(returned(session_for_test(; save_history = SaveHistory(; states = :expected_reward)), (;)).timestep_sizes, [BeforeFirstTimestep(); fill(1, 5)])
+        @test isequal(returned(session_for_test(; timestep_sizes = 0.5, save_history = SaveHistory(; actions = SaveEverything())), (;)).timestep_sizes, [BeforeFirstTimestep(); fill(0.5, 5)])
         sizes = [0.5, 1.0, 1.5, 2.0, 2.5]
-        @test returned(session_for_test(; timestep_sizes = sizes, save_history = SaveHistory(SaveEverything())), (;)).timestep_sizes === sizes
+        @test isequal(returned(session_for_test(; timestep_sizes = sizes, save_history = SaveHistory(SaveEverything())), (;)).timestep_sizes, [BeforeFirstTimestep(); sizes])
+        @test returned(session_for_test(; timestep_sizes = sizes, save_history = SaveHistory(SaveEverything(); save_initial_values = false)), (;)).timestep_sizes == sizes
         #Nothing is saved by default
         @test returned(session_for_test(), (;)).timestep_sizes == Int[]
         @test returned(session_for_test(; timestep_sizes = sizes), (;)).timestep_sizes == Float64[]
@@ -217,8 +224,8 @@ end
         @test (@test_logs match_mode = :any logjoint(model, given)) ≈ expected_prior + expected_likelihood
         @test (@test_logs match_mode = :any logprior(model, given)) ≈ expected_prior
         @test (@test_logs match_mode = :any loglikelihood(model, given)) ≈ expected_likelihood
-        #The returned actions have the imputed values
-        @test (@test_logs match_mode = :any returned(model, given)).actions == filled
+        #The returned actions have the imputed values, after timestep 0
+        @test (@test_logs match_mode = :any returned(model, given)).actions == [(; choice = BeforeFirstTimestep(), bet = BeforeFirstTimestep()); filled]
         #A single missing action keeps the types of the rest known
         single = session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), (; reward = [1.0, 0.0]), (; choice = [0.2, MissingAction()], bet = [1.0, 1.5]))
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), single))) == [@varname(timestep[2].choice.imputed)]
@@ -243,7 +250,7 @@ end
         with_no_action = (; choice = [0.2, NoAction(), 0.4, NoAction()], bet = [1.0, 1.5, NoAction(), 0.8])
         @test logjoint(model, (;)) ≈ logjoint(session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), rewards, with_no_action), (;))
         #The returned actions have NoAction for them
-        @test returned(model, (;)).actions == [(; choice = 0.2, bet = 1.0), (; choice = NoAction(), bet = 1.5), (; choice = 0.4, bet = NoAction()), (; choice = NoAction(), bet = 0.8)]
+        @test returned(model, (;)).actions[2:end] == [(; choice = 0.2, bet = 1.0), (; choice = NoAction(), bet = 1.5), (; choice = 0.4, bet = NoAction()), (; choice = NoAction(), bet = 0.8)]
 
         #The model receives NoAction as its previous action after a missing one, so here it chooses at random again
         choices = (; choice = [true, MissingAction(), true])
@@ -254,7 +261,7 @@ end
 
         #The environment receives NoAction too: RewardsPreviousChoice gives 0.5 for it, and the previous choice otherwise
         model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 3)), choices; impute_missing_actions = false, environment = RewardsPreviousChoice(), save_history = SaveHistory(; observations = SaveEverything()))
-        @test returned(model, (;)).observations == [(; reward = 0.5), (; reward = 1.0), (; reward = 0.5)]
+        @test returned(model, (;)).observations[2:end] == [(; reward = 0.5), (; reward = 1.0), (; reward = 0.5)]
     end
 
     @testset "A missing observation is filled in by the environment, which runs on every timestep" begin
@@ -264,18 +271,18 @@ end
         reference = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, full, SESSION_CHOICES)
         model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES; environment = RewardsPreviousChoice(), save_history = SaveHistory(; observations = SaveEverything()))
         @test logjoint(model, (;)) ≈ logjoint(reference, (;))
-        @test returned(model, (;)).observations == [(; reward) for reward in full.reward]
+        @test returned(model, (;)).observations[2:end] == [(; reward) for reward in full.reward]
         #The environment's defaults are filled in and its names checked
         @test_throws "attribute_names lists the parameters of an environment model of type RewardsPreviousChoice" session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES; environment = RewardsPreviousChoice(), environment_parameters = (; size = 1.0))
         @test_throws "A cognitive model of type SessionRescorlaWagner lists the observations (:reward,), but an environment model of type GivesNothing gives (). Without a map, the two must list the same observations." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, SESSION_REWARDS, SESSION_CHOICES; environment = GivesNothing())
         #When the agent starts, the environment responds to the action of the same timestep
         model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 5)), SESSION_CHOICES; who_starts = AgentStarts(), environment = RewardsPreviousChoice(), save_history = SaveHistory(; observations = SaveEverything()))
-        @test returned(model, (;)).observations == [(; reward = float(choice)) for choice in SESSION_CHOICES.choice]
+        @test returned(model, (;)).observations[2:end] == [(; reward = float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
         @test_throws "The observations have entries that are MissingObservation(), but no environment was given to fill them in." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES)
         #An observation that the environment doesn't give stays NoObservation
         model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 3)), (; choice = [true, false, true]); environment = RewardsAfterFirstChoice(), save_history = SaveHistory(; observations = SaveEverything()))
-        @test returned(model, (;)).observations == [(; reward = NoObservation()), (; reward = 1.0), (; reward = 0.0)]
+        @test returned(model, (;)).observations[2:end] == [(; reward = NoObservation()), (; reward = 1.0), (; reward = 0.0)]
     end
 
     @testset "A missing observation is a latent when the environment gives a distribution for it" begin
@@ -286,7 +293,7 @@ end
         @test Set(keys(values)) == Set([@varname(timestep[1].environment.reward.imputed), @varname(timestep[3].environment.reward.imputed)])
         #The model observes their values
         rewards = Dict(@varname(timestep[1].environment.reward.imputed) => 0.7, @varname(timestep[3].environment.reward.imputed) => -0.4)
-        @test (@test_logs match_mode = :any returned(model, rewards)).observations == [(; reward = 0.7), (; reward = 1.0), (; reward = -0.4)]
+        @test (@test_logs match_mode = :any returned(model, rewards)).observations[2:end] == [(; reward = 0.7), (; reward = 1.0), (; reward = -0.4)]
         #They count in the log density with the environment's distribution, beside the choices given those rewards
         recorded = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = [0.7, 1.0, -0.4]), choices)
         @test (@test_logs match_mode = :any logjoint(model, rewards)) ≈ logjoint(recorded, (;)) + logpdf(Normal(0.5, 1.0), 0.7) + logpdf(Normal(0.5, 1.0), -0.4)
@@ -302,7 +309,7 @@ end
         @test Set(keys(values)) == Set([@varname(timestep[1].environment.drift), @varname(timestep[2].environment.drift)])
         #What it gives from them is what the model observes
         drifts = Dict(@varname(timestep[1].environment.drift) => 0.25, @varname(timestep[2].environment.drift) => -0.5)
-        @test (@test_logs match_mode = :any returned(model, drifts)).observations == [(; reward = 0.75), (; reward = 0.25)]
+        @test (@test_logs match_mode = :any returned(model, drifts)).observations[2:end] == [(; reward = 0.75), (; reward = 0.25)]
     end
 
     @testset "A model which samples within a timestep has a variable for each timestep" begin
@@ -326,17 +333,17 @@ end
         model = session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), actions; timestep_sizes = [0.5, 1.0, 1.5, 2.0], save_history = SaveHistory(SaveEverything()))
         @test logjoint(model, (;)) ≈ logpdf(Bernoulli(0.7), true) + logpdf(Bernoulli(0.7), false)
         history = returned(model, (;))
-        @test history.actions == [(; choice = NoAction()), (; choice = true), (; choice = NoAction()), (; choice = false)]
-        @test [state.timestep_size for state in history.states] == [0.5, 1.0, 1.5, 2.0]
-        @test history.observations == fill((;), 4)
+        @test history.actions[2:end] == [(; choice = NoAction()), (; choice = true), (; choice = NoAction()), (; choice = false)]
+        @test [state.timestep_size for state in history.states[2:end]] == [0.5, 1.0, 1.5, 2.0]
+        @test history.observations == fill((;), 5)
         #The data can also have NoAction where the model acts, which isn't scored either
         @test logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [NoAction(), NoAction(), NoAction(), false])), (;)) ≈ logpdf(Bernoulli(0.7), false)
         #A recorded action where the model took none is an error
         @test_throws "The cognitive model of type ActsEverySecondTimestep took no action choice on a timestep where the data has true for it." logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true, false, false])), (;))
         #The sizes of the timesteps are returned with what is saved
-        @test history.timestep_sizes == [0.5, 1.0, 1.5, 2.0]
+        @test isequal(history.timestep_sizes, [BeforeFirstTimestep(), 0.5, 1.0, 1.5, 2.0])
         #With a single size, every timestep gets it
-        @test [state.timestep_size for state in returned(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), actions; timestep_sizes = 0.25, save_history = SaveHistory(; states = :timestep_size)), (;)).states] == fill(0.25, 4)
+        @test [state.timestep_size for state in returned(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), actions; timestep_sizes = 0.25, save_history = SaveHistory(; states = :timestep_size)), (;)).states[2:end]] == fill(0.25, 4)
     end
 
     @testset "An InvalidParametersError stops the evaluation, unless it is caught to give a log density of -Inf" begin
@@ -348,25 +355,29 @@ end
         #Valid parameters are unaffected
         valid = session_for_test(RejectsHighLearningRate(), (; learning_rate = 0.3), SESSION_REWARDS, actions; catch_invalid_parameters = true, save_history = SaveHistory(; states = :expected_reward))
         @test logjoint(valid, (;)) ≈ logjoint(session_for_test(RejectsHighLearningRate(), (; learning_rate = 0.3), SESSION_REWARDS, actions), (;))
-        @test returned(valid, (;)).states[1] == (; expected_reward = 0.65)
+        @test returned(valid, (;)).states[2] == (; expected_reward = 0.65)
         #Other errors still get through
         @test_throws "took no action" logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true]); catch_invalid_parameters = true), (;))
     end
 
-    @testset "It can be sampled as a submodel, and returned gives the states for each sample" begin
+    @testset "It can be sampled as a submodel, and returned gives the states for each sample, also an initial state which is fitted" begin
         Turing.@model function fit_one_session(observations, actions)
             learning_rate ~ Beta(2, 2)
             inverse_temperature ~ LogNormal(0, 0.5)
-            session ~ to_submodel(prefix(turing_single_session(SessionRescorlaWagner(), (; learning_rate, inverse_temperature), observations, actions; who_starts = EnvironmentStarts(), save_history = SaveHistory(; states = :expected_reward)), @varname(session)), false)
+            initial_value ~ Beta(2, 2)
+            session ~ to_submodel(prefix(turing_single_session(SessionRescorlaWagner(), (; learning_rate, inverse_temperature), observations, actions; who_starts = EnvironmentStarts(), save_history = SaveHistory(; states = :expected_reward), previous_cognitive_state = (; expected_reward = initial_value)), @varname(session)), false)
             return session
         end
         model = fit_one_session(SESSION_REWARDS, SESSION_CHOICES)
         chain = sample(Xoshiro(1), model, NUTS(), 100; progress = false)
         @test size(chain, 1) == 100
-        @test Set(Turing.FlexiChains.parameters(chain)) == Set([@varname(learning_rate), @varname(inverse_temperature)])
+        @test Set(Turing.FlexiChains.parameters(chain)) == Set([@varname(learning_rate), @varname(inverse_temperature), @varname(initial_value)])
         trajectories = returned(model, chain)
         @test length(trajectories) == 100
-        @test length(trajectories[1].states) == 5
-        @test trajectories[1].states[1] == (; expected_reward = 0.5 + chain[@varname(learning_rate)][1] * 0.5)
+        #Timestep 0 has the initial state of each sample
+        @test length(trajectories[1].states) == 6
+        initial_value = chain[@varname(initial_value)][1]
+        @test trajectories[1].states[1] == (; expected_reward = initial_value)
+        @test trajectories[1].states[2].expected_reward ≈ initial_value + chain[@varname(learning_rate)][1] * (1.0 - initial_value)
     end
 end

@@ -207,7 +207,7 @@ function simulate_until_environment_ends(x, who_starts)
 end
 
 # A simulation where the reward isn't given on every timestep, saving everything or only the states, with the
-# parameters from a vector. Enzyme throws when the observations are saved, which is a bug in Enzyme: see
+# parameters from a vector. Enzyme reverse throws when the observations are saved, which is a bug in Enzyme: see
 # KNOWN_FAILURES in ad/runtests.jl
 function simulate_with_rewards_not_always_given(x, who_starts, save_history)
     _, _, cognitive_states, _ = simulate(
@@ -251,7 +251,9 @@ function simulate_sampled(x, who_starts)
     return sum_expected_rewards(cognitive_states)
 end
 
-# A simulation with a size for each timestep, with the parameters from a vector
+# A simulation with a size for each timestep, with the parameters from a vector. The sizes are returned after
+# BeforeFirstTimestep for timestep 0, which Enzyme reverse throws on, which is a bug in Enzyme: see
+# KNOWN_FAILURES in ad/runtests.jl
 const TIMESTEP_SIZES = collect(range(0.5, 1.5; length = 20))
 function simulate_with_timestep_sizes(x, who_starts)
     _, _, cognitive_states, _ = simulate(
@@ -293,9 +295,10 @@ function simulate_without_states(x, who_starts)
         environment_parameters = (; reward_size = x[2]),
         save_history = SaveHistory(SaveEverything()),
     )
-    total = zero(first(observations).reward)
-    for observation in observations
-        total += observation.reward
+    #Timestep 0 has no reward, so the sum starts at timestep 1
+    total = zero(x[2])
+    for t in 2:length(observations)
+        total += observations[t].reward
     end
     return total
 end

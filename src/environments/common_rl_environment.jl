@@ -66,10 +66,12 @@ observations, actions, _, _, _ = simulate(
     save_history = SaveHistory(SaveEverything()),
 )
 
+#Timestep 0, before the first timestep, and then what the environment gave on each timestep
 foreach(println, observations)
 
 # output
 
+(observation = BeforeFirstTimestep(), reward = BeforeFirstTimestep(), terminated = BeforeFirstTimestep())
 (observation = 0, reward = NoObservation(), terminated = false)
 (observation = 1, reward = 1.0, terminated = false)
 (observation = 2, reward = 1.0, terminated = true)

@@ -308,8 +308,11 @@ function folds(f, argument_types...)
     return all(statement -> statement isa Core.ReturnNode || statement === nothing || Meta.isexpr(statement, :code_coverage_effect), statements)
 end
 
+#Saves everything but timestep 0, so that element t of what a simulation returns is timestep t
+const EVERY_TIMESTEP = SaveHistory(SaveEverything(); save_initial_values = false)
+
 #Shortens the calls below
-function simulate_for_test(model, environment; who_starts = EnvironmentStarts(), n_steps = 50, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+function simulate_for_test(model, environment; who_starts = EnvironmentStarts(), n_steps = 50, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1), save_history = EVERY_TIMESTEP, save_environment_history = EVERY_TIMESTEP, keywords...)
     return simulate(model, environment; who_starts, n_steps, cognitive_parameters, environment_parameters, rng, save_history, save_environment_history, keywords...)
 end
 
@@ -355,9 +358,10 @@ end
             @test @inferred(run_simulation(who_starts, 10)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
             run_simulation(who_starts, 10)
-            #Doubling the timesteps only adds the storage: 8 bytes each for an observation and a state, and 1 for an action
+            #Doubling the timesteps only adds the storage: 8 bytes each for an observation and a state, and 1 for an action, and a byte
+            #each for the observation and the action to say which of two types it has, since timestep 0 has BeforeFirstTimestep
             extra_bytes = @allocated(run_simulation(who_starts, 20_000)) - @allocated(run_simulation(who_starts, 10_000))
-            @test extra_bytes <= 18 * 10_000
+            @test extra_bytes <= 20 * 10_000
         end
     end
 
@@ -461,36 +465,68 @@ end
         run_with(; keywords...) = simulate_for_test(LearnsAndCounts(), FixedRewards(); n_steps = 3, environment_parameters = fixed_rewards, keywords...)
         #The helper saves everything, which selecting everything also does
         everything = run_with()
-        @test run_with(; save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything())) == everything
+        @test run_with(; save_history = SaveHistory(SaveEverything(); save_initial_values = false), save_environment_history = SaveHistory(SaveEverything(); save_initial_values = false)) == everything
         @test everything[3] == [(; expected_reward = 0.75, n_timesteps = 1), (; expected_reward = 0.375, n_timesteps = 2), (; expected_reward = 0.6875, n_timesteps = 3)]
         #Names keep those entries, and a kind that isn't given keeps nothing
-        observations, actions, cognitive_states, environment_states = run_with(; save_history = SaveHistory(; states = :n_timesteps))
+        observations, actions, cognitive_states, environment_states = run_with(; save_history = SaveHistory(; states = :n_timesteps, save_initial_values = false))
         @test observations == fill((;), 3) && eltype(observations) === typeof((;))
         @test actions == fill((;), 3)
         @test cognitive_states == [(; n_timesteps = 1), (; n_timesteps = 2), (; n_timesteps = 3)]
         @test environment_states == everything[4]
         #Several names keep the entries in the order given
-        _, _, cognitive_states, _ = run_with(; save_history = SaveHistory(; states = (:n_timesteps, :expected_reward)))
+        _, _, cognitive_states, _ = run_with(; save_history = SaveHistory(; states = (:n_timesteps, :expected_reward), save_initial_values = false))
         @test cognitive_states[1] === (; n_timesteps = 1, expected_reward = 0.75)
         #The environment's selection only affects its states
-        observations, actions, cognitive_states, environment_states = run_with(; save_environment_history = SaveHistory(; observations = :reward, actions = :choice))
+        observations, actions, cognitive_states, environment_states = run_with(; save_environment_history = SaveHistory(; observations = :reward, actions = :choice, save_initial_values = false))
         @test (observations, actions, cognitive_states) == everything[1:3]
         @test environment_states == fill((;), 3)
         #Nothing at all gives empty NamedTuples of everything, followed by the size of the timesteps
-        nothing_saved = run_with(; save_history = SaveHistory(), save_environment_history = SaveHistory())
+        nothing_saved = run_with(; save_history = SaveHistory(; save_initial_values = false), save_environment_history = SaveHistory(; save_initial_values = false))
         @test all(==(fill((;), 3)), nothing_saved[1:4])
         @test nothing_saved[5] === 1
     end
 
-    @testset "Nothing is saved by default" begin
-        @test all(==(fill((;), 3)), simulate(LearnsRewards(), RewardsWithProbability(); who_starts = EnvironmentStarts(), n_steps = 3, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1))[1:4])
+    @testset "Nothing is saved by default, for timestep 0 and each timestep after it" begin
+        @test all(==(fill((;), 4)), simulate(LearnsRewards(), RewardsWithProbability(); who_starts = EnvironmentStarts(), n_steps = 3, cognitive_parameters = LEARNING, environment_parameters = REWARDS, rng = Xoshiro(1))[1:4])
+    end
+
+    @testset "Timestep 0 is saved by default, with the previous observation and action and the states before the first timestep" begin
+        rewards = (; rewards = [1.0, 0.0, 1.0])
+        everything = SaveHistory(SaveEverything())
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            with_timestep_zero = simulate_for_test(LearnsAndCounts(), FixedRewards(); who_starts, n_steps = 3, environment_parameters = rewards, save_history = everything, save_environment_history = everything)
+            observations, actions, cognitive_states, environment_states = with_timestep_zero
+            @test observations[1] === (; reward = BeforeFirstTimestep())
+            @test actions[1] === (; choice = BeforeFirstTimestep())
+            @test cognitive_states[1] === (; expected_reward = 0.5, n_timesteps = 0)
+            @test environment_states[1] === (; n_timesteps = 0)
+            #After it come the timesteps, as without it
+            without_timestep_zero = simulate_for_test(LearnsAndCounts(), FixedRewards(); who_starts, n_steps = 3, environment_parameters = rewards)
+            for i in 1:4
+                @test isequal(with_timestep_zero[i][2:end], without_timestep_zero[i])
+            end
+        end
+        #What is given as previous is what timestep 0 has, and when it has the types of the later timesteps, the vectors have them only
+        observations, actions, cognitive_states, environment_states = simulate_for_test(LearnsAndCounts(), FixedRewards(); n_steps = 2, environment_parameters = rewards, previous_observation = (; reward = 0.25), previous_action = (; choice = true), previous_cognitive_state = (; expected_reward = 0.1, n_timesteps = 5), save_history = everything, save_environment_history = everything)
+        @test (observations[1], actions[1], cognitive_states[1], environment_states[1]) === ((; reward = 0.25), (; choice = true), (; expected_reward = 0.1, n_timesteps = 5), (; n_timesteps = 0))
+        @test observations isa Vector{@NamedTuple{reward::Float64}} && actions isa Vector{@NamedTuple{choice::Bool}}
+        #With maps, the observation and the action have the cognitive model's names
+        observations, actions, _, _ = simulate_for_test(LearnsRewards(), PaysForLever(); n_steps = 2, environment_parameters = (;), observation_map = PAYOFF_AS_REWARD, action_map = CHOICE_AS_LEVER, save_history = everything)
+        @test observations[1] === (; reward = BeforeFirstTimestep()) && actions[1] === (; choice = BeforeFirstTimestep())
+        #A selection applies to it too, and save_history decides for the environment's states as well, so that the four vectors have the same length
+        _, _, cognitive_states, environment_states = simulate_for_test(LearnsAndCounts(), FixedRewards(); n_steps = 2, environment_parameters = rewards, save_history = SaveHistory(; states = :n_timesteps))
+        @test cognitive_states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2)]
+        @test environment_states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2)]
+        #A state changed in place is saved before the first timestep changes it
+        _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(state -> (; values = copy(state.values))), FixedRewards(); n_steps = 2, environment_parameters = (; rewards = [1.0, 1.0]), save_history = everything)
+        @test [state.values[1] for state in cognitive_states] == [0.5, 0.75, 0.875]
     end
 
     @testset "An entry that is NoObservation is saved like any other, and a model without actions saves empty NamedTuples" begin
-        observations, actions, _, _ = simulate_for_test(LearnsRewards(), RewardsTrue(); n_steps = 3, environment_parameters = (;), save_history = SaveHistory(; observations = :reward, actions = :choice))
+        observations, actions, _, _ = simulate_for_test(LearnsRewards(), RewardsTrue(); n_steps = 3, environment_parameters = (;), save_history = SaveHistory(; observations = :reward, actions = :choice, save_initial_values = false))
         @test observations[1] === (; reward = NoObservation())
         @test observations[2] == (; reward = float(actions[1].choice))
-        for save_history in (SaveHistory(; actions = ()), SaveHistory(SaveEverything()))
+        for save_history in (SaveHistory(; actions = (), save_initial_values = false), EVERY_TIMESTEP)
             _, actions, _, _ = simulate_for_test(OnlyLearns(), RewardsAndCues(); n_steps = 3, environment_parameters = (;), observation_map = NameMap(:reward), save_history)
             @test actions == fill((;), 3)
         end
@@ -530,9 +566,9 @@ end
         @test !(MissingAction() isa AbstractNoValue) && !(MissingObservation() isa AbstractNoValue)
     end
 
-    @testset "A state isn't prepared for saving when none of it is saved" begin
+    @testset "A state isn't prepared for saving when none of it is saved, also at timestep 0" begin
         _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(state -> error("prepared anyway")), RewardsWithProbability(); save_history = SaveHistory(; observations = SaveEverything()))
-        @test cognitive_states == fill((;), 50)
+        @test cognitive_states == fill((;), 51)
     end
 
     @testset "Selecting a name that isn't there, or from something that isn't a NamedTuple, gives an error" begin
@@ -591,8 +627,9 @@ end
         @test_throws "Each model must define CognitiveModeling.initialize_state" simulate_for_test(NeedsGivenState(), RewardsWithProbability(); cognitive_parameters = (;))
         @test_throws "Each environment model must define CognitiveModeling.initialize_state" simulate_for_test(LearnsRewards(), EnvironmentNeedsGivenState(); environment_parameters = (;))
         _, _, cognitive_states, environment_states = simulate(NeedsGivenState(), EnvironmentNeedsGivenState(); who_starts = EnvironmentStarts(), n_steps = 2, cognitive_parameters = (;), environment_parameters = (;), previous_cognitive_state = (; value = 1.0), previous_environment_state = (; value = 2.0), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
-        @test cognitive_states == [(; value = 1.0), (; value = 1.0)]
-        @test environment_states == [(; value = 2.0), (; value = 2.0)]
+        #The given states are those of timestep 0
+        @test cognitive_states == fill((; value = 1.0), 3)
+        @test environment_states == fill((; value = 2.0), 3)
     end
 
     @testset "A timestep method which returns the wrong type gives an informative error" begin
@@ -605,7 +642,7 @@ end
     @testset "The model and the environment both get the size of each timestep" begin
         get_sizes(outputs) = [output.timestep_size for output in outputs]
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            run_with_sizes(; keywords...) = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+            run_with_sizes(; keywords...) = simulate(SavesTimestepSize(), ObservesTimestepSize(); who_starts, n_steps = 3, cognitive_parameters = (;), environment_parameters = (;), rng = Xoshiro(1), save_history = EVERY_TIMESTEP, save_environment_history = EVERY_TIMESTEP, keywords...)
             #The default is the integer 1
             observations, _, cognitive_states, _ = run_with_sizes()
             @test get_sizes(observations) == [1, 1, 1] && eltype(get_sizes(observations)) === Int
@@ -649,12 +686,16 @@ end
         @test run_with_sizes(1:3) == 1:3
         #They are returned whatever is saved
         @test run_with_sizes(0.5; save_history = SaveHistory(), save_environment_history = SaveHistory()) === 0.5
+        #With timestep 0, a vector starts with BeforeFirstTimestep for it, so that it has an element for each element of the others, and one size stays as it is
+        @test isequal(run_with_sizes([0.5, 2.0, 0.25]; save_history = SaveHistory(SaveEverything())), [BeforeFirstTimestep(), 0.5, 2.0, 0.25])
+        @test run_with_sizes([0.5, 2.0, 0.25]; save_history = SaveHistory(SaveEverything())) isa Vector{Union{BeforeFirstTimestep, Float64}}
+        @test run_with_sizes(0.5; save_history = SaveHistory(SaveEverything())) === 0.5
     end
 
     @testset "An environment's stopping criterion ends the simulation, and n_steps is the most timesteps there can be" begin
         @test CognitiveModeling.stopping_criterion(RewardsWithProbability(), (;), REWARDS) === false
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            run_until_end(n_steps; timestep_sizes = 1) = simulate_for_test(LearnsRewards(), EndsAfterTimesteps(); who_starts, n_steps, timestep_sizes, environment_parameters = (; last_timestep = 7))
+            run_until_end(n_steps; timestep_sizes = 1, keywords...) = simulate_for_test(LearnsRewards(), EndsAfterTimesteps(); who_starts, n_steps, timestep_sizes, environment_parameters = (; last_timestep = 7), keywords...)
             #Everything returned has the timesteps that ran
             observations, actions, cognitive_states, environment_states, timestep_sizes = run_until_end(20)
             @test length(observations) == length(actions) == length(cognitive_states) == length(environment_states) == 7
@@ -666,6 +707,10 @@ end
             @test length(run_until_end(5)[1]) == 5
             #A vector of sizes has one for each timestep there can be, and those of the timesteps that ran are returned
             @test run_until_end(20; timestep_sizes = collect(0.5:0.5:10.0))[5] == collect(0.5:0.5:3.5)
+            #With timestep 0, everything has it too
+            with_timestep_zero = run_until_end(20; timestep_sizes = collect(0.5:0.5:10.0), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
+            @test all(vector -> length(vector) == 8, with_timestep_zero)
+            @test with_timestep_zero[4][1] == (; n_timesteps = 0) && with_timestep_zero[4][end] == (; n_timesteps = 7)
             #The return type is still known
             rng = Xoshiro(1)
             typed_run(n_steps) = simulate(LearnsRewards(), EndsAfterTimesteps(); who_starts, n_steps, cognitive_parameters = LEARNING, environment_parameters = (; last_timestep = 7), rng, save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()))
@@ -691,9 +736,14 @@ end
             first_part = simulate!(agent, environment; who_starts, n_steps = 25, rng)
             second_part = simulate!(agent, environment; who_starts, n_steps = 35, rng)
 
+            #simulate! returns no timestep 0, which the one simulation starts with, and which the histories have from where they started
             for i in 1:4
-                @test isequal(vcat(first_part[i], second_part[i]), one_simulation[i])
+                @test isequal(vcat(first_part[i], second_part[i]), one_simulation[i][2:end])
             end
+            @test isequal(agent.history.observations, one_simulation[1])
+            @test isequal(agent.history.actions, one_simulation[2])
+            @test isequal(agent.history.states, one_simulation[3])
+            @test isequal(environment.history.states, one_simulation[4])
             #The size of the timesteps is returned as it was given
             @test first_part[5] === 1 && second_part[5] === 1 && one_simulation[5] === 1
             @test agent.cognitive_state == one_simulation[3][end]
@@ -714,10 +764,11 @@ end
             first_part = simulate!(agent, environment; who_starts, n_steps = 2, timestep_sizes = sizes[1:2], rng)
             second_part = simulate!(agent, environment; who_starts, n_steps = 3, timestep_sizes = sizes[3:5], rng)
 
-            #The vectors, and the sizes of the timesteps that follow them
+            #The vectors, and the sizes of the timesteps that follow them, after timestep 0, which the histories have too
             for i in 1:5
-                @test isequal(vcat(first_part[i], second_part[i]), one_simulation[i])
+                @test isequal(vcat(first_part[i], second_part[i]), one_simulation[i][2:end])
             end
+            @test isequal(agent.history.timestep_sizes, one_simulation[5])
         end
     end
 
@@ -885,9 +936,9 @@ end
             @test @inferred(run_simulation(who_starts, 10)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
             run_simulation(who_starts, 10)
-            #As without maps: 8 bytes each for an observation and a state, and 1 for an action
+            #As without maps: 8 bytes each for an observation and a state, 1 for an action, and a byte each for which type they have
             extra_bytes = @allocated(run_simulation(who_starts, 20_000)) - @allocated(run_simulation(who_starts, 10_000))
-            @test extra_bytes <= 18 * 10_000
+            @test extra_bytes <= 20 * 10_000
         end
         @test folds(CognitiveModeling.check_names_fit, LearnsRewards, PaysForLever, typeof(PAYOFF_AS_REWARD), typeof(CHOICE_AS_LEVER))
     end
@@ -962,7 +1013,8 @@ end
         rng = Xoshiro(9)
         actions = [simulate!(agent, (; reward); rng) for reward in rewards]
 
-        @test actions == one_simulation[2]
+        #The simulation starts with timestep 0
+        @test actions == one_simulation[2][2:end]
         @test agent.cognitive_state == one_simulation[3][end]
     end
 
@@ -1034,7 +1086,8 @@ end
             push!(actions, action)
         end
 
-        @test actions == one_simulation[2]
+        #The simulation starts with timestep 0
+        @test actions == one_simulation[2][2:end]
         @test cognitive_state == one_simulation[3][end]
     end
 
@@ -1083,6 +1136,22 @@ end
         @test history.observations == [(; reward = BeforeFirstTimestep())]
         @test history.actions == [(; choice = true)]
         @test history.states == [(; expected_reward = 0.25)]
+    end
+
+    @testset "It starts empty when the initial values aren't saved, and then has one element for each timestep" begin
+        save_history = SaveHistory(SaveEverything(); save_initial_values = false)
+        agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history)
+        environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0]); save_history)
+        @test isempty(agent.history.states) && isempty(agent.history.timestep_sizes) && isempty(environment.history.states)
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
+        simulate!(agent, (; reward = 1.0); timestep_size = 0.5)
+        @test agent.history.states == [(; expected_reward = 0.75), (; expected_reward = 0.375), (; expected_reward = 0.6875)]
+        @test agent.history.observations == [(; reward = 1.0), (; reward = 0.0), (; reward = 1.0)]
+        @test agent.history.timestep_sizes == [1, 1, 0.5]
+        @test environment.history.states == [(; n_timesteps = 1), (; n_timesteps = 2)]
+        #reset! starts it empty again
+        reset!(agent)
+        @test isempty(agent.history.states) && isempty(agent.history.timestep_sizes)
     end
 
     @testset "Nothing is saved by default, and a SaveHistory selects what is" begin

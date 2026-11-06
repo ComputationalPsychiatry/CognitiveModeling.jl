@@ -12,9 +12,14 @@ The model is a building block for a Turing.jl model which samples the parameters
 submodel with its own prefix: `to_submodel(prefix(turing_single_session(...),
 @varname(session)), false)`. It returns what `save_history` selects of the observations, the
 actions and the states of the session, as a `NamedTuple` of vectors with one element for
-each timestep, which `returned(model, chain)` gives for each sample. Its `timestep_sizes`
-has the size of each timestep when anything is selected, and is empty otherwise. Nothing is
-selected by default.
+timestep 0, before the first timestep, and one for each timestep after it, which
+`returned(model, chain)` gives for each sample. Timestep 0 has the previous observation and
+action, which are [`BeforeFirstTimestep`](@ref) unless others are given, and the initial
+state, which can depend on the parameters. Element `t + 1` is then timestep `t`, and a
+[`SaveHistory`](@ref) with `save_initial_values = false` leaves timestep 0 out. Its
+`timestep_sizes` has the size of each timestep, after `BeforeFirstTimestep()` for timestep 0
+when it is there, when anything is selected, and is empty otherwise. Nothing is selected by
+default.
 
 On each timestep, [`turing_apply_model`](@ref) of `cognitive_model` runs as a submodel with
 the prefix `timestep[t]`, so a model which samples within a timestep has its own variables
@@ -57,8 +62,8 @@ times faster than scoring each timestep on its own.
   passed on as `NoAction()` instead: `cognitive_model` receives `NoAction()` as that
   previous action on the next timestep, and `environment` as the action it responds to.
 - `save_history::SaveHistory=SaveHistory()`: which observations, actions and states are
-  returned, by name. The returned actions and observations are those the model received,
-  with the imputed and filled in values.
+  returned, by name, and whether timestep 0 is. The returned actions and observations are
+  those the model received, with the imputed and filled in values.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) from
   the model gives the parameters a log density of `-Inf`, so that a sampler rejects them,
   instead of stopping the sampler. It is off by default because the `try` block it needs

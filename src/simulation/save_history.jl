@@ -7,17 +7,25 @@ Marker for saving every attribute of a kind, used in [`SaveHistory`](@ref).
 struct SaveEverything end
 
 """
-    SaveHistory(; observations=(), actions=(), states=())
-    SaveHistory(SaveEverything())
+    SaveHistory(; observations=(), actions=(), states=(), save_initial_values=true)
+    SaveHistory(SaveEverything(); save_initial_values=true)
 
-Which observations, actions and states a simulation saves, by name.
+Which observations, actions and states a simulation saves, by name, and whether it saves
+them from before the first timestep too.
 
-Each argument is the names of that kind to save, in a `Tuple` of `Symbol`s, a single
-`Symbol` or a `Vector` of them, or [`SaveEverything`](@ref) for all of them. A kind that
-isn't given saves nothing, so `SaveHistory()` saves nothing, which is the default
-everywhere, and `SaveHistory(SaveEverything())` saves everything. The selections are kept
-in the type, so that selecting costs nothing in a simulation, and are read as properties,
-such as `save_history.states`.
+`observations`, `actions` and `states` are each the names of that kind to save, in a `Tuple`
+of `Symbol`s, a single `Symbol` or a `Vector` of them, or [`SaveEverything`](@ref) for all
+of them. A kind that isn't given saves nothing, so `SaveHistory()` saves nothing, which is
+the default everywhere, and `SaveHistory(SaveEverything())` saves everything. The
+selections are kept in the type, so that selecting costs nothing in a simulation, and are
+read as properties, such as `save_history.states`.
+
+`save_initial_values` is whether what is saved starts with timestep 0, before the first
+timestep: the initial states, and the previous observation and action, which are
+[`BeforeFirstTimestep`](@ref) unless others are given. It is `true` by default, which
+matters when the initial state depends on parameters that are fitted. Since Julia counts
+from 1, element `t + 1` of what is saved is then timestep `t`, and with `false`, element `t`
+is.
 
 Saving some names of a kind gives a `NamedTuple` with those names on each timestep, which
 only works when the value is a `NamedTuple`, and saving none gives an empty one, `(;)`, for
@@ -36,24 +44,28 @@ SaveHistory
 Observations: none
 Actions: choice
 States: expected_reward, surprise
+Initial values: saved
 
 julia> save_history.states
 (:expected_reward, :surprise)
 
 julia> SaveHistory(SaveEverything()).observations
 SaveEverything()
+
+julia> SaveHistory(SaveEverything(); save_initial_values = false).save_initial_values
+false
 ```
 """
-struct SaveHistory{Tobservations, Tactions, Tstates} end
+struct SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values} end
 
-#Takes the names by keyword, and puts each selection in the type
-function SaveHistory(; observations = (), actions = (), states = ())
-    return SaveHistory{as_selection(observations), as_selection(actions), as_selection(states)}()
+#Takes the names by keyword, and puts each selection in the type, and whether the initial values are saved
+function SaveHistory(; observations = (), actions = (), states = (), save_initial_values::Bool = true)
+    return SaveHistory{as_selection(observations), as_selection(actions), as_selection(states), save_initial_values}()
 end
 
 #Saves everything of every kind
-function SaveHistory(::SaveEverything)
-    return SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), states = SaveEverything())
+function SaveHistory(::SaveEverything; save_initial_values::Bool = true)
+    return SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), states = SaveEverything(), save_initial_values)
 end
 
 """
@@ -68,22 +80,24 @@ as_selection(name::Symbol) = (name,)
 as_selection(names::AbstractVector{Symbol}) = Tuple(names)
 as_selection(::SaveEverything) = SaveEverything()
 
-#Reads the selections in the type as properties
-function Base.getproperty(save_history::SaveHistory{Tobservations, Tactions, Tstates}, name::Symbol) where {Tobservations, Tactions, Tstates}
+#Reads the selections in the type as properties, and whether the initial values are saved
+function Base.getproperty(save_history::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}, name::Symbol) where {Tobservations, Tactions, Tstates, Tsave_initial_values}
     if name === :observations
         return Tobservations
     elseif name === :actions
         return Tactions
     elseif name === :states
         return Tstates
+    elseif name === :save_initial_values
+        return Tsave_initial_values
     else
         throw(FieldError(typeof(save_history), name))
     end
 end
 
-Base.propertynames(::SaveHistory) = (:observations, :actions, :states)
+Base.propertynames(::SaveHistory) = (:observations, :actions, :states, :save_initial_values)
 
-#Shows the selections on one line each in the REPL and notebooks
+#Shows the selections on one line each in the REPL and notebooks, and whether the initial values are saved
 function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
     print(io, "SaveHistory")
     for (kind, selection) in (("Observations", save_history.observations), ("Actions", save_history.actions), ("States", save_history.states))
@@ -96,6 +110,7 @@ function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
             join(io, selection, ", ")
         end
     end
+    print(io, "\nInitial values: ", save_history.save_initial_values ? "saved" : "not saved")
     return nothing
 end
 
@@ -108,9 +123,17 @@ end
 Return the selection of one kind in a [`SaveHistory`](@ref) as a `Val`, so that the names are
 known at compile time wherever something is selected with it.
 """
-observation_selection(::SaveHistory{Tobservations, Tactions, Tstates}) where {Tobservations, Tactions, Tstates} = Val(Tobservations)
-action_selection(::SaveHistory{Tobservations, Tactions, Tstates}) where {Tobservations, Tactions, Tstates} = Val(Tactions)
-state_selection(::SaveHistory{Tobservations, Tactions, Tstates}) where {Tobservations, Tactions, Tstates} = Val(Tstates)
+observation_selection(::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Tstates, Tsave_initial_values} = Val(Tobservations)
+action_selection(::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Tstates, Tsave_initial_values} = Val(Tactions)
+state_selection(::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Tstates, Tsave_initial_values} = Val(Tstates)
+
+"""
+    saves_initial_values(save_history)
+
+Return whether `save_history` saves the values from before the first timestep, as
+timestep 0. It is read from the type, so that it is known at compile time.
+"""
+saves_initial_values(::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Tstates, Tsave_initial_values} = Tsave_initial_values
 
 """
     select_names(x, selection::Val)
@@ -175,23 +198,26 @@ save_state(model, state, ::Val{()}) = (;)
     saves_nothing(save_history)
 
 Return whether `save_history` selects nothing of any kind, which is known at compile time.
+Whether it saves the initial values doesn't matter, since there is nothing to save of them.
 """
-saves_nothing(::SaveHistory{(), (), ()}) = true
+saves_nothing(::SaveHistory{(), (), (), Tsave_initial_values}) where {Tsave_initial_values} = true
 saves_nothing(::SaveHistory) = false
 
 """
     savehistory_states_only(save_history)
 
 Return a [`SaveHistory`](@ref) which selects only the states that `save_history` selects,
-which is what [`simulate`](@ref) keeps of an environment's selection.
+which is what [`simulate`](@ref) keeps of an environment's selection. Whether the initial
+values are saved stays as it is.
 """
-savehistory_states_only(::SaveHistory{Tobservations, Tactions, Tstates}) where {Tobservations, Tactions, Tstates} = SaveHistory{(), (), Tstates}()
+savehistory_states_only(::SaveHistory{Tobservations, Tactions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Tstates, Tsave_initial_values} = SaveHistory{(), (), Tstates, Tsave_initial_values}()
 
 """
     saved_timestep_sizes(timestep_sizes, n_steps, save_history)
 
 Return the sizes of `n_steps` timesteps as they are returned with a history: one size for
-each timestep when `save_history` saves anything, and an empty vector when it saves nothing.
+each timestep when `save_history` saves anything, after [`BeforeFirstTimestep`](@ref) for
+timestep 0 when it saves the initial values, and an empty vector when it saves nothing.
 """
-saved_timestep_sizes(timestep_sizes, n_steps, ::SaveHistory) = each_timestep_size(timestep_sizes, n_steps)
-saved_timestep_sizes(timestep_sizes, n_steps, ::SaveHistory{(), (), ()}) = empty(each_timestep_size(timestep_sizes, 0))
+saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory) = returned_timestep_sizes(each_timestep_size(timestep_sizes, n_steps), n_steps, Val(saves_initial_values(save_history)))
+saved_timestep_sizes(timestep_sizes, n_steps, ::SaveHistory{(), (), (), Tsave_initial_values}) where {Tsave_initial_values} = empty(each_timestep_size(timestep_sizes, 0))

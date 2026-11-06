@@ -58,10 +58,14 @@ yet, as one entry of a `NamedTuple`, such as `(; choice = BeforeFirstTimestep())
 
 A cognitive model receives it for every previous action on its first timestep, and for every
 observation too when the agent starts. An environment model receives it for every previous
-observation on its first timestep, and for every action too when the environment starts. A
-history starts with it, also as the size of the timestep. [`NoObservation`](@ref) and
-[`NoAction`](@ref) are different: they say that nothing was observed or done on a timestep
-that did run.
+observation on its first timestep, and for every action too when the environment starts.
+[`NoObservation`](@ref) and [`NoAction`](@ref) are different: they say that nothing was
+observed or done on a timestep that did run.
+
+Before the first timestep is timestep 0, which a simulation, a history and a fitted session
+start with when their [`SaveHistory`](@ref) saves the initial values, as it does by
+default. Its observation and action are this marker unless others are given, and so is its
+size.
 """
 struct BeforeFirstTimestep <: AbstractNoValue end
 

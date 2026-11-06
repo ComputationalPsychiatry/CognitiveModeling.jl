@@ -15,3 +15,9 @@ This page lists what is planned and not written yet. The list will grow.
 ## Interfaces
 
 - BayesianRegressionModels.jl.
+
+## Plots
+
+- Plots of a simulation, a history or a fitted session over time. The entry before the first
+  timestep is timestep 0, at time 0, and its size is `BeforeFirstTimestep()`. The time of a
+  later timestep is the sum of the sizes of the timesteps up to it.

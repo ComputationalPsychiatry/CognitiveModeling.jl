@@ -74,25 +74,26 @@ Turing.@model function single_session(cognitive_model, cognitive_parameters, obs
         environment_state = previous_environment_state,
     )
 
+    #Save what is kept from before the first timestep before it runs, since it can change a state in place
+    initial_saved = initial_session_outputs(Val(saves_initial_values(save_history)), cognitive_model, previous, save_history)
+
     #Run the first timestep outside the loop, since its inputs can have other types than all the rest
     outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, 1), row(actions, 1), get_timestep_size(timestep_sizes, 1), keys(recorded), previous), @varname(timestep[1])), false)
 
-    #Initialize storage for the saved outputs, and the distributions of the recorded actions
-    storage = (;
-        observations = initialize_storage(select_names(outputs.observation, observation_selection(save_history)), n_timesteps),
-        actions = initialize_storage(select_names(outputs.action, action_selection(save_history)), n_timesteps),
-        states = initialize_storage(save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)), n_timesteps),
-    )
+    #Initialize storage for the saved outputs, which starts with timestep 0 when it is kept, and the distributions of the recorded actions
+    storage = initialize_session_storage(initial_saved, saved_session_outputs(cognitive_model, outputs, save_history), n_timesteps)
+    offset = initial_saved === nothing ? 0 : 1
     distributions = store_distributions(map(_ -> Vector{Union{}}(), recorded), outputs.scored_distributions, outputs.scored)
 
-    #Run the remaining timesteps, each starting from the outputs of the one before
+    #Run the remaining timesteps, each starting from the outputs of the one before, storing timestep t as element t + offset
     for t in 2:n_timesteps
         next_outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, t), row(actions, t), get_timestep_size(timestep_sizes, t), keys(recorded), outputs), @varname(timestep[t])), false)
         outputs = next_outputs
+        saved = saved_session_outputs(cognitive_model, outputs, save_history)
         storage = (;
-            observations = store_output!(storage.observations, select_names(outputs.observation, observation_selection(save_history)), t),
-            actions = store_output!(storage.actions, select_names(outputs.action, action_selection(save_history)), t),
-            states = store_output!(storage.states, save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)), t),
+            observations = store_output!(storage.observations, saved.observation, t + offset),
+            actions = store_output!(storage.actions, saved.action, t + offset),
+            states = store_output!(storage.states, saved.state, t + offset),
         )
         distributions = store_distributions(distributions, outputs.scored_distributions, outputs.scored)
     end
@@ -159,6 +160,36 @@ Turing.@model function session_timestep(cognitive_model, environment, cognitive_
         environment_state,
         scored,
         scored_distributions = NamedTuple{scored_names}(output.action_distribution),
+    )
+end
+
+#What a session saves of the outputs of a timestep, or of where it starts, as save_history selects it
+function saved_session_outputs(cognitive_model, outputs, save_history)
+    return (;
+        observation = select_names(outputs.observation, observation_selection(save_history)),
+        action = select_names(outputs.action, action_selection(save_history)),
+        state = save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)),
+    )
+end
+
+#What a session saves from before the first timestep, as timestep 0, when save_history saves the initial values, and nothing otherwise
+initial_session_outputs(::Val{true}, cognitive_model, previous, save_history) = saved_session_outputs(cognitive_model, previous, save_history)
+initial_session_outputs(::Val{false}, cognitive_model, previous, save_history) = nothing
+
+#The vectors for what a session saves, typed by the first timestep, which start with timestep 0 when it is kept
+function initialize_session_storage(::Nothing, saved, n_timesteps)
+    return (;
+        observations = initialize_storage(saved.observation, n_timesteps),
+        actions = initialize_storage(saved.action, n_timesteps),
+        states = initialize_storage(saved.state, n_timesteps),
+    )
+end
+
+function initialize_session_storage(initial_saved::NamedTuple, saved, n_timesteps)
+    return (;
+        observations = initialize_storage(initial_saved.observation, saved.observation, n_timesteps),
+        actions = initialize_storage(initial_saved.action, saved.action, n_timesteps),
+        states = initialize_storage(initial_saved.state, saved.state, n_timesteps),
     )
 end
 

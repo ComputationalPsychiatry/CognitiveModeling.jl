@@ -41,14 +41,15 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, Revers
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reproduced without the package, to be reported |
-| Enzyme, all four forms | `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved | throws an `IllegalTypeAnalysisException` | to be reported |
+| Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reproduced without the package, to be reported; with a single timestep size, or `save_initial_values = false`, the sizes are right |
 | Enzyme forward and reverse without runtime activity | the log density of any Turing.jl model of a session | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity |
 | Enzyme reverse with runtime activity | a session whose data has two types in a column: an action that is `MissingAction` on some timesteps, or an observation that is `MissingObservation` or `NoObservation` on some | throws an `EnzymeNonScalarReturnException` from Enzyme's rule for building a struct of unknown type | to be reported |
 | Enzyme forward with runtime activity | a session whose data has an observation that is `MissingObservation` or `NoObservation` on some timesteps | wrong gradient, no error | to be reported |
 
 A state which depends on the parameters from the start isn't affected, and neither is
 `simulate!` on single observations. A simulation where an observation isn't made on every
-timestep is right on every backend when the observations aren't saved. The other forms of
+timestep is right on every backend when the observations aren't saved, and on Enzyme's
+forward mode when they are. The other forms of
 Enzyme, and the other backends, are right on all of these cases. ForwardDiff, ReverseDiff
 and Mooncake are right on every Turing.jl case, and so are both forms of Enzyme with runtime
 activity on a session where every column of the data has one type.

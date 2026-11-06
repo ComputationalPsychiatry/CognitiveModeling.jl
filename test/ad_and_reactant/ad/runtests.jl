@@ -59,11 +59,15 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug = "Enzyme throws an IllegalTypeAnalysisException when an observation is NoObservation on some timesteps and a number on the others, so that it has two types inside the loop, and the observations are saved",
-        backends = ["Enzyme forward", "Enzyme reverse", "Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
+        bug = "Enzyme reverse throws an EnzymeNoTypeError when numbers are copied into a vector whose element type is a Union: here when an observation is NoObservation on some timesteps and the vector of saved observations is widened to hold it, and when a vector of timestep sizes is copied into the one simulate returns, which starts with BeforeFirstTimestep for timestep 0",
+        backends = ["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases = [
             "simulate with a reward that isn't always given, environment starts",
             "simulate with a reward that isn't always given, agent starts",
+            "simulate with timestep sizes, environment starts",
+            "simulate with timestep sizes, agent starts",
+            "gradient of the timestep sizes, environment starts",
+            "gradient of the timestep sizes, agent starts",
         ],
     ),
 ]

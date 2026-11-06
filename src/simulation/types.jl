@@ -66,19 +66,21 @@ The history of states, actions and observations for a [`CognitiveAgent`](@ref), 
 
 Each argument is kept in a field of the same name, such as `history.actions`. The agent's
 [`SaveHistory`](@ref) selects what is kept of each observation, action and state, and when
-it selects nothing at all, the vectors stay empty.
+it selects nothing at all, the vectors stay empty. Each vector starts with timestep 0,
+where the agent started, when the `SaveHistory` saves the initial values, which it does by
+default, so that element `t + 1` is timestep `t`.
 
 # Arguments
-- `observations::Vector{Any}`: the observations, starting with one where every observation
-  the model lists is [`BeforeFirstTimestep`](@ref).
-- `actions::Vector{Any}`: the actions, starting with the agent's previous action, which by
-  default has every action as `BeforeFirstTimestep()`.
-- `states::Vector{Any}`: the states of the model, starting with its initial state. Later
-  states are those after each timestep. All of them are as returned by
+- `observations::Vector{Any}`: the observations, starting at timestep 0 with one where
+  every observation the model lists is [`BeforeFirstTimestep`](@ref).
+- `actions::Vector{Any}`: the actions, starting at timestep 0 with the agent's previous
+  action, which by default has every action as `BeforeFirstTimestep()`.
+- `states::Vector{Any}`: the states of the model, starting at timestep 0 with its initial
+  state. Later states are those after each timestep. All of them are as returned by
   [`prepare_state_for_saving`](@ref).
 - `timestep_sizes::Vector{Any}`: how much time each timestep covered, starting with
-  `BeforeFirstTimestep()` for where the agent started, so that it has an entry for each
-  entry of the other vectors.
+  `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
+  other vectors.
 """
 struct AgentHistory
     observations::Vector{Any}
@@ -103,11 +105,12 @@ with the full parameters, and the previous action to every action being
 and the names of the parameters, of the previous action, and of the state when it is a
 `NamedTuple`, must be those it lists, or an error is thrown.
 
-`agent.history` holds an [`AgentHistory`](@ref) with where the agent started and everything
-that happens to it, as selected by `save_history`, a [`SaveHistory`](@ref). By default
-nothing is selected and the vectors in `agent.history` stay empty, and
-`SaveHistory(SaveEverything())` saves everything. Observations and actions can only be
-selected by name among those the model lists, since the history starts from those names.
+`agent.history` holds an [`AgentHistory`](@ref) with where the agent started, which is
+timestep 0, and everything that happens to it, as selected by `save_history`, a
+[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
+stay empty, and `SaveHistory(SaveEverything())` saves everything. Observations and actions
+can only be selected by name among those the model lists, since the history starts from
+those names.
 
 See also [`Environment`](@ref).
 """
@@ -150,16 +153,17 @@ end
     starting_history(environment_model, state, previous_observation, save_history)
 
 Return the history that an agent or an environment starts with: an [`AgentHistory`](@ref) or
-an [`EnvironmentHistory`](@ref) with what `save_history` selects of where it starts, and
-[`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has run yet. When
-nothing is selected, the vectors are empty.
+an [`EnvironmentHistory`](@ref) with what `save_history` selects of where it starts, as
+timestep 0, and [`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has
+run yet. When nothing is selected, or `save_history` doesn't save the initial values, the
+vectors are empty.
 
 An agent hasn't observed anything when it starts, and an environment hasn't received an
 action, so that entry has every name the model lists as `BeforeFirstTimestep()`.
 [`reset!`](@ref) starts from the same history as the constructors.
 """
 function starting_history(cognitive_model::AbstractCognitiveModel, cognitive_state, previous_action, save_history::SaveHistory)
-    if saves_nothing(save_history)
+    if saves_nothing(save_history) || !saves_initial_values(save_history)
         return AgentHistory(Any[], Any[], Any[], Any[])
     end
     return AgentHistory(Any[select_names(initial_observation(cognitive_model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))], Any[BeforeFirstTimestep()])
@@ -172,23 +176,25 @@ What has happened to an [`Environment`](@ref), which [`simulate!`](@ref) adds to
 
 Each argument is kept in a field of the same name, such as `history.states`. The
 environment's [`SaveHistory`](@ref) selects what is kept of each observation, action and
-state, and when it selects nothing at all, the vectors stay empty. The observations are
-those the environment gave and the actions those it received, which are the same as in the
-agent's history unless a [`NameMap`](@ref) selects or renames them.
+state, and when it selects nothing at all, the vectors stay empty. Each vector starts with
+timestep 0, where the environment started, when the `SaveHistory` saves the initial
+values, which it does by default. The observations are those the environment gave and the
+actions those it received, which are the same as in the agent's history unless a
+[`NameMap`](@ref) selects or renames them.
 
 # Arguments
 - `observations::Vector{Any}`: the observations the environment gave, starting with its
-  previous observation, which by default has every observation as
+  previous observation at timestep 0, which by default has every observation as
   [`BeforeFirstTimestep`](@ref).
-- `actions::Vector{Any}`: the actions on each timestep, starting with every action the
-  environment lists as `BeforeFirstTimestep()`, since it has received none before the
-  simulation.
-- `states::Vector{Any}`: the states of the environment, starting with its initial state.
-  Later states are those after each timestep. All of them are as returned by
+- `actions::Vector{Any}`: the actions on each timestep, starting at timestep 0 with every
+  action the environment lists as `BeforeFirstTimestep()`, since it has received none
+  before the simulation.
+- `states::Vector{Any}`: the states of the environment, starting at timestep 0 with its
+  initial state. Later states are those after each timestep. All of them are as returned by
   [`prepare_state_for_saving`](@ref).
 - `timestep_sizes::Vector{Any}`: how much time each timestep covered, starting with
-  `BeforeFirstTimestep()` for where the environment started, so that it has an entry for
-  each entry of the other vectors.
+  `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
+  other vectors.
 """
 struct EnvironmentHistory
     observations::Vector{Any}
@@ -212,11 +218,11 @@ observation being [`BeforeFirstTimestep`](@ref). The environment model must have
 of the state when it is a `NamedTuple`, must be those it lists, or an error is thrown.
 
 `environment.history` holds an [`EnvironmentHistory`](@ref) with where the environment
-started and what happens to it, as selected by `save_history`, a [`SaveHistory`](@ref). By
-default nothing is selected and the vectors in `environment.history` stay empty, and
-`SaveHistory(SaveEverything())` saves everything. Observations and actions can only be
-selected by name among those the environment model lists, since the history starts from
-those names.
+started, as timestep 0, and what happens to it, as selected by `save_history`, a
+[`SaveHistory`](@ref). By default nothing is selected and the vectors in
+`environment.history` stay empty, and `SaveHistory(SaveEverything())` saves everything.
+Observations and actions can only be selected by name among those the environment model
+lists, since the history starts from those names.
 
 See also [`CognitiveAgent`](@ref).
 """
@@ -255,7 +261,7 @@ end
 
 #The history of an environment which starts in a state and after an observation, as for an agent
 function starting_history(model::AbstractEnvironmentModel, state, previous_observation, save_history::SaveHistory)
-    if saves_nothing(save_history)
+    if saves_nothing(save_history) || !saves_initial_values(save_history)
         return EnvironmentHistory(Any[], Any[], Any[], Any[])
     end
     return EnvironmentHistory(Any[select_names(previous_observation, observation_selection(save_history))], Any[select_names(initial_action(model), action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))], Any[BeforeFirstTimestep()])
@@ -270,9 +276,9 @@ Put `agent` or `environment` back to where a new one starts, and return it.
 The state becomes the output of [`initialize_state`](@ref) with the parameters it has. The
 previous action of an agent has every action as [`BeforeFirstTimestep`](@ref) again, and so
 has every observation of the previous observation of an environment. The history is a new
-one which starts from there, so a history that was read before the reset, as in
-`history = agent.history`, is kept as it was. The model, the parameters and the
-[`SaveHistory`](@ref) stay the same.
+one which starts from there, as timestep 0 when the [`SaveHistory`](@ref) saves the initial
+values, so a history that was read before the reset, as in `history = agent.history`, is
+kept as it was. The model, the parameters and the `SaveHistory` stay the same.
 
 An agent or an environment that was created with a state, a previous action or a previous
 observation of its own doesn't return to those. Create a new one for that.

@@ -35,8 +35,8 @@ CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Deterministic(1), second = Deterministic(2)))
 CognitiveModeling.attribute_names(model::PullsTwoArms) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = (:first, :second))
 
-#Shortens the calls below
-function run_bandit(rl_env, model = PullsArm(); action_name = :arm, n_steps = 4, cognitive_parameters = (; arm = 1), save_history = SaveHistory(SaveEverything()), save_environment_history = SaveHistory(SaveEverything()), keywords...)
+#Shortens the calls below, saving everything but timestep 0, so that element t is timestep t
+function run_bandit(rl_env, model = PullsArm(); action_name = :arm, n_steps = 4, cognitive_parameters = (; arm = 1), save_history = SaveHistory(SaveEverything(); save_initial_values = false), save_environment_history = SaveHistory(SaveEverything(); save_initial_values = false), keywords...)
     return simulate(model, CommonRLEnvironment(rl_env; action_name); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), save_history, save_environment_history, keywords...)
 end
 
@@ -116,6 +116,16 @@ end
         _, _, _, environment_states = run_bandit(rl_env)
         @test allunique(objectid(state) for state in environment_states)
         @test [state.pulls for state in environment_states] == [0, 1, 2, 3]
+    end
+
+    @testset "Timestep 0 has the environment where the episode starts, copied like the rest" begin
+        rl_env = CountingBandit(0, 0)
+        everything = SaveHistory(SaveEverything())
+        observations, actions, _, environment_states = run_bandit(rl_env; save_history = everything, save_environment_history = everything)
+        @test observations[1] === (; observation = BeforeFirstTimestep(), reward = BeforeFirstTimestep(), terminated = BeforeFirstTimestep())
+        @test actions[1] === (; arm = BeforeFirstTimestep())
+        @test [state.pulls for state in environment_states] == [0, 0, 1, 2, 3]
+        @test rl_env.clones == 5
     end
 
     @testset "Nothing is copied when the environment's states aren't saved" begin
