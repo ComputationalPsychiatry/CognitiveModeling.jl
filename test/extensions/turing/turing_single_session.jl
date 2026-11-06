@@ -65,7 +65,7 @@ struct RewardsPreviousChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsPreviousChoice, parameters) = (; n_timesteps = 0)
 function CognitiveModeling.apply_model(environment::RewardsPreviousChoice, input::EnvironmentInput)
     reward = input.action.choice isa AbstractNoValue ? 0.5 : float(input.action.choice)
-    return EnvironmentOutput((; reward = reward * input.parameters.scale), (; n_timesteps = input.previous_state.n_timesteps + 1))
+    return EnvironmentOutput((; reward = Deterministic(reward * input.parameters.scale)), (; n_timesteps = input.previous_state.n_timesteps + 1))
 end
 CognitiveModeling.attribute_names(environment::RewardsPreviousChoice) = ModelAttributes(; parameters = :scale, states = :n_timesteps, observations = :reward, actions = :choice)
 CognitiveModeling.default_parameters(environment::RewardsPreviousChoice) = (; scale = 1.0)
@@ -76,14 +76,30 @@ CognitiveModeling.initialize_state(environment::GivesNothing, parameters) = (;)
 CognitiveModeling.apply_model(environment::GivesNothing, input::EnvironmentInput) = EnvironmentOutput((;))
 CognitiveModeling.attribute_names(environment::GivesNothing) = ModelAttributes(; parameters = (), states = (), observations = (), actions = ())
 
-#Samples its reward in Turing
+#Gives a distribution to sample its reward from
 struct NoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::NoisyRewards, parameters) = (;)
-Turing.@model function CognitiveModeling.turing_apply_model(environment::NoisyRewards, input::EnvironmentInput)
-    reward ~ Normal(0.5, 1.0)
-    return EnvironmentOutput((; reward))
-end
+CognitiveModeling.apply_model(environment::NoisyRewards, input::EnvironmentInput) = EnvironmentOutput((; reward = Normal(0.5, 1.0)))
 CognitiveModeling.attribute_names(environment::NoisyRewards) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = :choice)
+
+#Samples a drift of its state within each timestep in Turing, and gives the state as a reward which isn't random
+struct DriftingRewards <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::DriftingRewards, parameters) = (; level = 0.5)
+Turing.@model function CognitiveModeling.turing_apply_model(environment::DriftingRewards, input::EnvironmentInput)
+    drift ~ Normal(0, 1)
+    level = input.previous_state.level + drift
+    return EnvironmentOutput((; reward = Deterministic(level)), (; level))
+end
+CognitiveModeling.attribute_names(environment::DriftingRewards) = ModelAttributes(; parameters = (), states = :level, observations = :reward, actions = :choice)
+
+#Gives no reward before the first choice, and the previous choice afterwards
+struct RewardsAfterFirstChoice <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::RewardsAfterFirstChoice, parameters) = (;)
+function CognitiveModeling.apply_model(environment::RewardsAfterFirstChoice, input::EnvironmentInput)
+    input.action.choice isa AbstractNoValue && return EnvironmentOutput((; reward = NoObservation()))
+    return EnvironmentOutput((; reward = Deterministic(float(input.action.choice))))
+end
+CognitiveModeling.attribute_names(environment::RewardsAfterFirstChoice) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = :choice)
 
 #The log density of the recorded choices of a Rescorla-Wagner session, and the saved states, by hand
 function session_by_hand(rewards, choices, learning_rate, inverse_temperature, who_starts)
@@ -257,12 +273,36 @@ end
         @test returned(model, (;)).observations == [(; reward = float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
         @test_throws "The observations have entries that are MissingObservation(), but no environment was given to fill them in." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES)
-        #A random environment has its variables under the timestep, and its values are used
-        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 2)), (; choice = [true, false]); environment = NoisyRewards(), save_history = SaveHistory(; observations = SaveEverything()))
+        #An observation that the environment doesn't give stays NoObservation
+        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 3)), (; choice = [true, false, true]); environment = RewardsAfterFirstChoice(), save_history = SaveHistory(; observations = SaveEverything()))
+        @test returned(model, (;)).observations == [(; reward = NoObservation()), (; reward = 1.0), (; reward = 0.0)]
+    end
+
+    @testset "A missing observation is a latent when the environment gives a distribution for it" begin
+        #Each one is named after its timestep and the observation, under the environment, and there is none where the data has the observation
+        choices = (; choice = [true, false, true])
+        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = [MissingObservation(), 1.0, MissingObservation()]), choices; environment = NoisyRewards(), save_history = SaveHistory(; observations = SaveEverything()))
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
-        @test Set(keys(values)) == Set([@varname(timestep[1].environment.reward), @varname(timestep[2].environment.reward)])
-        rewards = Dict(@varname(timestep[1].environment.reward) => 0.7, @varname(timestep[2].environment.reward) => -0.4)
-        @test (@test_logs match_mode = :any returned(model, rewards)).observations == [(; reward = 0.7), (; reward = -0.4)]
+        @test Set(keys(values)) == Set([@varname(timestep[1].environment.reward.imputed), @varname(timestep[3].environment.reward.imputed)])
+        #The model observes their values
+        rewards = Dict(@varname(timestep[1].environment.reward.imputed) => 0.7, @varname(timestep[3].environment.reward.imputed) => -0.4)
+        @test (@test_logs match_mode = :any returned(model, rewards)).observations == [(; reward = 0.7), (; reward = 1.0), (; reward = -0.4)]
+        #They count in the log density with the environment's distribution, beside the choices given those rewards
+        recorded = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = [0.7, 1.0, -0.4]), choices)
+        @test (@test_logs match_mode = :any logjoint(model, rewards)) ≈ logjoint(recorded, (;)) + logpdf(Normal(0.5, 1.0), 0.7) + logpdf(Normal(0.5, 1.0), -0.4)
+        #With the data complete, the environment adds no latents
+        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = [0.7, 1.0, -0.4]), choices; environment = NoisyRewards())
+        @test isempty(keys(rand(Xoshiro(1), model)))
+        @test logjoint(model, (;)) ≈ logjoint(recorded, (;))
+    end
+
+    @testset "An environment which samples within a timestep has its variables under the timestep" begin
+        model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 2)), (; choice = [true, false]); environment = DriftingRewards(), save_history = SaveHistory(; observations = SaveEverything()))
+        values = @test_logs match_mode = :any rand(Xoshiro(1), model)
+        @test Set(keys(values)) == Set([@varname(timestep[1].environment.drift), @varname(timestep[2].environment.drift)])
+        #What it gives from them is what the model observes
+        drifts = Dict(@varname(timestep[1].environment.drift) => 0.25, @varname(timestep[2].environment.drift) => -0.5)
+        @test (@test_logs match_mode = :any returned(model, drifts)).observations == [(; reward = 0.75), (; reward = 0.25)]
     end
 
     @testset "A model which samples within a timestep has a variable for each timestep" begin

@@ -1,6 +1,3 @@
-using CommonRLInterface: CommonRLInterface
-using Random: AbstractRNG
-
 ## Environments and models for the tests ##
 #A two-armed bandit where the first arm pays, in episodes of three pulls, which counts how often it is cloned
 mutable struct CountingBandit <: CommonRLInterface.AbstractEnv
@@ -24,24 +21,18 @@ CommonRLInterface.observe(rl_env::PlainBandit) = rl_env.pulls
 CommonRLInterface.act!(rl_env::PlainBandit, arm) = (rl_env.pulls += 1; arm == 1 ? 1.0 : 0.0)
 CommonRLInterface.terminated(rl_env::PlainBandit) = rl_env.pulls >= 3
 
-#An action that is always the same
-struct Always{T}
-    value::T
-end
-Base.rand(rng::AbstractRNG, action::Always) = action.value
-
 #Pulls the arm in its parameters, and keeps the last reward in its state
 struct PullsArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsArm, parameters) = (; last_reward = NoObservation())
 function CognitiveModeling.apply_model(model::PullsArm, input::ModelInput)
-    return ModelOutput((; arm = Always(input.parameters.arm)), (; last_reward = input.observation.reward))
+    return ModelOutput((; arm = Deterministic(input.parameters.arm)), (; last_reward = input.observation.reward))
 end
 CognitiveModeling.attribute_names(model::PullsArm) = ModelAttributes(; parameters = :arm, states = :last_reward, observations = (:observation, :reward, :terminated), actions = :arm)
 
 #Has two actions, of which a map passes one on to the environment, and lists only the reward
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
-CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Always(1), second = Always(2)))
+CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Deterministic(1), second = Deterministic(2)))
 CognitiveModeling.attribute_names(model::PullsTwoArms) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = (:first, :second))
 
 #Shortens the calls below
@@ -49,9 +40,7 @@ function run_bandit(rl_env, model = PullsArm(); action_name = :arm, n_steps = 4,
     return simulate(model, CommonRLEnvironment(rl_env; action_name); who_starts = EnvironmentStarts(), n_steps, cognitive_parameters, environment_parameters = (;), save_history, save_environment_history, keywords...)
 end
 
-@testset "CommonRLInterface extension" begin
-    @test Base.get_extension(CognitiveModeling, :CognitiveModelingCommonRLInterfaceExt) isa Module
-
+@testset "CommonRLEnvironment" begin
     @testset "The name of the action is required, and kept in the type with the names" begin
         environment = CommonRLEnvironment(PlainBandit(0); action_name = :arm)
         @test environment isa CommonRLEnvironment{PlainBandit, :arm}
@@ -103,9 +92,17 @@ end
         environment = CommonRLEnvironment(rl_env; action_name = :arm)
         for no_action in (BeforeFirstTimestep(), NoAction())
             output = CognitiveModeling.apply_model(environment, EnvironmentInput((; arm = no_action), rl_env, CognitiveModeling.initial_observation(environment), (;)))
-            @test output.observation === (; observation = 0, reward = NoObservation(), terminated = false)
+            @test output.observation_distribution === (; observation = Deterministic(0), reward = NoObservation(), terminated = Deterministic(false))
             @test rl_env.pulls == 0
         end
+    end
+
+    @testset "What the environment gives after an action is passed on as it is, with nothing sampled" begin
+        rl_env = CountingBandit(0, 0)
+        environment = CommonRLEnvironment(rl_env; action_name = :arm)
+        output = CognitiveModeling.apply_model(environment, EnvironmentInput((; arm = 1), rl_env, CognitiveModeling.initial_observation(environment), (;)))
+        @test output.observation_distribution === (; observation = Deterministic(1), reward = Deterministic(1.0), terminated = Deterministic(false))
+        @test output.new_state === rl_env
     end
 
     @testset "The saved states are copies, with clone when the environment has it and deepcopy otherwise" begin

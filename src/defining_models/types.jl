@@ -1,4 +1,13 @@
 """
+    AbstractModel
+
+Supertype for cognitive models and environment models, which the functions that treat the
+two in the same way take. A model is a subtype of [`AbstractCognitiveModel`](@ref) or of
+[`AbstractEnvironmentModel`](@ref), and not of this type itself.
+"""
+abstract type AbstractModel end
+
+"""
     AbstractCognitiveModel
 
 Supertype for cognitive models.
@@ -9,7 +18,7 @@ Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](
 [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`turing_apply_model`](@ref).
 """
-abstract type AbstractCognitiveModel end
+abstract type AbstractCognitiveModel <: AbstractModel end
 
 #Types for cases where there is no observation or action
 
@@ -55,6 +64,41 @@ history starts with it, also as the size of the timestep. [`NoObservation`](@ref
 that did run.
 """
 struct BeforeFirstTimestep <: AbstractNoValue end
+
+#Type for an action or an observation that isn't random
+
+"""
+    Deterministic(value)
+
+An action or an observation that is always `value`, for a cognitive model or an environment
+model which gives it without any randomness, as in `(; reward = Deterministic(1.0))`.
+
+A simulation samples every action and every observation with `rand`, and sampling from a
+`Deterministic` gives `value` itself. The value is kept in the field `value`.
+
+A value that isn't wrapped is sampled from as it is, which is rarely what is meant: `rand`
+of an integer gives a vector of that many random numbers, and `rand` of a vector, a tuple, a
+range or a string picks one of its elements, all with no error.
+
+# Examples
+```jldoctest
+julia> using Random: Xoshiro
+
+julia> rand(Xoshiro(1), Deterministic(1.0))
+1.0
+
+julia> ModelOutput((; choice = Deterministic(true))).action_distribution.choice.value
+true
+```
+"""
+struct Deterministic{T}
+    value::T
+end
+
+#Sampling from it gives the value itself
+function Base.rand(::AbstractRNG, deterministic::Deterministic)
+    return deterministic.value
+end
 
 """
     ModelInput(observation, previous_state, previous_action, parameters, timestep_size=1,
@@ -121,9 +165,9 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
 - `action_distribution::NamedTuple`: what the actions on this timestep are sampled from, in
   a `NamedTuple` with one entry for each action, such as `(; choice = Bernoulli(0.7))`.
   Each entry can be anything that works with `rand`, such as a distribution from
-  Distributions.jl, and the sampled actions keep the names. An action that isn't taken on
-  this timestep is [`NoAction`](@ref), and a model without actions gives an empty
-  `NamedTuple`, `(;)`.
+  Distributions.jl, or a [`Deterministic`](@ref) for an action that isn't random, and the
+  sampled actions keep the names. An action that isn't taken on this timestep is
+  [`NoAction`](@ref), and a model without actions gives an empty `NamedTuple`, `(;)`.
 - `new_state=(;)`: the cognitive state of the model after this timestep, which is the
   `previous_state` of the next one.
 

@@ -116,7 +116,8 @@ Turing.@model function session_timestep(cognitive_model, environment, cognitive_
         else
             environment_output ~ to_submodel(prefix(turing_apply_model(environment, EnvironmentInput(previous.action, previous.environment_state, previous.observation, environment_parameters, timestep_size)), @varname(environment)), false)
             environment_output = check_environment_output(environment_output, environment)
-            observation = fill_missing_observations(data_observation, environment_output.observation)
+            filled_observation ~ to_submodel(prefix(impute_missing_observations(data_observation, environment_output.observation_distribution), @varname(environment)), false)
+            observation = filled_observation
             environment_state = environment_output.new_state
         end
     else
@@ -145,7 +146,8 @@ Turing.@model function session_timestep(cognitive_model, environment, cognitive_
         else
             environment_output ~ to_submodel(prefix(turing_apply_model(environment, EnvironmentInput(action, previous.environment_state, previous.observation, environment_parameters, timestep_size)), @varname(environment)), false)
             environment_output = check_environment_output(environment_output, environment)
-            observation = fill_missing_observations(data_observation, environment_output.observation)
+            filled_observation ~ to_submodel(prefix(impute_missing_observations(data_observation, environment_output.observation_distribution), @varname(environment)), false)
+            observation = filled_observation
             environment_state = environment_output.new_state
         end
     end
@@ -166,12 +168,48 @@ Turing.@model function impute_action(distribution)
     return imputed
 end
 
+#Fills in the observations that are missing in the data, each from what the environment gives for it, under the name of the observation, and takes the rest from the data.
+#It runs under the environment's prefix, so that an observation and an action with the same name get a latent each
+Turing.@model function impute_missing_observations(data_observation, observation_distribution)
+    missing_names = missing_observation_names(data_observation)
+    imputed_values = ()
+    for name in missing_names
+        imputed ~ to_submodel(prefix(impute_observation(getproperty(observation_distribution, name)), VarName{name}()), false)
+        imputed_values = (imputed_values..., imputed)
+    end
+    return merge(data_observation, NamedTuple{missing_names}(imputed_values))
+end
+
+#A missing observation as a latent, with the environment's distribution for it
+Turing.@model function impute_observation(distribution)
+    imputed ~ distribution
+    return imputed
+end
+
+#An observation that isn't random is its value, with nothing to sample
+Turing.@model function impute_observation(deterministic::Deterministic)
+    return deterministic.value
+end
+
+#An observation that the environment doesn't give on this timestep stays NoObservation
+Turing.@model function impute_observation(no_observation::NoObservation)
+    return no_observation
+end
+
 #The names of the actions of a timestep that are MissingAction, unrolled over the names so that the types are known
 missing_action_names(data_action::NamedTuple{names}) where {names} = missing_action_names(names, Tuple(data_action))
 missing_action_names(names::Tuple{}, data_values::Tuple{}) = ()
 function missing_action_names(names::Tuple, data_values::Tuple)
     rest = missing_action_names(Base.tail(names), Base.tail(data_values))
     return first(data_values) isa MissingAction ? (first(names), rest...) : rest
+end
+
+#The names of the observations of a timestep that are MissingObservation, unrolled over the names in the same way
+missing_observation_names(data_observation::NamedTuple{names}) where {names} = missing_observation_names(names, Tuple(data_observation))
+missing_observation_names(names::Tuple{}, data_values::Tuple{}) = ()
+function missing_observation_names(names::Tuple, data_values::Tuple)
+    rest = missing_observation_names(Base.tail(names), Base.tail(data_values))
+    return first(data_values) isa MissingObservation ? (first(names), rest...) : rest
 end
 
 #Whether each action of a timestep is scored: those recorded in the data, which the cognitive model must have a distribution for

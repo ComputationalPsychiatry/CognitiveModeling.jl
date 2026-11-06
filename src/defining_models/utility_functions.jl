@@ -5,22 +5,23 @@ Return `attributes` if it is the [`ModelAttributes`](@ref) that a method of
 [`attribute_names`](@ref) must return, and throw an informative error otherwise. `model` is
 the cognitive model or the environment model whose method returned it.
 """
-function check_type_attribute_names(attributes::ModelAttributes, ::AbstractCognitiveModel)
+function check_type_attribute_names(attributes::ModelAttributes, ::AbstractModel)
     return attributes
 end
 
-function check_type_attribute_names(attributes, model::AbstractCognitiveModel)
-    error("The attribute_names method of a model of type $(typeof(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).")
+function check_type_attribute_names(attributes, model::AbstractModel)
+    error("The attribute_names method of $(describe_model(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).")
 end
 
 """
     has_attribute_names(model)
 
 Return whether `model`, a cognitive model or an environment model, has its own method of
-[`attribute_names`](@ref), instead of the fallback which throws.
+[`attribute_names`](@ref), instead of one of the two fallbacks which throw.
 """
-function has_attribute_names(model::AbstractCognitiveModel)
-    return which(attribute_names, (typeof(model),)).sig != Tuple{typeof(attribute_names), AbstractCognitiveModel}
+function has_attribute_names(model::AbstractModel)
+    method_signature = which(attribute_names, (typeof(model),)).sig
+    return method_signature != Tuple{typeof(attribute_names), AbstractCognitiveModel} && method_signature != Tuple{typeof(attribute_names), AbstractEnvironmentModel}
 end
 
 """
@@ -93,11 +94,11 @@ Return the action and the observation from before the first timestep: a `NamedTu
 the action or the observation names that [`attribute_names`](@ref) lists for `model`, a
 cognitive model or an environment model, each [`BeforeFirstTimestep`](@ref).
 """
-function initial_action(model::AbstractCognitiveModel)
+function initial_action(model::AbstractModel)
     return actions_before_first_timestep(check_type_attribute_names(attribute_names(model), model))
 end
 
-function initial_observation(model::AbstractCognitiveModel)
+function initial_observation(model::AbstractModel)
     return observations_before_first_timestep(check_type_attribute_names(attribute_names(model), model))
 end
 

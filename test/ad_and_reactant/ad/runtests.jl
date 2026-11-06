@@ -58,6 +58,14 @@ const KNOWN_FAILURES = [
             "reading the history of an agent with a state saved with deepcopy",
         ],
     ),
+    (;
+        bug = "Enzyme throws an IllegalTypeAnalysisException when an observation is NoObservation on some timesteps and a number on the others, so that it has two types inside the loop, and the observations are saved",
+        backends = ["Enzyme forward", "Enzyme reverse", "Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
+        cases = [
+            "simulate with a reward that isn't always given, environment starts",
+            "simulate with a reward that isn't always given, agent starts",
+        ],
+    ),
 ]
 
 is_known_failure(case_name, backend_name) = any(failure -> backend_name in failure.backends && case_name in failure.cases, KNOWN_FAILURES)

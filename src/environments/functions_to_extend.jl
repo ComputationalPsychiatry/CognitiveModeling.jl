@@ -3,11 +3,15 @@
 """
     apply_model(environment, input::EnvironmentInput)::EnvironmentOutput
 
-Run a single timestep of `environment`: update its state and give the next observation.
+Run a single timestep of `environment`: update its state, and return what the next
+observation is sampled from.
 
 # Implementation
 Every environment model must add a method of this function, which throws an error otherwise.
-Anything random should be sampled from `input.rng`, so that a simulation can be reproduced.
+A simulation samples the observations itself, from the `observation_distribution` of the
+[`EnvironmentOutput`](@ref) that the method returns, so an observation that isn't random is
+wrapped in a [`Deterministic`](@ref). Anything else that is random, such as a change of the
+state, should be sampled from `input.rng`, so that a simulation can be reproduced.
 
 See also [`simulate`](@ref), which has an example.
 """
@@ -35,9 +39,10 @@ end
 Return the names of the parameters, states, observations and actions of `environment`, in a
 [`ModelAttributes`](@ref).
 
-The observations are the names in the observation that [`apply_model`](@ref) gives, which
-the cognitive model receives, and the actions are the names it reads from `input.action`,
-which the cognitive model gives. The parameters and the states are as for a cognitive model.
+The observations are the names in the `observation_distribution` that [`apply_model`](@ref)
+returns, which the cognitive model receives, and the actions are the names it reads from
+`input.action`, which the cognitive model gives. The parameters and the states are as for a
+cognitive model.
 
 # Implementation
 Every environment model must add a method of this function, which throws an error
@@ -90,8 +95,9 @@ end
 """
     default_parameters(environment::AbstractEnvironmentModel)
 
-Return the default parameter values of `environment`, such as `(; reward_probability = 0.8)`,
-which [`Environment`](@ref) and [`simulate`](@ref) use for the parameters they aren't given.
+Return the default parameter values of `environment`, such as
+`(; reward_probability = 0.8)`, which [`Environment`](@ref) and [`simulate`](@ref) use for
+the parameters they aren't given.
 
 # Implementation
 An environment model can add a method of this function. The default is an empty

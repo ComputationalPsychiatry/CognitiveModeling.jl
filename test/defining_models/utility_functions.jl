@@ -68,7 +68,7 @@ CognitiveModeling.attribute_names(environment::EnvironmentReturnsNamedTupleOfNam
     end
 
     @testset "Names that aren't a ModelAttributes give an informative error" begin
-        @test_throws "must return a ModelAttributes" repr("text/plain", ReturnsNamedTupleOfNames())
+        @test_throws "The attribute_names method of a cognitive model of type ReturnsNamedTupleOfNames must return a ModelAttributes" repr("text/plain", ReturnsNamedTupleOfNames())
         @test_throws "must return a ModelAttributes" CognitiveModeling.check_type_attribute_names(CognitiveModeling.attribute_names(ReturnsNamedTupleOfNames()), ReturnsNamedTupleOfNames())
         @test_throws "The attribute_names method of an environment model of type EnvironmentReturnsNamedTupleOfNames must return a ModelAttributes" repr("text/plain", EnvironmentReturnsNamedTupleOfNames())
         @test_throws "must return a ModelAttributes" CognitiveModeling.check_type_attribute_names(CognitiveModeling.attribute_names(EnvironmentReturnsNamedTupleOfNames()), EnvironmentReturnsNamedTupleOfNames())

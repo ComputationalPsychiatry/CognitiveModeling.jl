@@ -1,17 +1,3 @@
-#Return the names if they are a ModelAttributes, and throw an informative error otherwise, as for a cognitive model
-function check_type_attribute_names(attributes::ModelAttributes, ::AbstractEnvironmentModel)
-    return attributes
-end
-
-function check_type_attribute_names(attributes, environment::AbstractEnvironmentModel)
-    error("The attribute_names method of an environment model of type $(typeof(environment)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).")
-end
-
-#Whether an environment model has its own method of attribute_names, instead of the fallback which throws
-function has_attribute_names(environment::AbstractEnvironmentModel)
-    return which(attribute_names, (typeof(environment),)).sig != Tuple{typeof(attribute_names), AbstractEnvironmentModel}
-end
-
 #Throw an informative error if the names of the parameters, the previous observation or a NamedTuple state aren't those in attribute_names
 function check_match_attribute_names(environment::AbstractEnvironmentModel, parameters, state, previous_observation)
     attributes = check_type_attribute_names(attribute_names(environment), environment)
@@ -25,15 +11,6 @@ function check_match_attribute_names(environment::AbstractEnvironmentModel, para
         throw(ArgumentError("The state is named $(keys(state)), but attribute_names lists the states of an environment model of type $(typeof(environment)) as $(attributes.states)."))
     end
     return nothing
-end
-
-#The action and the observation before the first timestep, with the names that attribute_names lists for the environment model
-function initial_action(environment::AbstractEnvironmentModel)
-    return actions_before_first_timestep(check_type_attribute_names(attribute_names(environment), environment))
-end
-
-function initial_observation(environment::AbstractEnvironmentModel)
-    return observations_before_first_timestep(check_type_attribute_names(attribute_names(environment), environment))
 end
 
 """

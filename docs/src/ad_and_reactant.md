@@ -5,17 +5,19 @@ compiled with Reactant. Every commit is tested against every form of each backen
 cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, with sampled
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
 states, with a state changed in place, with a selection of what is saved, with maps of names
-between the model and the environment, with an environment which ends the simulation, and
-on single observations, and agents simulated with an environment or on single observations,
-with and without a history, and with a state saved with `deepcopy`. Code in the package's
-extensions is differentiated in suites of its own, each with its own environment, beside
-the other tests of the extension. The one for Turing.jl, in `test/extensions/turing/ad`,
-differentiates the log density of Turing.jl models of a session, in its `turing_cases.jl`:
-with the agent or the environment starting, with imputed actions, with an environment
-filling in observations, and with a model which samples within each timestep.
-That keeps the package's own code tested without Turing.jl, since the backends work without
-it and with other probabilistic programming languages. Every gradient is compared with
-finite differences. Zygote isn't supported, because the package uses for loops.
+between the model and the environment, with an environment which ends the simulation, with
+a reward that isn't given on every timestep, and on single observations, and agents
+simulated with an environment or on single observations, with and without a history, and
+with a state saved with `deepcopy`. Code in the package's extensions is differentiated in
+suites of its own, each with its own environment, beside the other tests of the extension.
+The one for Turing.jl, in `test/extensions/turing/ad`, differentiates the log density of
+Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
+starting, with imputed actions, with an environment filling in observations, with
+observations imputed from an environment's distributions, with a reward that isn't given on
+every timestep, and with a model which samples within each timestep. That keeps the
+package's own code tested without Turing.jl, since the backends work without it and with
+other probabilistic programming languages. Every gradient is compared with finite
+differences. Zygote isn't supported, because the package uses for loops.
 
 | Backend | Forms tested |
 |---|---|
@@ -39,15 +41,17 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, Revers
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reproduced without the package, to be reported |
+| Enzyme, all four forms | `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved | throws an `IllegalTypeAnalysisException` | to be reported |
 | Enzyme forward and reverse without runtime activity | the log density of any Turing.jl model of a session | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity |
-| Enzyme reverse with runtime activity | a session with imputed actions, or with an environment filling in missing observations | throws an `EnzymeNonScalarReturnException` from Enzyme's rule for building a struct of unknown type | to be reported |
-| Enzyme forward with runtime activity | a session with an environment filling in missing observations | wrong gradient, no error | to be reported |
+| Enzyme reverse with runtime activity | a session whose data has two types in a column: an action that is `MissingAction` on some timesteps, or an observation that is `MissingObservation` or `NoObservation` on some | throws an `EnzymeNonScalarReturnException` from Enzyme's rule for building a struct of unknown type | to be reported |
+| Enzyme forward with runtime activity | a session whose data has an observation that is `MissingObservation` or `NoObservation` on some timesteps | wrong gradient, no error | to be reported |
 
 A state which depends on the parameters from the start isn't affected, and neither is
-`simulate!` on single observations. The other forms of Enzyme, and the other backends, are
-right on all of these cases. ForwardDiff, ReverseDiff and Mooncake are right on every
-Turing.jl case, and so are both forms of Enzyme with runtime activity on a session without
-missing data.
+`simulate!` on single observations. A simulation where an observation isn't made on every
+timestep is right on every backend when the observations aren't saved. The other forms of
+Enzyme, and the other backends, are right on all of these cases. ForwardDiff, ReverseDiff
+and Mooncake are right on every Turing.jl case, and so are both forms of Enzyme with runtime
+activity on a session where every column of the data has one type.
 
 ## Pitfalls
 
@@ -56,6 +60,11 @@ These aren't failures of the package's own code, but a model can run into them.
 - **Enzyme reverse and `SVector` states:** updating an `SVector` in a state with `setindex`
   gives wrong gradients for some sizes, with no error. A `Vector` changed in place or by
   broadcasting is right.
+- **Enzyme reverse with runtime activity and a softmax in one line:** a softmax written as
+  `exp.(v .- maximum(v)) ./ sum(exp.(v .- maximum(v)))` gives wrong gradients, with no
+  error, when it runs in a loop on values that differ between the timesteps. Keeping the
+  exponentials in a variable, and dividing them by their sum, is right. It is reproduced
+  without the package, and to be reported.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.

@@ -41,18 +41,32 @@ const KNOWN_FAILURES = [
             "turing session, agent starts",
             "turing session with imputed actions",
             "turing session with an environment",
+            "turing session with imputed observations",
+            "turing session with a reward that isn't always given, environment starts",
+            "turing session with a reward that isn't always given, agent starts",
             "turing session with noise in each timestep",
         ],
     ),
     (;
-        bug = "Enzyme reverse with runtime activity throws an EnzymeNonScalarReturnException from its rule for building a struct of unknown type, when a NamedTuple is built from a data column which holds MissingAction or MissingObservation",
+        bug = "Enzyme reverse with runtime activity throws an EnzymeNonScalarReturnException from its rule for building a struct of unknown type, when a NamedTuple is built from a data column which holds two types: MissingAction, MissingObservation or NoObservation beside the recorded values",
         backends = ["Enzyme reverse, runtime activity"],
-        cases = ["turing session with imputed actions", "turing session with an environment"],
+        cases = [
+            "turing session with imputed actions",
+            "turing session with an environment",
+            "turing session with imputed observations",
+            "turing session with a reward that isn't always given, environment starts",
+            "turing session with a reward that isn't always given, agent starts",
+        ],
     ),
     (;
-        bug = "Enzyme forward with runtime activity gives wrong gradients, with no error, for a session where an environment fills in missing observations",
+        bug = "Enzyme forward with runtime activity gives wrong gradients, with no error, for a session whose observations hold two types in the data: MissingObservation, which an environment fills in, or NoObservation, beside the recorded values",
         backends = ["Enzyme forward, runtime activity"],
-        cases = ["turing session with an environment"],
+        cases = [
+            "turing session with an environment",
+            "turing session with imputed observations",
+            "turing session with a reward that isn't always given, environment starts",
+            "turing session with a reward that isn't always given, agent starts",
+        ],
     ),
 ]
 

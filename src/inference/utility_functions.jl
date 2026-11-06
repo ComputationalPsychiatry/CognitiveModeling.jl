@@ -1,19 +1,4 @@
 """
-    fill_missing_observations(observation, environment_observation)
-
-Return `observation` with each entry that is [`MissingObservation`](@ref) replaced by the
-entry of the same name in `environment_observation`, which an environment model gave for the
-same timestep. The other entries are kept as they are.
-"""
-function fill_missing_observations(observation::NamedTuple{names}, environment_observation::NamedTuple) where {names}
-    return NamedTuple{names}(map(name -> fill_missing_observation(getproperty(observation, name), environment_observation, name), names))
-end
-
-#Keeps a recorded observation, and takes a missing one from the environment
-fill_missing_observation(value, environment_observation, name) = value
-fill_missing_observation(::MissingObservation, environment_observation, name) = getproperty(environment_observation, name)
-
-"""
     has_missing_observation(observation)
 
 Return whether any entry of `observation` is [`MissingObservation`](@ref).

@@ -124,7 +124,10 @@ end
 # environment object and no trajectory. The action probabilities are then the cognitive
 # model's own: here a softmax over the learner's action values, with an inverse temperature.
 
-softmax(values) = exp.(values .- maximum(values)) ./ sum(exp.(values .- maximum(values)))
+function softmax(values)
+    exponentials = exp.(values .- maximum(values))
+    return exponentials ./ sum(exponentials)
+end
 
 struct TemporalDifferenceLearner <: AbstractCognitiveModel
     n_states::Int
@@ -174,3 +177,18 @@ end
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceLearner, state)
     return (; action_values = copy(state.rl_learner.approximator.model), state.previous_observation)
 end
+
+# ## Fitting
+#
+# This page doesn't fit the cognitive models yet. When they are fitted with a sampler that
+# uses gradients, use Enzyme.jl in reverse mode with runtime activity as the automatic
+# differentiation backend, which for Turing.jl is
+# `AutoEnzyme(; mode = set_runtime_activity(Reverse), function_annotation = Const)`. It gave
+# the right gradient of the log density of a session for both cognitive models here, when
+# checked against finite differences with Enzyme.jl 0.13. ForwardDiff.jl and ReverseDiff.jl
+# can't differentiate either of them, because the learner keeps its learning rate and its
+# discount in `Float64` fields, which the number types of those two don't fit in.
+#
+# The softmax above keeps its exponentials in a variable on purpose. Written in one line,
+# Enzyme's reverse mode can give a wrong gradient with no error, which the page
+# [Automatic differentiation and Reactant](@ref) describes under its pitfalls.

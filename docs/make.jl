@@ -36,10 +36,14 @@ makedocs(;
             "generated/interfacing_with_common_rl.md",
             "generated/interfacing_with_reinforcement_learning.md",
             "generated/interfacing_with_pomdps.md",
+            "generated/interfacing_with_actr_models.md",
+            "generated/interfacing_with_sequential_sampling_models.md",
             "generated/compiling_with_reactant.md",
         ],
+        "Planned tutorials and interfaces" => "planned.md",
         "Automatic differentiation and Reactant" => "ad_and_reactant.md",
         "API" => "api.md",
+        "Internals" => "internals.md",
     ],
 )
 

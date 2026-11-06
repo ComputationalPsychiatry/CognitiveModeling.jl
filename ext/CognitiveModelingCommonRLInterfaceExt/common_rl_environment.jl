@@ -19,9 +19,9 @@ function CognitiveModeling.apply_model(environment::CommonRLEnvironment{Trl_env,
         error("The episode of the environment of type $(typeof(rl_env)) from CommonRLInterface.jl has ended, so it can't take the action $action_name. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an Environment.")
     end
 
-    #Take the model's action, and give what follows from it
+    #Take the model's action, and give what follows from it, with nothing left to sample
     reward = act!(rl_env, action)
-    return EnvironmentOutput((; observation = observe(rl_env), reward, terminated = terminated(rl_env)), rl_env)
+    return EnvironmentOutput((; observation = Deterministic(observe(rl_env)), reward = Deterministic(reward), terminated = Deterministic(terminated(rl_env))), rl_env)
 end
 
 #Copies the environment with its own clone, or with deepcopy if it has none
@@ -36,5 +36,5 @@ end
 
 #The observation when no action is taken, where there is no reward
 function observation_without_action(rl_env)
-    return (; observation = observe(rl_env), reward = NoObservation(), terminated = false)
+    return (; observation = Deterministic(observe(rl_env)), reward = NoObservation(), terminated = Deterministic(false))
 end

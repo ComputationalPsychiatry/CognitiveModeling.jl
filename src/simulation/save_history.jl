@@ -135,11 +135,11 @@ end
     check_savehistory_selection_names(save_history, model)
 
 Throw an informative error if `save_history` selects an observation or an action by name that
-[`attribute_names`](@ref) of `model`, which can also be an environment model, doesn't list,
-since a history starts from those names. The states aren't checked, because
+[`attribute_names`](@ref) of `model`, a cognitive model or an environment model, doesn't
+list, since a history starts from those names. The states aren't checked, because
 [`prepare_state_for_saving`](@ref) can save anything.
 """
-function check_savehistory_selection_names(save_history::SaveHistory, model)
+function check_savehistory_selection_names(save_history::SaveHistory, model::AbstractModel)
     attributes = check_type_attribute_names(attribute_names(model), model)
     check_selected_names(save_history.observations, attributes.observations, "observations", model)
     check_selected_names(save_history.actions, attributes.actions, "actions", model)

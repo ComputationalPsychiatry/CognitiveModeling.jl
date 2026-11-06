@@ -15,8 +15,9 @@ struct MissingAction end
     MissingObservation()
 
 Stand-in for an observation that was made on a timestep but isn't in the data, as one entry
-of the observations `NamedTuple`, such as `(; reward = MissingObservation())`. Fitting fills
-it in from an environment model. [`NoObservation`](@ref) is different: it says that nothing
-was observed on that timestep.
+of the observations `NamedTuple`, such as `(; reward = MissingObservation())`. Fitting
+imputes it from what an environment model gives for that observation on the timestep: as a
+latent variable with that distribution, or as the value of a [`Deterministic`](@ref).
+[`NoObservation`](@ref) is different: it says that nothing was observed on that timestep.
 """
 struct MissingObservation end

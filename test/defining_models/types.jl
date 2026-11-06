@@ -38,12 +38,12 @@ using Random: Xoshiro, default_rng
         @test ModelOutput((; choice = 0.7), state).new_state === state
     end
 
-    @testset "EnvironmentOutput only takes named observations" begin
-        @test EnvironmentOutput(observation).observation === observation
-        @test EnvironmentOutput((;)).observation === (;)
-        @test EnvironmentOutput((; reward = NoObservation())).observation === (; reward = NoObservation())
+    @testset "EnvironmentOutput only takes named observation distributions" begin
+        @test EnvironmentOutput((; reward = Deterministic(1.0))).observation_distribution === (; reward = Deterministic(1.0))
+        @test EnvironmentOutput((;)).observation_distribution === (;)
+        @test EnvironmentOutput((; reward = NoObservation())).observation_distribution === (; reward = NoObservation())
         @test_throws MethodError EnvironmentOutput(NoObservation())
-        @test_throws MethodError EnvironmentOutput(1.0)
+        @test_throws MethodError EnvironmentOutput(Deterministic(1.0))
     end
 
     @testset "EnvironmentOutput sets the new state to an empty NamedTuple if it isn't specified" begin
@@ -66,6 +66,26 @@ using Random: Xoshiro, default_rng
     @testset "The types hold their values directly, so they don't allocate" begin
         @test isbitstype(typeof(ModelInput(observation, state, previous_action, parameters)))
         @test isbitstype(typeof(ModelOutput((; choice = 0.7))))
+        @test isbitstype(typeof(EnvironmentOutput((; reward = Deterministic(1.0)))))
+    end
+
+    @testset "Sampling from a Deterministic gives its value" begin
+        rng = Xoshiro(1)
+        @test rand(rng, Deterministic(1.0)) === 1.0
+        @test rand(rng, Deterministic(:left)) === :left
+        @test @inferred(rand(rng, Deterministic(2))) === 2
+        #The generator isn't used, and the default one works too
+        @test rng == Xoshiro(1)
+        @test rand(Deterministic(true)) === true
+        #The value is kept as it is, without a copy
+        values = [0.2, 0.7]
+        @test Deterministic(values).value === values
+        @test rand(rng, Deterministic(values)) === values
+    end
+
+    @testset "Cognitive models and environment models share a supertype" begin
+        @test AbstractCognitiveModel <: CognitiveModeling.AbstractModel
+        @test AbstractEnvironmentModel <: CognitiveModeling.AbstractModel
     end
 
     @testset "ModelAttributes keeps the names of each kind in a tuple" begin

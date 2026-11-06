@@ -1,24 +1,4 @@
-@testset "Filling in missing observations" begin
-    from_environment = (; reward = 1.0, cue = 2)
-
-    @testset "A missing entry is taken from the environment, and the others are kept" begin
-        @test CognitiveModeling.fill_missing_observations((; reward = MissingObservation(), cue = 5), from_environment) === (; reward = 1.0, cue = 5)
-        @test CognitiveModeling.fill_missing_observations((; reward = 0.0, cue = 5), from_environment) === (; reward = 0.0, cue = 5)
-        @test CognitiveModeling.fill_missing_observations((; reward = MissingObservation(), cue = MissingObservation()), from_environment) === from_environment
-        #The names of the data decide, so the environment can give more
-        @test CognitiveModeling.fill_missing_observations((; reward = MissingObservation()), from_environment) === (; reward = 1.0)
-        @test CognitiveModeling.fill_missing_observations((;), from_environment) === (;)
-    end
-
-    @testset "An entry the environment doesn't give can't be filled in" begin
-        @test_throws FieldError CognitiveModeling.fill_missing_observations((; punishment = MissingObservation()), from_environment)
-    end
-
-    @testset "It is inferred" begin
-        @test @inferred(CognitiveModeling.fill_missing_observations((; reward = MissingObservation(), cue = 5), from_environment)) === (; reward = 1.0, cue = 5)
-        @test @inferred(CognitiveModeling.fill_missing_observations((; reward = 0.5), from_environment)) === (; reward = 0.5)
-    end
-
+@testset "Missing observations" begin
     @testset "has_missing_observation" begin
         @test CognitiveModeling.has_missing_observation((; reward = MissingObservation(), cue = 5))
         @test !CognitiveModeling.has_missing_observation((; reward = 1.0, cue = 5))

@@ -7,11 +7,12 @@ Supertype for environment models, which give a cognitive model its observations.
 Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
 [`attribute_names`](@ref) for it. The method of `apply_model` takes an
 [`EnvironmentInput`](@ref) and returns an [`EnvironmentOutput`](@ref). An environment model
-can also add methods of [`prepare_state_for_saving`](@ref) and [`default_parameters`](@ref).
+can also add methods of [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`stopping_criterion`](@ref).
 
 See also [`simulate`](@ref), which has an example.
 """
-abstract type AbstractEnvironmentModel end
+abstract type AbstractEnvironmentModel <: AbstractModel end
 
 """
     EnvironmentInput(action, previous_state, previous_observation, parameters,
@@ -27,9 +28,9 @@ Each argument is kept in a field of the same name, such as `input.action`.
   environment starts, each of them is [`BeforeFirstTimestep`](@ref), and an action that
   isn't taken is [`NoAction`](@ref).
 - `previous_state`: the state of the environment after the previous timestep.
-- `previous_observation`: the observation from the previous timestep, in a `NamedTuple` with
-  the names the environment gave them. On the first timestep, each of them is
-  [`BeforeFirstTimestep`](@ref).
+- `previous_observation`: the observations that were sampled on the previous timestep, in a
+  `NamedTuple` with the names the environment gave them. On the first timestep, each of them
+  is [`BeforeFirstTimestep`](@ref).
 - `parameters`: the parameters of the environment model.
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the
@@ -50,26 +51,32 @@ function EnvironmentInput(action, previous_state, previous_observation, paramete
 end
 
 """
-    EnvironmentOutput(observation, new_state=(;))
+    EnvironmentOutput(observation_distribution, new_state=(;))
 
-The outputs of an environment model for a single timestep.
+The outputs of an environment model for a single timestep, which [`apply_model`](@ref)
+returns.
 
-Each argument is kept in a field of the same name, such as `output.observation`.
+Each argument is kept in a field of the same name, such as `output.new_state`.
 
 # Arguments
-- `observation::NamedTuple`: what the cognitive model observes, in a `NamedTuple` with one
-  entry for each observation, such as `(; reward = 1.0)`. An observation that isn't made on
-  this timestep is [`NoObservation`](@ref), and an environment model without observations
-  gives an empty `NamedTuple`, `(;)`.
+- `observation_distribution::NamedTuple`: what the observations on this timestep are sampled
+  from, in a `NamedTuple` with one entry for each observation, such as
+  `(; reward = Bernoulli(0.8))`. Each entry can be anything that works with `rand`, such as
+  a distribution from Distributions.jl, or a [`Deterministic`](@ref) for an observation that
+  isn't random, as in `(; reward = Deterministic(1.0))`, and the sampled observations keep
+  the names. An observation that isn't made on this timestep is [`NoObservation`](@ref),
+  and an environment model without observations gives an empty `NamedTuple`, `(;)`.
 - `new_state=(;)`: the state of the environment after this timestep, which is the
-  `previous_state` of the next one.
+  `previous_state` of the next one. The observations are sampled after it is made, so it
+  can't depend on them: the environment receives them as `input.previous_observation` on
+  the next timestep.
 """
 struct EnvironmentOutput{Tobservation, Tstate}
-    observation::Tobservation
+    observation_distribution::Tobservation
     new_state::Tstate
 
-    #Only takes named observations, so that the environment model names every observation
-    function EnvironmentOutput(observation::NamedTuple, new_state = (;))
-        return new{typeof(observation), typeof(new_state)}(observation, new_state)
+    #Only takes named observation distributions, so that the environment model names every observation
+    function EnvironmentOutput(observation_distribution::NamedTuple, new_state = (;))
+        return new{typeof(observation_distribution), typeof(new_state)}(observation_distribution, new_state)
     end
 end

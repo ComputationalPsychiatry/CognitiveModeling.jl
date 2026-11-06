@@ -18,7 +18,8 @@ parameters aren't used, and neither is the random number generator, since an env
 CommonRLInterface.jl has its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
-gives, the reward that `act!` returned, and whether the episode has ended. Before the first
+gives, the reward that `act!` returned, and whether the episode has ended. They are given as
+they are, each in a [`Deterministic`](@ref), so nothing more is sampled. Before the first
 action, when the action is [`BeforeFirstTimestep`](@ref), the environment is at its initial
 observation, so the reward is [`NoObservation`](@ref) and nothing is done with the action.
 The same goes for a timestep where the model takes no action, [`NoAction`](@ref): the
@@ -37,7 +38,6 @@ has ended isn't started again, and an action given to it throws an error. A new 
 ```jldoctest
 using CognitiveModeling
 using CommonRLInterface
-using Random: AbstractRNG
 
 #A two-armed bandit where the first arm always pays, in episodes of two pulls
 mutable struct Bandit <: CommonRLInterface.AbstractEnv
@@ -49,16 +49,10 @@ CommonRLInterface.observe(rl_env::Bandit) = rl_env.pulls
 CommonRLInterface.act!(rl_env::Bandit, arm) = (rl_env.pulls += 1; arm == 1 ? 1.0 : 0.0)
 CommonRLInterface.terminated(rl_env::Bandit) = rl_env.pulls == 2
 
-#An action that is always the same
-struct Always{T}
-    value::T
-end
-Base.rand(rng::AbstractRNG, action::Always) = action.value
-
 #A model which always pulls the first arm
 struct PullsFirstArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
-CognitiveModeling.apply_model(model::PullsFirstArm, input::ModelInput) = ModelOutput((; arm = Always(1)))
+CognitiveModeling.apply_model(model::PullsFirstArm, input::ModelInput) = ModelOutput((; arm = Deterministic(1)))
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = :arm)
 
 #The simulation stops when the episode ends, before it has run all of n_steps

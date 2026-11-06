@@ -1,6 +1,10 @@
 # API
 
+The functions and types that are only used inside the package are on the page
+[Internals](@ref).
+
 ```@index
+Pages = ["api.md"]
 ```
 
 ## Public
@@ -55,15 +59,4 @@ Modules = [CognitiveModeling]
 Public = false
 Pages = ["defining_models/utility_functions.jl", "environments/utility_functions.jl"]
 Filter = object -> object === Base.show
-```
-
-## Internals
-
-These are only used inside the package, and can change without notice.
-
-```@autodocs
-Modules = [CognitiveModeling]
-Public = false
-Pages = ["defining_models/types.jl", "defining_models/utility_functions.jl", "environments/utility_functions.jl", "simulation/save_history.jl", "simulation/types.jl", "simulation/simulate.jl", "inference/utility_functions.jl"]
-Filter = object -> object !== Base.show
 ```

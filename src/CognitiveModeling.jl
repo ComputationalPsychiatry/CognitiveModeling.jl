@@ -24,7 +24,7 @@ include("inference/turing_models.jl")
 export AbstractCognitiveModel, AbstractEnvironmentModel
 export AbstractNoValue, NoObservation, NoAction, BeforeFirstTimestep
 export MissingObservation, MissingAction
-export ModelInput, ModelOutput, ModelAttributes, InvalidParametersError
+export ModelInput, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
 export EnvironmentInput, EnvironmentOutput, CommonRLEnvironment
 export CognitiveAgent, Environment, AgentStarts, EnvironmentStarts
 export SaveHistory, SaveEverything, NameMap

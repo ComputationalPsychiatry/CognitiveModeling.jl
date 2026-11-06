@@ -42,11 +42,13 @@ times faster than scoring each timestep on its own.
   wrong choice shifts the model by a timestep without any error.
 - `environment::Union{Nothing, AbstractEnvironmentModel}=nothing`: an environment model
   which fills in the observations that are `MissingObservation()`. When it is given, it runs
-  on every timestep as a submodel with the prefix `environment[t]`, and its
-  `turing_apply_model` must sample with `~` if it is random. The observations it gives are
-  only used where the data has none. It must list the same observations and the same actions
-  as `cognitive_model`, since a session takes no maps of names. Without it, the data can't
-  have missing observations.
+  on every timestep as a submodel with the prefix `timestep[t].environment`, and what it
+  gives for an observation is only used where the data has none: the missing observation is
+  then imputed from it, as a latent variable with that distribution, or as the value itself
+  if it is a [`Deterministic`](@ref). Its `turing_apply_model` must sample with `~` if
+  anything else in it is random. It must list the same observations and the same actions as
+  `cognitive_model`, since a session takes no maps of names. Without it, the data can't have
+  missing observations.
 - `environment_parameters::NamedTuple=(;)`: the parameters of `environment`, with its
   default values for those that aren't given, if it provides any.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
@@ -69,10 +71,12 @@ times faster than scoring each timestep on its own.
 
 An imputed action is a latent variable named after its timestep and action, such as
 `timestep[3].choice.imputed`, with the model's action distribution on that timestep as its
-distribution. The sampler must handle its type: a continuous action can be
-sampled with NUTS, a discrete one needs a sampler for discrete variables. Any latent variable
-in a session, imputed or from a model which samples within a timestep, makes evaluating the
-model much slower in the current version of DynamicPPL.jl.
+distribution. An observation imputed from a distribution is one in the same way, under the
+environment's prefix, such as `timestep[3].environment.reward.imputed`. The sampler must
+handle its type: a continuous action can be sampled with NUTS, a discrete one needs a
+sampler for discrete variables. Any latent variable in a session, imputed or from a model
+which samples within a timestep, makes evaluating the model much slower in the current
+version of DynamicPPL.jl.
 
 # Examples
 ```julia

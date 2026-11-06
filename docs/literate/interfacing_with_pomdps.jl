@@ -41,7 +41,10 @@ end
 # each action under that belief. On the first timestep there is no previous action, which
 # [`AbstractNoValue`](@ref) covers, and the belief is left as it is.
 
-softmax(values) = exp.(values .- maximum(values)) ./ sum(exp.(values .- maximum(values)))
+function softmax(values)
+    exponentials = exp.(values .- maximum(values))
+    return exponentials ./ sum(exponentials)
+end
 
 function CognitiveModeling.apply_model(model::BayesianObserver, input::ModelInput)
 
@@ -84,3 +87,17 @@ end
 #
 # The learners in TabularTDLearning.jl can't be used this way. They are solvers which run
 # every episode themselves, so there is no single timestep to call.
+
+# ## Fitting
+#
+# This page doesn't fit the cognitive model yet. When it is fitted with a sampler that uses
+# gradients, use Enzyme.jl in reverse mode with runtime activity as the automatic
+# differentiation backend, which for Turing.jl is
+# `AutoEnzyme(; mode = set_runtime_activity(Reverse), function_annotation = Const)`. It gave
+# the right gradient of the log density of a session for this cognitive model, when checked
+# against finite differences with Enzyme.jl 0.13. So did ForwardDiff.jl and ReverseDiff.jl,
+# while Mooncake.jl and Enzyme's forward mode threw an error.
+#
+# The softmax above keeps its exponentials in a variable on purpose. Written in one line,
+# Enzyme's reverse mode gave a wrong gradient for this cognitive model, with no error, which
+# the page [Automatic differentiation and Reactant](@ref) describes under its pitfalls.
