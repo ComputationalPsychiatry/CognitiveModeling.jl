@@ -38,7 +38,7 @@ function CognitiveModeling.apply_model(model::PullsArm, input::ModelInput)
 end
 CognitiveModeling.attribute_names(model::PullsArm) = ModelAttributes(; parameters = :arm, states = :last_reward, observations = (:observation, :reward, :terminated), actions = :arm)
 
-#Has two actions, of which the environment takes the one named, and lists only the reward
+#Has two actions, of which a map passes one on to the environment, and lists only the reward
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsTwoArms, input::ModelInput) = ModelOutput((; first = Always(1), second = Always(2)))
@@ -80,13 +80,32 @@ end
         @test observations[2] == (; observation = 1, reward = 0.0, terminated = false)
     end
 
-    @testset "An episode that has ended isn't started again, and a new simulation starts a new one" begin
+    @testset "A simulation stops when the episode ends, and a new simulation starts a new one" begin
         rl_env = CountingBandit(0, 0)
-        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm." run_bandit(rl_env; n_steps = 5)
+        environment = CommonRLEnvironment(rl_env; action_name = :arm)
+        #The stopping criterion is whether the episode has ended
+        @test CognitiveModeling.stopping_criterion(environment, rl_env, (;)) === false
+        observations, actions, cognitive_states, environment_states, _ = run_bandit(rl_env; n_steps = 10)
+        @test length(observations) == length(actions) == length(cognitive_states) == length(environment_states) == 4
+        @test observations[end].terminated
         @test rl_env.pulls == 3
+        @test CognitiveModeling.stopping_criterion(environment, rl_env, (;)) === true
         #A new simulation resets the environment, and runs the episode again
         observations, _, _, _ = run_bandit(rl_env)
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
+        #An episode that has ended isn't started again by an action given to it by hand
+        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm." CognitiveModeling.apply_model(environment, EnvironmentInput((; arm = 1), rl_env, observations[end], (;)))
+        @test rl_env.pulls == 3
+    end
+
+    @testset "Before the first action, and when the model takes none, the environment stays where it is" begin
+        rl_env = CountingBandit(0, 0)
+        environment = CommonRLEnvironment(rl_env; action_name = :arm)
+        for no_action in (BeforeFirstTimestep(), NoAction())
+            output = CognitiveModeling.apply_model(environment, EnvironmentInput((; arm = no_action), rl_env, CognitiveModeling.initial_observation(environment), (;)))
+            @test output.observation === (; observation = 0, reward = NoObservation(), terminated = false)
+            @test rl_env.pulls == 0
+        end
     end
 
     @testset "The saved states are copies, with clone when the environment has it and deepcopy otherwise" begin
@@ -112,15 +131,19 @@ end
     @testset "simulate! continues with the same environment object" begin
         rl_env = CountingBandit(0, 0)
         environment = Environment(CommonRLEnvironment(rl_env; action_name = :arm), (;))
-        @test environment.previous_observation === (; observation = NoObservation(), reward = NoObservation(), terminated = NoObservation())
+        @test environment.previous_observation === (; observation = BeforeFirstTimestep(), reward = BeforeFirstTimestep(), terminated = BeforeFirstTimestep())
         agent = CognitiveAgent(PullsArm(), (; arm = 1); save_history = SaveHistory(SaveEverything()))
         simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
         @test environment.state === rl_env
         @test rl_env.pulls == 1
         observations, _, _, _ = simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2)
         @test [observation.observation for observation in observations] == [2, 3]
-        #The episode has ended, so it can't continue
-        @test_throws "has ended, so it can't take the action arm" simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 1)
+        #The episode has ended, so it can't continue until the environment is reset
+        @test_throws "The stopping criterion of an environment model of type CommonRLEnvironment{CountingBandit, :arm} is already met before the first timestep" simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 1)
+        #After a reset of both, a call that asks for more timesteps than the episode has stops with it
+        CognitiveModeling.reset!(environment)
+        CognitiveModeling.reset!(agent)
+        @test length(simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 10)[1]) == 4
     end
 
     @testset "reset! of the agent and the environment starts a new episode with the same environment object" begin
@@ -138,11 +161,14 @@ end
         @test observations[1].reward === NoObservation()
     end
 
-    @testset "The action named is the one given to act!, and the model must have it" begin
-        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :second, cognitive_parameters = (;))
-        @test observations[2] == (; observation = 1, reward = 0.0, terminated = false)
-        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :first, cognitive_parameters = (;))
-        @test observations[2] == (; observation = 1, reward = 1.0, terminated = false)
-        @test_throws "lists the actions (:lever,), but a model of type PullsTwoArms gives (:first, :second). The model must give every action the environment lists." run_bandit(CountingBandit(0, 0), PullsTwoArms(); action_name = :lever, cognitive_parameters = (;))
+    @testset "Maps of names pass on what a model with other names lists" begin
+        #PullsTwoArms lists only the reward, and has two actions, of which a map passes one on as the arm
+        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); cognitive_parameters = (;), observation_map = NameMap(:reward), action_map = NameMap(:second => :arm))
+        @test observations[2] == (; reward = 0.0)
+        observations, _, _, _ = run_bandit(CountingBandit(0, 0), PullsTwoArms(); cognitive_parameters = (;), observation_map = NameMap(:reward), action_map = NameMap(:first => :arm))
+        @test observations[2] == (; reward = 1.0)
+        #Without the maps, the two don't fit
+        @test_throws "A cognitive model of type PullsTwoArms lists the observations (:reward,), but an environment model of type CommonRLEnvironment{CountingBandit, :arm} gives (:observation, :reward, :terminated). Without a map, the two must list the same observations." run_bandit(CountingBandit(0, 0), PullsTwoArms(); cognitive_parameters = (;))
+        @test_throws "Without a map, the two must list the same actions." run_bandit(CountingBandit(0, 0), PullsTwoArms(); cognitive_parameters = (;), observation_map = NameMap(:reward))
     end
 end

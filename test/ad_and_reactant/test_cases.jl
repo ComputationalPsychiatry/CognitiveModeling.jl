@@ -20,7 +20,7 @@ function CognitiveModeling.apply_model(model::LearnsRewards{Taction}, input::Mod
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    Vₜ = input.observation.reward isa NoObservation ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
+    Vₜ = input.observation.reward isa AbstractNoValue ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
     return ModelOutput((; choice = Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
 CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
@@ -29,7 +29,7 @@ CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; para
 struct RewardsFollowActions <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsFollowActions, parameters) = (; n_timesteps = 0)
 function CognitiveModeling.apply_model(environment::RewardsFollowActions, input::EnvironmentInput)
-    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     n_timesteps = input.previous_state.n_timesteps + 1
     return EnvironmentOutput((; reward = input.parameters.reward_size * action), (; n_timesteps))
 end
@@ -39,19 +39,19 @@ CognitiveModeling.attribute_names(environment::RewardsFollowActions) = ModelAttr
 struct PayoffsFollowLevers <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters) = (; n_timesteps = 0)
 function CognitiveModeling.apply_model(environment::PayoffsFollowLevers, input::EnvironmentInput)
-    action = input.action.lever isa NoAction ? 0.5 : input.action.lever
+    action = input.action.lever isa AbstractNoValue ? 0.5 : input.action.lever
     n_timesteps = input.previous_state.n_timesteps + 1
     return EnvironmentOutput((; payoff = input.parameters.reward_size * action, n_timesteps), (; n_timesteps))
 end
 CognitiveModeling.attribute_names(environment::PayoffsFollowLevers) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = (:payoff, :n_timesteps), actions = :lever)
 
-# An environment whose reward is sampled
+# An environment which takes the choice, and whose reward is sampled whatever it is
 struct SampledRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;)
 function CognitiveModeling.apply_model(environment::SampledRewards, input::EnvironmentInput)
     return EnvironmentOutput((; reward = float(rand(input.rng) < input.parameters.reward_probability)))
 end
-CognitiveModeling.attribute_names(environment::SampledRewards) = ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = ())
+CognitiveModeling.attribute_names(environment::SampledRewards) = ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = :choice)
 
 # A Rescorla-Wagner model which learns more the more time passes. It learns on the first timestep too, so that every size counts
 struct LearnsOverTime <: AbstractCognitiveModel end
@@ -60,7 +60,7 @@ function CognitiveModeling.apply_model(model::LearnsOverTime, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + (1 - exp(-α * input.timestep_size)) * (r - V₋₁)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
@@ -70,7 +70,7 @@ CognitiveModeling.attribute_names(model::LearnsOverTime) = ModelAttributes(; par
 struct RewardsGrowOverTime <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsGrowOverTime, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsGrowOverTime, input::EnvironmentInput)
-    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action * input.timestep_size))
 end
 CognitiveModeling.attribute_names(environment::RewardsGrowOverTime) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
@@ -85,7 +85,7 @@ CognitiveModeling.attribute_names(model::ChoosesWithoutState) = ModelAttributes(
 struct RewardsWithoutState <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithoutState, parameters) = (;)
 function CognitiveModeling.apply_model(environment::RewardsWithoutState, input::EnvironmentInput)
-    action = input.action.choice isa NoAction ? 0.5 : input.action.choice
+    action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = input.parameters.reward_size * action))
 end
 CognitiveModeling.attribute_names(environment::RewardsWithoutState) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
@@ -97,7 +97,7 @@ function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + α * (r - V₋₁) + α * 0.1 * (rand(input.rng) - 0.5)
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
 end
@@ -112,7 +112,7 @@ function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     V = input.previous_state.expected_rewards
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    r = input.observation.reward isa NoObservation ? 0.5 : input.observation.reward
+    r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     V[1] += α * (r - V[1])
     return ModelOutput((; choice = ProbabilityAsAction(inv(1 + exp(-β * (V[1] - 0.5))))), input.previous_state)
 end
@@ -126,6 +126,17 @@ CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters)
 CognitiveModeling.apply_model(model::LearnsInPlaceWithDeepcopy, input::ModelInput) = CognitiveModeling.apply_model(LearnsInPlace(), input)
 CognitiveModeling.prepare_state_for_saving(model::LearnsInPlaceWithDeepcopy, state) = deepcopy(state)
 CognitiveModeling.attribute_names(model::LearnsInPlaceWithDeepcopy) = CognitiveModeling.attribute_names(LearnsInPlace())
+
+# The same environment as RewardsFollowActions, which ends after the number of timesteps in its parameters
+struct RewardsUntilEnd <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::RewardsUntilEnd, parameters) = (; n_timesteps = 0)
+function CognitiveModeling.apply_model(environment::RewardsUntilEnd, input::EnvironmentInput)
+    action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
+    n_timesteps = input.previous_state.n_timesteps + 1
+    return EnvironmentOutput((; reward = input.parameters.reward_size * action), (; n_timesteps))
+end
+CognitiveModeling.attribute_names(environment::RewardsUntilEnd) = ModelAttributes(; parameters = (:reward_size, :last_timestep), states = :n_timesteps, observations = :reward, actions = :choice)
+CognitiveModeling.stopping_criterion(environment::RewardsUntilEnd, state, parameters) = state.n_timesteps >= parameters.last_timestep
 
 # Sums the expected rewards in the states of a simulation
 function sum_expected_rewards(cognitive_states)
@@ -164,6 +175,32 @@ function simulate_deterministic(x, who_starts)
         save_history = SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
+end
+
+# A simulation which the environment ends before n_steps, with the parameters from a vector
+function simulate_until_environment_ends(x, who_starts)
+    _, _, cognitive_states, _ = simulate(
+        LearnsRewards{ProbabilityAsAction}(),
+        RewardsUntilEnd();
+        who_starts,
+        n_steps = 40,
+        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
+        environment_parameters = (; reward_size = 0.8, last_timestep = 20),
+        save_history = SaveHistory(SaveEverything()),
+    )
+    return sum_expected_rewards(cognitive_states)
+end
+
+# A model run on one observation at a time with simulate, passing its state and action on, with the parameters from a vector
+function simulate_on_observations(x)
+    cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2])
+    action, cognitive_state = simulate(LearnsRewards{ProbabilityAsAction}(), (; reward = 1.0); cognitive_parameters)
+    total = action.choice
+    for reward in (0.0, 1.0, 1.0, 0.0)
+        action, cognitive_state = simulate(LearnsRewards{ProbabilityAsAction}(), (; reward); cognitive_parameters, previous_cognitive_state = cognitive_state, previous_action = action)
+        total += action.choice
+    end
+    return total
 end
 
 # A simulation with sampled actions and rewards from a seeded generator, with the parameters from a vector.
@@ -356,4 +393,7 @@ const TEST_CASES = [
     (; name = "reading the history of an agent with a state saved with deepcopy", f = x -> read_history_in_place(x, LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
     (; name = "simulate with maps of names, environment starts", f = x -> simulate_with_name_maps(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
     (; name = "simulate with maps of names, agent starts", f = x -> simulate_with_name_maps(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate until the environment ends, environment starts", f = x -> simulate_until_environment_ends(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate until the environment ends, agent starts", f = x -> simulate_until_environment_ends(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
+    (; name = "simulate on single observations", f = simulate_on_observations, x = [0.3, 2.0], reactant = true),
 ]

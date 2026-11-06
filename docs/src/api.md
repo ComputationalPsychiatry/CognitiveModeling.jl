@@ -45,6 +45,7 @@ CognitiveModeling.attribute_names(::CognitiveModeling.AbstractEnvironmentModel)
 ```@docs
 CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
 CognitiveModeling.default_parameters(::CognitiveModeling.AbstractEnvironmentModel)
+CognitiveModeling.stopping_criterion
 ```
 
 ### Display
@@ -53,6 +54,7 @@ CognitiveModeling.default_parameters(::CognitiveModeling.AbstractEnvironmentMode
 Modules = [CognitiveModeling]
 Public = false
 Pages = ["defining_models/utility_functions.jl", "environments/utility_functions.jl"]
+Filter = object -> object === Base.show
 ```
 
 ## Internals
@@ -62,5 +64,6 @@ These are only used inside the package, and can change without notice.
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["simulation/save_history.jl", "simulation/simulate.jl", "inference/utility_functions.jl"]
+Pages = ["defining_models/types.jl", "defining_models/utility_functions.jl", "environments/utility_functions.jl", "simulation/save_history.jl", "simulation/types.jl", "simulation/simulate.jl", "inference/utility_functions.jl"]
+Filter = object -> object !== Base.show
 ```

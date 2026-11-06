@@ -2,18 +2,19 @@ using Turing
 using Turing.DynamicPPL: LogDensityFunction, LogDensityProblems
 
 # Test cases for the log density of Turing.jl models of a session, which only this suite runs,
-# since Turing.jl isn't loaded by the AD and Reactant suites of the package itself. Each case
+# since Turing.jl isn't loaded by the AD and Reactant suites of the package itself, in
+# test/ad_and_reactant. Each case
 # differentiates the log density the way a sampler does: through a LogDensityFunction made
 # once, with the parameters and the latents in one vector in the order of the model. The
 # parameters have flat priors, so the log density is the session's own.
 
-# A Rescorla-Wagner model with a softmax choice, which does nothing with NoObservation
+# A Rescorla-Wagner model with a softmax choice, which doesn't learn when there is no observation
 struct TuringRescorlaWagner <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::TuringRescorlaWagner, parameters) = (; expected_reward = 0.5)
 function CognitiveModeling.apply_model(model::TuringRescorlaWagner, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     r = input.observation.reward
-    Vₜ = r isa NoObservation ? V₋₁ : V₋₁ + input.parameters.learning_rate * (r - V₋₁)
+    Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + input.parameters.learning_rate * (r - V₋₁)
     return ModelOutput((; choice = BernoulliLogit(input.parameters.inverse_temperature * (Vₜ - 0.5))), (; expected_reward = Vₜ))
 end
 CognitiveModeling.attribute_names(model::TuringRescorlaWagner) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
@@ -42,7 +43,7 @@ CognitiveModeling.attribute_names(model::TuringNoisyModel) = ModelAttributes(; p
 struct TuringRewardsPreviousChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::TuringRewardsPreviousChoice, parameters) = (;)
 function CognitiveModeling.apply_model(environment::TuringRewardsPreviousChoice, input::EnvironmentInput)
-    reward = input.action.choice isa NoAction ? 0.5 : input.action.choice
+    reward = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     return EnvironmentOutput((; reward = reward * input.parameters.scale))
 end
 CognitiveModeling.attribute_names(environment::TuringRewardsPreviousChoice) = ModelAttributes(; parameters = :scale, states = (), observations = :reward, actions = :choice)

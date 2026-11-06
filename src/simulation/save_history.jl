@@ -56,7 +56,13 @@ function SaveHistory(::SaveEverything)
     return SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), states = SaveEverything())
 end
 
-#A selection is a tuple of symbols, or the marker for everything
+"""
+    as_selection(names)
+
+Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it: a `Tuple` of
+`Symbol`s, made from a single `Symbol` or a `Vector` of them too, or
+[`SaveEverything`](@ref) as it is.
+"""
 as_selection(names::Tuple{Vararg{Symbol}}) = names
 as_selection(name::Symbol) = (name,)
 as_selection(names::AbstractVector{Symbol}) = Tuple(names)
@@ -134,13 +140,19 @@ since a history starts from those names. The states aren't checked, because
 [`prepare_state_for_saving`](@ref) can save anything.
 """
 function check_savehistory_selection_names(save_history::SaveHistory, model)
-    attributes = check_attribute_names(attribute_names(model), model)
+    attributes = check_type_attribute_names(attribute_names(model), model)
     check_selected_names(save_history.observations, attributes.observations, "observations", model)
     check_selected_names(save_history.actions, attributes.actions, "actions", model)
     return nothing
 end
 
-#Everything can always be selected, and names must be among those the model lists
+"""
+    check_selected_names(selection, names, kind, model)
+
+Throw an informative error if `selection` has a name that isn't among `names`, those that
+`model` lists for `kind`, which is `"observations"` or `"actions"`.
+[`SaveEverything`](@ref) can always be selected.
+"""
 check_selected_names(::SaveEverything, names, kind, model) = nothing
 function check_selected_names(selection::Tuple, names, kind, model)
     if !has_every_name(selection, names)

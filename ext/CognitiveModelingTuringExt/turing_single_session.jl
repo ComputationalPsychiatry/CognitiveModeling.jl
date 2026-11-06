@@ -1,7 +1,7 @@
 #Checks the data and the names, fills in the defaults, and creates the Turing model of the session
 function CognitiveModeling.turing_single_session(
-        model::AbstractCognitiveModel,
-        parameters,
+        cognitive_model::AbstractCognitiveModel,
+        cognitive_parameters,
         observations,
         actions;
         who_starts::Union{AgentStarts, EnvironmentStarts},
@@ -11,16 +11,16 @@ function CognitiveModeling.turing_single_session(
         impute_missing_actions::Bool = true,
         save_history::SaveHistory = SaveHistory(),
         catch_invalid_parameters::Bool = false,
-        previous_state = initialize_state(model, merge_default_parameters(model, parameters)),
-        previous_action = initial_action(model),
-        previous_observation = initial_observation(environment === nothing ? model : environment),
+        previous_cognitive_state = initialize_state(cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)),
+        previous_action = initial_action(cognitive_model),
+        previous_observation = initial_observation(environment === nothing ? cognitive_model : environment),
         previous_environment_state = environment === nothing ? nothing : initialize_state(environment, merge_default_parameters(environment, environment_parameters)),
     )
 
     #Fill in the default parameters, and check the names of everything against attribute_names
-    parameters = merge_default_parameters(model, parameters)
-    check_match_attribute_names(model, parameters, previous_state, previous_action)
-    n_timesteps = check_data(model, observations, actions)
+    cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
+    check_match_attribute_names(cognitive_model, cognitive_parameters, previous_cognitive_state, previous_action)
+    n_timesteps = check_data(cognitive_model, observations, actions)
     if environment === nothing
         if any(column -> any(value -> value isa MissingObservation, column), values(observations))
             throw(ArgumentError("The observations have entries that are MissingObservation(), but no environment was given to fill them in."))
@@ -28,7 +28,7 @@ function CognitiveModeling.turing_single_session(
     else
         environment_parameters = merge_default_parameters(environment, environment_parameters)
         check_match_attribute_names(environment, environment_parameters, previous_environment_state, previous_observation)
-        check_names_fit(model, environment)
+        check_names_fit(cognitive_model, environment)
     end
 
     #A vector of timestep sizes must have one size for each timestep
@@ -47,11 +47,11 @@ function CognitiveModeling.turing_single_session(
     #The sizes of the timesteps are returned with what is saved of the session
     timestep_sizes_to_return = saved_timestep_sizes(timestep_sizes, n_timesteps, save_history)
 
-    session = single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
+    session = single_session(cognitive_model, cognitive_parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_cognitive_state, previous_action, previous_observation, previous_environment_state)
     return catch_invalid_parameters ? catching_invalid_parameters(session) : session
 end
 
-#Runs the session, and gives the parameters a log density of -Inf if the model throws an InvalidParametersError
+#Runs the session, and gives the parameters a log density of -Inf if the cognitive model throws an InvalidParametersError
 Turing.@model function catching_invalid_parameters(session)
     result = nothing
     try
@@ -64,35 +64,35 @@ Turing.@model function catching_invalid_parameters(session)
 end
 
 #Runs the timesteps of the session, with the recorded actions scored together at the end
-Turing.@model function single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
+Turing.@model function single_session(cognitive_model, cognitive_parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_cognitive_state, previous_action, previous_observation, previous_environment_state)
 
     #Collect where the session starts
     previous = (;
         observation = previous_observation,
         action = previous_action,
-        state = previous_state,
+        cognitive_state = previous_cognitive_state,
         environment_state = previous_environment_state,
     )
 
     #Run the first timestep outside the loop, since its inputs can have other types than all the rest
-    outputs ~ to_submodel(prefix(session_timestep(model, environment, parameters, environment_parameters, who_starts, row(observations, 1), row(actions, 1), get_timestep_size(timestep_sizes, 1), keys(recorded), previous), @varname(timestep[1])), false)
+    outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, 1), row(actions, 1), get_timestep_size(timestep_sizes, 1), keys(recorded), previous), @varname(timestep[1])), false)
 
     #Initialize storage for the saved outputs, and the distributions of the recorded actions
     storage = (;
         observations = initialize_storage(select_names(outputs.observation, observation_selection(save_history)), n_timesteps),
         actions = initialize_storage(select_names(outputs.action, action_selection(save_history)), n_timesteps),
-        states = initialize_storage(save_state(model, outputs.state, state_selection(save_history)), n_timesteps),
+        states = initialize_storage(save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)), n_timesteps),
     )
     distributions = store_distributions(map(_ -> Vector{Union{}}(), recorded), outputs.scored_distributions, outputs.scored)
 
     #Run the remaining timesteps, each starting from the outputs of the one before
     for t in 2:n_timesteps
-        next_outputs ~ to_submodel(prefix(session_timestep(model, environment, parameters, environment_parameters, who_starts, row(observations, t), row(actions, t), get_timestep_size(timestep_sizes, t), keys(recorded), outputs), @varname(timestep[t])), false)
+        next_outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, t), row(actions, t), get_timestep_size(timestep_sizes, t), keys(recorded), outputs), @varname(timestep[t])), false)
         outputs = next_outputs
         storage = (;
             observations = store_output!(storage.observations, select_names(outputs.observation, observation_selection(save_history)), t),
             actions = store_output!(storage.actions, select_names(outputs.action, action_selection(save_history)), t),
-            states = store_output!(storage.states, save_state(model, outputs.state, state_selection(save_history)), t),
+            states = store_output!(storage.states, save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)), t),
         )
         distributions = store_distributions(distributions, outputs.scored_distributions, outputs.scored)
     end
@@ -106,7 +106,7 @@ Turing.@model function single_session(model, parameters, observations, actions, 
 end
 
 #Runs one timestep, as a submodel with the timestep as its prefix, and returns what the next one starts from, together with what is saved and scored
-Turing.@model function session_timestep(model, environment, parameters, environment_parameters, who_starts, data_observation, data_action, timestep_size, scored_names, previous)
+Turing.@model function session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, data_observation, data_action, timestep_size, scored_names, previous)
 
     #When the environment starts, it gives this timestep's observation, in response to the previous action
     if who_starts isa EnvironmentStarts
@@ -124,11 +124,11 @@ Turing.@model function session_timestep(model, environment, parameters, environm
         environment_state = previous.environment_state
     end
 
-    #Run the model on the observation
-    output ~ to_submodel(turing_apply_model(model, ModelInput(observation, previous.state, previous.action, parameters, timestep_size)), false)
-    output = check_model_output(output, model)
+    #Run the cognitive model on the observation
+    output ~ to_submodel(turing_apply_model(cognitive_model, ModelInput(observation, previous.cognitive_state, previous.action, cognitive_parameters, timestep_size)), false)
+    output = check_model_output(output, cognitive_model)
 
-    #Impute the missing actions as latents named after the action, each with the model's distribution for it, and take the rest from the data
+    #Impute the missing actions as latents named after the action, each with the cognitive model's distribution for it, and take the rest from the data
     missing_names = missing_action_names(data_action)
     imputed_values = ()
     for name in missing_names
@@ -136,7 +136,7 @@ Turing.@model function session_timestep(model, environment, parameters, environm
         imputed_values = (imputed_values..., imputed)
     end
     action = merge(data_action, NamedTuple{missing_names}(imputed_values))
-    scored = scored_actions(data_action, output.action_distribution, model)
+    scored = scored_actions(data_action, output.action_distribution, cognitive_model)
 
     #When the agent starts, the environment responds to the action with the next observation
     if who_starts isa AgentStarts
@@ -153,14 +153,14 @@ Turing.@model function session_timestep(model, environment, parameters, environm
     return (;
         observation,
         action,
-        state = output.new_state,
+        cognitive_state = output.new_state,
         environment_state,
         scored,
         scored_distributions = NamedTuple{scored_names}(output.action_distribution),
     )
 end
 
-#A missing action as a latent, with the model's distribution for it
+#A missing action as a latent, with the cognitive model's distribution for it
 Turing.@model function impute_action(distribution)
     imputed ~ distribution
     return imputed
@@ -174,20 +174,20 @@ function missing_action_names(names::Tuple, data_values::Tuple)
     return first(data_values) isa MissingAction ? (first(names), rest...) : rest
 end
 
-#Whether each action of a timestep is scored: those recorded in the data, which the model must have a distribution for
-function scored_actions(data_action::NamedTuple{names}, action_distribution::NamedTuple, model) where {names}
-    return NamedTuple{names}(scored_actions(names, Tuple(data_action), action_distribution, model))
+#Whether each action of a timestep is scored: those recorded in the data, which the cognitive model must have a distribution for
+function scored_actions(data_action::NamedTuple{names}, action_distribution::NamedTuple, cognitive_model) where {names}
+    return NamedTuple{names}(scored_actions(names, Tuple(data_action), action_distribution, cognitive_model))
 end
 
-scored_actions(names::Tuple{}, data_values::Tuple{}, action_distribution, model) = ()
-function scored_actions(names::Tuple, data_values::Tuple, action_distribution, model)
+scored_actions(names::Tuple{}, data_values::Tuple{}, action_distribution, cognitive_model) = ()
+function scored_actions(names::Tuple, data_values::Tuple, action_distribution, cognitive_model)
     name = first(names)
     value = first(data_values)
     is_scored = is_recorded(value)
     if is_scored && getproperty(action_distribution, name) isa NoAction
-        throw(ArgumentError("The model of type $(typeof(model)) took no action $name on a timestep where the data has $value for it."))
+        throw(ArgumentError("The cognitive model of type $(typeof(cognitive_model)) took no action $name on a timestep where the data has $value for it."))
     end
-    return (is_scored, scored_actions(Base.tail(names), Base.tail(data_values), action_distribution, model)...)
+    return (is_scored, scored_actions(Base.tail(names), Base.tail(data_values), action_distribution, cognitive_model)...)
 end
 
 #Keeps the distributions of the actions that are scored on this timestep. The first one kept sets the type of each vector

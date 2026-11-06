@@ -23,12 +23,13 @@ Each argument is kept in a field of the same name, such as `input.action`.
 
 # Arguments
 - `action`: the actions that the environment responds to, in a `NamedTuple` with the names
-  the cognitive model gave them, as in `input.action.choice`. Before the first action, each
-  of them is [`NoAction`](@ref).
+  the cognitive model gave them, as in `input.action.choice`. On the first timestep when the
+  environment starts, each of them is [`BeforeFirstTimestep`](@ref), and an action that
+  isn't taken is [`NoAction`](@ref).
 - `previous_state`: the state of the environment after the previous timestep.
 - `previous_observation`: the observation from the previous timestep, in a `NamedTuple` with
-  the names the environment gave them. Before the first observation, each of them is
-  [`NoObservation`](@ref).
+  the names the environment gave them. On the first timestep, each of them is
+  [`BeforeFirstTimestep`](@ref).
 - `parameters`: the parameters of the environment model.
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the

@@ -100,9 +100,9 @@ Every model must add a method of this function, which throws an error otherwise.
 without one kind of attribute gives `()` for it. [`simulate`](@ref) and
 [`CognitiveAgent`](@ref) use the action names for the action before the first timestep, and
 check the parameters, the previous action and a `NamedTuple` state against the names. A
-simulation with an environment also checks that the two fit together: the environment must
-give every observation the model lists, and the model must give every action the environment
-lists.
+simulation with an environment also checks that the two fit together: they must list the
+same observations and the same actions, unless a [`NameMap`](@ref) says which of them are
+passed on, and under which names.
 
 # Examples
 ```jldoctest

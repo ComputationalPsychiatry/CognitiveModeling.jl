@@ -44,7 +44,7 @@ jobs:
           use_oidc: true
           fail_ci_if_error: false
   ad_and_reactant:
-    name: AD and Reactant - ${{ matrix.suite }}
+    name: AD and Reactant - ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -53,11 +53,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each suite has its own environment in test/ad_and_reactant/
-        suite:
-          - ad
-          - reactant
-          - extensions/turing
+        # Each suite has its own environment. The one for the Turing.jl extension is with the extension's other tests
+        include:
+          - name: ad
+            path: test/ad_and_reactant/ad
+          - name: reactant
+            path: test/ad_and_reactant/reactant
+          - name: turing
+            path: test/extensions/turing/ad
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
@@ -65,9 +68,9 @@ jobs:
           version: '1'
       - uses: julia-actions/cache@v3
       - name: Install the test environment
-        run: julia --color=yes --project=test/ad_and_reactant/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
+        run: julia --color=yes --project=${{ matrix.path }} -e 'using Pkg; Pkg.instantiate()'
       - name: Run the tests
-        run: julia --color=yes --project=test/ad_and_reactant/${{ matrix.suite }} test/ad_and_reactant/${{ matrix.suite }}/runtests.jl
+        run: julia --color=yes --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl
   premade:
     name: PremadeCognitiveModels
     runs-on: ubuntu-latest

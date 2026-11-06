@@ -1,77 +1,11 @@
-using CognitiveModeling: apply_model, turing_apply_model
-using Random: Xoshiro
-
-## Models for the tests ##
-#Only has the normal function, so it gets the default in Turing
-struct OnlyNormalFunction <: AbstractCognitiveModel end
-function CognitiveModeling.apply_model(model::OnlyNormalFunction, input::ModelInput)
-    return ModelOutput((; choice = Bernoulli(0.5)), (; total = input.previous_state.total + input.observation.reward))
-end
-
-#Has its own Turing version, which samples within the timestep
-struct SamplesWithinTimestep <: AbstractCognitiveModel end
-Turing.@model function CognitiveModeling.turing_apply_model(model::SamplesWithinTimestep, input::ModelInput)
-    noise ~ Normal(0, 1)
-    return ModelOutput((; choice = Bernoulli(0.5)), (; total = input.previous_state.total + input.observation.reward + noise))
-end
-
-#Runs several timesteps as submodels, each with its own prefix
-Turing.@model function run_timesteps_as_submodels(model, rewards)
-    state = (; total = 0.0)
-    for t in eachindex(rewards)
-        input = ModelInput((; reward = rewards[t]), state, (; choice = NoAction()), (;))
-        output ~ to_submodel(prefix(turing_apply_model(model, input), @varname(timestep[t])), false)
-        state = output.new_state
-    end
-    return state
-end
-
-@testset "Turing extension" begin
-    @test Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt) isa Module
-
-    input = ModelInput((; reward = 1.0), (; total = 0.5), (; choice = NoAction()), (;))
-
-    @testset "The default gives what apply_model returns" begin
-        output = turing_apply_model(OnlyNormalFunction(), input)()
-        @test output isa ModelOutput
-        @test output.new_state == apply_model(OnlyNormalFunction(), input).new_state
-        @test output.action_distribution == apply_model(OnlyNormalFunction(), input).action_distribution
-    end
-
-    @testset "The default works as a submodel, and has no variables" begin
-        model = run_timesteps_as_submodels(OnlyNormalFunction(), [1.0, 2.0])
-        @test isempty(keys(rand(Xoshiro(1), model)))
-        @test model() == (; total = 3.0)
-    end
-
-    @testset "A model without an apply_model method gives the informative error" begin
-        @test_throws "Each model must define" turing_apply_model(ModelWithoutMethods(), input)()
-    end
-
-    @testset "A model's own method is used instead of the default" begin
-        @test @varname(noise) in keys(rand(Xoshiro(1), turing_apply_model(SamplesWithinTimestep(), input)))
-    end
-
-    @testset "Each timestep has its own variable, and they count in the log density" begin
-        model = run_timesteps_as_submodels(SamplesWithinTimestep(), [1.0, 2.0])
-        #Turing warns about the array of timesteps when it handles the values, which @test_logs hides
-        values = @test_logs match_mode = :any rand(Xoshiro(1), model)
-        @test Set(keys(values)) == Set([@varname(timestep[1].noise), @varname(timestep[2].noise)])
-        noises = Dict(@varname(timestep[1].noise) => 0.25, @varname(timestep[2].noise) => -0.5)
-        log_density = @test_logs match_mode = :any logjoint(model, noises)
-        @test log_density ≈ logpdf(Normal(0, 1), 0.25) + logpdf(Normal(0, 1), -0.5)
-        @test (@test_logs match_mode = :any returned(model, noises)) == (; total = 2.75)
-    end
-end
-
 ## Models and environments for the sessions ##
-#A Rescorla-Wagner model with a softmax choice, which does nothing with NoObservation
+#A Rescorla-Wagner model with a softmax choice, which doesn't learn when there is no observation
 struct SessionRescorlaWagner <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::SessionRescorlaWagner, parameters) = (; expected_reward = 0.5)
 function CognitiveModeling.apply_model(model::SessionRescorlaWagner, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     r = input.observation.reward
-    Vₜ = r isa NoObservation ? V₋₁ : V₋₁ + input.parameters.learning_rate * (r - V₋₁)
+    Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + input.parameters.learning_rate * (r - V₋₁)
     return ModelOutput((; choice = BernoulliLogit(input.parameters.inverse_temperature * (Vₜ - 0.5))), (; expected_reward = Vₜ))
 end
 CognitiveModeling.attribute_names(model::SessionRescorlaWagner) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
@@ -112,7 +46,7 @@ struct RepeatsPreviousChoice <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RepeatsPreviousChoice, parameters) = (;)
 function CognitiveModeling.apply_model(model::RepeatsPreviousChoice, input::ModelInput)
     previous = input.previous_action.choice
-    return ModelOutput((; choice = Bernoulli(previous isa NoAction ? 0.5 : previous ? 0.9 : 0.1)))
+    return ModelOutput((; choice = Bernoulli(previous isa AbstractNoValue ? 0.5 : previous ? 0.9 : 0.1)))
 end
 CognitiveModeling.attribute_names(model::RepeatsPreviousChoice) = ModelAttributes(; parameters = (), states = (), observations = (), actions = :choice)
 
@@ -130,7 +64,7 @@ CognitiveModeling.attribute_names(model::RejectsHighLearningRate) = ModelAttribu
 struct RewardsPreviousChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsPreviousChoice, parameters) = (; n_timesteps = 0)
 function CognitiveModeling.apply_model(environment::RewardsPreviousChoice, input::EnvironmentInput)
-    reward = input.action.choice isa NoAction ? 0.5 : float(input.action.choice)
+    reward = input.action.choice isa AbstractNoValue ? 0.5 : float(input.action.choice)
     return EnvironmentOutput((; reward = reward * input.parameters.scale), (; n_timesteps = input.previous_state.n_timesteps + 1))
 end
 CognitiveModeling.attribute_names(environment::RewardsPreviousChoice) = ModelAttributes(; parameters = :scale, states = :n_timesteps, observations = :reward, actions = :choice)
@@ -149,7 +83,7 @@ Turing.@model function CognitiveModeling.turing_apply_model(environment::NoisyRe
     reward ~ Normal(0.5, 1.0)
     return EnvironmentOutput((; reward))
 end
-CognitiveModeling.attribute_names(environment::NoisyRewards) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = ())
+CognitiveModeling.attribute_names(environment::NoisyRewards) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = :choice)
 
 #The log density of the recorded choices of a Rescorla-Wagner session, and the saved states, by hand
 function session_by_hand(rewards, choices, learning_rate, inverse_temperature, who_starts)
@@ -179,6 +113,13 @@ function session_for_test(model = SessionRescorlaWagner(), parameters = SESSION_
 end
 
 @testset "turing_single_session" begin
+    @testset "The session starts with BeforeFirstTimestep for the previous action, and for the observation when the agent starts" begin
+        #RepeatsPreviousChoice chooses at random when there is no previous action, and repeats its choice with 0.9 otherwise
+        @test logjoint(session_for_test(RepeatsPreviousChoice(), (;), (;), (; choice = [true, true, false])), (;)) ≈ log(0.5) + log(0.9) + log(0.1)
+        #A previous action of its own replaces the marker
+        @test logjoint(session_for_test(RepeatsPreviousChoice(), (;), (;), (; choice = [true, true, false]); previous_action = (; choice = true)), (;)) ≈ 2 * log(0.9) + log(0.1)
+    end
+
     @testset "The log density is the sum over the recorded actions, with the agent or the environment starting" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             model = session_for_test(; who_starts, save_history = SaveHistory(SaveEverything()))
@@ -197,12 +138,12 @@ end
     @testset "Default parameters are filled in, and the names and the data are checked" begin
         @test logjoint(session_for_test(SessionRescorlaWagner(), (; learning_rate = 0.3)), (;)) ≈ logjoint(session_for_test(), (;))
         @test_throws "The parameters are named (:inverse_temperature, :learning_rate, :noise), but attribute_names lists the parameters of a model of type SessionRescorlaWagner" session_for_test(SessionRescorlaWagner(), (; learning_rate = 0.3, noise = 1.0))
-        @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a model of type SessionRescorlaWagner as (:reward,). The data must have every observation the model lists." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; cue = [1.0, 0.0]), (; choice = [true, false]))
-        @test_throws "The actions in the data are named (:bet,), but attribute_names lists the actions of a model of type SessionRescorlaWagner as (:choice,)." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, SESSION_REWARDS, (; bet = SESSION_CHOICES.choice))
+        @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a cognitive model of type SessionRescorlaWagner as (:reward,). The data must have every observation the cognitive model lists." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; cue = [1.0, 0.0]), (; choice = [true, false]))
+        @test_throws "The actions in the data are named (:bet,), but attribute_names lists the actions of a cognitive model of type SessionRescorlaWagner as (:choice,)." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, SESSION_REWARDS, (; bet = SESSION_CHOICES.choice))
         @test_throws "Every observation and action in the data must have one value for each timestep, but their lengths are (reward = 2,) and (choice = 5,)." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = [1.0, 0.0]), SESSION_CHOICES)
         @test_throws "must each be a NamedTuple with one vector for each name" session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, [(; reward = 1.0)], [(; choice = true)])
         @test_throws "timestep_sizes must have one size for each timestep, but it has 2 sizes and the data has 5 timesteps." session_for_test(; timestep_sizes = [1.0, 2.0])
-        @test_throws "The state is named (:value,), but attribute_names lists the states of a model of type SessionRescorlaWagner" session_for_test(; previous_state = (; value = 0.5))
+        @test_throws "The state is named (:value,), but attribute_names lists the states of a model of type SessionRescorlaWagner" session_for_test(; previous_cognitive_state = (; value = 0.5))
         #The data can have more observations than the model lists
         @test logjoint(session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = SESSION_REWARDS.reward, cue = 1:5)), (;)) ≈ logjoint(session_for_test(), (;))
     end
@@ -310,7 +251,7 @@ end
         @test returned(model, (;)).observations == [(; reward) for reward in full.reward]
         #The environment's defaults are filled in and its names checked
         @test_throws "attribute_names lists the parameters of an environment model of type RewardsPreviousChoice" session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES; environment = RewardsPreviousChoice(), environment_parameters = (; size = 1.0))
-        @test_throws "The environment must give every observation the model lists." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, SESSION_REWARDS, SESSION_CHOICES; environment = GivesNothing())
+        @test_throws "A cognitive model of type SessionRescorlaWagner lists the observations (:reward,), but an environment model of type GivesNothing gives (). Without a map, the two must list the same observations." session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, SESSION_REWARDS, SESSION_CHOICES; environment = GivesNothing())
         #When the agent starts, the environment responds to the action of the same timestep
         model = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = fill(MissingObservation(), 5)), SESSION_CHOICES; who_starts = AgentStarts(), environment = RewardsPreviousChoice(), save_history = SaveHistory(; observations = SaveEverything()))
         @test returned(model, (;)).observations == [(; reward = float(choice)) for choice in SESSION_CHOICES.choice]
@@ -351,7 +292,7 @@ end
         #The data can also have NoAction where the model acts, which isn't scored either
         @test logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [NoAction(), NoAction(), NoAction(), false])), (;)) ≈ logpdf(Bernoulli(0.7), false)
         #A recorded action where the model took none is an error
-        @test_throws "The model of type ActsEverySecondTimestep took no action choice on a timestep where the data has true for it." logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true, false, false])), (;))
+        @test_throws "The cognitive model of type ActsEverySecondTimestep took no action choice on a timestep where the data has true for it." logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true, false, false])), (;))
         #The sizes of the timesteps are returned with what is saved
         @test history.timestep_sizes == [0.5, 1.0, 1.5, 2.0]
         #With a single size, every timestep gets it

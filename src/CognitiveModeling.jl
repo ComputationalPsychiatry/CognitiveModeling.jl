@@ -22,7 +22,8 @@ include("inference/turing_models.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
-export NoObservation, NoAction, MissingObservation, MissingAction
+export AbstractNoValue, NoObservation, NoAction, BeforeFirstTimestep
+export MissingObservation, MissingAction
 export ModelInput, ModelOutput, ModelAttributes, InvalidParametersError
 export EnvironmentInput, EnvironmentOutput, CommonRLEnvironment
 export CognitiveAgent, Environment, AgentStarts, EnvironmentStarts
@@ -31,7 +32,7 @@ export simulate, simulate!, reset!, turing_single_session
 
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names
-public prepare_state_for_saving, default_parameters, turing_apply_model
+public prepare_state_for_saving, default_parameters, stopping_criterion, turing_apply_model
 public AgentHistory, EnvironmentHistory
 
 end

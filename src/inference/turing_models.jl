@@ -1,11 +1,12 @@
 ## Turing.jl models which users call, defined in the Turing extension ##
 
 """
-    turing_single_session(model, parameters, observations, actions; <keyword arguments>)
+    turing_single_session(cognitive_model, cognitive_parameters, observations, actions;
+                          <keyword arguments>)
 
-Create a Turing.jl model of one session: `model` with `parameters` goes through the timesteps
-of the data, and the recorded actions are scored against the action distributions it gives.
-This needs Turing.jl to be loaded.
+Create a Turing.jl model of one session: `cognitive_model` with `cognitive_parameters` goes
+through the timesteps of the data, and the recorded actions are scored against the action
+distributions it gives. This needs Turing.jl to be loaded.
 
 The model is a building block for a Turing.jl model which samples the parameters, as a
 submodel with its own prefix: `to_submodel(prefix(turing_single_session(...),
@@ -15,17 +16,17 @@ each timestep, which `returned(model, chain)` gives for each sample. Its `timest
 has the size of each timestep when anything is selected, and is empty otherwise. Nothing is
 selected by default.
 
-On each timestep, [`turing_apply_model`](@ref) of `model` runs as a submodel with the prefix
-`timestep[t]`, so a model which samples within a timestep has its own variables for each
-timestep, such as `timestep[3].noise`. The recorded actions are scored together at the end,
-in one `product_distribution` over every action and timestep, which is several times faster
-than scoring each timestep on its own.
+On each timestep, [`turing_apply_model`](@ref) of `cognitive_model` runs as a submodel with
+the prefix `timestep[t]`, so a model which samples within a timestep has its own variables
+for each timestep, such as `timestep[3].noise`. The recorded actions are scored together at
+the end, in one `product_distribution` over every action and timestep, which is several
+times faster than scoring each timestep on its own.
 
 # Arguments
-- `model::AbstractCognitiveModel`: the cognitive model.
-- `parameters::NamedTuple`: its parameters, usually the random variables of the model around
-  this one. Those it doesn't have take the values in [`default_parameters`](@ref), if the
-  model provides defaults for them.
+- `cognitive_model::AbstractCognitiveModel`: the cognitive model.
+- `cognitive_parameters::NamedTuple`: its parameters, usually the random variables of the
+  model around this one. Those it doesn't have take the values in
+  [`default_parameters`](@ref), if the model provides defaults for them.
 - `observations::NamedTuple`: the observations in the data, with one vector for each name
   and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data must have
   every observation the model lists in [`attribute_names`](@ref), and can have more. An
@@ -43,14 +44,16 @@ than scoring each timestep on its own.
   which fills in the observations that are `MissingObservation()`. When it is given, it runs
   on every timestep as a submodel with the prefix `environment[t]`, and its
   `turing_apply_model` must sample with `~` if it is random. The observations it gives are
-  only used where the data has none. Without it, the data can't have missing observations.
+  only used where the data has none. It must list the same observations and the same actions
+  as `cognitive_model`, since a session takes no maps of names. Without it, the data can't
+  have missing observations.
 - `environment_parameters::NamedTuple=(;)`: the parameters of `environment`, with its
   default values for those that aren't given, if it provides any.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
 - `impute_missing_actions::Bool=true`: whether an action that is `MissingAction()` is
   imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
-  passed on as `NoAction()` instead: `model` receives `NoAction()` as that previous action
-  on the next timestep, and `environment` as the action it responds to.
+  passed on as `NoAction()` instead: `cognitive_model` receives `NoAction()` as that
+  previous action on the next timestep, and `environment` as the action it responds to.
 - `save_history::SaveHistory=SaveHistory()`: which observations, actions and states are
   returned, by name. The returned actions and observations are those the model received,
   with the imputed and filled in values.
@@ -60,7 +63,7 @@ than scoring each timestep on its own.
   can't be differentiated with Mooncake, and a compiled ReverseDiff tape doesn't see the
   error, so the parameters get a finite log density with no warning. It works with
   ForwardDiff and Enzyme.
-- `previous_state`, `previous_action`, `previous_observation`,
+- `previous_cognitive_state`, `previous_action`, `previous_observation`,
   `previous_environment_state`: where the session starts, with the same defaults as in
   `simulate`.
 

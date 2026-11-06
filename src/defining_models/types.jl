@@ -14,22 +14,47 @@ abstract type AbstractCognitiveModel end
 #Types for cases where there is no observation or action
 
 """
+    AbstractNoValue
+
+Supertype for what stands in for an observation or an action that isn't there:
+[`NoObservation`](@ref), [`NoAction`](@ref) and [`BeforeFirstTimestep`](@ref). A model which
+treats them all the same can check for it, as in
+`input.observation.reward isa AbstractNoValue`.
+"""
+abstract type AbstractNoValue end
+
+"""
     NoObservation()
 
 Stand-in for an observation that isn't made on a timestep, as one entry of the observations
-`NamedTuple`, such as `(; reward = NoObservation())`. Before the first observation, every
-observation is `NoObservation()`, such as on the first timestep when the agent starts.
+`NamedTuple`, such as `(; reward = NoObservation())`. Before the first timestep, an
+observation is [`BeforeFirstTimestep`](@ref) instead.
 """
-struct NoObservation end
+struct NoObservation <: AbstractNoValue end
 
 """
     NoAction()
 
 Stand-in for an action that isn't taken on a timestep, as one entry of the actions
-`NamedTuple`, such as `(; choice = NoAction())`. Before the first timestep, every action is
-`NoAction()`.
+`NamedTuple`, such as `(; choice = NoAction())`. Before the first timestep, an action is
+[`BeforeFirstTimestep`](@ref) instead.
 """
-struct NoAction end
+struct NoAction <: AbstractNoValue end
+
+"""
+    BeforeFirstTimestep()
+
+Stand-in for an observation or an action from before the first timestep, when there is none
+yet, as one entry of a `NamedTuple`, such as `(; choice = BeforeFirstTimestep())`.
+
+A cognitive model receives it for every previous action on its first timestep, and for every
+observation too when the agent starts. An environment model receives it for every previous
+observation on its first timestep, and for every action too when the environment starts. A
+history starts with it, also as the size of the timestep. [`NoObservation`](@ref) and
+[`NoAction`](@ref) are different: they say that nothing was observed or done on a timestep
+that did run.
+"""
+struct BeforeFirstTimestep <: AbstractNoValue end
 
 """
     ModelInput(observation, previous_state, previous_action, parameters, timestep_size=1,
@@ -42,13 +67,13 @@ Each argument is kept in a field of the same name, such as `input.observation`.
 # Arguments
 - `observation`: what the model observes on this timestep, in a `NamedTuple` with the names
   the environment gave them, as in `input.observation.reward`. An observation that isn't
-  made on this timestep is [`NoObservation`](@ref), which every observation is on the first
-  timestep when the agent starts.
+  made on this timestep is [`NoObservation`](@ref). On the first timestep when the agent
+  starts, every observation is [`BeforeFirstTimestep`](@ref).
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
 - `previous_action`: the actions from the previous timestep, in a `NamedTuple` with the
-  names the model gave them, as in `input.previous_action.choice`. Before the first
-  timestep, each of them is [`NoAction`](@ref).
+  names the model gave them, as in `input.previous_action.choice`. On the first timestep,
+  each of them is [`BeforeFirstTimestep`](@ref).
 - `parameters`: the cognitive parameters of the model. Will generally be a NamedTuple. 
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
@@ -62,7 +87,7 @@ julia> state = (; expected_reward = 0.5);
 
 julia> parameters = (; learning_rate = 0.1);
 
-julia> previous_action = (; choice = NoAction());
+julia> previous_action = (; choice = BeforeFirstTimestep());
 
 julia> ModelInput(observation, state, previous_action, parameters).timestep_size
 1
@@ -164,7 +189,12 @@ function ModelAttributes(; parameters, states, observations, actions)
     return ModelAttributes{as_tuple_of_names(parameters), as_tuple_of_names(states), as_tuple_of_names(observations), as_tuple_of_names(actions)}()
 end
 
-#Names are kept in a tuple of symbols
+"""
+    as_tuple_of_names(names)
+
+Return `names` as a `Tuple` of `Symbol`s, which is how a [`ModelAttributes`](@ref) keeps
+them: a tuple as it is, a single `Symbol` in a tuple, and a `Vector` of them as a tuple.
+"""
 as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
 as_tuple_of_names(name::Symbol) = (name,)
 as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)

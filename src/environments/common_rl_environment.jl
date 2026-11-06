@@ -19,14 +19,17 @@ CommonRLInterface.jl has its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
 gives, the reward that `act!` returned, and whether the episode has ended. Before the first
-action, when the action is [`NoAction`](@ref), the environment is at its initial
+action, when the action is [`BeforeFirstTimestep`](@ref), the environment is at its initial
 observation, so the reward is [`NoObservation`](@ref) and nothing is done with the action.
-Its [`attribute_names`](@ref) are these three observations, the one action, no parameters
-and no states, since `rl_env` isn't a `NamedTuple`. Use [`EnvironmentStarts`](@ref), so
-that the model observes before it acts.
+The same goes for a timestep where the model takes no action, [`NoAction`](@ref): the
+environment stays where it is. Its [`attribute_names`](@ref) are these three observations,
+the one action, no parameters and no states, since `rl_env` isn't a `NamedTuple`. Use
+[`EnvironmentStarts`](@ref), so that the model observes before it acts.
 
-An episode that has ended isn't started again: an action after the timestep where
-`terminated` is `true` throws an error, so simulate no further than that. A new call of
+A simulation stops by itself when the episode ends, since the
+[`stopping_criterion`](@ref) of the environment is `terminated` of `rl_env`, so `n_steps` is
+the most timesteps it can take. An episode that
+has ended isn't started again, and an action given to it throws an error. A new call of
 [`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref) of an
 [`Environment`](@ref), since both reset `rl_env` through `initialize_state`.
 
@@ -58,11 +61,12 @@ CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
 CognitiveModeling.apply_model(model::PullsFirstArm, input::ModelInput) = ModelOutput((; arm = Always(1)))
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = :arm)
 
-observations, actions, _, _ = simulate(
+#The simulation stops when the episode ends, before it has run all of n_steps
+observations, actions, _, _, _ = simulate(
     PullsFirstArm(),
     CommonRLEnvironment(Bandit(0); action_name = :arm);
     who_starts = EnvironmentStarts(),
-    n_steps = 3,
+    n_steps = 10,
     cognitive_parameters = (;),
     environment_parameters = (;),
     save_history = SaveHistory(SaveEverything()),

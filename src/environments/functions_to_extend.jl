@@ -45,9 +45,9 @@ otherwise. An environment model without one kind of attribute gives `()` for it,
 one whose state isn't a `NamedTuple`. [`simulate`](@ref) and [`Environment`](@ref) use the
 observation names for the observation before the first timestep, and check the parameters,
 the previous observation and a `NamedTuple` state against the names. A simulation also
-checks that the environment model and the cognitive model fit together: the environment must
-give every observation the model lists, and the model must give every action the environment
-lists.
+checks that the environment model and the cognitive model fit together: they must list the
+same observations and the same actions, unless a [`NameMap`](@ref) says which of them are
+passed on, and under which names.
 
 # Examples
 ```jldoctest
@@ -99,4 +99,38 @@ An environment model can add a method of this function. The default is an empty
 """
 function default_parameters(environment::AbstractEnvironmentModel)
     return (;)
+end
+
+"""
+    stopping_criterion(environment::AbstractEnvironmentModel, state, parameters)
+
+Return whether `environment` has ended, with `state` as its state after a timestep and its
+`parameters`, so that a simulation stops there instead of running all of `n_steps`.
+
+[`simulate`](@ref) and [`simulate!`](@ref) check it before each timestep, with the state
+that the timestep before left. When it returns `true`, no further timestep runs, and what
+is returned and added to the histories has the timesteps that ran. When the environment
+starts, the cognitive model has then made its last observation and acted on it, and the
+environment doesn't receive that action. An environment whose criterion is already met
+before the first timestep can't be simulated, and throws an error: a new simulation starts
+from the initial state, and [`reset!`](@ref) puts an [`Environment`](@ref) back there.
+
+# Implementation
+An environment model can add a method of this function. The default returns `false`, so a
+simulation runs all of its timesteps.
+
+# Examples
+```jldoctest
+julia> struct Maze <: AbstractEnvironmentModel end
+
+julia> function CognitiveModeling.stopping_criterion(environment::Maze, state, parameters)
+           return state.position == parameters.goal
+       end;
+
+julia> CognitiveModeling.stopping_criterion(Maze(), (; position = 4), (; goal = 4))
+true
+```
+"""
+function stopping_criterion(environment::AbstractEnvironmentModel, state, parameters)
+    return false
 end

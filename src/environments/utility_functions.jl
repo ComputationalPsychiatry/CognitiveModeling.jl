@@ -1,9 +1,9 @@
-#Return the names if they are a ModelAttributes, and throw an informative error otherwise
-function check_attribute_names(attributes::ModelAttributes, ::AbstractEnvironmentModel)
+#Return the names if they are a ModelAttributes, and throw an informative error otherwise, as for a cognitive model
+function check_type_attribute_names(attributes::ModelAttributes, ::AbstractEnvironmentModel)
     return attributes
 end
 
-function check_attribute_names(attributes, environment::AbstractEnvironmentModel)
+function check_type_attribute_names(attributes, environment::AbstractEnvironmentModel)
     error("The attribute_names method of an environment model of type $(typeof(environment)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).")
 end
 
@@ -14,7 +14,7 @@ end
 
 #Throw an informative error if the names of the parameters, the previous observation or a NamedTuple state aren't those in attribute_names
 function check_match_attribute_names(environment::AbstractEnvironmentModel, parameters, state, previous_observation)
-    attributes = check_attribute_names(attribute_names(environment), environment)
+    attributes = check_type_attribute_names(attribute_names(environment), environment)
     if !same_names(keys(parameters), attributes.parameters)
         throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of an environment model of type $(typeof(environment)) as $(attributes.parameters)."))
     end
@@ -29,38 +29,63 @@ end
 
 #The action and the observation before the first timestep, with the names that attribute_names lists for the environment model
 function initial_action(environment::AbstractEnvironmentModel)
-    return no_actions(check_attribute_names(attribute_names(environment), environment))
+    return actions_before_first_timestep(check_type_attribute_names(attribute_names(environment), environment))
 end
 
 function initial_observation(environment::AbstractEnvironmentModel)
-    return no_observations(check_attribute_names(attribute_names(environment), environment))
+    return observations_before_first_timestep(check_type_attribute_names(attribute_names(environment), environment))
 end
 
-#How a model or an environment model is named in error messages
-describe_model(model::AbstractCognitiveModel) = "a model of type $(typeof(model))"
+"""
+    describe_model(model)
+
+Return how `model` is named in an error message: as a cognitive model or as an environment
+model, with its type.
+"""
+describe_model(cognitive_model::AbstractCognitiveModel) = "a cognitive model of type $(typeof(cognitive_model))"
 describe_model(environment::AbstractEnvironmentModel) = "an environment model of type $(typeof(environment))"
 
-#Throw an informative error if the model doesn't receive every observation it lists, or the environment every action it lists, directly or through a NameMap for each
-function check_names_fit(model::AbstractCognitiveModel, environment::AbstractEnvironmentModel, observation_map = nothing, action_map = nothing)
-    model_attributes = check_attribute_names(attribute_names(model), model)
-    environment_attributes = check_attribute_names(attribute_names(environment), environment)
-    check_observations_fit(model, environment, model_attributes.observations, environment_attributes.observations, observation_map)
-    check_actions_fit(model, environment, model_attributes.actions, environment_attributes.actions, action_map)
+"""
+    check_names_fit(cognitive_model, environment, observation_map=nothing,
+                    action_map=nothing)
+
+Throw an informative error if `cognitive_model` and `environment` can't be simulated
+together. Without a map, they must list the same observations and the same actions in
+[`attribute_names`](@ref). With a [`NameMap`](@ref) for the observations or the actions, the
+map must take names the giver lists, and give exactly the names the receiver lists.
+
+The names are in the types, so the check is decided at compile time and costs nothing.
+"""
+function check_names_fit(cognitive_model::AbstractCognitiveModel, environment::AbstractEnvironmentModel, observation_map = nothing, action_map = nothing)
+    cognitive_attributes = check_type_attribute_names(attribute_names(cognitive_model), cognitive_model)
+    environment_attributes = check_type_attribute_names(attribute_names(environment), environment)
+    check_observations_fit(cognitive_model, environment, cognitive_attributes.observations, environment_attributes.observations, observation_map)
+    check_actions_fit(cognitive_model, environment, cognitive_attributes.actions, environment_attributes.actions, action_map)
     return nothing
 end
 
-#Without a map, the environment must give every observation the model lists
-function check_observations_fit(model, environment, model_names, environment_names, ::Nothing)
-    if !has_every_name(model_names, environment_names)
-        throw(ArgumentError("A model of type $(typeof(model)) lists the observations $model_names, but an environment model of type $(typeof(environment)) gives $environment_names. The environment must give every observation the model lists. A NameMap as observation_map can rename them."))
+"""
+    check_observations_fit(cognitive_model, environment, cognitive_model_names,
+                           environment_names, observation_map)
+    check_actions_fit(cognitive_model, environment, cognitive_model_names,
+                      environment_names, action_map)
+
+Throw an informative error if the observations `environment` gives don't fit those
+`cognitive_model` lists, or the actions `cognitive_model` gives don't fit those
+`environment` lists, as [`check_names_fit`](@ref) describes. The methods for a
+[`NameMap`](@ref) are with the simulation code, where that type is defined.
+"""
+function check_observations_fit(cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing)
+    if !same_names(cognitive_model_names, environment_names)
+        throw(ArgumentError("A cognitive model of type $(typeof(cognitive_model)) lists the observations $cognitive_model_names, but an environment model of type $(typeof(environment)) gives $environment_names. Without a map, the two must list the same observations. A NameMap as observation_map can select and rename them."))
     end
     return nothing
 end
 
-#Without a map, the model must give every action the environment lists
-function check_actions_fit(model, environment, model_names, environment_names, ::Nothing)
-    if !has_every_name(environment_names, model_names)
-        throw(ArgumentError("An environment model of type $(typeof(environment)) lists the actions $environment_names, but a model of type $(typeof(model)) gives $model_names. The model must give every action the environment lists. A NameMap as action_map can rename them."))
+#Without a map, the cognitive model and the environment must list the same actions. The method above is for the same observations
+function check_actions_fit(cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing)
+    if !same_names(cognitive_model_names, environment_names)
+        throw(ArgumentError("A cognitive model of type $(typeof(cognitive_model)) gives the actions $cognitive_model_names, but an environment model of type $(typeof(environment)) lists $environment_names. Without a map, the two must list the same actions. A NameMap as action_map can select and rename them."))
     end
     return nothing
 end
@@ -103,7 +128,7 @@ function Base.show(io::IO, ::MIME"text/plain", environment::AbstractEnvironmentM
 
     #Print that the environment model has no method of its own for its names, or the names
     if has_attribute_names(environment)
-        print_attribute_names(io, check_attribute_names(attribute_names(environment), environment))
+        print_attribute_names(io, check_type_attribute_names(attribute_names(environment), environment))
     else
         print(io, "\nAttributes: not specified")
     end
