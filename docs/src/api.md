@@ -28,14 +28,6 @@ CognitiveModeling.initialize_state(::CognitiveModeling.AbstractCognitiveModel, :
 CognitiveModeling.attribute_names(::CognitiveModeling.AbstractCognitiveModel)
 ```
 
-### Functions that a model can implement
-
-```@docs
-CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractCognitiveModel, ::Any)
-CognitiveModeling.default_parameters(::CognitiveModeling.AbstractCognitiveModel)
-CognitiveModeling.turing_apply_model
-```
-
 ### Functions that an environment model must implement
 
 ```@docs
@@ -44,11 +36,17 @@ CognitiveModeling.initialize_state(::CognitiveModeling.AbstractEnvironmentModel,
 CognitiveModeling.attribute_names(::CognitiveModeling.AbstractEnvironmentModel)
 ```
 
+### Functions that a model or an environment model can implement
+
+```@docs
+CognitiveModeling.prepare_state_for_saving
+CognitiveModeling.default_parameters
+CognitiveModeling.turing_apply_model
+```
+
 ### Functions that an environment model can implement
 
 ```@docs
-CognitiveModeling.prepare_state_for_saving(::CognitiveModeling.AbstractEnvironmentModel, ::Any)
-CognitiveModeling.default_parameters(::CognitiveModeling.AbstractEnvironmentModel)
 CognitiveModeling.stopping_criterion
 ```
 

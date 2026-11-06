@@ -1,13 +1,4 @@
 """
-    has_missing_observation(observation)
-
-Return whether any entry of `observation` is [`MissingObservation`](@ref).
-"""
-function has_missing_observation(observation::NamedTuple)
-    return any(value -> value isa MissingObservation, values(observation))
-end
-
-"""
     is_recorded(action)
 
 Return whether a single action in the data was taken and recorded, so that it is scored:

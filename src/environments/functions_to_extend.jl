@@ -78,36 +78,6 @@ end
 ## Functions that an environment model can implement ##
 
 """
-    prepare_state_for_saving(environment::AbstractEnvironmentModel, state)
-
-Return what a simulation saves of `state`, as it is about to save it. The state that the
-next timestep starts from isn't affected.
-
-# Implementation
-An environment model can add a method of this function. The default returns `state` as it
-is. An environment model which changes an object in its state in place must add a method
-which copies it, as for a cognitive model.
-"""
-function prepare_state_for_saving(environment::AbstractEnvironmentModel, state)
-    return state
-end
-
-"""
-    default_parameters(environment::AbstractEnvironmentModel)
-
-Return the default parameter values of `environment`, such as
-`(; reward_probability = 0.8)`, which [`Environment`](@ref) and [`simulate`](@ref) use for
-the parameters they aren't given.
-
-# Implementation
-An environment model can add a method of this function. The default is an empty
-`NamedTuple`, `(;)`, so there are no default values.
-"""
-function default_parameters(environment::AbstractEnvironmentModel)
-    return (;)
-end
-
-"""
     stopping_criterion(environment::AbstractEnvironmentModel, state, parameters)
 
 Return whether `environment` has ended, with `state` as its state after a timestep and its

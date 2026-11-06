@@ -11,6 +11,7 @@
 
 using CognitiveModeling
 using Distributions: DiscreteNonParametric
+using LogExpFunctions: softmax
 using POMDPs: POMDPs
 using POMDPTools: DiscreteUpdater, actionvalues
 using QMDP: QMDPSolver
@@ -38,13 +39,9 @@ end
 
 # On each timestep, the belief is updated from the previous action and the observation that
 # followed it, and the action probabilities are a softmax over the values the policy gives
-# each action under that belief. On the first timestep there is no previous action, which
-# [`AbstractNoValue`](@ref) covers, and the belief is left as it is.
-
-function softmax(values)
-    exponentials = exp.(values .- maximum(values))
-    return exponentials ./ sum(exponentials)
-end
+# each action under that belief, with the softmax from LogExpFunctions.jl. On the first
+# timestep there is no previous action, which [`AbstractNoValue`](@ref) covers, and the
+# belief is left as it is.
 
 function CognitiveModeling.apply_model(model::BayesianObserver, input::ModelInput)
 
@@ -98,6 +95,7 @@ end
 # against finite differences with Enzyme.jl 0.13. So did ForwardDiff.jl and ReverseDiff.jl,
 # while Mooncake.jl and Enzyme's forward mode threw an error.
 #
-# The softmax above keeps its exponentials in a variable on purpose. Written in one line,
-# Enzyme's reverse mode gave a wrong gradient for this cognitive model, with no error, which
-# the page [Automatic differentiation and Reactant](@ref) describes under its pitfalls.
+# Use the softmax from LogExpFunctions.jl, as above, and not one written by hand. Written
+# in one line, a softmax got a wrong gradient for this cognitive model from Enzyme's reverse
+# mode, with no error, which the page [Automatic differentiation and Reactant](@ref)
+# describes under its pitfalls.

@@ -1,13 +1,3 @@
-@testset "Missing observations" begin
-    @testset "has_missing_observation" begin
-        @test CognitiveModeling.has_missing_observation((; reward = MissingObservation(), cue = 5))
-        @test !CognitiveModeling.has_missing_observation((; reward = 1.0, cue = 5))
-        @test !CognitiveModeling.has_missing_observation((;))
-        #NoObservation isn't missing data
-        @test !CognitiveModeling.has_missing_observation((; reward = NoObservation()))
-    end
-end
-
 @testset "Preparing the data of a session" begin
     actions = (; choice = [true, MissingAction(), false, NoAction(), true], bet = Any[MissingAction(), MissingAction(), 1.0, 2.0, MissingAction()])
 

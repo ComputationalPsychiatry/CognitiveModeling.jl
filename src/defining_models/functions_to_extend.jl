@@ -125,18 +125,21 @@ function attribute_names(model::AbstractCognitiveModel)
     error("There is no attribute_names method for a model of type $(typeof(model)). Each model must define CognitiveModeling.attribute_names(model::$(typeof(model))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.")
 end
 
-## Functions that a model can implement ##
+## Functions that a model or an environment model can implement ##
 
 """
     prepare_state_for_saving(model::AbstractCognitiveModel, state)
+    prepare_state_for_saving(environment::AbstractEnvironmentModel, state)
 
-Return what a simulation saves of `state`, as it is about to save it. The state that the
-next timestep starts from isn't affected.
+Return what a simulation saves of `state`, the state of a cognitive model or of an
+environment model, as it is about to save it. The state that the next timestep starts from
+isn't affected.
 
 # Implementation
-A model can add a method of this function. The default returns `state` as it is, so nothing
-is copied. A model which changes an object in its state in place must add a method which
-copies it, or all the saved states show the final values, with no error.
+A cognitive model or an environment model can add a method of this function. The default
+returns `state` as it is, so nothing is copied. One which changes an object in its state in
+place must add a method which copies it, or all the saved states show the final values, with
+no error.
 
 # Examples
 ```jldoctest
@@ -152,20 +155,22 @@ julia> CognitiveModeling.prepare_state_for_saving(LearnsInPlace(), state).values
 false
 ```
 """
-function prepare_state_for_saving(model::AbstractCognitiveModel, state)
+function prepare_state_for_saving(model::AbstractModel, state)
     return state
 end
 
 """
     default_parameters(model::AbstractCognitiveModel)
+    default_parameters(environment::AbstractEnvironmentModel)
 
-Return the default parameter values of `model`, such as `(; learning_rate = 0.1)`, which
-[`CognitiveAgent`](@ref) and [`simulate`](@ref) use for the parameters they aren't given.
+Return the default parameter values of a cognitive model or of an environment model, such as
+`(; learning_rate = 0.1)`, which [`CognitiveAgent`](@ref), [`Environment`](@ref) and
+[`simulate`](@ref) use for the parameters they aren't given.
 
 # Implementation
-A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
-there are no default values.
+A cognitive model or an environment model can add a method of this function. The default is
+an empty `NamedTuple`, `(;)`, so there are no default values.
 """
-function default_parameters(model::AbstractCognitiveModel)
+function default_parameters(model::AbstractModel)
     return (;)
 end

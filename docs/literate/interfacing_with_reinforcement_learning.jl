@@ -12,6 +12,7 @@
 
 using CognitiveModeling
 using Distributions: Categorical
+using LogExpFunctions: softmax
 using ReinforcementLearningBase: ReinforcementLearningBase as RLBase
 using ReinforcementLearningCore: ReinforcementLearningCore as RLCore
 using ReinforcementLearningCore: Agent, QBasedPolicy, TDLearner, TabularQApproximator
@@ -123,11 +124,7 @@ end
 # A learner can also be used on its own, with one transition at a time, which needs no
 # environment object and no trajectory. The action probabilities are then the cognitive
 # model's own: here a softmax over the learner's action values, with an inverse temperature.
-
-function softmax(values)
-    exponentials = exp.(values .- maximum(values))
-    return exponentials ./ sum(exponentials)
-end
+# The softmax is the one from LogExpFunctions.jl.
 
 struct TemporalDifferenceLearner <: AbstractCognitiveModel
     n_states::Int
@@ -189,6 +186,6 @@ end
 # can't differentiate either of them, because the learner keeps its learning rate and its
 # discount in `Float64` fields, which the number types of those two don't fit in.
 #
-# The softmax above keeps its exponentials in a variable on purpose. Written in one line,
-# Enzyme's reverse mode can give a wrong gradient with no error, which the page
-# [Automatic differentiation and Reactant](@ref) describes under its pitfalls.
+# Use the softmax from LogExpFunctions.jl, as above, and not one written by hand. Written
+# in one line, a softmax can get a wrong gradient from Enzyme's reverse mode, with no error,
+# which the page [Automatic differentiation and Reactant](@ref) describes under its pitfalls.

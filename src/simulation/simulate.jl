@@ -4,7 +4,8 @@
 
 Sample an action from what a model returned, using `rand`. Each action in a `NamedTuple` is
 sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an
-entry that is [`NoAction`](@ref) is kept.
+entry that is [`NoAction`](@ref) is kept. A number, a string or a symbol is a value and not
+something to sample from, and throws an `ArgumentError` which names [`Deterministic`](@ref).
 """
 function sample_action(rng, action_distribution)
     return rand(rng, action_distribution)
@@ -20,12 +21,18 @@ function sample_action(rng, ::NoAction)
     return NoAction()
 end
 
+#A number, a string or a symbol is a value, which rand would read as something else or not at all
+function sample_action(rng, value::Union{Number, AbstractString, Symbol})
+    throw(ArgumentError("A cognitive model gave $(repr(value)), of type $(typeof(value)), as what to sample an action from, but it is a value. An action that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))."))
+end
+
 """
     sample_observation(rng, observation_distribution)
 
 Sample an observation from what an environment model returned, using `rand`, as
 [`sample_action`](@ref) does for an action. Each observation in a `NamedTuple` is sampled on
-its own, and an entry that is [`NoObservation`](@ref) is kept.
+its own, and an entry that is [`NoObservation`](@ref) is kept. A number, a string or a symbol
+throws an `ArgumentError` here too.
 """
 function sample_observation(rng, observation_distribution)
     return rand(rng, observation_distribution)
@@ -39,6 +46,11 @@ end
 #An observation that isn't made has nothing to sample
 function sample_observation(rng, ::NoObservation)
     return NoObservation()
+end
+
+#A number, a string or a symbol is a value, which rand would read as something else or not at all
+function sample_observation(rng, value::Union{Number, AbstractString, Symbol})
+    throw(ArgumentError("An environment model gave $(repr(value)), of type $(typeof(value)), as what to sample an observation from, but it is a value. An observation that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))."))
 end
 
 ## Starting a simulation ##

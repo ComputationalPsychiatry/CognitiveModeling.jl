@@ -76,9 +76,10 @@ model which gives it without any randomness, as in `(; reward = Deterministic(1.
 A simulation samples every action and every observation with `rand`, and sampling from a
 `Deterministic` gives `value` itself. The value is kept in the field `value`.
 
-A value that isn't wrapped is sampled from as it is, which is rarely what is meant: `rand`
-of an integer gives a vector of that many random numbers, and `rand` of a vector, a tuple, a
-range or a string picks one of its elements, all with no error.
+A simulation throws an error for a number, a string or a symbol that isn't wrapped, since
+none of them is something to sample from. A vector, a tuple or a range that isn't wrapped is
+sampled from as it is, which is rarely what is meant: `rand` picks one of its elements, with
+no error.
 
 # Examples
 ```jldoctest

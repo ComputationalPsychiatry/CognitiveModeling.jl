@@ -276,6 +276,20 @@ function CognitiveModeling.apply_model(environment::RemembersReward, input::Envi
 end
 CognitiveModeling.attribute_names(environment::RemembersReward) = ModelAttributes(; parameters = (), states = :previous_reward, observations = :reward, actions = :choice)
 
+#Give a value itself where something to sample from is needed
+struct GivesUnwrapped{T} <: AbstractEnvironmentModel
+    reward::T
+end
+CognitiveModeling.initialize_state(environment::GivesUnwrapped, parameters) = (;)
+CognitiveModeling.apply_model(environment::GivesUnwrapped, input::EnvironmentInput) = EnvironmentOutput((; reward = environment.reward))
+CognitiveModeling.attribute_names(environment::GivesUnwrapped) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = :choice)
+struct ChoosesUnwrapped{T} <: AbstractCognitiveModel
+    choice::T
+end
+CognitiveModeling.initialize_state(model::ChoosesUnwrapped, parameters) = (;)
+CognitiveModeling.apply_model(model::ChoosesUnwrapped, input::ModelInput) = ModelOutput((; choice = model.choice))
+CognitiveModeling.attribute_names(model::ChoosesUnwrapped) = ModelAttributes(; parameters = (), states = (), observations = :reward, actions = :choice)
+
 const LEARNING = (; learning_rate = 0.5)
 const REWARDS = (; reward_probability = 0.8)
 
@@ -412,6 +426,20 @@ end
         sampled = (; reward = 1.0, skipped = NoObservation(), cues = (; left = 0.0, right = 2))
         @test all(observation -> observation === sampled, environment.history.observations[2:end])
         @test environment.previous_observation === sampled
+    end
+
+    @testset "A number, a string or a symbol that isn't wrapped gives an informative error" begin
+        for value in (1.0, 1, true, "left", :left)
+            @test_throws "An environment model gave $(repr(value)), of type $(typeof(value)), as what to sample an observation from, but it is a value. An observation that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))." simulate_for_test(LearnsRewards(), GivesUnwrapped(value); environment_parameters = (;))
+            @test_throws "A cognitive model gave $(repr(value)), of type $(typeof(value)), as what to sample an action from, but it is a value. An action that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))." simulate_for_test(ChoosesUnwrapped(value), RewardsWithProbability(); cognitive_parameters = (;))
+            @test_throws ArgumentError simulate!(CognitiveAgent(ChoosesUnwrapped(value), (;)), (; reward = 1.0))
+        end
+        #Wrapped, the same values are what is observed and done
+        observations, actions, _, _ = simulate_for_test(ChoosesUnwrapped(Deterministic(:left)), GivesUnwrapped(Deterministic(1)); n_steps = 2, cognitive_parameters = (;), environment_parameters = (;))
+        @test observations == fill((; reward = 1), 2) && actions == fill((; choice = :left), 2)
+        #A collection is still something to sample from, so one that isn't wrapped gives one of its elements
+        observations, _, _, _ = simulate_for_test(ChoosesUnwrapped(Deterministic(:left)), GivesUnwrapped([2.0, 2.0]); n_steps = 2, cognitive_parameters = (;), environment_parameters = (;))
+        @test observations == fill((; reward = 2.0), 2)
     end
 
     @testset "The environment receives the observation that was sampled, on the next timestep" begin

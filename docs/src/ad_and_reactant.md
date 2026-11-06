@@ -62,9 +62,10 @@ These aren't failures of the package's own code, but a model can run into them.
   broadcasting is right.
 - **Enzyme reverse with runtime activity and a softmax in one line:** a softmax written as
   `exp.(v .- maximum(v)) ./ sum(exp.(v .- maximum(v)))` gives wrong gradients, with no
-  error, when it runs in a loop on values that differ between the timesteps. Keeping the
-  exponentials in a variable, and dividing them by their sum, is right. It is reproduced
-  without the package, and to be reported.
+  error, when it runs in a loop on values that differ between the timesteps. The `softmax`
+  of LogExpFunctions.jl is right, and so is any softmax which keeps its exponentials in a
+  variable and divides them by their sum. It is reproduced without the package, and to be
+  reported.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.
