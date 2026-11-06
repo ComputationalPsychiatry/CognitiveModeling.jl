@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="referrer" content="no-referrer"/><title>Models from ReinforcementLearning.jl as cognitive models · CognitiveModeling.jl</title><meta name="title" content="Models from ReinforcementLearning.jl as cognitive models · CognitiveModeling.jl"/><meta property="og:title" content="Models from ReinforcementLearning.jl as cognitive models · CognitiveModeling.jl"/><meta property="twitter:title" content="Models from ReinforcementLearning.jl as cognitive models · CognitiveModeling.jl"/><meta name="description" content="Documentation for CognitiveModeling.jl."/><meta property="og:description" content="Documentation for CognitiveModeling.jl."/><meta property="twitter:description" content="Documentation for CognitiveModeling.jl."/><meta property="og:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_reinforcement_learning/"/><meta property="twitter:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_reinforcement_learning/"/><link rel="canonical" href="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_reinforcement_learning/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">CognitiveModeling.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../cognitive_abm_with_agents/">Cognitive agent-based modelling with Agents.jl</a></li><li><a class="tocitem" href="../interfacing_with_common_rl/">Interfacing with CommonRLInterface.jl</a></li><li class="is-active"><a class="tocitem" href>Models from ReinforcementLearning.jl as cognitive models</a><ul class="internal"><li><a class="tocitem" href="#A-whole-agent"><span>A whole agent</span></a></li><li><a class="tocitem" href="#Only-the-learner"><span>Only the learner</span></a></li></ul></li><li><a class="tocitem" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models</a></li><li><a class="tocitem" href="../compiling_with_reactant/">Compiling simulations with Reactant.jl</a></li></ul></li><li><a class="tocitem" href="../../ad_and_reactant/">Automatic differentiation and Reactant</a></li><li><a class="tocitem" href="../../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Models from ReinforcementLearning.jl as cognitive models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Models from ReinforcementLearning.jl as cognitive models</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/blob/dev/docs/literate/interfacing_with_reinforcement_learning.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Models-from-ReinforcementLearning.jl-as-cognitive-models"><a class="docs-heading-anchor" href="#Models-from-ReinforcementLearning.jl-as-cognitive-models">Models from ReinforcementLearning.jl as cognitive models</a><a id="Models-from-ReinforcementLearning.jl-as-cognitive-models-1"></a><a class="docs-heading-anchor-permalink" href="#Models-from-ReinforcementLearning.jl-as-cognitive-models" title="Permalink"></a></h1><p>An agent or a learner from ReinforcementLearning.jl can do the learning inside a cognitive model. The cognitive model keeps their object in its state, gives it what was observed on each timestep, and returns the probabilities of its actions, which a simulation samples from and fitting scores the recorded actions against.</p><p>This page shows two such cognitive models. It doesn&#39;t simulate or fit them yet, and its code isn&#39;t run when the documentation is built, because ReinforcementLearning.jl is a large package to have in the documentation&#39;s environment. It was run by hand with ReinforcementLearningCore.jl 0.15.</p><pre><code class="language-julia hljs">using CognitiveModeling
+using Distributions: Categorical
+using ReinforcementLearningBase: ReinforcementLearningBase as RLBase
+using ReinforcementLearningCore: ReinforcementLearningCore as RLCore
+using ReinforcementLearningCore: Agent, QBasedPolicy, TDLearner, TabularQApproximator
+using ReinforcementLearningCore: EpsilonGreedyExplorer, PreEpisodeStage, PostActStage
+using ReinforcementLearningTrajectories: Trajectory, CircularArraySARTSTraces
+using ReinforcementLearningTrajectories: DummySampler, InsertSampleRatioController</code></pre><p>Both models list the observations <code>observation</code>, <code>reward</code> and <code>terminated</code>, which are the names that <a href="../../api/#CognitiveModeling.CommonRLEnvironment"><code>CommonRLEnvironment</code></a> gives, so they can be used with an environment from ReinforcementLearning.jl as they are. The observation must be the number of the state the environment is in, since the learners here keep a table of values.</p><p>Both also need the environment to move first on each timestep, with <a href="../../api/#CognitiveModeling.EnvironmentStarts"><code>EnvironmentStarts</code></a>, so that there is an observation to act on. On the first timestep of an episode there is no reward yet: the reward is then <a href="../../api/#CognitiveModeling.NoObservation"><code>NoObservation</code></a>, and the models check for <a href="../../api/#CognitiveModeling.AbstractNoValue"><code>AbstractNoValue</code></a>, which covers that.</p><h2 id="A-whole-agent"><a class="docs-heading-anchor" href="#A-whole-agent">A whole agent</a><a id="A-whole-agent-1"></a><a class="docs-heading-anchor-permalink" href="#A-whole-agent" title="Permalink"></a></h2><p>An agent from ReinforcementLearning.jl reads the state, the reward and the end of the episode from an environment object, at the stages of its own run loop. This small environment holds what the cognitive model observed on a timestep, for the agent to read.</p><pre><code class="language-julia hljs">struct ObservedByAgent &lt;: RLBase.AbstractEnv
+    state::Int
+    reward::Float64
+    terminated::Bool
+    n_actions::Int
+end
+
+RLBase.state(rl_env::ObservedByAgent) = rl_env.state
+RLBase.reward(rl_env::ObservedByAgent) = rl_env.reward
+RLBase.is_terminated(rl_env::ObservedByAgent) = rl_env.terminated
+RLBase.action_space(rl_env::ObservedByAgent) = Base.OneTo(rl_env.n_actions)</code></pre><p>The cognitive model creates the agent in its initial state, from its parameters: here a temporal difference learner with a table of action values, which explores with a probability of <code>epsilon</code>.</p><pre><code class="language-julia hljs">struct TemporalDifferenceAgent &lt;: AbstractCognitiveModel
+    n_states::Int
+    n_actions::Int
+end
+
+function CognitiveModeling.initialize_state(model::TemporalDifferenceAgent, parameters)
+
+    #The learner, with the learning rate and the discount factor from the parameters
+    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
+    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+
+    #The explorer, which picks any action with a probability of epsilon
+    rl_explorer = EpsilonGreedyExplorer(parameters.epsilon; is_break_tie = true)
+
+    #The agent&#39;s memory of the last transition, which the learner learns from
+    rl_traces = CircularArraySARTSTraces(; capacity = 1, state = Int64 =&gt; (), action = Int64 =&gt; (), reward = Float64 =&gt; (), terminal = Bool =&gt; ())
+    rl_trajectory = Trajectory(rl_traces, DummySampler(), InsertSampleRatioController())
+
+    return (; rl_agent = Agent(QBasedPolicy(rl_learner, rl_explorer), rl_trajectory))
+end</code></pre><p>On each timestep, the cognitive model takes the agent through the stage of its run loop that fits what was observed, and returns the probabilities its policy gives each action. The agent is changed in place, so the same object is passed on as the new state.</p><pre><code class="language-julia hljs">function CognitiveModeling.apply_model(model::TemporalDifferenceAgent, input::ModelInput)
+
+    # Unpack input ##
+    rl_agent = input.previous_state.rl_agent
+    (; observation, reward, terminated) = input.observation
+
+    # Update state ##
+    if reward isa AbstractNoValue
+        #An episode starts, so there is nothing to learn from yet
+        rl_env = ObservedByAgent(observation, 0.0, false, model.n_actions)
+        push!(rl_agent, PreEpisodeStage(), rl_env)
+    else
+        #Give the agent what followed its previous action, and let it learn from it
+        rl_env = ObservedByAgent(observation, reward, terminated, model.n_actions)
+        push!(rl_agent, PostActStage(), rl_env, input.previous_action.move)
+        RLBase.optimise!(rl_agent, PostActStage())
+    end
+
+    # Compute action probabilities ##
+    #The policy gives a distribution over the actions, which the action is sampled from
+    Pₜ = RLBase.prob(rl_agent.policy, rl_env)
+
+    return ModelOutput((; move = Pₜ), (; rl_agent))
+end
+
+function CognitiveModeling.attribute_names(model::TemporalDifferenceAgent)
+    return ModelAttributes(;
+        parameters = (:learning_rate, :discount, :epsilon),
+        states = :rl_agent,
+        observations = (:observation, :reward, :terminated),
+        actions = :move,
+    )
+end</code></pre><p>Since the agent is changed in place, every saved state would be the same object, showing the values after the last timestep. This method saves a copy of the table of action values on each timestep instead.</p><pre><code class="language-julia hljs">function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceAgent, state)
+    return (; action_values = copy(state.rl_agent.policy.learner.approximator.model))
+end</code></pre><h2 id="Only-the-learner"><a class="docs-heading-anchor" href="#Only-the-learner">Only the learner</a><a id="Only-the-learner-1"></a><a class="docs-heading-anchor-permalink" href="#Only-the-learner" title="Permalink"></a></h2><p>A learner can also be used on its own, with one transition at a time, which needs no environment object and no trajectory. The action probabilities are then the cognitive model&#39;s own: here a softmax over the learner&#39;s action values, with an inverse temperature.</p><pre><code class="language-julia hljs">softmax(values) = exp.(values .- maximum(values)) ./ sum(exp.(values .- maximum(values)))
+
+struct TemporalDifferenceLearner &lt;: AbstractCognitiveModel
+    n_states::Int
+    n_actions::Int
+end
+
+function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, parameters)
+    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
+    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+
+    #The learner needs the observation before the action too, so that is kept in the state
+    return (; rl_learner, previous_observation = 0)
+end
+
+function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::ModelInput)
+
+    # Unpack input ##
+    (; rl_learner, previous_observation) = input.previous_state
+    (; observation, reward, terminated) = input.observation
+    β = input.parameters.inverse_temperature
+
+    # Update state ##
+    #Let the learner learn from what followed the previous action, unless an episode starts
+    if !(reward isa AbstractNoValue)
+        rl_transition = (; state = previous_observation, next_state = observation, action = input.previous_action.move, reward, terminal = terminated)
+        RLBase.optimise!(rl_learner, rl_transition)
+    end
+
+    # Compute action probabilities ##
+    #The learner&#39;s value of each action where the agent is now
+    Qₜ = RLCore.forward(rl_learner, observation)
+    #Softmax over the action values
+    Pₜ = Categorical(softmax(β .* Qₜ))
+
+    return ModelOutput((; move = Pₜ), (; rl_learner, previous_observation = observation))
+end
+
+function CognitiveModeling.attribute_names(model::TemporalDifferenceLearner)
+    return ModelAttributes(;
+        parameters = (:learning_rate, :discount, :inverse_temperature),
+        states = (:rl_learner, :previous_observation),
+        observations = (:observation, :reward, :terminated),
+        actions = :move,
+    )
+end
+
+function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceLearner, state)
+    return (; action_values = copy(state.rl_learner.approximator.model), state.previous_observation)
+end</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../interfacing_with_common_rl/">« Interfacing with CommonRLInterface.jl</a><a class="docs-footer-nextpage" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Friday 6 November 2026 17:23">Friday 6 November 2026</span>. Using Julia version 1.13.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
