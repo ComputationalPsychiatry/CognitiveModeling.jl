@@ -44,7 +44,10 @@ function CognitiveModeling.turing_single_session(
     #The recorded actions are scored at the end
     recorded = recorded_actions(actions)
 
-    session = single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
+    #The sizes of the timesteps are returned with what is saved of the session
+    timestep_sizes_to_return = saved_timestep_sizes(timestep_sizes, n_timesteps, save_history)
+
+    session = single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
     return catch_invalid_parameters ? catching_invalid_parameters(session) : session
 end
 
@@ -61,7 +64,7 @@ Turing.@model function catching_invalid_parameters(session)
 end
 
 #Runs the timesteps of the session, with the recorded actions scored together at the end
-Turing.@model function single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
+Turing.@model function single_session(model, parameters, observations, actions, recorded, n_timesteps, environment, environment_parameters, who_starts, timestep_sizes, timestep_sizes_to_return, save_history, previous_state, previous_action, previous_observation, previous_environment_state)
 
     #Collect where the session starts
     previous = (;
@@ -99,7 +102,7 @@ Turing.@model function single_session(model, parameters, observations, actions, 
         recorded ~ product_distribution(map(product_distribution, distributions))
     end
 
-    return (; observations = storage.observations, actions = storage.actions, states = storage.states)
+    return (; observations = storage.observations, actions = storage.actions, states = storage.states, timestep_sizes = timestep_sizes_to_return)
 end
 
 #Runs one timestep, as a submodel with the timestep as its prefix, and returns what the next one starts from, together with what is saved and scored

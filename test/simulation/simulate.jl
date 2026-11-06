@@ -977,6 +977,36 @@ end
         @test agent.history.states[1:4] == states_so_far
     end
 
+    @testset "It has the size of each timestep, when anything is saved" begin
+        agent = CognitiveAgent(SavesTimestepSize(), (;); save_history = SaveHistory(; actions = :choice))
+        environment = Environment(ObservesTimestepSize(), (;); save_history = SaveHistory(; observations = SaveEverything()))
+        #A new history has none, since no timestep has run
+        @test isempty(agent.history.timestep_sizes) && isempty(environment.history.timestep_sizes)
+        #A vector of sizes, and one size for every timestep
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, timestep_sizes = [0.5, 2.0, 0.25])
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 2, timestep_sizes = 4)
+        @test agent.history.timestep_sizes == [0.5, 2.0, 0.25, 4, 4]
+        @test environment.history.timestep_sizes == [0.5, 2.0, 0.25, 4, 4]
+        #One size for each timestep, so one fewer than the actions, which start with the previous action
+        @test length(agent.history.actions) == length(agent.history.timestep_sizes) + 1
+        #They are the sizes the environment gave the model as observations
+        @test [observation.timestep_size for observation in environment.history.observations[2:end]] == agent.history.timestep_sizes
+        #A single observation adds the size of its timestep, which is 1 by default
+        simulate!(agent, (;); timestep_size = 1.5)
+        simulate!(agent, (;))
+        @test agent.history.timestep_sizes == [0.5, 2.0, 0.25, 4, 4, 1.5, 1]
+        #reset! starts without any again
+        reset!(agent)
+        @test isempty(agent.history.timestep_sizes)
+        #Nothing is kept when nothing is saved, on either side
+        agent = CognitiveAgent(SavesTimestepSize(), (;))
+        environment = Environment(ObservesTimestepSize(), (;); save_history = SaveHistory(; observations = SaveEverything()))
+        simulate!(agent, environment; who_starts = EnvironmentStarts(), n_steps = 3, timestep_sizes = [0.5, 2.0, 0.25])
+        simulate!(agent, (; timestep_size = 1.0); timestep_size = 1.5)
+        @test isempty(agent.history.timestep_sizes)
+        @test environment.history.timestep_sizes == [0.5, 2.0, 0.25]
+    end
+
     @testset "The environment has a history too, with the same observations and actions" begin
         agent = CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(SaveEverything()))
         environment = Environment(FixedRewards(), (; rewards = [1.0, 0.0, 1.0]); save_history = SaveHistory(SaveEverything()))

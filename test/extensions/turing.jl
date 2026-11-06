@@ -217,6 +217,17 @@ end
         @test_throws FieldError returned(session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), SESSION_REWARDS, (; choice = ones(5), bet = ones(5)); save_history = SaveHistory(; observations = :cue)), (;))
     end
 
+    @testset "The sizes of the timesteps are returned when anything is saved, and are empty otherwise" begin
+        @test returned(session_for_test(; save_history = SaveHistory(; states = :expected_reward)), (;)).timestep_sizes == fill(1, 5)
+        @test returned(session_for_test(; timestep_sizes = 0.5, save_history = SaveHistory(; actions = SaveEverything())), (;)).timestep_sizes == fill(0.5, 5)
+        sizes = [0.5, 1.0, 1.5, 2.0, 2.5]
+        @test returned(session_for_test(; timestep_sizes = sizes, save_history = SaveHistory(SaveEverything())), (;)).timestep_sizes === sizes
+        #Nothing is saved by default
+        @test returned(session_for_test(), (;)).timestep_sizes == Int[]
+        @test returned(session_for_test(; timestep_sizes = sizes), (;)).timestep_sizes == Float64[]
+        @test keys(returned(session_for_test(), (;))) == (:observations, :actions, :states, :timestep_sizes)
+    end
+
     @testset "Missing actions are latents named after their timestep, with the model's distributions" begin
         actions = (; choice = [0.2, MissingAction(), 0.4, MissingAction()], bet = [1.0, 1.5, MissingAction(), 0.8])
         model = session_for_test(TwoContinuousActions(), (; learning_rate = 0.3), (; reward = [1.0, 0.0, 1.0, 1.0]), actions; save_history = SaveHistory(; actions = SaveEverything()))
@@ -341,6 +352,8 @@ end
         @test logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [NoAction(), NoAction(), NoAction(), false])), (;)) ≈ logpdf(Bernoulli(0.7), false)
         #A recorded action where the model took none is an error
         @test_throws "The model of type ActsEverySecondTimestep took no action choice on a timestep where the data has true for it." logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true, false, false])), (;))
+        #The sizes of the timesteps are returned with what is saved
+        @test history.timestep_sizes == [0.5, 1.0, 1.5, 2.0]
         #With a single size, every timestep gets it
         @test [state.timestep_size for state in returned(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), actions; timestep_sizes = 0.25, save_history = SaveHistory(; states = :timestep_size)), (;)).states] == fill(0.25, 4)
     end

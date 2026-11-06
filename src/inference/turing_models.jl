@@ -10,9 +10,10 @@ This needs Turing.jl to be loaded.
 The model is a building block for a Turing.jl model which samples the parameters, as a
 submodel with its own prefix: `to_submodel(prefix(turing_single_session(...),
 @varname(session)), false)`. It returns what `save_history` selects of the observations, the
-actions and the states of the session, as a `NamedTuple` of three vectors with one element
-for each timestep, which `returned(model, chain)` gives for each sample. Nothing is selected
-by default.
+actions and the states of the session, as a `NamedTuple` of vectors with one element for
+each timestep, which `returned(model, chain)` gives for each sample. Its `timestep_sizes`
+has the size of each timestep when anything is selected, and is empty otherwise. Nothing is
+selected by default.
 
 On each timestep, [`turing_apply_model`](@ref) of `model` runs as a submodel with the prefix
 `timestep[t]`, so a model which samples within a timestep has its own variables for each
@@ -23,7 +24,8 @@ than scoring each timestep on its own.
 # Arguments
 - `model::AbstractCognitiveModel`: the cognitive model.
 - `parameters::NamedTuple`: its parameters, usually the random variables of the model around
-  this one. Those it doesn't have take the values in [`default_parameters`](@ref).
+  this one. Those it doesn't have take the values in [`default_parameters`](@ref), if the
+  model provides defaults for them.
 - `observations::NamedTuple`: the observations in the data, with one vector for each name
   and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data must have
   every observation the model lists in [`attribute_names`](@ref), and can have more. An
@@ -42,7 +44,8 @@ than scoring each timestep on its own.
   on every timestep as a submodel with the prefix `environment[t]`, and its
   `turing_apply_model` must sample with `~` if it is random. The observations it gives are
   only used where the data has none. Without it, the data can't have missing observations.
-- `environment_parameters::NamedTuple=(;)`: the parameters of `environment`.
+- `environment_parameters::NamedTuple=(;)`: the parameters of `environment`, with its
+  default values for those that aren't given, if it provides any.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
 - `impute_missing_actions::Bool=true`: whether an action that is `MissingAction()` is
   imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
