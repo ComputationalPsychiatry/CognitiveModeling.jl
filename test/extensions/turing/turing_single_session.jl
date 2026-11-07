@@ -360,6 +360,18 @@ end
         @test_throws "took no action" logjoint(session_for_test(ActsEverySecondTimestep(), (; probability = 0.7), (;), (; choice = [true, true]); catch_invalid_parameters = true), (;))
     end
 
+    @testset "Evaluating a session only allocates the distributions it keeps, so each timestep is compiled with its types known" begin
+        session_with(n_timesteps) = session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, (; reward = repeat([1.0, 0.0], n_timesteps ÷ 2)), (; choice = repeat([true, false], n_timesteps ÷ 2)))
+        short_session = session_with(10_000)
+        long_session = session_with(20_000)
+        logjoint(short_session, (;))
+        logjoint(long_session, (;))
+        #Doubling the timesteps only adds the vector of the distributions of the recorded actions, about 23 bytes per timestep.
+        #When the names of the recorded actions reached the timesteps as a plain tuple, it was about 1500 bytes, and each timestep was a hundred times slower
+        extra_bytes = @allocated(logjoint(long_session, (;))) - @allocated(logjoint(short_session, (;)))
+        @test extra_bytes <= 40 * 10_000
+    end
+
     @testset "It can be sampled as a submodel, and returned gives the states for each sample, also an initial state which is fitted" begin
         Turing.@model function fit_one_session(observations, actions)
             learning_rate ~ Beta(2, 2)

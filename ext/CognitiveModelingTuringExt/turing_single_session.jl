@@ -77,8 +77,11 @@ Turing.@model function single_session(cognitive_model, cognitive_parameters, obs
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
     initial_saved = initial_session_outputs(Val(saves_initial_values(save_history)), cognitive_model, previous, save_history)
 
+    #The names of the recorded actions, in a Val so that each timestep is compiled knowing them
+    scored_names = Val(keys(recorded))
+
     #Run the first timestep outside the loop, since its inputs can have other types than all the rest
-    outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, 1), row(actions, 1), get_timestep_size(timestep_sizes, 1), keys(recorded), previous), @varname(timestep[1])), false)
+    outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, 1), row(actions, 1), get_timestep_size(timestep_sizes, 1), scored_names, previous), @varname(timestep[1])), false)
 
     #Initialize storage for the saved outputs, which starts with timestep 0 when it is kept, and the distributions of the recorded actions
     storage = initialize_session_storage(initial_saved, saved_session_outputs(cognitive_model, outputs, save_history), n_timesteps)
@@ -87,7 +90,7 @@ Turing.@model function single_session(cognitive_model, cognitive_parameters, obs
 
     #Run the remaining timesteps, each starting from the outputs of the one before, storing timestep t as element t + offset
     for t in 2:n_timesteps
-        next_outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, t), row(actions, t), get_timestep_size(timestep_sizes, t), keys(recorded), outputs), @varname(timestep[t])), false)
+        next_outputs ~ to_submodel(prefix(session_timestep(cognitive_model, environment, cognitive_parameters, environment_parameters, who_starts, row(observations, t), row(actions, t), get_timestep_size(timestep_sizes, t), scored_names, outputs), @varname(timestep[t])), false)
         outputs = next_outputs
         saved = saved_session_outputs(cognitive_model, outputs, save_history)
         storage = (;
@@ -159,7 +162,7 @@ Turing.@model function session_timestep(cognitive_model, environment, cognitive_
         cognitive_state = output.new_state,
         environment_state,
         scored,
-        scored_distributions = NamedTuple{scored_names}(output.action_distribution),
+        scored_distributions = select_names(output.action_distribution, scored_names),
     )
 end
 
