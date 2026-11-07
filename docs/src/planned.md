@@ -15,6 +15,20 @@ This page lists what is planned and not written yet. The list will grow.
 ## Interfaces
 
 - BayesianRegressionModels.jl.
+- Simulation-based inference, where a neural network is trained on simulations to estimate
+  the parameters: NeuralEstimators.jl, to test or to make an interface with, and perhaps the
+  Python package sbi too. A simulation of a cognitive model is what both need.
+- StanBlocks.jl, potentially, as another way to write the probabilistic model around a
+  session.
+
+## Fitting
+
+- Dyadic interaction, with another agent as the environment of the agent that is fitted.
+  When the other agent's actions are recorded, each agent is a session of its own whose
+  observations are the other's actions. When they aren't, the other agent is the environment
+  that fills them in.
+- Session identifiers in the names of the variables of a fitted session, instead of
+  `session[i]`, if a way is found that doesn't compile the session once per identifier.
 
 ## Plots
 

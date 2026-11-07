@@ -105,9 +105,52 @@ function Base.rand(::AbstractRNG, deterministic::Deterministic)
     return deterministic.value
 end
 
+#Types for who moves first on a timestep
+
+"""
+    AgentStarts()
+
+Make the agent move first on each timestep of a simulation or a fitted session.
+
+On a timestep, the cognitive model updates and acts on the previous observation, and the
+environment then responds to its action. On the first timestep, the cognitive model receives
+an observation with every entry [`BeforeFirstTimestep`](@ref). The model receives it as the
+`who_starts` of its [`ModelInput`](@ref), so that it can act before it updates when that is
+what it means.
+
+See also [`EnvironmentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
+[`SessionInfo`](@ref).
+"""
+struct AgentStarts end
+
+"""
+    EnvironmentStarts()
+
+Make the environment move first on each timestep of a simulation or a fitted session.
+
+On a timestep, the environment gives an observation in response to the previous action, and
+the cognitive model then updates and acts on it. On the first timestep, the environment
+receives an action with every entry [`BeforeFirstTimestep`](@ref). The model receives it as
+the `who_starts` of its [`ModelInput`](@ref).
+
+See also [`AgentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
+[`SessionInfo`](@ref).
+"""
+struct EnvironmentStarts end
+
+"""
+    UnknownWhoStarts()
+
+The `who_starts` of a [`ModelInput`](@ref) when neither side is known to move first on a
+timestep, as when a model runs on a single observation with [`simulate`](@ref), or is used
+outside a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other
+two, which a simulation or a fitted session passes on from its own `who_starts`.
+"""
+struct UnknownWhoStarts end
+
 """
     ModelInput(observation, previous_state, previous_action, parameters, timestep_size=1,
-               rng=default_rng())
+               rng=default_rng(), who_starts=UnknownWhoStarts())
 
 Everything a model needs to run a single timestep, which [`apply_model`](@ref) receives.
 
@@ -127,6 +170,12 @@ Each argument is kept in a field of the same name, such as `input.observation`.
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
   is random, so that a simulation can be reproduced.
+- `who_starts=UnknownWhoStarts()`: who moves first on the timestep, [`AgentStarts`](@ref) or
+  [`EnvironmentStarts`](@ref) as the simulation or the fitted session was told, or
+  [`UnknownWhoStarts`](@ref) when neither is known. A model which can update before it acts
+  or act before it updates can choose by it: with `EnvironmentStarts()` the observation is
+  this timestep's, and with `AgentStarts()` the previous timestep's. It is kept in the type,
+  so that choosing costs nothing.
 
 # Examples
 ```jldoctest
@@ -143,20 +192,24 @@ julia> ModelInput(observation, state, previous_action, parameters).timestep_size
 
 julia> ModelInput(observation, state, previous_action, parameters, 0.5).timestep_size
 0.5
+
+julia> ModelInput(observation, state, previous_action, parameters).who_starts
+UnknownWhoStarts()
 ```
 """
-struct ModelInput{Tobservation, Tstate, Taction, Tparameters, Ttimestep_size, Trng}
+struct ModelInput{Tobservation, Tstate, Taction, Tparameters, Ttimestep_size, Trng, Twho_starts}
     observation::Tobservation
     previous_state::Tstate
     previous_action::Taction
     parameters::Tparameters
     timestep_size::Ttimestep_size
     rng::Trng
+    who_starts::Twho_starts
 end
 
-#Sets the timestep size to 1 and the generator to the default one if they aren't specified.
-function ModelInput(observation, previous_state, previous_action, parameters, timestep_size = 1)
-    return ModelInput(observation, previous_state, previous_action, parameters, timestep_size, default_rng())
+#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified
+function ModelInput(observation, previous_state, previous_action, parameters, timestep_size = 1, rng::AbstractRNG = default_rng(), who_starts = UnknownWhoStarts())
+    return ModelInput{typeof(observation), typeof(previous_state), typeof(previous_action), typeof(parameters), typeof(timestep_size), typeof(rng), typeof(who_starts)}(observation, previous_state, previous_action, parameters, timestep_size, rng, who_starts)
 end
 
 """

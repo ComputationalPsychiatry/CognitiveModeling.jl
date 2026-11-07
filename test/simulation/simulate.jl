@@ -78,6 +78,18 @@ end
 CognitiveModeling.attribute_names(model::StartsWithInteger) = ModelAttributes(; parameters = (), states = :expected_reward, observations = :reward, actions = :choice)
 
 #Has two states, so that one of them can be selected for saving
+#An environment which keeps who started as its state, to check what the environment is told
+struct EnvironmentRecordsWhoStarts <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::EnvironmentRecordsWhoStarts, parameters) = (; who_starts = UnknownWhoStarts())
+CognitiveModeling.apply_model(environment::EnvironmentRecordsWhoStarts, input::EnvironmentInput) = EnvironmentOutput((; reward = Deterministic(1.0)), (; who_starts = input.who_starts))
+CognitiveModeling.attribute_names(environment::EnvironmentRecordsWhoStarts) = ModelAttributes(; parameters = (), states = :who_starts, observations = :reward, actions = :choice)
+
+#Keeps who started as its state, to check what the model is told
+struct RecordsWhoStarts <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters) = (; who_starts = UnknownWhoStarts())
+CognitiveModeling.apply_model(model::RecordsWhoStarts, input::ModelInput) = ModelOutput((; choice = Deterministic(true)), (; who_starts = input.who_starts))
+CognitiveModeling.attribute_names(model::RecordsWhoStarts) = ModelAttributes(; parameters = (), states = :who_starts, observations = :reward, actions = :choice)
+
 struct LearnsAndCounts <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::LearnsAndCounts, parameters) = (; expected_reward = 0.5, n_timesteps = 0)
 function CognitiveModeling.apply_model(model::LearnsAndCounts, input::ModelInput)
@@ -358,10 +370,11 @@ end
             @test @inferred(run_simulation(who_starts, 10)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
             run_simulation(who_starts, 10)
-            #Doubling the timesteps only adds the storage: 8 bytes each for an observation and a state, and 1 for an action, and a byte
-            #each for the observation and the action to say which of two types it has, since timestep 0 has BeforeFirstTimestep
+            #Doubling the timesteps only adds the storage: 8 bytes each for an observation, an action distribution and a state, and 1 for
+            #an action, and a byte each for the observation, the action and the action distribution to say which of two types it has,
+            #since timestep 0 has BeforeFirstTimestep
             extra_bytes = @allocated(run_simulation(who_starts, 20_000)) - @allocated(run_simulation(who_starts, 10_000))
-            @test extra_bytes <= 20 * 10_000
+            @test extra_bytes <= 30 * 10_000
         end
     end
 
@@ -517,6 +530,19 @@ end
         _, _, cognitive_states, environment_states = simulate_for_test(LearnsAndCounts(), FixedRewards(); n_steps = 2, environment_parameters = rewards, save_history = SaveHistory(; states = :n_timesteps))
         @test cognitive_states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2)]
         @test environment_states == [(; n_timesteps = 0), (; n_timesteps = 1), (; n_timesteps = 2)]
+        #The model is told who starts, and that nobody is known to when it runs on a single observation
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            @test simulate_for_test(RecordsWhoStarts(), FixedRewards(); who_starts, n_steps = 2, cognitive_parameters = (;), environment_parameters = rewards, save_history = SaveHistory(; states = :who_starts))[3][end] === (; who_starts)
+            @test simulate_for_test(RecordsWhoStarts(), EnvironmentRecordsWhoStarts(); who_starts, n_steps = 2, cognitive_parameters = (;), environment_parameters = (;), save_history = SaveHistory(; states = :who_starts))[4][end] === (; who_starts)
+        end
+        @test simulate(RecordsWhoStarts(), (; reward = 1.0); cognitive_parameters = (;))[2] === (; who_starts = UnknownWhoStarts())
+        #The action distributions are saved when selected, as a sixth value, with BeforeFirstTimestep for every action at timestep 0
+        _, actions, _, _, _, action_distributions = simulate_for_test(LearnsRewards(), FixedRewards(); n_steps = 3, environment_parameters = rewards, save_history = SaveHistory(; actions = :choice, action_distributions = :choice))
+        @test action_distributions[1] === (; choice = BeforeFirstTimestep())
+        @test [distribution.choice.probability for distribution in action_distributions[2:end]] ≈ [0.75, 0.375, 0.6875]
+        @test length(action_distributions) == length(actions) == 4
+        @test simulate_for_test(LearnsRewards(), FixedRewards(); n_steps = 3, environment_parameters = rewards, save_history = SaveHistory(; actions = :choice))[6] == fill((;), 4)
+        @test_throws "The SaveHistory selects the action distributions (:bet,), but attribute_names lists the actions of a cognitive model of type LearnsRewards as (:choice,). A history can only select observations, actions and action distributions that the model lists." CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(; action_distributions = :bet))
         #A state changed in place is saved before the first timestep changes it
         _, _, cognitive_states, _ = simulate_for_test(LearnsInPlace(state -> (; values = copy(state.values))), FixedRewards(); n_steps = 2, environment_parameters = (; rewards = [1.0, 1.0]), save_history = everything)
         @test [state.values[1] for state in cognitive_states] == [0.5, 0.75, 0.875]
@@ -563,7 +589,7 @@ end
     @testset "The markers for nothing there share a supertype, and the one for before the first timestep is its own" begin
         @test NoAction() isa AbstractNoValue && NoObservation() isa AbstractNoValue && BeforeFirstTimestep() isa AbstractNoValue
         @test !(BeforeFirstTimestep() isa NoAction) && !(BeforeFirstTimestep() isa NoObservation)
-        @test !(MissingAction() isa AbstractNoValue) && !(MissingObservation() isa AbstractNoValue)
+        @test !(MissingValue() isa AbstractNoValue)
     end
 
     @testset "A state isn't prepared for saving when none of it is saved, also at timestep 0" begin
@@ -936,9 +962,9 @@ end
             @test @inferred(run_simulation(who_starts, 10)) isa Tuple
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(who_starts, 10)
             run_simulation(who_starts, 10)
-            #As without maps: 8 bytes each for an observation and a state, 1 for an action, and a byte each for which type they have
+            #As without maps: 8 bytes each for an observation, an action distribution and a state, 1 for an action, and a byte each for which type they have
             extra_bytes = @allocated(run_simulation(who_starts, 20_000)) - @allocated(run_simulation(who_starts, 10_000))
-            @test extra_bytes <= 20 * 10_000
+            @test extra_bytes <= 30 * 10_000
         end
         @test folds(CognitiveModeling.check_names_fit, LearnsRewards, PaysForLever, typeof(PAYOFF_AS_REWARD), typeof(CHOICE_AS_LEVER))
     end
@@ -950,6 +976,7 @@ end
         #The agent's are the ones returned, under the model's names
         @test agent.history.observations[2:end] == observations
         @test agent.history.actions[2:end] == actions
+        @test length(agent.history.action_distributions) == length(agent.history.actions) && agent.history.action_distributions[1] === (; choice = BeforeFirstTimestep())
         @test all(observation -> keys(observation) == (:reward,), agent.history.observations)
         @test all(action -> keys(action) == (:choice,), agent.history.actions)
         #The environment's are the same values, under its own names, with the cue the model didn't receive
@@ -1183,7 +1210,7 @@ end
     end
 
     @testset "A history can only select observations and actions that the model lists" begin
-        @test_throws "The SaveHistory selects the observations (:reward,), but attribute_names lists the observations of a cognitive model of type OnlyChooses as (). A history can only select observations and actions that the model lists." CognitiveAgent(OnlyChooses(), (;); save_history = SaveHistory(; observations = :reward))
+        @test_throws "The SaveHistory selects the observations (:reward,), but attribute_names lists the observations of a cognitive model of type OnlyChooses as (). A history can only select observations, actions and action distributions that the model lists." CognitiveAgent(OnlyChooses(), (;); save_history = SaveHistory(; observations = :reward))
         @test_throws "The SaveHistory selects the actions (:bet,), but attribute_names lists the actions of a cognitive model of type LearnsRewards as (:choice,)." CognitiveAgent(LearnsRewards(), LEARNING; save_history = SaveHistory(; actions = :bet))
         @test_throws "The SaveHistory selects the actions (:choice,), but attribute_names lists the actions of an environment model of type RewardsAndCues as ()." Environment(RewardsAndCues(), (;); save_history = SaveHistory(; actions = :choice))
         @test_throws "attribute_names lists the observations of an environment model of type FixedRewards as (:reward,)" Environment(FixedRewards(), (; rewards = [1.0]); save_history = SaveHistory(; observations = :cue))

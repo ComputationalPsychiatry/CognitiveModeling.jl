@@ -59,55 +59,50 @@ CognitiveModeling.attribute_names(environment::TuringNoisyRewards) = ModelAttrib
 
 const TURING_REWARDS = (; reward = [1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0])
 const TURING_CHOICES = (; choice = [true, false, true, true, false, false, true, true, false, true])
-const TURING_CONTINUOUS_CHOICES = (; choice = [0.3, 0.6, MissingAction(), 0.4, 0.7, MissingAction(), 0.5, 0.2, 0.8, 0.6])
+const TURING_CONTINUOUS_CHOICES = (; choice = [0.3, 0.6, MissingValue(), 0.4, 0.7, MissingValue(), 0.5, 0.2, 0.8, 0.6])
 const TURING_REWARDS_NOT_ALWAYS_GIVEN = (; reward = [1.0, 0.0, NoObservation(), 1.0, 0.0, NoObservation(), 0.0, 0.0, NoObservation(), 1.0])
-const TURING_MISSING_REWARDS = (; reward = [MissingObservation(), 0.0, MissingObservation(), 1.0, MissingObservation(), 1.0, 0.0, MissingObservation(), 1.0, 1.0])
+const TURING_MISSING_REWARDS = (; reward = [MissingValue(), 0.0, MissingValue(), 1.0, MissingValue(), 1.0, 0.0, MissingValue(), 1.0, 1.0])
 
-# The sessions, with flat priors on the parameters
-Turing.@model function fit_rescorla_wagner(who_starts)
+# The sessions, prepared once, with flat priors on the parameters
+Turing.@model function fit_rescorla_wagner(session_info)
     learning_rate ~ Turing.Flat()
     inverse_temperature ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringRescorlaWagner(), (; learning_rate, inverse_temperature), TURING_REWARDS, TURING_CHOICES; who_starts), @varname(session)), false)
+    session ~ to_submodel(prefix(turing_behavioural_session(session_info, (; learning_rate, inverse_temperature)), @varname(session)), false)
     return nothing
 end
 
-# The same session with data where the reward isn't given on every timestep, so that its column holds two types
-Turing.@model function fit_with_rewards_not_always_given(who_starts)
-    learning_rate ~ Turing.Flat()
-    inverse_temperature ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringRescorlaWagner(), (; learning_rate, inverse_temperature), TURING_REWARDS_NOT_ALWAYS_GIVEN, TURING_CHOICES; who_starts), @varname(session)), false)
-    return nothing
-end
-
-Turing.@model function fit_with_imputed_actions()
+Turing.@model function fit_with_imputed_actions(session_info)
     learning_rate ~ Turing.Flat()
     noise_scale ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringContinuousAction(), (; learning_rate, noise_scale), TURING_REWARDS, TURING_CONTINUOUS_CHOICES; who_starts = EnvironmentStarts()), @varname(session)), false)
+    session ~ to_submodel(prefix(turing_behavioural_session(session_info, (; learning_rate, noise_scale)), @varname(session)), false)
     return nothing
 end
 
-Turing.@model function fit_with_environment()
+# A session with an environment, whose parameter is fitted too
+Turing.@model function fit_with_environment(session_info)
     learning_rate ~ Turing.Flat()
     inverse_temperature ~ Turing.Flat()
     scale ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringRescorlaWagner(), (; learning_rate, inverse_temperature), TURING_MISSING_REWARDS, TURING_CHOICES; who_starts = EnvironmentStarts(), environment = TuringRewardsPreviousChoice(), environment_parameters = (; scale)), @varname(session)), false)
+    session ~ to_submodel(prefix(turing_behavioural_session(session_info, (; learning_rate, inverse_temperature), (; scale)), @varname(session)), false)
     return nothing
 end
 
-Turing.@model function fit_with_imputed_observations()
-    learning_rate ~ Turing.Flat()
-    inverse_temperature ~ Turing.Flat()
-    scale ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringRescorlaWagner(), (; learning_rate, inverse_temperature), TURING_MISSING_REWARDS, TURING_CHOICES; who_starts = EnvironmentStarts(), environment = TuringNoisyRewards(), environment_parameters = (; scale)), @varname(session)), false)
-    return nothing
-end
+# Three sessions of the Rescorla-Wagner model, through the full model with independent priors on each session's parameters
+const TURING_TABLE = (;
+    id = repeat([1, 2, 3]; inner = 10),
+    reward = [TURING_REWARDS.reward; reverse(TURING_REWARDS.reward); TURING_REWARDS.reward],
+    choice = [TURING_CHOICES.choice; TURING_CHOICES.choice; reverse(TURING_CHOICES.choice)],
+)
+const TURING_SESSIONS = MultipleSessionsInfo(TuringRescorlaWagner(), TURING_TABLE; observation_columns = :reward, action_columns = :choice, session_columns = :id, who_starts = EnvironmentStarts())
+const TURING_FULL_MODEL = turing_full_model(IndependentSessions((; learning_rate = Turing.Flat(), inverse_temperature = Turing.Flat())), TURING_SESSIONS)
 
-Turing.@model function fit_with_noise_in_timesteps()
-    learning_rate ~ Turing.Flat()
-    noise_scale ~ Turing.Flat()
-    session ~ to_submodel(prefix(turing_single_session(TuringNoisyModel(), (; learning_rate, noise_scale), TURING_REWARDS, (; choice = TURING_REWARDS.reward .- 0.5); who_starts = EnvironmentStarts()), @varname(session)), false)
-    return nothing
-end
+#The session of each case, prepared once
+rescorla_wagner_session(who_starts) = SessionInfo(TuringRescorlaWagner(), TURING_REWARDS, TURING_CHOICES; who_starts)
+rewards_not_always_given_session(who_starts) = SessionInfo(TuringRescorlaWagner(), TURING_REWARDS_NOT_ALWAYS_GIVEN, TURING_CHOICES; who_starts)
+imputed_actions_session() = SessionInfo(TuringContinuousAction(), TURING_REWARDS, TURING_CONTINUOUS_CHOICES; who_starts = EnvironmentStarts())
+environment_session() = SessionInfo(TuringRescorlaWagner(), TURING_MISSING_REWARDS, TURING_CHOICES; who_starts = EnvironmentStarts(), environment = TuringRewardsPreviousChoice())
+imputed_observations_session() = SessionInfo(TuringRescorlaWagner(), TURING_MISSING_REWARDS, TURING_CHOICES; who_starts = EnvironmentStarts(), environment = TuringNoisyRewards())
+noise_in_timesteps_session() = SessionInfo(TuringNoisyModel(), TURING_REWARDS, (; choice = TURING_REWARDS.reward .- 0.5); who_starts = EnvironmentStarts())
 
 # The log density as a function of the vector of parameters and latents, through a LogDensityFunction made once
 function log_density_of(model)
@@ -116,12 +111,13 @@ function log_density_of(model)
 end
 
 const TURING_CASES = [
-    (; name = "turing session, environment starts", f = log_density_of(fit_rescorla_wagner(EnvironmentStarts())), x = [0.3, 2.0], reactant = false),
-    (; name = "turing session, agent starts", f = log_density_of(fit_rescorla_wagner(AgentStarts())), x = [0.3, 2.0], reactant = false),
-    (; name = "turing session with imputed actions", f = log_density_of(fit_with_imputed_actions()), x = [0.3, 0.8, 0.2, -0.1], reactant = false),
-    (; name = "turing session with an environment", f = log_density_of(fit_with_environment()), x = [0.3, 2.0, 0.9], reactant = false),
-    (; name = "turing session with imputed observations", f = log_density_of(fit_with_imputed_observations()), x = [0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1], reactant = false),
-    (; name = "turing session with a reward that isn't always given, environment starts", f = log_density_of(fit_with_rewards_not_always_given(EnvironmentStarts())), x = [0.3, 2.0], reactant = false),
-    (; name = "turing session with a reward that isn't always given, agent starts", f = log_density_of(fit_with_rewards_not_always_given(AgentStarts())), x = [0.3, 2.0], reactant = false),
-    (; name = "turing session with noise in each timestep", f = log_density_of(fit_with_noise_in_timesteps()), x = [0.3, 0.8, 0.1, -0.2, 0.05, 0.3, -0.1, 0.2, 0.0, -0.3, 0.15, 0.1], reactant = false),
+    (; name = "turing session, environment starts", f = log_density_of(fit_rescorla_wagner(rescorla_wagner_session(EnvironmentStarts()))), x = [0.3, 2.0], reactant = false),
+    (; name = "turing session, agent starts", f = log_density_of(fit_rescorla_wagner(rescorla_wagner_session(AgentStarts()))), x = [0.3, 2.0], reactant = false),
+    (; name = "turing session with imputed actions", f = log_density_of(fit_with_imputed_actions(imputed_actions_session())), x = [0.3, 0.8, 0.2, -0.1], reactant = false),
+    (; name = "turing session with an environment", f = log_density_of(fit_with_environment(environment_session())), x = [0.3, 2.0, 0.9], reactant = false),
+    (; name = "turing session with imputed observations", f = log_density_of(fit_with_environment(imputed_observations_session())), x = [0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1], reactant = false),
+    (; name = "turing session with a reward that isn't always given, environment starts", f = log_density_of(fit_rescorla_wagner(rewards_not_always_given_session(EnvironmentStarts()))), x = [0.3, 2.0], reactant = false),
+    (; name = "turing session with a reward that isn't always given, agent starts", f = log_density_of(fit_rescorla_wagner(rewards_not_always_given_session(AgentStarts()))), x = [0.3, 2.0], reactant = false),
+    (; name = "turing session with noise in each timestep", f = log_density_of(fit_with_imputed_actions(noise_in_timesteps_session())), x = [0.3, 0.8, 0.1, -0.2, 0.05, 0.3, -0.1, 0.2, 0.0, -0.3, 0.15, 0.1], reactant = false),
+    (; name = "turing full model with three sessions and independent priors", f = log_density_of(TURING_FULL_MODEL), x = [0.2, 0.3, 0.4, 1.0, 2.0, 3.0], reactant = false),
 ]

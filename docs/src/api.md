@@ -42,6 +42,7 @@ CognitiveModeling.attribute_names(::CognitiveModeling.AbstractEnvironmentModel)
 CognitiveModeling.prepare_state_for_saving
 CognitiveModeling.default_parameters
 CognitiveModeling.turing_apply_model
+CognitiveModeling.turing_initialize_state
 ```
 
 ### Functions that an environment model can implement
@@ -50,11 +51,23 @@ CognitiveModeling.turing_apply_model
 CognitiveModeling.stopping_criterion
 ```
 
+## Fitting several sessions
+
+These are what the parts of [`turing_full_model`](@ref) are written with, beside the types
+on the public list. They are public, but not exported.
+
+```@docs
+CognitiveModeling.turing_population_model
+CognitiveModeling.turing_downstream_model
+CognitiveModeling.n_sessions
+CognitiveModeling.session_index
+```
+
 ### Display
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["defining_models/utility_functions.jl", "environments/utility_functions.jl"]
+Pages = ["defining_models/utility_functions.jl", "environments/utility_functions.jl", "inference/utility_functions.jl"]
 Filter = object -> object === Base.show
 ```

@@ -60,21 +60,25 @@ function Base.show(io::IO, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceive
 end
 
 """
-    AgentHistory(observations, actions, states, timestep_sizes)
+    AgentHistory(observations, actions, action_distributions, states, timestep_sizes)
 
-The history of states, actions and observations for a [`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
+The history of observations, actions, action distributions and states of a
+[`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
 
 Each argument is kept in a field of the same name, such as `history.actions`. The agent's
-[`SaveHistory`](@ref) selects what is kept of each observation, action and state, and when
-it selects nothing at all, the vectors stay empty. Each vector starts with timestep 0,
-where the agent started, when the `SaveHistory` saves the initial values, which it does by
-default, so that element `t + 1` is timestep `t`.
+[`SaveHistory`](@ref) selects what is kept of each kind, and when it selects nothing at all,
+the vectors stay empty. Each vector starts with timestep 0, where the agent started, when the
+`SaveHistory` saves the initial values, which it does by default, so that element `t + 1` is
+timestep `t`.
 
 # Arguments
 - `observations::Vector{Any}`: the observations, starting at timestep 0 with one where
   every observation the model lists is [`BeforeFirstTimestep`](@ref).
 - `actions::Vector{Any}`: the actions, starting at timestep 0 with the agent's previous
   action, which by default has every action as `BeforeFirstTimestep()`.
+- `action_distributions::Vector{Any}`: what the model gave each action to be sampled from,
+  starting at timestep 0 with `BeforeFirstTimestep()` for every action, since nothing was
+  given yet.
 - `states::Vector{Any}`: the states of the model, starting at timestep 0 with its initial
   state. Later states are those after each timestep. All of them are as returned by
   [`prepare_state_for_saving`](@ref).
@@ -85,6 +89,7 @@ default, so that element `t + 1` is timestep `t`.
 struct AgentHistory
     observations::Vector{Any}
     actions::Vector{Any}
+    action_distributions::Vector{Any}
     states::Vector{Any}
     timestep_sizes::Vector{Any}
 end
@@ -164,9 +169,9 @@ action, so that entry has every name the model lists as `BeforeFirstTimestep()`.
 """
 function starting_history(cognitive_model::AbstractCognitiveModel, cognitive_state, previous_action, save_history::SaveHistory)
     if saves_nothing(save_history) || !saves_initial_values(save_history)
-        return AgentHistory(Any[], Any[], Any[], Any[])
+        return AgentHistory(Any[], Any[], Any[], Any[], Any[])
     end
-    return AgentHistory(Any[select_names(initial_observation(cognitive_model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))], Any[BeforeFirstTimestep()])
+    return AgentHistory(Any[select_names(initial_observation(cognitive_model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[select_names(initial_action(cognitive_model), action_distribution_selection(save_history))], Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))], Any[BeforeFirstTimestep()])
 end
 
 """
@@ -334,29 +339,3 @@ function reset!(environment::Environment)
     environment.history = starting_history(environment.model, environment.state, environment.previous_observation, environment.save_history)
     return environment
 end
-
-"""
-    AgentStarts()
-
-Make the agent move first on each timestep of a simulation.
-
-On a timestep, the cognitive model updates and acts on the previous observation, and the
-environment then responds to its action. On the first timestep, the cognitive model receives
-an observation with every entry [`BeforeFirstTimestep`](@ref).
-
-See also [`EnvironmentStarts`](@ref), [`simulate`](@ref).
-"""
-struct AgentStarts end
-
-"""
-    EnvironmentStarts()
-
-Make the environment move first on each timestep of a simulation.
-
-On a timestep, the environment gives an observation in response to the previous action, and
-the cognitive model then updates and acts on it. On the first timestep, the environment
-receives an action with every entry [`BeforeFirstTimestep`](@ref).
-
-See also [`AgentStarts`](@ref), [`simulate`](@ref).
-"""
-struct EnvironmentStarts end

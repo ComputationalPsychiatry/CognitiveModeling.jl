@@ -16,7 +16,7 @@ abstract type AbstractEnvironmentModel <: AbstractModel end
 
 """
     EnvironmentInput(action, previous_state, previous_observation, parameters,
-                     timestep_size=1, rng=default_rng())
+                     timestep_size=1, rng=default_rng(), who_starts=UnknownWhoStarts())
 
 Everything an environment model needs to run a single timestep.
 
@@ -35,19 +35,23 @@ Each argument is kept in a field of the same name, such as `input.action`.
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the
   environment is random, so that a simulation can be reproduced.
+- `who_starts=UnknownWhoStarts()`: who moves first on the timestep, as for
+  [`ModelInput`](@ref): [`EnvironmentStarts`](@ref), [`AgentStarts`](@ref) or
+  [`UnknownWhoStarts`](@ref).
 """
-struct EnvironmentInput{Taction, Tstate, Tobservation, Tparameters, Ttimestep_size, Trng}
+struct EnvironmentInput{Taction, Tstate, Tobservation, Tparameters, Ttimestep_size, Trng, Twho_starts}
     action::Taction
     previous_state::Tstate
     previous_observation::Tobservation
     parameters::Tparameters
     timestep_size::Ttimestep_size
     rng::Trng
+    who_starts::Twho_starts
 end
 
-#Sets the timestep size to 1 and the generator to the default one if they aren't specified. An integer keeps Float32 models in Float32
-function EnvironmentInput(action, previous_state, previous_observation, parameters, timestep_size = 1)
-    return EnvironmentInput(action, previous_state, previous_observation, parameters, timestep_size, default_rng())
+#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified. An integer keeps Float32 models in Float32
+function EnvironmentInput(action, previous_state, previous_observation, parameters, timestep_size = 1, rng::AbstractRNG = default_rng(), who_starts = UnknownWhoStarts())
+    return EnvironmentInput{typeof(action), typeof(previous_state), typeof(previous_observation), typeof(parameters), typeof(timestep_size), typeof(rng), typeof(who_starts)}(action, previous_state, previous_observation, parameters, timestep_size, rng, who_starts)
 end
 
 """

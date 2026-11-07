@@ -4,7 +4,8 @@
         @test save_history.observations === SaveEverything()
         @test save_history.actions === (:choice,)
         @test save_history.states === (:expected_reward, :surprise)
-        @test propertynames(save_history) == (:observations, :actions, :states, :save_initial_values)
+        @test propertynames(save_history) == (:observations, :actions, :action_distributions, :states, :save_initial_values)
+        @test save_history.action_distributions === ()
         @test_throws FieldError save_history.parameters
     end
 
@@ -17,6 +18,8 @@
         @test_throws TypeError SaveHistory(; save_initial_values = 1)
         #It stays as it is when only the states are kept, and doesn't matter when nothing is saved
         @test CognitiveModeling.savehistory_states_only(SaveHistory(SaveEverything(); save_initial_values = false)) === SaveHistory(; states = SaveEverything(), save_initial_values = false)
+        @test SaveHistory(SaveEverything()).action_distributions === SaveEverything()
+        @test SaveHistory(; action_distributions = :choice).action_distributions === (:choice,)
         @test CognitiveModeling.saves_nothing(SaveHistory(; save_initial_values = false))
     end
 
@@ -31,7 +34,7 @@
         @test SaveHistory(; states = :expected_reward).observations === ()
         everything = SaveHistory(SaveEverything())
         @test everything.observations === everything.actions === everything.states === SaveEverything()
-        @test everything === SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), states = SaveEverything())
+        @test everything === SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), action_distributions = SaveEverything(), states = SaveEverything())
     end
 
     @testset "It only takes names" begin
@@ -42,9 +45,9 @@
 
     @testset "The selections are in the type, so constructing it from literals is inferred, and holding it costs nothing" begin
         from_literals() = SaveHistory(; actions = :choice, states = (:expected_reward, :surprise))
-        @test Base.return_types(from_literals, Tuple{})[1] === SaveHistory{(), (:choice,), (:expected_reward, :surprise), true}
+        @test Base.return_types(from_literals, Tuple{})[1] === SaveHistory{(), (:choice,), (), (:expected_reward, :surprise), true}
         without_initial_values() = SaveHistory(; states = :expected_reward, save_initial_values = false)
-        @test Base.return_types(without_initial_values, Tuple{})[1] === SaveHistory{(), (), (:expected_reward,), false}
+        @test Base.return_types(without_initial_values, Tuple{})[1] === SaveHistory{(), (), (), (:expected_reward,), false}
         @test @inferred(SaveHistory(SaveEverything())) isa SaveHistory
         @test @inferred(SaveHistory()) isa SaveHistory
         @test isbitstype(typeof(SaveHistory(; states = :expected_reward)))
@@ -56,12 +59,14 @@
             SaveHistory
             Observations: none
             Actions: choice
+            Action distributions: none
             States: expected_reward, surprise
             Initial values: saved"""
         @test repr("text/plain", SaveHistory(SaveEverything(); save_initial_values = false)) == """
             SaveHistory
             Observations: everything
             Actions: everything
+            Action distributions: everything
             States: everything
             Initial values: not saved"""
     end
@@ -82,6 +87,7 @@
         @test CognitiveModeling.observation_selection(save_history) === Val(SaveEverything())
         @test CognitiveModeling.action_selection(save_history) === Val(())
         @test CognitiveModeling.state_selection(save_history) === Val((:expected_reward,))
+        @test CognitiveModeling.action_distribution_selection(SaveHistory(; action_distributions = :choice)) === Val((:choice,))
     end
 
     @testset "The sizes of the timesteps are kept with a history, one for each timestep, when anything is saved" begin

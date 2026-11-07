@@ -1,4 +1,4 @@
-using CognitiveModeling: apply_model, turing_apply_model
+using CognitiveModeling: apply_model, initialize_state, turing_apply_model, turing_initialize_state
 using Random: Xoshiro
 
 #The tests of the Turing.jl extension which run with the main suite. Automatic differentiation
@@ -6,6 +6,7 @@ using Random: Xoshiro
 @testset "Turing extension" begin
     @test Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt) isa Module
 
-    include("turing_apply_model.jl")
-    include("turing_single_session.jl")
+    include("extension_defaults.jl")
+    include("turing_behavioural_session.jl")
+    include("turing_full_model.jl")
 end

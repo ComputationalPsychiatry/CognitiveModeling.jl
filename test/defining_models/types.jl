@@ -24,6 +24,17 @@ using Random: Xoshiro, default_rng
         @test EnvironmentInput(previous_action, state, observation, parameters, 1, rng).rng === rng
     end
 
+    @testset "ModelInput says who starts, and unknown if it isn't specified" begin
+        @test ModelInput(observation, state, previous_action, parameters).who_starts === UnknownWhoStarts()
+        @test ModelInput(observation, state, previous_action, parameters, 1, default_rng(), AgentStarts()).who_starts === AgentStarts()
+        @test ModelInput(observation, state, previous_action, parameters, 1, default_rng(), EnvironmentStarts()).who_starts === EnvironmentStarts()
+        #It is in the type, so a model can choose by it at compile time
+        @test typeof(ModelInput(observation, state, previous_action, parameters, 1, default_rng(), AgentStarts())).parameters[end] === AgentStarts
+        @test isbitstype(UnknownWhoStarts)
+        @test EnvironmentInput(previous_action, state, observation, parameters).who_starts === UnknownWhoStarts()
+        @test EnvironmentInput(previous_action, state, observation, parameters, 1, default_rng(), EnvironmentStarts()).who_starts === EnvironmentStarts()
+    end
+
     @testset "ModelOutput only takes named action distributions" begin
         @test ModelOutput((; choice = 0.7)).action_distribution === (; choice = 0.7)
         @test ModelOutput((;)).action_distribution === (;)

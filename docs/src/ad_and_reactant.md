@@ -42,9 +42,8 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, Revers
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reproduced without the package, to be reported |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reproduced without the package, to be reported |
 | Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reproduced without the package, to be reported; with a single timestep size, or `save_initial_values = false`, the sizes are right |
-| Enzyme forward and reverse without runtime activity | the log density of any Turing.jl model of a session | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity |
-| Enzyme reverse with runtime activity | a session whose data has two types in a column: an action that is `MissingAction` on some timesteps, or an observation that is `MissingObservation` or `NoObservation` on some | throws an `EnzymeNonScalarReturnException` from Enzyme's rule for building a struct of unknown type | to be reported |
-| Enzyme forward with runtime activity | a session whose data has an observation that is `MissingObservation` or `NoObservation` on some timesteps | wrong gradient, no error | to be reported |
+| Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
+| Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session whose observations are `NoObservation` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | to be reported; an action that is `MissingValue` on some timesteps is fine |
 
 A state which depends on the parameters from the start isn't affected, and neither is
 `simulate!` on single observations. A simulation where an observation isn't made on every
@@ -78,15 +77,16 @@ These aren't failures of the package's own code, but a model can run into them.
   a session or a model which samples within a timestep, because building the variables runs
   DynamicPPL's warning about growable arrays, and a `@warn` holds a `try`. Samplers go through
   a `LogDensityFunction`, where the variables exist already, and that is fine. The same `try`
-  is why `catch_invalid_parameters` of [`turing_single_session`](@ref) is off by default, and
+  is why [`turing_catch_invalid_parameters`](@ref) is only used when asked for, and
   a compiled ReverseDiff tape doesn't see the error it catches either, so the rejected
   parameters get a finite log density with no error.
-- **Latent variables in a session:** in DynamicPPL 0.42.14, one latent variable anywhere
-  inside a session, imputed or from a model which samples within a timestep, makes every
-  timestep of the session about 450 ns slower to evaluate, and a Mooncake gradient about
-  10 µs slower per timestep, whatever the number of latents. A session without them costs
-  about 5 ns per timestep. This is DynamicPPL's cost of looking variables up under a prefix
-  that holds some, not the package's, and is to be raised with the Turing developers.
+- **Types known when a session is compiled:** a session costs about 10 ns per timestep to
+  evaluate, with or without latent variables, as long as every type is known when it is
+  compiled. Earlier versions of the package built a `NamedTuple` from names only known at run
+  time, which made every timestep about a hundred times slower, and that cost was taken for
+  one of DynamicPPL.jl's. The rows of the data get the element types of their columns for the
+  same reason, so a column which holds two types costs nothing extra. A model's own code can
+  lose the same factor in the same way, so check a slow model with JET's `@report_opt`.
 - **Reactant:** the constructors of Distributions.jl don't accept traced numbers, so a model
   built on them can't be compiled, and sets `reactant = false` in its test case. An `if` on a
   traced value throws, where `ifelse` works. A `Xoshiro` can't run in a compiled function,

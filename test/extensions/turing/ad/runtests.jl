@@ -34,39 +34,28 @@ const BACKENDS = [
 # bugs, so update both together.
 const KNOWN_FAILURES = [
     (;
-        bug = "Enzyme without runtime activity throws an EnzymeRuntimeActivityError on Turing.jl models, which Turing.jl documents as needing runtime activity",
+        bug = "Enzyme without runtime activity throws an EnzymeRuntimeActivityError on a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and on the full model, which Turing.jl documents as needing runtime activity. A plain session passes",
         backends = ["Enzyme forward", "Enzyme reverse"],
         cases = [
-            "turing session, environment starts",
-            "turing session, agent starts",
             "turing session with imputed actions",
             "turing session with an environment",
             "turing session with imputed observations",
-            "turing session with a reward that isn't always given, environment starts",
-            "turing session with a reward that isn't always given, agent starts",
             "turing session with noise in each timestep",
+            "turing full model with three sessions and independent priors",
         ],
     ),
     (;
-        bug = "Enzyme reverse with runtime activity throws an EnzymeNonScalarReturnException from its rule for building a struct of unknown type, when a NamedTuple is built from a data column which holds two types: MissingAction, MissingObservation or NoObservation beside the recorded values",
-        backends = ["Enzyme reverse, runtime activity"],
+        bug = "Enzyme reverse throws an IllegalTypeAnalysisException, with and without runtime activity, for a session whose observations are NoObservation on some timesteps, so that a row of the data is one of two NamedTuples",
+        backends = ["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases = [
-            "turing session with imputed actions",
-            "turing session with an environment",
-            "turing session with imputed observations",
             "turing session with a reward that isn't always given, environment starts",
             "turing session with a reward that isn't always given, agent starts",
         ],
     ),
     (;
-        bug = "Enzyme forward with runtime activity gives wrong gradients, with no error, for a session whose observations hold two types in the data: MissingObservation, which an environment fills in, or NoObservation, beside the recorded values",
-        backends = ["Enzyme forward, runtime activity"],
-        cases = [
-            "turing session with an environment",
-            "turing session with imputed observations",
-            "turing session with a reward that isn't always given, environment starts",
-            "turing session with a reward that isn't always given, agent starts",
-        ],
+        bug = "Enzyme forward throws the same IllegalTypeAnalysisException when the agent starts, so that the observation of one of two types is carried from one timestep to the next, and is right when the environment starts",
+        backends = ["Enzyme forward", "Enzyme forward, runtime activity"],
+        cases = ["turing session with a reward that isn't always given, agent starts"],
     ),
 ]
 
