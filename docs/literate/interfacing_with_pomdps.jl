@@ -21,20 +21,26 @@ using QMDP: QMDPSolver
 # The cognitive model holds the problem, a policy for it and a belief updater. The problem
 # is solved once, when the cognitive model is created, so nothing is solved on a timestep.
 
-struct BayesianObserver{Tpomdp, Tpomdp_policy, Tpomdp_updater} <: AbstractCognitiveModel
+struct BayesianObserver{Tpomdp,Tpomdp_policy,Tpomdp_updater} <: AbstractCognitiveModel
     pomdp::Tpomdp
     pomdp_policy::Tpomdp_policy
     pomdp_updater::Tpomdp_updater
 end
 
 function BayesianObserver(pomdp)
-    return BayesianObserver(pomdp, POMDPs.solve(QMDPSolver(), pomdp), DiscreteUpdater(pomdp))
+    return BayesianObserver(
+        pomdp, POMDPs.solve(QMDPSolver(), pomdp), DiscreteUpdater(pomdp)
+    )
 end
 
 # Its state is the belief, which starts as the problem's distribution over initial states.
 
 function CognitiveModeling.initialize_state(model::BayesianObserver, parameters)
-    return (; belief = POMDPs.initialize_belief(model.pomdp_updater, POMDPs.initialstate(model.pomdp)))
+    return (;
+        belief=POMDPs.initialize_belief(
+            model.pomdp_updater, POMDPs.initialstate(model.pomdp)
+        )
+    )
 end
 
 # On each timestep, the belief is updated from the previous action and the observation that
@@ -53,7 +59,9 @@ function CognitiveModeling.apply_model(model::BayesianObserver, input::ModelInpu
     ## Update state ##
     #Update the belief from the previous action and what was observed after it
     if !(previous_choice isa AbstractNoValue)
-        belief = POMDPs.update(model.pomdp_updater, belief, previous_choice, input.observation.observation)
+        belief = POMDPs.update(
+            model.pomdp_updater, belief, previous_choice, input.observation.observation
+        )
     end
 
     ## Compute action probabilities ##
@@ -62,15 +70,15 @@ function CognitiveModeling.apply_model(model::BayesianObserver, input::ModelInpu
     #Softmax over the action values, as a distribution over the problem's own actions
     Pₜ = DiscreteNonParametric(collect(POMDPs.actions(model.pomdp)), softmax(β .* Qₜ))
 
-    return ModelOutput((; choice = Pₜ), (; belief))
+    return ModelOutput((; choice=Pₜ), (; belief))
 end
 
 function CognitiveModeling.attribute_names(model::BayesianObserver)
     return ModelAttributes(;
-        parameters = :inverse_temperature,
-        states = :belief,
-        observations = :observation,
-        actions = :choice,
+        parameters=:inverse_temperature,
+        states=:belief,
+        observations=:observation,
+        actions=:choice,
     )
 end
 

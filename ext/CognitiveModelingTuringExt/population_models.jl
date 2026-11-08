@@ -1,8 +1,15 @@
 ### POPULATION MODELS, WHICH SAMPLE THE COGNITIVE PARAMETERS OF EVERY SESSION ###
 
 #The simplest population model: every session has its own parameters, each sampled from the same prior
-Turing.@model function CognitiveModeling.turing_population_model(population_model::IndependentSessions, sessions_info::MultipleSessionsInfo)
-    parameters ~ to_submodel(turing_sample_independent_parameters(population_model.priors, n_sessions(sessions_info)), false)
+Turing.@model function CognitiveModeling.turing_population_model(
+    population_model::IndependentSessions, sessions_info::MultipleSessionsInfo
+)
+    parameters ~ to_submodel(
+        turing_sample_independent_parameters(
+            population_model.priors, n_sessions(sessions_info)
+        ),
+        false,
+    )
     return parameters
 end
 
@@ -14,14 +21,25 @@ with [`turing_sample_parameter_across_sessions`](@ref) under the parameter's nam
 returns them in a `NamedTuple`. The names are taken from the type of `priors`, so that the
 result is compiled knowing them.
 """
-Turing.@model function turing_sample_independent_parameters(priors::NamedTuple{names}, n_sessions) where {names}
+Turing.@model function turing_sample_independent_parameters(
+    priors::NamedTuple{names}, n_sessions
+) where {names}
     name = first(names)
-    sessions ~ to_submodel(prefix(turing_sample_parameter_across_sessions(filldist(first(priors), n_sessions)), VarName{name}()), false)
-    rest ~ to_submodel(turing_sample_independent_parameters(Base.tail(priors), n_sessions), false)
+    sessions ~ to_submodel(
+        prefix(
+            turing_sample_parameter_across_sessions(filldist(first(priors), n_sessions)),
+            VarName{name}(),
+        ),
+        false,
+    )
+    rest ~
+    to_submodel(turing_sample_independent_parameters(Base.tail(priors), n_sessions), false)
     return merge(NamedTuple{(name,)}((sessions,)), rest)
 end
 
-Turing.@model function turing_sample_independent_parameters(priors::NamedTuple{()}, n_sessions)
+Turing.@model function turing_sample_independent_parameters(
+    priors::NamedTuple{()}, n_sessions
+)
     return (;)
 end
 

@@ -52,7 +52,9 @@ CognitiveModeling.apply_model(RescorlaWagner(), input).new_state
 ```
 """
 function apply_model(model::AbstractCognitiveModel, input)
-    error("There is no apply_model method for a model of type $(typeof(model)) with an input of type $(typeof(input)). Each model must define CognitiveModeling.apply_model(model::$(typeof(model)), input::CognitiveModeling.ModelInput).")
+    return error(
+        "There is no apply_model method for a model of type $(typeof(model)) with an input of type $(typeof(input)). Each model must define CognitiveModeling.apply_model(model::$(typeof(model)), input::CognitiveModeling.ModelInput).",
+    )
 end
 
 """
@@ -78,7 +80,9 @@ julia> CognitiveModeling.initialize_state(RescorlaWagner(), (; initial_value = 0
 ```
 """
 function initialize_state(model::AbstractCognitiveModel, parameters)
-    error("There is no initialize_state method for a model of type $(typeof(model)). Each model must define CognitiveModeling.initialize_state(model::$(typeof(model)), parameters), which returns (;) if the model has no state.")
+    return error(
+        "There is no initialize_state method for a model of type $(typeof(model)). Each model must define CognitiveModeling.initialize_state(model::$(typeof(model)), parameters), which returns (;) if the model has no state.",
+    )
 end
 
 """
@@ -122,7 +126,9 @@ julia> CognitiveModeling.attribute_names(RescorlaWagner()).parameters
 ```
 """
 function attribute_names(model::AbstractCognitiveModel)
-    error("There is no attribute_names method for a model of type $(typeof(model)). Each model must define CognitiveModeling.attribute_names(model::$(typeof(model))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.")
+    return error(
+        "There is no attribute_names method for a model of type $(typeof(model)). Each model must define CognitiveModeling.attribute_names(model::$(typeof(model))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.",
+    )
 end
 
 ## Functions that a model or an environment model can implement ##

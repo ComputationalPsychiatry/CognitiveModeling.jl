@@ -39,7 +39,9 @@ Each argument is kept in a field of the same name, such as `input.action`.
   [`ModelInput`](@ref): [`EnvironmentStarts`](@ref), [`AgentStarts`](@ref) or
   [`UnknownWhoStarts`](@ref).
 """
-struct EnvironmentInput{Taction, Tstate, Tobservation, Tparameters, Ttimestep_size, Trng, Twho_starts}
+struct EnvironmentInput{
+    Taction,Tstate,Tobservation,Tparameters,Ttimestep_size,Trng,Twho_starts
+}
     action::Taction
     previous_state::Tstate
     previous_observation::Tobservation
@@ -50,8 +52,32 @@ struct EnvironmentInput{Taction, Tstate, Tobservation, Tparameters, Ttimestep_si
 end
 
 #Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified. An integer keeps Float32 models in Float32
-function EnvironmentInput(action, previous_state, previous_observation, parameters, timestep_size = 1, rng::AbstractRNG = default_rng(), who_starts = UnknownWhoStarts())
-    return EnvironmentInput{typeof(action), typeof(previous_state), typeof(previous_observation), typeof(parameters), typeof(timestep_size), typeof(rng), typeof(who_starts)}(action, previous_state, previous_observation, parameters, timestep_size, rng, who_starts)
+function EnvironmentInput(
+    action,
+    previous_state,
+    previous_observation,
+    parameters,
+    timestep_size=1,
+    rng::AbstractRNG=default_rng(),
+    who_starts=UnknownWhoStarts(),
+)
+    return EnvironmentInput{
+        typeof(action),
+        typeof(previous_state),
+        typeof(previous_observation),
+        typeof(parameters),
+        typeof(timestep_size),
+        typeof(rng),
+        typeof(who_starts),
+    }(
+        action,
+        previous_state,
+        previous_observation,
+        parameters,
+        timestep_size,
+        rng,
+        who_starts,
+    )
 end
 
 """
@@ -75,12 +101,14 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   can't depend on them: the environment receives them as `input.previous_observation` on
   the next timestep.
 """
-struct EnvironmentOutput{Tobservation, Tstate}
+struct EnvironmentOutput{Tobservation,Tstate}
     observation_distribution::Tobservation
     new_state::Tstate
 
     #Only takes named observation distributions, so that the environment model names every observation
-    function EnvironmentOutput(observation_distribution::NamedTuple, new_state = (;))
-        return new{typeof(observation_distribution), typeof(new_state)}(observation_distribution, new_state)
+    function EnvironmentOutput(observation_distribution::NamedTuple, new_state=(;))
+        return new{typeof(observation_distribution),typeof(new_state)}(
+            observation_distribution, new_state
+        )
     end
 end

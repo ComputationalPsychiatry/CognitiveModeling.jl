@@ -5,7 +5,7 @@
 [![Coverage](https://codecov.io/gh/ComputationalPsychiatry/CognitiveModeling.jl/branch/dev/graph/badge.svg)](https://codecov.io/gh/ComputationalPsychiatry/CognitiveModeling.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET](https://img.shields.io/badge/%F0%9F%9B%A9%EF%B8%8F_tested_with-JET.jl-233f9a)](https://github.com/aviatesk/JET.jl)
-[![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
+[![Code Style: Blue](https://img.shields.io/badge/code%20style-blue-4495d1.svg)](https://github.com/JuliaDiff/BlueStyle)
 
 A Julia package for computational modeling of cognition and behaviour. It is a remake of [ActionModels.jl](https://github.com/ComputationalPsychiatry/ActionModels.jl) and is under development.
 
@@ -15,9 +15,10 @@ Pre-created models live in a separate package, [PremadeCognitiveModels.jl](https
 
 Work happens on `dev`, and `main` holds released code, so open pull requests against `dev`.
 
-Install the formatting hook once per clone. It runs [Runic](https://github.com/fredrikekre/Runic.jl) on every `git commit`:
+The code is formatted with [JuliaFormatter](https://github.com/JuliaEditorSupport/JuliaFormatter.jl) in [Blue style](https://github.com/JuliaDiff/BlueStyle). Install its `jlfmt` app once per machine, and the formatting hook once per clone. The hook then formats the files of every `git commit`:
 
 ```bash
+julia -e 'import Pkg; Pkg.Apps.add("JuliaFormatter")'
 pre-commit install
 ```
 

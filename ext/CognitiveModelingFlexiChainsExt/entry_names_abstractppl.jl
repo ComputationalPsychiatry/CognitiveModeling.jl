@@ -13,4 +13,6 @@ Return the name of an entry in the chain, which reads `names` one after the othe
 """
 entry_name(first_name::Symbol) = @varname($first_name)
 entry_name(first_name::Symbol, second_name::Symbol) = @varname($first_name.$second_name)
-entry_name(first_name::Symbol, second_name::Symbol, third_name::Symbol) = @varname($first_name.$second_name.$third_name)
+function entry_name(first_name::Symbol, second_name::Symbol, third_name::Symbol)
+    @varname($first_name.$second_name.$third_name)
+end

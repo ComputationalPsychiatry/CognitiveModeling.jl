@@ -9,26 +9,28 @@ const NOT_RUN = ["interfacing_with_reinforcement_learning.jl", "interfacing_with
 # Turn the scripts in docs/literate/ into markdown pages in docs/src/generated/
 literate_dir = joinpath(@__DIR__, "literate")
 generated_dir = joinpath(@__DIR__, "src", "generated")
-for file in readdir(literate_dir; join = true)
+for file in readdir(literate_dir; join=true)
     if basename(file) in NOT_RUN
-        Literate.markdown(file, generated_dir; codefence = "```julia" => "```")
+        Literate.markdown(file, generated_dir; codefence="```julia" => "```")
     else
         Literate.markdown(file, generated_dir)
     end
 end
 
-DocMeta.setdocmeta!(CognitiveModeling, :DocTestSetup, :(using CognitiveModeling); recursive = true)
+DocMeta.setdocmeta!(
+    CognitiveModeling, :DocTestSetup, :(using CognitiveModeling); recursive=true
+)
 
 makedocs(;
-    modules = [CognitiveModeling],
-    authors = "Peter Thestrup Waade <peter@waade.net>",
-    sitename = "CognitiveModeling.jl",
-    format = Documenter.HTML(;
-        canonical = "https://ComputationalPsychiatry.github.io/CognitiveModeling.jl",
-        edit_link = "dev",
-        assets = String[],
+    modules=[CognitiveModeling],
+    authors="Peter Thestrup Waade <peter@waade.net>",
+    sitename="CognitiveModeling.jl",
+    format=Documenter.HTML(;
+        canonical="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl",
+        edit_link="dev",
+        assets=String[],
     ),
-    pages = [
+    pages=[
         "Home" => "index.md",
         "Tutorials" => [
             "generated/getting_started.md",
@@ -48,7 +50,7 @@ makedocs(;
 )
 
 deploydocs(;
-    repo = "github.com/ComputationalPsychiatry/CognitiveModeling.jl",
-    devbranch = "dev",
-    push_preview = true,
+    repo="github.com/ComputationalPsychiatry/CognitiveModeling.jl",
+    devbranch="dev",
+    push_preview=true,
 )

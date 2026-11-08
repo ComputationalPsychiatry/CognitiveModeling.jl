@@ -61,16 +61,36 @@ julia> SaveHistory(SaveEverything(); save_initial_values = false).save_initial_v
 false
 ```
 """
-struct SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} end
+struct SaveHistory{
+    Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values
+} end
 
 #Takes the names by keyword, and puts each selection in the type, and whether the initial values are saved
-function SaveHistory(; observations = (), actions = (), action_distributions = (), states = (), save_initial_values::Bool = true)
-    return SaveHistory{as_selection(observations), as_selection(actions), as_selection(action_distributions), as_selection(states), save_initial_values}()
+function SaveHistory(;
+    observations=(),
+    actions=(),
+    action_distributions=(),
+    states=(),
+    save_initial_values::Bool=true,
+)
+    return SaveHistory{
+        as_selection(observations),
+        as_selection(actions),
+        as_selection(action_distributions),
+        as_selection(states),
+        save_initial_values,
+    }()
 end
 
 #Saves everything of every kind
-function SaveHistory(::SaveEverything; save_initial_values::Bool = true)
-    return SaveHistory(; observations = SaveEverything(), actions = SaveEverything(), action_distributions = SaveEverything(), states = SaveEverything(), save_initial_values)
+function SaveHistory(::SaveEverything; save_initial_values::Bool=true)
+    return SaveHistory(;
+        observations=SaveEverything(),
+        actions=SaveEverything(),
+        action_distributions=SaveEverything(),
+        states=SaveEverything(),
+        save_initial_values,
+    )
 end
 
 """
@@ -86,7 +106,12 @@ as_selection(names::AbstractVector{Symbol}) = Tuple(names)
 as_selection(::SaveEverything) = SaveEverything()
 
 #Reads the selections in the type as properties, and whether the initial values are saved
-function Base.getproperty(save_history::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}, name::Symbol) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}
+function Base.getproperty(
+    save_history::SaveHistory{
+        Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values
+    },
+    name::Symbol,
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
     if name === :observations
         return Tobservations
     elseif name === :actions
@@ -102,12 +127,19 @@ function Base.getproperty(save_history::SaveHistory{Tobservations, Tactions, Tac
     end
 end
 
-Base.propertynames(::SaveHistory) = (:observations, :actions, :action_distributions, :states, :save_initial_values)
+function Base.propertynames(::SaveHistory)
+    return (:observations, :actions, :action_distributions, :states, :save_initial_values)
+end
 
 #Shows the selections on one line each in the REPL and notebooks, and whether the initial values are saved
 function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
     print(io, "SaveHistory")
-    for (kind, selection) in (("Observations", save_history.observations), ("Actions", save_history.actions), ("Action distributions", save_history.action_distributions), ("States", save_history.states))
+    for (kind, selection) in (
+        ("Observations", save_history.observations),
+        ("Actions", save_history.actions),
+        ("Action distributions", save_history.action_distributions),
+        ("States", save_history.states),
+    )
         print(io, "\n", kind, ": ")
         if selection isa SaveEverything
             print(io, "everything")
@@ -117,7 +149,9 @@ function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
             join(io, selection, ", ")
         end
     end
-    print(io, "\nInitial values: ", save_history.save_initial_values ? "saved" : "not saved")
+    print(
+        io, "\nInitial values: ", save_history.save_initial_values ? "saved" : "not saved"
+    )
     return nothing
 end
 
@@ -131,10 +165,26 @@ end
 Return the selection of one kind in a [`SaveHistory`](@ref) as a `Val`, so that the names are
 known at compile time wherever something is selected with it.
 """
-observation_selection(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = Val(Tobservations)
-action_selection(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = Val(Tactions)
-action_distribution_selection(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = Val(Taction_distributions)
-state_selection(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = Val(Tstates)
+function observation_selection(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return Val(Tobservations)
+end
+function action_selection(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return Val(Tactions)
+end
+function action_distribution_selection(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return Val(Taction_distributions)
+end
+function state_selection(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return Val(Tstates)
+end
 
 """
     saves_initial_values(save_history)
@@ -142,7 +192,11 @@ state_selection(::SaveHistory{Tobservations, Tactions, Taction_distributions, Ts
 Return whether `save_history` saves the values from before the first timestep, as
 timestep 0. It is read from the type, so that it is known at compile time.
 """
-saves_initial_values(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = Tsave_initial_values
+function saves_initial_values(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return Tsave_initial_values
+end
 
 """
     select_names(x, selection::Val)
@@ -159,7 +213,9 @@ function select_names(x, ::Val{names}) where {names}
     if x isa NamedTuple
         return NamedTuple{names}(x)
     else
-        error("A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). Use SaveEverything() or () for this kind of attribute.")
+        error(
+            "A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). Use SaveEverything() or () for this kind of attribute.",
+        )
     end
 end
 
@@ -173,9 +229,13 @@ checked, because [`prepare_state_for_saving`](@ref) can save anything.
 """
 function check_savehistory_selection_names(save_history::SaveHistory, model::AbstractModel)
     attributes = check_type_attribute_names(attribute_names(model), model)
-    check_selected_names(save_history.observations, attributes.observations, "observations", model)
+    check_selected_names(
+        save_history.observations, attributes.observations, "observations", model
+    )
     check_selected_names(save_history.actions, attributes.actions, "actions", model)
-    check_selected_names(save_history.action_distributions, attributes.actions, "action distributions", model)
+    check_selected_names(
+        save_history.action_distributions, attributes.actions, "action distributions", model
+    )
     return nothing
 end
 
@@ -190,7 +250,11 @@ the last being named like the actions.
 check_selected_names(::SaveEverything, names, kind, model) = nothing
 function check_selected_names(selection::Tuple, names, kind, model)
     if !has_every_name(selection, names)
-        throw(ArgumentError("The SaveHistory selects the $kind $selection, but attribute_names lists the $(kind == "action distributions" ? "actions" : kind) of $(describe_model(model)) as $names. A history can only select observations, actions and action distributions that the model lists."))
+        throw(
+            ArgumentError(
+                "The SaveHistory selects the $kind $selection, but attribute_names lists the $(kind == "action distributions" ? "actions" : kind) of $(describe_model(model)) as $names. A history can only select observations, actions and action distributions that the model lists.",
+            ),
+        )
     end
     return nothing
 end
@@ -202,7 +266,9 @@ Return what is saved of `state`: what `selection` selects of the output of
 [`prepare_state_for_saving`](@ref). When nothing is selected, the state isn't prepared at
 all, so that no copy is made of a state which isn't saved.
 """
-save_state(model, state, selection::Val) = select_names(prepare_state_for_saving(model, state), selection)
+function save_state(model, state, selection::Val)
+    return select_names(prepare_state_for_saving(model, state), selection)
+end
 save_state(model, state, ::Val{()}) = (;)
 
 """
@@ -211,7 +277,11 @@ save_state(model, state, ::Val{()}) = (;)
 Return whether `save_history` selects nothing of any kind, which is known at compile time.
 Whether it saves the initial values doesn't matter, since there is nothing to save of them.
 """
-saves_nothing(::SaveHistory{(), (), (), (), Tsave_initial_values}) where {Tsave_initial_values} = true
+function saves_nothing(
+    ::SaveHistory{(),(),(),(),Tsave_initial_values}
+) where {Tsave_initial_values}
+    return true
+end
 saves_nothing(::SaveHistory) = false
 
 """
@@ -221,7 +291,11 @@ Return a [`SaveHistory`](@ref) which selects only the states that `save_history`
 which is what [`simulate`](@ref) keeps of an environment's selection. Whether the initial
 values are saved stays as it is.
 """
-savehistory_states_only(::SaveHistory{Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values}) where {Tobservations, Tactions, Taction_distributions, Tstates, Tsave_initial_values} = SaveHistory{(), (), (), Tstates, Tsave_initial_values}()
+function savehistory_states_only(
+    ::SaveHistory{Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+) where {Tobservations,Tactions,Taction_distributions,Tstates,Tsave_initial_values}
+    return SaveHistory{(),(),(),Tstates,Tsave_initial_values}()
+end
 
 """
     saved_timestep_sizes(timestep_sizes, n_steps, save_history)
@@ -230,5 +304,15 @@ Return the sizes of `n_steps` timesteps as they are returned with a history: one
 each timestep when `save_history` saves anything, after [`BeforeFirstTimestep`](@ref) for
 timestep 0 when it saves the initial values, and an empty vector when it saves nothing.
 """
-saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory) = returned_timestep_sizes(each_timestep_size(timestep_sizes, n_steps), n_steps, Val(saves_initial_values(save_history)))
-saved_timestep_sizes(timestep_sizes, n_steps, ::SaveHistory{(), (), (), (), Tsave_initial_values}) where {Tsave_initial_values} = empty(each_timestep_size(timestep_sizes, 0))
+function saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory)
+    return returned_timestep_sizes(
+        each_timestep_size(timestep_sizes, n_steps),
+        n_steps,
+        Val(saves_initial_values(save_history)),
+    )
+end
+function saved_timestep_sizes(
+    timestep_sizes, n_steps, ::SaveHistory{(),(),(),(),Tsave_initial_values}
+) where {Tsave_initial_values}
+    return empty(each_timestep_size(timestep_sizes, 0))
+end

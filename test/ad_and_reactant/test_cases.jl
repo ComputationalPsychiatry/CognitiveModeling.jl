@@ -18,98 +18,194 @@ Base.rand(rng::AbstractRNG, reward::SampledReward) = float(rand(rng) < reward.pr
 
 # A Rescorla-Wagner model. Its state starts as a Float64, whatever number type the parameters have
 struct LearnsRewards{Taction} <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::LearnsRewards, parameters) = (; expected_reward = 0.5)
-function CognitiveModeling.apply_model(model::LearnsRewards{Taction}, input::ModelInput) where {Taction}
+function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.apply_model(
+    model::LearnsRewards{Taction}, input::ModelInput
+) where {Taction}
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
-    Vₜ = input.observation.reward isa AbstractNoValue ? V₋₁ : V₋₁ + α * (input.observation.reward - V₋₁)
-    return ModelOutput((; choice = Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
+    Vₜ = if input.observation.reward isa AbstractNoValue
+        V₋₁
+    else
+        V₋₁ + α * (input.observation.reward - V₋₁)
+    end
+    return ModelOutput(
+        (; choice=Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward=Vₜ)
+    )
 end
-CognitiveModeling.attribute_names(model::LearnsRewards) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(model::LearnsRewards)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        observations=:reward,
+        actions=:choice,
+    )
+end
 
 # An environment whose reward depends on the action, and which has a state
 struct RewardsFollowActions <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsFollowActions, parameters) = (; n_timesteps = 0)
-function CognitiveModeling.apply_model(environment::RewardsFollowActions, input::EnvironmentInput)
+function CognitiveModeling.initialize_state(environment::RewardsFollowActions, parameters)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.apply_model(
+    environment::RewardsFollowActions, input::EnvironmentInput
+)
     action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     n_timesteps = input.previous_state.n_timesteps + 1
-    return EnvironmentOutput((; reward = Deterministic(input.parameters.reward_size * action)), (; n_timesteps))
+    return EnvironmentOutput(
+        (; reward=Deterministic(input.parameters.reward_size * action)), (; n_timesteps)
+    )
 end
-CognitiveModeling.attribute_names(environment::RewardsFollowActions) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(environment::RewardsFollowActions)
+    return ModelAttributes(;
+        parameters=:reward_size, states=:n_timesteps, observations=:reward, actions=:choice
+    )
+end
 
 # The same environment under other names than the model's, with an observation the model doesn't list
 struct PayoffsFollowLevers <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters) = (; n_timesteps = 0)
-function CognitiveModeling.apply_model(environment::PayoffsFollowLevers, input::EnvironmentInput)
+function CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.apply_model(
+    environment::PayoffsFollowLevers, input::EnvironmentInput
+)
     action = input.action.lever isa AbstractNoValue ? 0.5 : input.action.lever
     n_timesteps = input.previous_state.n_timesteps + 1
-    return EnvironmentOutput((; payoff = Deterministic(input.parameters.reward_size * action), n_timesteps = Deterministic(n_timesteps)), (; n_timesteps))
+    return EnvironmentOutput(
+        (;
+            payoff=Deterministic(input.parameters.reward_size * action),
+            n_timesteps=Deterministic(n_timesteps),
+        ),
+        (; n_timesteps),
+    )
 end
-CognitiveModeling.attribute_names(environment::PayoffsFollowLevers) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = (:payoff, :n_timesteps), actions = :lever)
+function CognitiveModeling.attribute_names(environment::PayoffsFollowLevers)
+    return ModelAttributes(;
+        parameters=:reward_size,
+        states=:n_timesteps,
+        observations=(:payoff, :n_timesteps),
+        actions=:lever,
+    )
+end
 
 # An environment which takes the choice, and whose reward is sampled whatever it is
 struct SampledRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;)
 function CognitiveModeling.apply_model(environment::SampledRewards, input::EnvironmentInput)
-    return EnvironmentOutput((; reward = SampledReward(input.parameters.reward_probability)))
+    return EnvironmentOutput((; reward=SampledReward(input.parameters.reward_probability)))
 end
-CognitiveModeling.attribute_names(environment::SampledRewards) = ModelAttributes(; parameters = :reward_probability, states = (), observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(environment::SampledRewards)
+    return ModelAttributes(;
+        parameters=:reward_probability, states=(), observations=:reward, actions=:choice
+    )
+end
 
 # A Rescorla-Wagner model which learns more the more time passes. It learns on the first timestep too, so that every size counts
 struct LearnsOverTime <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::LearnsOverTime, parameters) = (; expected_reward = 0.5)
+function CognitiveModeling.initialize_state(model::LearnsOverTime, parameters)
+    return (; expected_reward=0.5)
+end
 function CognitiveModeling.apply_model(model::LearnsOverTime, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
     r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + (1 - exp(-α * input.timestep_size)) * (r - V₋₁)
-    return ModelOutput((; choice = Deterministic(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
+    return ModelOutput(
+        (; choice=Deterministic(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward=Vₜ)
+    )
 end
-CognitiveModeling.attribute_names(model::LearnsOverTime) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(model::LearnsOverTime)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        observations=:reward,
+        actions=:choice,
+    )
+end
 
 # An environment whose reward grows with the time that passes
 struct RewardsGrowOverTime <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsGrowOverTime, parameters) = (;)
-function CognitiveModeling.apply_model(environment::RewardsGrowOverTime, input::EnvironmentInput)
+function CognitiveModeling.apply_model(
+    environment::RewardsGrowOverTime, input::EnvironmentInput
+)
     action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
-    return EnvironmentOutput((; reward = Deterministic(input.parameters.reward_size * action * input.timestep_size)))
+    return EnvironmentOutput((;
+        reward=Deterministic(input.parameters.reward_size * action * input.timestep_size)
+    ))
 end
-CognitiveModeling.attribute_names(environment::RewardsGrowOverTime) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(environment::RewardsGrowOverTime)
+    return ModelAttributes(;
+        parameters=:reward_size, states=(), observations=:reward, actions=:choice
+    )
+end
 
 # A model and an environment which leave out their states
 struct ChoosesWithoutState <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ChoosesWithoutState, parameters) = (;)
 function CognitiveModeling.apply_model(model::ChoosesWithoutState, input::ModelInput)
-    return ModelOutput((; choice = Deterministic(inv(1 + exp(-input.parameters.inverse_temperature)))))
+    return ModelOutput((;
+        choice=Deterministic(inv(1 + exp(-input.parameters.inverse_temperature)))
+    ))
 end
-CognitiveModeling.attribute_names(model::ChoosesWithoutState) = ModelAttributes(; parameters = :inverse_temperature, states = (), observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(model::ChoosesWithoutState)
+    return ModelAttributes(;
+        parameters=:inverse_temperature, states=(), observations=:reward, actions=:choice
+    )
+end
 struct RewardsWithoutState <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithoutState, parameters) = (;)
-function CognitiveModeling.apply_model(environment::RewardsWithoutState, input::EnvironmentInput)
+function CognitiveModeling.apply_model(
+    environment::RewardsWithoutState, input::EnvironmentInput
+)
     action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
-    return EnvironmentOutput((; reward = Deterministic(input.parameters.reward_size * action)))
+    return EnvironmentOutput((;
+        reward=Deterministic(input.parameters.reward_size * action)
+    ))
 end
-CognitiveModeling.attribute_names(environment::RewardsWithoutState) = ModelAttributes(; parameters = :reward_size, states = (), observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(environment::RewardsWithoutState)
+    return ModelAttributes(;
+        parameters=:reward_size, states=(), observations=:reward, actions=:choice
+    )
+end
 
 # A model whose state update has noise in it
 struct LearnsWithNoise <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters) = (; expected_reward = 0.5)
+function CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters)
+    return (; expected_reward=0.5)
+end
 function CognitiveModeling.apply_model(model::LearnsWithNoise, input::ModelInput)
     V₋₁ = input.previous_state.expected_reward
     α = input.parameters.learning_rate
     β = input.parameters.inverse_temperature
     r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     Vₜ = V₋₁ + α * (r - V₋₁) + α * 0.1 * (rand(input.rng) - 0.5)
-    return ModelOutput((; choice = Deterministic(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward = Vₜ))
+    return ModelOutput(
+        (; choice=Deterministic(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward=Vₜ)
+    )
 end
-CognitiveModeling.attribute_names(model::LearnsWithNoise) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_reward, observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(model::LearnsWithNoise)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        observations=:reward,
+        actions=:choice,
+    )
+end
 
 # A Rescorla-Wagner model which changes a Vector in its state in place, and copies it when it's saved
 struct LearnsInPlace <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsInPlace, parameters)
-    return (; expected_rewards = [0.5 * one(parameters.learning_rate), 0.5 * one(parameters.learning_rate)])
+    return (;
+        expected_rewards=[
+            0.5 * one(parameters.learning_rate), 0.5 * one(parameters.learning_rate)
+        ]
+    )
 end
 function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     V = input.previous_state.expected_rewards
@@ -117,41 +213,89 @@ function CognitiveModeling.apply_model(model::LearnsInPlace, input::ModelInput)
     β = input.parameters.inverse_temperature
     r = input.observation.reward isa AbstractNoValue ? 0.5 : input.observation.reward
     V[1] += α * (r - V[1])
-    return ModelOutput((; choice = Deterministic(inv(1 + exp(-β * (V[1] - 0.5))))), input.previous_state)
+    return ModelOutput(
+        (; choice=Deterministic(inv(1 + exp(-β * (V[1] - 0.5))))), input.previous_state
+    )
 end
-CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state) = (; expected_rewards = copy(state.expected_rewards))
-CognitiveModeling.attribute_names(model::LearnsInPlace) = ModelAttributes(; parameters = (:learning_rate, :inverse_temperature), states = :expected_rewards, observations = :reward, actions = :choice)
+function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state)
+    return (; expected_rewards=copy(state.expected_rewards))
+end
+function CognitiveModeling.attribute_names(model::LearnsInPlace)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_rewards,
+        observations=:reward,
+        actions=:choice,
+    )
+end
 
 # The same model, which copies its state with deepcopy when it's saved. ReverseDiff v1.18.7 gives zero gradients through
 # deepcopy of a container of tracked numbers, which is fixed on its master branch: see KNOWN_FAILURES in ad/runtests.jl
 struct LearnsInPlaceWithDeepcopy <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters) = CognitiveModeling.initialize_state(LearnsInPlace(), parameters)
-CognitiveModeling.apply_model(model::LearnsInPlaceWithDeepcopy, input::ModelInput) = CognitiveModeling.apply_model(LearnsInPlace(), input)
-CognitiveModeling.prepare_state_for_saving(model::LearnsInPlaceWithDeepcopy, state) = deepcopy(state)
-CognitiveModeling.attribute_names(model::LearnsInPlaceWithDeepcopy) = CognitiveModeling.attribute_names(LearnsInPlace())
+function CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters)
+    return CognitiveModeling.initialize_state(LearnsInPlace(), parameters)
+end
+function CognitiveModeling.apply_model(model::LearnsInPlaceWithDeepcopy, input::ModelInput)
+    return CognitiveModeling.apply_model(LearnsInPlace(), input)
+end
+function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlaceWithDeepcopy, state)
+    return deepcopy(state)
+end
+function CognitiveModeling.attribute_names(model::LearnsInPlaceWithDeepcopy)
+    return CognitiveModeling.attribute_names(LearnsInPlace())
+end
 
 # The same environment as RewardsFollowActions, which ends after the number of timesteps in its parameters
 struct RewardsUntilEnd <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsUntilEnd, parameters) = (; n_timesteps = 0)
-function CognitiveModeling.apply_model(environment::RewardsUntilEnd, input::EnvironmentInput)
+function CognitiveModeling.initialize_state(environment::RewardsUntilEnd, parameters)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.apply_model(
+    environment::RewardsUntilEnd, input::EnvironmentInput
+)
     action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     n_timesteps = input.previous_state.n_timesteps + 1
-    return EnvironmentOutput((; reward = Deterministic(input.parameters.reward_size * action)), (; n_timesteps))
+    return EnvironmentOutput(
+        (; reward=Deterministic(input.parameters.reward_size * action)), (; n_timesteps)
+    )
 end
-CognitiveModeling.attribute_names(environment::RewardsUntilEnd) = ModelAttributes(; parameters = (:reward_size, :last_timestep), states = :n_timesteps, observations = :reward, actions = :choice)
-CognitiveModeling.stopping_criterion(environment::RewardsUntilEnd, state, parameters) = state.n_timesteps >= parameters.last_timestep
+function CognitiveModeling.attribute_names(environment::RewardsUntilEnd)
+    return ModelAttributes(;
+        parameters=(:reward_size, :last_timestep),
+        states=:n_timesteps,
+        observations=:reward,
+        actions=:choice,
+    )
+end
+function CognitiveModeling.stopping_criterion(
+    environment::RewardsUntilEnd, state, parameters
+)
+    return state.n_timesteps >= parameters.last_timestep
+end
 
 # The same environment as RewardsFollowActions, which gives no reward on every third timestep, so that the
 # observation is sometimes NoObservation and has two types inside the loop
 struct RewardsNotAlwaysGiven <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsNotAlwaysGiven, parameters) = (; n_timesteps = 0)
-function CognitiveModeling.apply_model(environment::RewardsNotAlwaysGiven, input::EnvironmentInput)
+function CognitiveModeling.initialize_state(environment::RewardsNotAlwaysGiven, parameters)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.apply_model(
+    environment::RewardsNotAlwaysGiven, input::EnvironmentInput
+)
     action = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
     n_timesteps = input.previous_state.n_timesteps + 1
-    observation_distribution = iszero(mod(n_timesteps, 3)) ? (; reward = NoObservation()) : (; reward = Deterministic(input.parameters.reward_size * action))
+    observation_distribution = if iszero(mod(n_timesteps, 3))
+        (; reward=NoObservation())
+    else
+        (; reward=Deterministic(input.parameters.reward_size * action))
+    end
     return EnvironmentOutput(observation_distribution, (; n_timesteps))
 end
-CognitiveModeling.attribute_names(environment::RewardsNotAlwaysGiven) = ModelAttributes(; parameters = :reward_size, states = :n_timesteps, observations = :reward, actions = :choice)
+function CognitiveModeling.attribute_names(environment::RewardsNotAlwaysGiven)
+    return ModelAttributes(;
+        parameters=:reward_size, states=:n_timesteps, observations=:reward, actions=:choice
+    )
+end
 
 # Sums the expected rewards in the states of a simulation
 function sum_expected_rewards(cognitive_states)
@@ -168,12 +312,12 @@ function simulate_with_name_maps(x, who_starts)
         LearnsRewards{Deterministic}(),
         PayoffsFollowLevers();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(SaveEverything()),
-        observation_map = NameMap(:payoff => :reward),
-        action_map = NameMap(:choice => :lever),
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(SaveEverything()),
+        observation_map=NameMap(:payoff => :reward),
+        action_map=NameMap(:choice => :lever),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -184,10 +328,10 @@ function simulate_deterministic(x, who_starts)
         LearnsRewards{Deterministic}(),
         RewardsFollowActions();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -198,10 +342,10 @@ function simulate_until_environment_ends(x, who_starts)
         LearnsRewards{Deterministic}(),
         RewardsUntilEnd();
         who_starts,
-        n_steps = 40,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8, last_timestep = 20),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=40,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8, last_timestep=20),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -214,9 +358,9 @@ function simulate_with_rewards_not_always_given(x, who_starts, save_history)
         LearnsRewards{Deterministic}(),
         RewardsNotAlwaysGiven();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
         save_history,
     )
     return sum_expected_rewards(cognitive_states)
@@ -224,11 +368,19 @@ end
 
 # A model run on one observation at a time with simulate, passing its state and action on, with the parameters from a vector
 function simulate_on_observations(x)
-    cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2])
-    action, cognitive_state = simulate(LearnsRewards{Deterministic}(), (; reward = 1.0); cognitive_parameters)
+    cognitive_parameters = (; learning_rate=x[1], inverse_temperature=x[2])
+    action, cognitive_state = simulate(
+        LearnsRewards{Deterministic}(), (; reward=1.0); cognitive_parameters
+    )
     total = action.choice
     for reward in (0.0, 1.0, 1.0, 0.0)
-        action, cognitive_state = simulate(LearnsRewards{Deterministic}(), (; reward); cognitive_parameters, previous_cognitive_state = cognitive_state, previous_action = action)
+        action, cognitive_state = simulate(
+            LearnsRewards{Deterministic}(),
+            (; reward);
+            cognitive_parameters,
+            previous_cognitive_state=cognitive_state,
+            previous_action=action,
+        )
         total += action.choice
     end
     return total
@@ -242,11 +394,11 @@ function simulate_sampled(x, who_starts)
         LearnsRewards{SampledAction}(),
         SampledRewards();
         who_starts,
-        n_steps = 30,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_probability = 0.8),
-        rng = Xoshiro(1),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=30,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_probability=0.8),
+        rng=Xoshiro(1),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -254,17 +406,17 @@ end
 # A simulation with a size for each timestep, with the parameters from a vector. The sizes are returned after
 # BeforeFirstTimestep for timestep 0, which Enzyme reverse throws on, which is a bug in Enzyme: see
 # KNOWN_FAILURES in ad/runtests.jl
-const TIMESTEP_SIZES = collect(range(0.5, 1.5; length = 20))
+const TIMESTEP_SIZES = collect(range(0.5, 1.5; length=20))
 function simulate_with_timestep_sizes(x, who_starts)
     _, _, cognitive_states, _ = simulate(
         LearnsOverTime(),
         RewardsGrowOverTime();
         who_starts,
-        n_steps = 20,
-        timestep_sizes = TIMESTEP_SIZES,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=20,
+        timestep_sizes=TIMESTEP_SIZES,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -275,11 +427,11 @@ function simulate_timestep_sizes_from_vector(x, who_starts)
         LearnsOverTime(),
         RewardsGrowOverTime();
         who_starts,
-        n_steps = 5,
-        timestep_sizes = x,
-        cognitive_parameters = (; learning_rate = 0.3, inverse_temperature = 2.0),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=5,
+        timestep_sizes=x,
+        cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -290,10 +442,10 @@ function simulate_without_states(x, who_starts)
         ChoosesWithoutState(),
         RewardsWithoutState();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; inverse_temperature = x[1]),
-        environment_parameters = (; reward_size = x[2]),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=20,
+        cognitive_parameters=(; inverse_temperature=x[1]),
+        environment_parameters=(; reward_size=x[2]),
+        save_history=SaveHistory(SaveEverything()),
     )
     #Timestep 0 has no reward, so the sum starts at timestep 1
     total = zero(x[2])
@@ -309,25 +461,25 @@ function simulate_with_noise_in_model(x, who_starts)
         LearnsWithNoise(),
         RewardsWithoutState();
         who_starts,
-        n_steps = 30,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        rng = Xoshiro(1),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=30,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        rng=Xoshiro(1),
+        save_history=SaveHistory(SaveEverything()),
     )
     return sum_expected_rewards(cognitive_states)
 end
 
 # A simulation with a state changed in place, with the parameters from a vector
-function simulate_in_place(x, who_starts, model = LearnsInPlace())
+function simulate_in_place(x, who_starts, model=LearnsInPlace())
     _, _, cognitive_states, _ = simulate(
         model,
         RewardsWithoutState();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(SaveEverything()),
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(SaveEverything()),
     )
     total = zero(x[1])
     for state in cognitive_states
@@ -342,11 +494,11 @@ function simulate_with_selection(x, who_starts)
         LearnsRewards{Deterministic}(),
         RewardsFollowActions();
         who_starts,
-        n_steps = 20,
-        cognitive_parameters = (; learning_rate = x[1], inverse_temperature = x[2]),
-        environment_parameters = (; reward_size = 0.8),
-        save_history = SaveHistory(; states = :expected_reward),
-        save_environment_history = SaveHistory(),
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(; reward_size=0.8),
+        save_history=SaveHistory(; states=:expected_reward),
+        save_environment_history=SaveHistory(),
     )
     return sum_expected_rewards(cognitive_states)
 end
@@ -356,15 +508,23 @@ end
 # a constant: forward gives wrong gradients with no error, and reverse throws an error, which is a bug in Enzyme: see
 # KNOWN_FAILURES in ad/runtests.jl
 function simulate_agent_with_environment(x, who_starts, save_history)
-    agent = CognitiveAgent(LearnsRewards{Deterministic}(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history)
-    environment = Environment(RewardsFollowActions(), (; reward_size = 0.8))
-    _, _, cognitive_states, _ = simulate!(agent, environment; who_starts, n_steps = 20)
+    agent = CognitiveAgent(
+        LearnsRewards{Deterministic}(),
+        (; learning_rate=x[1], inverse_temperature=x[2]);
+        save_history,
+    )
+    environment = Environment(RewardsFollowActions(), (; reward_size=0.8))
+    _, _, cognitive_states, _ = simulate!(agent, environment; who_starts, n_steps=20)
     return sum_expected_rewards(cognitive_states)
 end
 
 # An agent simulated on one observation at a time, with or without its history, with the parameters from a vector
 function simulate_agent_on_observations(x, save_history)
-    agent = CognitiveAgent(LearnsRewards{Deterministic}(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history)
+    agent = CognitiveAgent(
+        LearnsRewards{Deterministic}(),
+        (; learning_rate=x[1], inverse_temperature=x[2]);
+        save_history,
+    )
     total = zero(x[1])
     for reward in (1.0, 0.0, 1.0, 1.0, 0.0)
         total += simulate!(agent, (; reward)).choice
@@ -374,15 +534,23 @@ end
 
 # The states read back from the history of an agent, with the parameters from a vector
 function read_history_after_environment(x, who_starts)
-    agent = CognitiveAgent(LearnsRewards{Deterministic}(), (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
-    environment = Environment(RewardsFollowActions(), (; reward_size = 0.8))
-    simulate!(agent, environment; who_starts, n_steps = 20)
+    agent = CognitiveAgent(
+        LearnsRewards{Deterministic}(),
+        (; learning_rate=x[1], inverse_temperature=x[2]);
+        save_history=SaveHistory(SaveEverything()),
+    )
+    environment = Environment(RewardsFollowActions(), (; reward_size=0.8))
+    simulate!(agent, environment; who_starts, n_steps=20)
     return sum_expected_rewards(agent.history.states[2:end])
 end
 
 # The states read back from the history of an agent with a state changed in place, with the parameters from a vector
-function read_history_in_place(x, model = LearnsInPlace())
-    agent = CognitiveAgent(model, (; learning_rate = x[1], inverse_temperature = x[2]); save_history = SaveHistory(SaveEverything()))
+function read_history_in_place(x, model=LearnsInPlace())
+    agent = CognitiveAgent(
+        model,
+        (; learning_rate=x[1], inverse_temperature=x[2]);
+        save_history=SaveHistory(SaveEverything()),
+    )
     for reward in (1.0, 0.0, 1.0, 1.0, 0.0)
         simulate!(agent, (; reward))
     end
@@ -397,41 +565,242 @@ end
 # f takes a vector x and returns a number, such as a model's log likelihood for example data.
 # Set reactant = false for what can't run on Reactant. Here that's Xoshiro, which Reactant doesn't support.
 const TEST_CASES = [
-    (; name = "simulate, environment starts", f = x -> simulate_deterministic(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate, agent starts", f = x -> simulate_deterministic(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with sampling, environment starts", f = x -> simulate_sampled(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = false),
-    (; name = "simulate with sampling, agent starts", f = x -> simulate_sampled(x, AgentStarts()), x = [0.3, 2.0], reactant = false),
-    (; name = "simulate with timestep sizes, environment starts", f = x -> simulate_with_timestep_sizes(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with timestep sizes, agent starts", f = x -> simulate_with_timestep_sizes(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "gradient of the timestep sizes, environment starts", f = x -> simulate_timestep_sizes_from_vector(x, EnvironmentStarts()), x = [0.5, 2.0, 0.25, 1.5, 3.0], reactant = true),
-    (; name = "gradient of the timestep sizes, agent starts", f = x -> simulate_timestep_sizes_from_vector(x, AgentStarts()), x = [0.5, 2.0, 0.25, 1.5, 3.0], reactant = true),
-    (; name = "simulate without states, environment starts", f = x -> simulate_without_states(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate without states, agent starts", f = x -> simulate_without_states(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with noise in the model, environment starts", f = x -> simulate_with_noise_in_model(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = false),
-    (; name = "simulate with noise in the model, agent starts", f = x -> simulate_with_noise_in_model(x, AgentStarts()), x = [0.3, 2.0], reactant = false),
-    (; name = "simulate with a state changed in place, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a state changed in place, agent starts", f = x -> simulate_in_place(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a selection of what is saved, environment starts", f = x -> simulate_with_selection(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a selection of what is saved, agent starts", f = x -> simulate_with_selection(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! with a history, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! with a history, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! saving only the states, environment starts", f = x -> simulate_agent_with_environment(x, EnvironmentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! saving only the states, agent starts", f = x -> simulate_agent_with_environment(x, AgentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! on single observations, with a history", f = x -> simulate_agent_on_observations(x, SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate! on single observations, without a history", f = x -> simulate_agent_on_observations(x, SaveHistory()), x = [0.3, 2.0], reactant = true),
-    (; name = "reading the history of an agent, environment starts", f = x -> read_history_after_environment(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "reading the history of an agent, agent starts", f = x -> read_history_after_environment(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "reading the history of an agent with a state changed in place", f = read_history_in_place, x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a state saved with deepcopy, environment starts", f = x -> simulate_in_place(x, EnvironmentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a state saved with deepcopy, agent starts", f = x -> simulate_in_place(x, AgentStarts(), LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
-    (; name = "reading the history of an agent with a state saved with deepcopy", f = x -> read_history_in_place(x, LearnsInPlaceWithDeepcopy()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with maps of names, environment starts", f = x -> simulate_with_name_maps(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with maps of names, agent starts", f = x -> simulate_with_name_maps(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate until the environment ends, environment starts", f = x -> simulate_until_environment_ends(x, EnvironmentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate until the environment ends, agent starts", f = x -> simulate_until_environment_ends(x, AgentStarts()), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate on single observations", f = simulate_on_observations, x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a reward that isn't always given, environment starts", f = x -> simulate_with_rewards_not_always_given(x, EnvironmentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a reward that isn't always given, agent starts", f = x -> simulate_with_rewards_not_always_given(x, AgentStarts(), SaveHistory(SaveEverything())), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a reward that isn't always given, saving only the states, environment starts", f = x -> simulate_with_rewards_not_always_given(x, EnvironmentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
-    (; name = "simulate with a reward that isn't always given, saving only the states, agent starts", f = x -> simulate_with_rewards_not_always_given(x, AgentStarts(), SaveHistory(; states = :expected_reward)), x = [0.3, 2.0], reactant = true),
+    (;
+        name="simulate, environment starts",
+        f=x -> simulate_deterministic(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate, agent starts",
+        f=x -> simulate_deterministic(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with sampling, environment starts",
+        f=x -> simulate_sampled(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="simulate with sampling, agent starts",
+        f=x -> simulate_sampled(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="simulate with timestep sizes, environment starts",
+        f=x -> simulate_with_timestep_sizes(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with timestep sizes, agent starts",
+        f=x -> simulate_with_timestep_sizes(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="gradient of the timestep sizes, environment starts",
+        f=x -> simulate_timestep_sizes_from_vector(x, EnvironmentStarts()),
+        x=[0.5, 2.0, 0.25, 1.5, 3.0],
+        reactant=true,
+    ),
+    (;
+        name="gradient of the timestep sizes, agent starts",
+        f=x -> simulate_timestep_sizes_from_vector(x, AgentStarts()),
+        x=[0.5, 2.0, 0.25, 1.5, 3.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate without states, environment starts",
+        f=x -> simulate_without_states(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate without states, agent starts",
+        f=x -> simulate_without_states(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with noise in the model, environment starts",
+        f=x -> simulate_with_noise_in_model(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="simulate with noise in the model, agent starts",
+        f=x -> simulate_with_noise_in_model(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="simulate with a state changed in place, environment starts",
+        f=x -> simulate_in_place(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a state changed in place, agent starts",
+        f=x -> simulate_in_place(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a selection of what is saved, environment starts",
+        f=x -> simulate_with_selection(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a selection of what is saved, agent starts",
+        f=x -> simulate_with_selection(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! with a history, environment starts",
+        f=x -> simulate_agent_with_environment(
+            x, EnvironmentStarts(), SaveHistory(SaveEverything())
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! with a history, agent starts",
+        f=x -> simulate_agent_with_environment(
+            x, AgentStarts(), SaveHistory(SaveEverything())
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! saving only the states, environment starts",
+        f=x -> simulate_agent_with_environment(
+            x, EnvironmentStarts(), SaveHistory(; states=:expected_reward)
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! saving only the states, agent starts",
+        f=x -> simulate_agent_with_environment(
+            x, AgentStarts(), SaveHistory(; states=:expected_reward)
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! on single observations, with a history",
+        f=x -> simulate_agent_on_observations(x, SaveHistory(SaveEverything())),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate! on single observations, without a history",
+        f=x -> simulate_agent_on_observations(x, SaveHistory()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="reading the history of an agent, environment starts",
+        f=x -> read_history_after_environment(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="reading the history of an agent, agent starts",
+        f=x -> read_history_after_environment(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="reading the history of an agent with a state changed in place",
+        f=read_history_in_place,
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a state saved with deepcopy, environment starts",
+        f=x -> simulate_in_place(x, EnvironmentStarts(), LearnsInPlaceWithDeepcopy()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a state saved with deepcopy, agent starts",
+        f=x -> simulate_in_place(x, AgentStarts(), LearnsInPlaceWithDeepcopy()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="reading the history of an agent with a state saved with deepcopy",
+        f=x -> read_history_in_place(x, LearnsInPlaceWithDeepcopy()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with maps of names, environment starts",
+        f=x -> simulate_with_name_maps(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with maps of names, agent starts",
+        f=x -> simulate_with_name_maps(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate until the environment ends, environment starts",
+        f=x -> simulate_until_environment_ends(x, EnvironmentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate until the environment ends, agent starts",
+        f=x -> simulate_until_environment_ends(x, AgentStarts()),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate on single observations",
+        f=simulate_on_observations,
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a reward that isn't always given, environment starts",
+        f=x -> simulate_with_rewards_not_always_given(
+            x, EnvironmentStarts(), SaveHistory(SaveEverything())
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a reward that isn't always given, agent starts",
+        f=x -> simulate_with_rewards_not_always_given(
+            x, AgentStarts(), SaveHistory(SaveEverything())
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a reward that isn't always given, saving only the states, environment starts",
+        f=x -> simulate_with_rewards_not_always_given(
+            x, EnvironmentStarts(), SaveHistory(; states=:expected_reward)
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with a reward that isn't always given, saving only the states, agent starts",
+        f=x -> simulate_with_rewards_not_always_given(
+            x, AgentStarts(), SaveHistory(; states=:expected_reward)
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
 ]

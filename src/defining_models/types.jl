@@ -197,7 +197,7 @@ julia> ModelInput(observation, state, previous_action, parameters).who_starts
 UnknownWhoStarts()
 ```
 """
-struct ModelInput{Tobservation, Tstate, Taction, Tparameters, Ttimestep_size, Trng, Twho_starts}
+struct ModelInput{Tobservation,Tstate,Taction,Tparameters,Ttimestep_size,Trng,Twho_starts}
     observation::Tobservation
     previous_state::Tstate
     previous_action::Taction
@@ -208,8 +208,32 @@ struct ModelInput{Tobservation, Tstate, Taction, Tparameters, Ttimestep_size, Tr
 end
 
 #Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified
-function ModelInput(observation, previous_state, previous_action, parameters, timestep_size = 1, rng::AbstractRNG = default_rng(), who_starts = UnknownWhoStarts())
-    return ModelInput{typeof(observation), typeof(previous_state), typeof(previous_action), typeof(parameters), typeof(timestep_size), typeof(rng), typeof(who_starts)}(observation, previous_state, previous_action, parameters, timestep_size, rng, who_starts)
+function ModelInput(
+    observation,
+    previous_state,
+    previous_action,
+    parameters,
+    timestep_size=1,
+    rng::AbstractRNG=default_rng(),
+    who_starts=UnknownWhoStarts(),
+)
+    return ModelInput{
+        typeof(observation),
+        typeof(previous_state),
+        typeof(previous_action),
+        typeof(parameters),
+        typeof(timestep_size),
+        typeof(rng),
+        typeof(who_starts),
+    }(
+        observation,
+        previous_state,
+        previous_action,
+        parameters,
+        timestep_size,
+        rng,
+        who_starts,
+    )
 end
 
 """
@@ -243,13 +267,15 @@ julia> ModelOutput((; choice = NoAction(), bet = Bernoulli(0.2))).action_distrib
 NoAction()
 ```
 """
-struct ModelOutput{Taction, Tstate}
+struct ModelOutput{Taction,Tstate}
     action_distribution::Taction
     new_state::Tstate
 
     #Only takes named action distributions, so that the model names every action
-    function ModelOutput(action_distribution::NamedTuple, new_state = (;))
-        return new{typeof(action_distribution), typeof(new_state)}(action_distribution, new_state)
+    function ModelOutput(action_distribution::NamedTuple, new_state=(;))
+        return new{typeof(action_distribution),typeof(new_state)}(
+            action_distribution, new_state
+        )
     end
 end
 
@@ -284,11 +310,16 @@ julia> attributes.states
 (:expected_reward,)
 ```
 """
-struct ModelAttributes{Tparameters, Tstates, Tobservations, Tactions} end
+struct ModelAttributes{Tparameters,Tstates,Tobservations,Tactions} end
 
 #Takes the names by keyword, puts a single name or a vector of names in a tuple, and keeps them in the type
 function ModelAttributes(; parameters, states, observations, actions)
-    return ModelAttributes{as_tuple_of_names(parameters), as_tuple_of_names(states), as_tuple_of_names(observations), as_tuple_of_names(actions)}()
+    return ModelAttributes{
+        as_tuple_of_names(parameters),
+        as_tuple_of_names(states),
+        as_tuple_of_names(observations),
+        as_tuple_of_names(actions),
+    }()
 end
 
 """
@@ -302,7 +333,9 @@ as_tuple_of_names(name::Symbol) = (name,)
 as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
 
 #Reads the names in the type as properties
-function Base.getproperty(attributes::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}, name::Symbol) where {Tparameters, Tstates, Tobservations, Tactions}
+function Base.getproperty(
+    attributes::ModelAttributes{Tparameters,Tstates,Tobservations,Tactions}, name::Symbol
+) where {Tparameters,Tstates,Tobservations,Tactions}
     if name === :parameters
         return Tparameters
     elseif name === :states
@@ -350,7 +383,9 @@ end
 
 #The default message says what the error means
 function InvalidParametersError()
-    return InvalidParametersError("Model parameters are not valid, possibly dependent on observations, actions and states.")
+    return InvalidParametersError(
+        "Model parameters are not valid, possibly dependent on observations, actions and states.",
+    )
 end
 
 #Prints the message when the error isn't caught

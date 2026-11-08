@@ -77,16 +77,23 @@ foreach(println, observations)
 (observation = 2, reward = 1.0, terminated = true)
 ```
 """
-struct CommonRLEnvironment{Trl_env, action_name} <: AbstractEnvironmentModel
+struct CommonRLEnvironment{Trl_env,action_name} <: AbstractEnvironmentModel
     rl_env::Trl_env
 end
 
 #Takes the name of the action by keyword, and keeps it in the type, so that reading the action by name costs nothing
 function CommonRLEnvironment(rl_env; action_name::Symbol)
-    return CommonRLEnvironment{typeof(rl_env), action_name}(rl_env)
+    return CommonRLEnvironment{typeof(rl_env),action_name}(rl_env)
 end
 
 #The observations are always the same three, the action is the one named, and rl_env isn't a NamedTuple, so there are no named states
-function attribute_names(::CommonRLEnvironment{Trl_env, action_name}) where {Trl_env, action_name}
-    return ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = action_name)
+function attribute_names(
+    ::CommonRLEnvironment{Trl_env,action_name}
+) where {Trl_env,action_name}
+    return ModelAttributes(;
+        parameters=(),
+        states=(),
+        observations=(:observation, :reward, :terminated),
+        actions=action_name,
+    )
 end

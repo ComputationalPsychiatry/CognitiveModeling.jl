@@ -60,17 +60,27 @@ end
 function CognitiveModeling.initialize_state(model::TemporalDifferenceAgent, parameters)
 
     #The learner, with the learning rate and the discount factor from the parameters
-    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
-    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+    rl_approximator = TabularQApproximator(;
+        n_state=model.n_states, n_action=model.n_actions
+    )
+    rl_learner = TDLearner(
+        rl_approximator, :SARS; α=parameters.learning_rate, γ=parameters.discount
+    )
 
     #The explorer, which picks any action with a probability of epsilon
-    rl_explorer = EpsilonGreedyExplorer(parameters.epsilon; is_break_tie = true)
+    rl_explorer = EpsilonGreedyExplorer(parameters.epsilon; is_break_tie=true)
 
     #The agent's memory of the last transition, which the learner learns from
-    rl_traces = CircularArraySARTSTraces(; capacity = 1, state = Int64 => (), action = Int64 => (), reward = Float64 => (), terminal = Bool => ())
+    rl_traces = CircularArraySARTSTraces(;
+        capacity=1,
+        state=Int64 => (),
+        action=Int64 => (),
+        reward=Float64 => (),
+        terminal=Bool => (),
+    )
     rl_trajectory = Trajectory(rl_traces, DummySampler(), InsertSampleRatioController())
 
-    return (; rl_agent = Agent(QBasedPolicy(rl_learner, rl_explorer), rl_trajectory))
+    return (; rl_agent=Agent(QBasedPolicy(rl_learner, rl_explorer), rl_trajectory))
 end
 
 # On each timestep, the cognitive model takes the agent through the stage of its run loop
@@ -99,15 +109,15 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceAgent, input::Mo
     #The policy gives a distribution over the actions, which the action is sampled from
     Pₜ = RLBase.prob(rl_agent.policy, rl_env)
 
-    return ModelOutput((; move = Pₜ), (; rl_agent))
+    return ModelOutput((; move=Pₜ), (; rl_agent))
 end
 
 function CognitiveModeling.attribute_names(model::TemporalDifferenceAgent)
     return ModelAttributes(;
-        parameters = (:learning_rate, :discount, :epsilon),
-        states = :rl_agent,
-        observations = (:observation, :reward, :terminated),
-        actions = :move,
+        parameters=(:learning_rate, :discount, :epsilon),
+        states=:rl_agent,
+        observations=(:observation, :reward, :terminated),
+        actions=:move,
     )
 end
 
@@ -116,7 +126,7 @@ end
 # on each timestep instead.
 
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceAgent, state)
-    return (; action_values = copy(state.rl_agent.policy.learner.approximator.model))
+    return (; action_values=copy(state.rl_agent.policy.learner.approximator.model))
 end
 
 # ## Only the learner
@@ -132,11 +142,15 @@ struct TemporalDifferenceLearner <: AbstractCognitiveModel
 end
 
 function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, parameters)
-    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
-    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+    rl_approximator = TabularQApproximator(;
+        n_state=model.n_states, n_action=model.n_actions
+    )
+    rl_learner = TDLearner(
+        rl_approximator, :SARS; α=parameters.learning_rate, γ=parameters.discount
+    )
 
     #The learner needs the observation before the action too, so that is kept in the state
-    return (; rl_learner, previous_observation = 0)
+    return (; rl_learner, previous_observation=0)
 end
 
 function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::ModelInput)
@@ -149,7 +163,13 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::
     ## Update state ##
     #Let the learner learn from what followed the previous action, unless an episode starts
     if !(reward isa AbstractNoValue)
-        rl_transition = (; state = previous_observation, next_state = observation, action = input.previous_action.move, reward, terminal = terminated)
+        rl_transition = (;
+            state=previous_observation,
+            next_state=observation,
+            action=input.previous_action.move,
+            reward,
+            terminal=terminated,
+        )
         RLBase.optimise!(rl_learner, rl_transition)
     end
 
@@ -159,20 +179,22 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::
     #Softmax over the action values
     Pₜ = Categorical(softmax(β .* Qₜ))
 
-    return ModelOutput((; move = Pₜ), (; rl_learner, previous_observation = observation))
+    return ModelOutput((; move=Pₜ), (; rl_learner, previous_observation=observation))
 end
 
 function CognitiveModeling.attribute_names(model::TemporalDifferenceLearner)
     return ModelAttributes(;
-        parameters = (:learning_rate, :discount, :inverse_temperature),
-        states = (:rl_learner, :previous_observation),
-        observations = (:observation, :reward, :terminated),
-        actions = :move,
+        parameters=(:learning_rate, :discount, :inverse_temperature),
+        states=(:rl_learner, :previous_observation),
+        observations=(:observation, :reward, :terminated),
+        actions=:move,
     )
 end
 
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceLearner, state)
-    return (; action_values = copy(state.rl_learner.approximator.model), state.previous_observation)
+    return (;
+        action_values=copy(state.rl_learner.approximator.model), state.previous_observation
+    )
 end
 
 # ## Fitting

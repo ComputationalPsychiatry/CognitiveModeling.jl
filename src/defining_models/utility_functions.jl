@@ -10,7 +10,9 @@ function check_type_attribute_names(attributes::ModelAttributes, ::AbstractModel
 end
 
 function check_type_attribute_names(attributes, model::AbstractModel)
-    error("The attribute_names method of $(describe_model(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).")
+    return error(
+        "The attribute_names method of $(describe_model(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).",
+    )
 end
 
 """
@@ -21,7 +23,8 @@ Return whether `model`, a cognitive model or an environment model, has its own m
 """
 function has_attribute_names(model::AbstractModel)
     method_signature = which(attribute_names, (typeof(model),)).sig
-    return method_signature != Tuple{typeof(attribute_names), AbstractCognitiveModel} && method_signature != Tuple{typeof(attribute_names), AbstractEnvironmentModel}
+    return method_signature != Tuple{typeof(attribute_names),AbstractCognitiveModel} &&
+           method_signature != Tuple{typeof(attribute_names),AbstractEnvironmentModel}
 end
 
 """
@@ -36,9 +39,14 @@ when it knows them, which it doesn't for `issubset` and `issetequal` with more t
 name.
 """
 has_name(name::Symbol, names::Tuple{}) = false
-has_name(name::Symbol, names::Tuple) = name === first(names) || has_name(name, Base.tail(names))
+function has_name(name::Symbol, names::Tuple)
+    return name === first(names) || has_name(name, Base.tail(names))
+end
 has_every_name(names::Tuple{}, other_names::Tuple) = true
-has_every_name(names::Tuple, other_names::Tuple) = has_name(first(names), other_names) && has_every_name(Base.tail(names), other_names)
+function has_every_name(names::Tuple, other_names::Tuple)
+    return has_name(first(names), other_names) &&
+           has_every_name(Base.tail(names), other_names)
+end
 
 """
     same_names(names, other_names)
@@ -57,16 +65,33 @@ Throw an informative error if the names of the parameters, of the previous actio
 cognitive model or the previous observation of an environment model, or of a state that is a
 `NamedTuple`, aren't those that [`attribute_names`](@ref) lists.
 """
-function check_match_attribute_names(model::AbstractCognitiveModel, parameters, state, previous_action)
+function check_match_attribute_names(
+    model::AbstractCognitiveModel, parameters, state, previous_action
+)
     attributes = check_type_attribute_names(attribute_names(model), model)
     if !same_names(keys(parameters), attributes.parameters)
-        throw(ArgumentError("The parameters are named $(keys(parameters)), but attribute_names lists the parameters of a model of type $(typeof(model)) as $(attributes.parameters)."))
+        throw(
+            ArgumentError(
+                "The parameters are named $(keys(parameters)), but attribute_names lists the parameters of a model of type $(typeof(model)) as $(attributes.parameters).",
+            ),
+        )
     end
-    if !(previous_action isa NamedTuple && same_names(keys(previous_action), attributes.actions))
-        throw(ArgumentError("The previous action is $previous_action, but it must be a NamedTuple with the actions that attribute_names lists for a model of type $(typeof(model)), $(attributes.actions)."))
+    if !(
+        previous_action isa NamedTuple &&
+        same_names(keys(previous_action), attributes.actions)
+    )
+        throw(
+            ArgumentError(
+                "The previous action is $previous_action, but it must be a NamedTuple with the actions that attribute_names lists for a model of type $(typeof(model)), $(attributes.actions).",
+            ),
+        )
     end
     if state isa NamedTuple && !same_names(keys(state), attributes.states)
-        throw(ArgumentError("The state is named $(keys(state)), but attribute_names lists the states of a model of type $(typeof(model)) as $(attributes.states)."))
+        throw(
+            ArgumentError(
+                "The state is named $(keys(state)), but attribute_names lists the states of a model of type $(typeof(model)) as $(attributes.states).",
+            ),
+        )
     end
     return nothing
 end
@@ -80,8 +105,15 @@ lists for `model`. It can have more than those.
 """
 function check_observation_names(model::AbstractCognitiveModel, observation)
     attributes = check_type_attribute_names(attribute_names(model), model)
-    if !(observation isa NamedTuple && has_every_name(attributes.observations, keys(observation)))
-        throw(ArgumentError("The observation is $observation, but it must be a NamedTuple with the observations that attribute_names lists for a model of type $(typeof(model)), $(attributes.observations)."))
+    if !(
+        observation isa NamedTuple &&
+        has_every_name(attributes.observations, keys(observation))
+    )
+        throw(
+            ArgumentError(
+                "The observation is $observation, but it must be a NamedTuple with the observations that attribute_names lists for a model of type $(typeof(model)), $(attributes.observations).",
+            ),
+        )
     end
     return nothing
 end
@@ -95,11 +127,15 @@ the action or the observation names that [`attribute_names`](@ref) lists for `mo
 cognitive model or an environment model, each [`BeforeFirstTimestep`](@ref).
 """
 function initial_action(model::AbstractModel)
-    return actions_before_first_timestep(check_type_attribute_names(attribute_names(model), model))
+    return actions_before_first_timestep(
+        check_type_attribute_names(attribute_names(model), model)
+    )
 end
 
 function initial_observation(model::AbstractModel)
-    return observations_before_first_timestep(check_type_attribute_names(attribute_names(model), model))
+    return observations_before_first_timestep(
+        check_type_attribute_names(attribute_names(model), model)
+    )
 end
 
 """
@@ -110,11 +146,15 @@ Return a `NamedTuple` with the action or the observation names in `attributes`, 
 [`ModelAttributes`](@ref), each [`BeforeFirstTimestep`](@ref). The names are read from the
 type, so that the `NamedTuple` is known at compile time.
 """
-function actions_before_first_timestep(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
+function actions_before_first_timestep(
+    ::ModelAttributes{Tparameters,Tstates,Tobservations,Tactions}
+) where {Tparameters,Tstates,Tobservations,Tactions}
     return NamedTuple{Tactions}(map(_ -> BeforeFirstTimestep(), Tactions))
 end
 
-function observations_before_first_timestep(::ModelAttributes{Tparameters, Tstates, Tobservations, Tactions}) where {Tparameters, Tstates, Tobservations, Tactions}
+function observations_before_first_timestep(
+    ::ModelAttributes{Tparameters,Tstates,Tobservations,Tactions}
+) where {Tparameters,Tstates,Tobservations,Tactions}
     return NamedTuple{Tobservations}(map(_ -> BeforeFirstTimestep(), Tobservations))
 end
 
@@ -128,7 +168,12 @@ The `show` methods of a `ModelAttributes`, of a cognitive model and of an enviro
 each print a header of their own, and then these lines.
 """
 function print_attribute_names(io::IO, attributes::ModelAttributes)
-    for (kind, names) in (("Parameters", attributes.parameters), ("States", attributes.states), ("Observations", attributes.observations), ("Actions", attributes.actions))
+    for (kind, names) in (
+        ("Parameters", attributes.parameters),
+        ("States", attributes.states),
+        ("Observations", attributes.observations),
+        ("Actions", attributes.actions),
+    )
         print(io, "\n", kind, ": ")
         isempty(names) ? print(io, "none") : join(io, names, ", ")
     end

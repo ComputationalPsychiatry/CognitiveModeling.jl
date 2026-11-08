@@ -27,15 +27,18 @@ ERROR: ArgumentError: A NameMap can only give each name once, but it gives (:rew
 [...]
 ```
 """
-struct NameMap{Tgiven, Treceived} end
+struct NameMap{Tgiven,Treceived} end
 
 #Takes the names one by one, and puts those given and those received in the type
-function NameMap(names::Union{Symbol, Pair{Symbol, Symbol}}...)
+function NameMap(names::Union{Symbol,Pair{Symbol,Symbol}}...)
     given = map(given_name, names)
     received = map(received_name, names)
-    allunique(given) || throw(ArgumentError("A NameMap can only take each name once, but it takes $given."))
-    allunique(received) || throw(ArgumentError("A NameMap can only give each name once, but it gives $received."))
-    return NameMap{given, received}()
+    allunique(given) ||
+        throw(ArgumentError("A NameMap can only take each name once, but it takes $given."))
+    allunique(received) || throw(
+        ArgumentError("A NameMap can only give each name once, but it gives $received.")
+    )
+    return NameMap{given,received}()
 end
 
 """
@@ -47,14 +50,21 @@ argument of a [`NameMap`](@ref): the two sides of a `:given => :received` pair, 
 `Symbol`, which is received under the name it is given with.
 """
 given_name(name::Symbol) = name
-given_name(names::Pair{Symbol, Symbol}) = first(names)
+given_name(names::Pair{Symbol,Symbol}) = first(names)
 received_name(name::Symbol) = name
-received_name(names::Pair{Symbol, Symbol}) = last(names)
+received_name(names::Pair{Symbol,Symbol}) = last(names)
 
 #Shows the map as it is written
-function Base.show(io::IO, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceived}
+function Base.show(io::IO, ::NameMap{Tgiven,Treceived}) where {Tgiven,Treceived}
     print(io, "NameMap(")
-    join(io, (given === received ? repr(given) : string(repr(given), " => ", repr(received)) for (given, received) in zip(Tgiven, Treceived)), ", ")
+    join(
+        io,
+        (
+            given === received ? repr(given) : string(repr(given), " => ", repr(received))
+            for (given, received) in zip(Tgiven, Treceived)
+        ),
+        ", ",
+    )
     print(io, ")")
     return nothing
 end
@@ -119,7 +129,11 @@ those names.
 
 See also [`Environment`](@ref).
 """
-mutable struct CognitiveAgent{Tcognitive_model <: AbstractCognitiveModel, Tcognitive_parameters, Tsave_history <: SaveHistory}
+mutable struct CognitiveAgent{
+    Tcognitive_model<:AbstractCognitiveModel,
+    Tcognitive_parameters,
+    Tsave_history<:SaveHistory,
+}
     cognitive_model::Tcognitive_model
     cognitive_parameters::Tcognitive_parameters
     #Not typed, because they can change type, for example from BeforeFirstTimestep() to a Bool inside the action
@@ -130,27 +144,54 @@ mutable struct CognitiveAgent{Tcognitive_model <: AbstractCognitiveModel, Tcogni
 end
 
 #Starts the agent from its initial state, with no action taken yet
-function CognitiveAgent(cognitive_model::AbstractCognitiveModel, cognitive_parameters; save_history::SaveHistory = SaveHistory())
+function CognitiveAgent(
+    cognitive_model::AbstractCognitiveModel,
+    cognitive_parameters;
+    save_history::SaveHistory=SaveHistory(),
+)
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
-    return CognitiveAgent(cognitive_model, cognitive_parameters, initialize_state(cognitive_model, cognitive_parameters), initial_action(cognitive_model); save_history)
+    return CognitiveAgent(
+        cognitive_model,
+        cognitive_parameters,
+        initialize_state(cognitive_model, cognitive_parameters),
+        initial_action(cognitive_model);
+        save_history,
+    )
 end
 
 #Fills in the default parameters, checks the names, and starts the history where the agent starts, with what is selected of it
-function CognitiveAgent(cognitive_model::AbstractCognitiveModel, cognitive_parameters, cognitive_state, previous_action; save_history::SaveHistory = SaveHistory())
+function CognitiveAgent(
+    cognitive_model::AbstractCognitiveModel,
+    cognitive_parameters,
+    cognitive_state,
+    previous_action;
+    save_history::SaveHistory=SaveHistory(),
+)
 
     #Fill in the default parameters
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
 
     #Check that the parameters, the state and the previous action have the names the model lists
-    check_match_attribute_names(cognitive_model, cognitive_parameters, cognitive_state, previous_action)
+    check_match_attribute_names(
+        cognitive_model, cognitive_parameters, cognitive_state, previous_action
+    )
 
     #Check that the observations and actions selected for the history are among those the model lists
     check_savehistory_selection_names(save_history, cognitive_model)
 
     #Start the history from where the agent starts
-    history = starting_history(cognitive_model, cognitive_state, previous_action, save_history)
+    history = starting_history(
+        cognitive_model, cognitive_state, previous_action, save_history
+    )
 
-    return CognitiveAgent(cognitive_model, cognitive_parameters, cognitive_state, previous_action, history, save_history)
+    return CognitiveAgent(
+        cognitive_model,
+        cognitive_parameters,
+        cognitive_state,
+        previous_action,
+        history,
+        save_history,
+    )
 end
 
 """
@@ -167,11 +208,26 @@ An agent hasn't observed anything when it starts, and an environment hasn't rece
 action, so that entry has every name the model lists as `BeforeFirstTimestep()`.
 [`reset!`](@ref) starts from the same history as the constructors.
 """
-function starting_history(cognitive_model::AbstractCognitiveModel, cognitive_state, previous_action, save_history::SaveHistory)
+function starting_history(
+    cognitive_model::AbstractCognitiveModel,
+    cognitive_state,
+    previous_action,
+    save_history::SaveHistory,
+)
     if saves_nothing(save_history) || !saves_initial_values(save_history)
         return AgentHistory(Any[], Any[], Any[], Any[], Any[])
     end
-    return AgentHistory(Any[select_names(initial_observation(cognitive_model), observation_selection(save_history))], Any[select_names(previous_action, action_selection(save_history))], Any[select_names(initial_action(cognitive_model), action_distribution_selection(save_history))], Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))], Any[BeforeFirstTimestep()])
+    return AgentHistory(
+        Any[select_names(
+            initial_observation(cognitive_model), observation_selection(save_history)
+        )],
+        Any[select_names(previous_action, action_selection(save_history))],
+        Any[select_names(
+            initial_action(cognitive_model), action_distribution_selection(save_history)
+        )],
+        Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))],
+        Any[BeforeFirstTimestep()],
+    )
 end
 
 """
@@ -231,7 +287,9 @@ lists, since the history starts from those names.
 
 See also [`CognitiveAgent`](@ref).
 """
-mutable struct Environment{Tmodel <: AbstractEnvironmentModel, Tparameters, Tsave_history <: SaveHistory}
+mutable struct Environment{
+    Tmodel<:AbstractEnvironmentModel,Tparameters,Tsave_history<:SaveHistory
+}
     model::Tmodel
     parameters::Tparameters
     state::Any
@@ -241,13 +299,27 @@ mutable struct Environment{Tmodel <: AbstractEnvironmentModel, Tparameters, Tsav
 end
 
 #Starts the environment from its initial state, with no observation given yet
-function Environment(model::AbstractEnvironmentModel, parameters; save_history::SaveHistory = SaveHistory())
+function Environment(
+    model::AbstractEnvironmentModel, parameters; save_history::SaveHistory=SaveHistory()
+)
     parameters = merge_default_parameters(model, parameters)
-    return Environment(model, parameters, initialize_state(model, parameters), initial_observation(model); save_history)
+    return Environment(
+        model,
+        parameters,
+        initialize_state(model, parameters),
+        initial_observation(model);
+        save_history,
+    )
 end
 
 #Fills in the default parameters, checks the names, and starts the history where the environment starts, with what is selected of it
-function Environment(model::AbstractEnvironmentModel, parameters, state, previous_observation; save_history::SaveHistory = SaveHistory())
+function Environment(
+    model::AbstractEnvironmentModel,
+    parameters,
+    state,
+    previous_observation;
+    save_history::SaveHistory=SaveHistory(),
+)
 
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
@@ -261,15 +333,24 @@ function Environment(model::AbstractEnvironmentModel, parameters, state, previou
     #Start the history from where the environment starts
     history = starting_history(model, state, previous_observation, save_history)
 
-    return Environment(model, parameters, state, previous_observation, history, save_history)
+    return Environment(
+        model, parameters, state, previous_observation, history, save_history
+    )
 end
 
 #The history of an environment which starts in a state and after an observation, as for an agent
-function starting_history(model::AbstractEnvironmentModel, state, previous_observation, save_history::SaveHistory)
+function starting_history(
+    model::AbstractEnvironmentModel, state, previous_observation, save_history::SaveHistory
+)
     if saves_nothing(save_history) || !saves_initial_values(save_history)
         return EnvironmentHistory(Any[], Any[], Any[], Any[])
     end
-    return EnvironmentHistory(Any[select_names(previous_observation, observation_selection(save_history))], Any[select_names(initial_action(model), action_selection(save_history))], Any[save_state(model, state, state_selection(save_history))], Any[BeforeFirstTimestep()])
+    return EnvironmentHistory(
+        Any[select_names(previous_observation, observation_selection(save_history))],
+        Any[select_names(initial_action(model), action_selection(save_history))],
+        Any[save_state(model, state, state_selection(save_history))],
+        Any[BeforeFirstTimestep()],
+    )
 end
 
 """
@@ -326,9 +407,16 @@ function reset! end
 
 #Starts the agent again from its initial state, with no action taken yet and a new history
 function reset!(agent::CognitiveAgent)
-    agent.cognitive_state = initialize_state(agent.cognitive_model, agent.cognitive_parameters)
+    agent.cognitive_state = initialize_state(
+        agent.cognitive_model, agent.cognitive_parameters
+    )
     agent.previous_action = initial_action(agent.cognitive_model)
-    agent.history = starting_history(agent.cognitive_model, agent.cognitive_state, agent.previous_action, agent.save_history)
+    agent.history = starting_history(
+        agent.cognitive_model,
+        agent.cognitive_state,
+        agent.previous_action,
+        agent.save_history,
+    )
     return agent
 end
 
@@ -336,6 +424,11 @@ end
 function reset!(environment::Environment)
     environment.state = initialize_state(environment.model, environment.parameters)
     environment.previous_observation = initial_observation(environment.model)
-    environment.history = starting_history(environment.model, environment.state, environment.previous_observation, environment.save_history)
+    environment.history = starting_history(
+        environment.model,
+        environment.state,
+        environment.previous_observation,
+        environment.save_history,
+    )
     return environment
 end

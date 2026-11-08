@@ -22,8 +22,15 @@ out, which is decided by its type, so that it is the same for every session of a
 by [`SessionInfo`](@ref), which keeps the result in its field `recorded`.
 """
 function recorded_actions(actions::NamedTuple{names}) where {names}
-    recorded = map(column -> Vector{Base.typesplit(eltype(column), Union{MissingValue, NoAction})}(filter(is_recorded, column)), actions)
-    names_with_a_type = Tuple(name for name in names if eltype(getproperty(recorded, name)) !== Union{})
+    recorded = map(
+        column -> Vector{Base.typesplit(eltype(column), Union{MissingValue,NoAction})}(
+            filter(is_recorded, column)
+        ),
+        actions,
+    )
+    names_with_a_type = Tuple(
+        name for name in names if eltype(getproperty(recorded, name)) !== Union{}
+    )
     return NamedTuple{names_with_a_type}(recorded)
 end
 
@@ -43,7 +50,9 @@ end
 
 function without_missing_actions(column::AbstractVector)
     MissingValue <: eltype(column) || return column
-    replaced = Vector{Union{Base.typesplit(eltype(column), MissingValue), NoAction}}(undef, length(column))
+    replaced = Vector{Union{Base.typesplit(eltype(column), MissingValue),NoAction}}(
+        undef, length(column)
+    )
     for i in eachindex(column)
         replaced[i] = column[i] isa MissingValue ? NoAction() : column[i]
     end
@@ -64,7 +73,7 @@ function narrow_column(column::AbstractVector)
     (isconcretetype(T) || T isa Union) && return column
     narrowed_type = Union{}
     for value in column
-        narrowed_type = Union{narrowed_type, typeof(value)}
+        narrowed_type = Union{narrowed_type,typeof(value)}
     end
     return Vector{narrowed_type}(column)
 end
@@ -88,7 +97,9 @@ end
 function replace_missing(column::AbstractVector, replacement)
     column = narrow_column(column)
     Missing <: eltype(column) || return column
-    replaced = Vector{Union{nonmissingtype(eltype(column)), typeof(replacement)}}(undef, length(column))
+    replaced = Vector{Union{nonmissingtype(eltype(column)),typeof(replacement)}}(
+        undef, length(column)
+    )
     for i in eachindex(column)
         replaced[i] = ismissing(column[i]) ? replacement : column[i]
     end
@@ -141,23 +152,47 @@ observations and one for the actions, doesn't have the observations and the acti
 [`attribute_names`](@ref) lists, or has columns of different lengths, and return the number
 of timesteps otherwise. Used by [`SessionInfo`](@ref).
 """
-function check_data(cognitive_model::AbstractCognitiveModel, observations::NamedTuple, actions::NamedTuple)
-    attributes = check_type_attribute_names(attribute_names(cognitive_model), cognitive_model)
+function check_data(
+    cognitive_model::AbstractCognitiveModel, observations::NamedTuple, actions::NamedTuple
+)
+    attributes = check_type_attribute_names(
+        attribute_names(cognitive_model), cognitive_model
+    )
     if !has_every_name(attributes.observations, keys(observations))
-        throw(ArgumentError("The observations in the data are named $(keys(observations)), but attribute_names lists the observations of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.observations). The data must have every observation the cognitive model lists."))
+        throw(
+            ArgumentError(
+                "The observations in the data are named $(keys(observations)), but attribute_names lists the observations of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.observations). The data must have every observation the cognitive model lists.",
+            ),
+        )
     end
     if !same_names(keys(actions), attributes.actions)
-        throw(ArgumentError("The actions in the data are named $(keys(actions)), but attribute_names lists the actions of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.actions)."))
+        throw(
+            ArgumentError(
+                "The actions in the data are named $(keys(actions)), but attribute_names lists the actions of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.actions).",
+            ),
+        )
     end
     lengths = (map(length, values(observations))..., map(length, values(actions))...)
-    isempty(lengths) && throw(ArgumentError("The data has no observations and no actions, so the number of timesteps is unknown."))
-    allequal(lengths) || throw(ArgumentError("Every observation and action in the data must have one value for each timestep, but their lengths are $(map(length, observations)) and $(map(length, actions))."))
+    isempty(lengths) && throw(
+        ArgumentError(
+            "The data has no observations and no actions, so the number of timesteps is unknown.",
+        ),
+    )
+    allequal(lengths) || throw(
+        ArgumentError(
+            "Every observation and action in the data must have one value for each timestep, but their lengths are $(map(length, observations)) and $(map(length, actions)).",
+        ),
+    )
     return first(lengths)
 end
 
 #The same for the data that isn't a NamedTuple of vectors
 function check_data(cognitive_model::AbstractCognitiveModel, observations, actions)
-    throw(ArgumentError("The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), but they have types $(typeof(observations)) and $(typeof(actions))."))
+    return throw(
+        ArgumentError(
+            "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), but they have types $(typeof(observations)) and $(typeof(actions)).",
+        ),
+    )
 end
 
 """
@@ -168,14 +203,24 @@ observations in the data can't have a [`MissingValue`](@ref), since nothing fill
 with one, it must list the same observations and actions as `cognitive_model`. Used by
 [`SessionInfo`](@ref).
 """
-function check_environment_fits(cognitive_model::AbstractCognitiveModel, ::NoEnvironment, observations::NamedTuple)
+function check_environment_fits(
+    cognitive_model::AbstractCognitiveModel, ::NoEnvironment, observations::NamedTuple
+)
     if any(column -> any(value -> value isa MissingValue, column), values(observations))
-        throw(ArgumentError("The observations have entries that are MissingValue(), but no environment was given to fill them in."))
+        throw(
+            ArgumentError(
+                "The observations have entries that are MissingValue(), but no environment was given to fill them in.",
+            ),
+        )
     end
     return nothing
 end
 
-function check_environment_fits(cognitive_model::AbstractCognitiveModel, environment::AbstractEnvironmentModel, observations::NamedTuple)
+function check_environment_fits(
+    cognitive_model::AbstractCognitiveModel,
+    environment::AbstractEnvironmentModel,
+    observations::NamedTuple,
+)
     check_names_fit(cognitive_model, environment)
     return nothing
 end
@@ -210,11 +255,19 @@ A `missing` in any column used makes the value of that row `missing`. Used by
 [`MultipleSessionsInfo`](@ref) when it checks a table, and by [`build_column`](@ref).
 """
 columns_used(specification::Symbol) = (specification,)
-columns_used(specification::NamedTuple{names, <:Tuple{Vararg{Symbol}}}) where {names} = values(specification)
+function columns_used(
+    specification::NamedTuple{names,<:Tuple{Vararg{Symbol}}}
+) where {names}
+    return values(specification)
+end
 columns_used(specification::Tuple{Vararg{Symbol}}) = specification
 columns_used(specification::Pair{<:Tuple{Vararg{Symbol}}}) = first(specification)
 function columns_used(specification)
-    throw(ArgumentError("A column is specified by its name, a NamedTuple or a Tuple of names for a column built from several, or a Tuple of names => a function, but this specification is $(repr(specification))."))
+    return throw(
+        ArgumentError(
+            "A column is specified by its name, a NamedTuple or a Tuple of names for a column built from several, or a Tuple of names => a function, but this specification is $(repr(specification)).",
+        ),
+    )
 end
 
 """
@@ -226,11 +279,19 @@ a row with a `missing` in any of them gives `missing`. The column is narrowed as
 first, see [`narrow_column`](@ref), so that every session gets the same element type. Used by
 [`select_rows`](@ref).
 """
-build_column(table::NamedTuple, specification::Symbol, rows) = narrow_column(getproperty(table, specification))[rows]
-function build_column(table::NamedTuple, specification::NamedTuple{names, <:Tuple{Vararg{Symbol}}}, rows) where {names}
-    return build_column(table, values(specification) => (values...) -> NamedTuple{names}(values), rows)
+function build_column(table::NamedTuple, specification::Symbol, rows)
+    return narrow_column(getproperty(table, specification))[rows]
 end
-build_column(table::NamedTuple, specification::Tuple{Vararg{Symbol}}, rows) = build_column(table, specification => tuple, rows)
+function build_column(
+    table::NamedTuple, specification::NamedTuple{names,<:Tuple{Vararg{Symbol}}}, rows
+) where {names}
+    return build_column(
+        table, values(specification) => (values...) -> NamedTuple{names}(values), rows
+    )
+end
+function build_column(table::NamedTuple, specification::Tuple{Vararg{Symbol}}, rows)
+    return build_column(table, specification => tuple, rows)
+end
 function build_column(table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symbol}}}, rows)
     columns = map(name -> getproperty(table, name), first(specification))
     combine = last(specification)
@@ -251,17 +312,33 @@ splits a table.
 function check_table(table::NamedTuple, columns::Tuple{Vararg{Symbol}})
     for column in columns
         if !haskey(table, column)
-            throw(ArgumentError("The table has no column named $column. Its columns are $(keys(table))."))
+            throw(
+                ArgumentError(
+                    "The table has no column named $column. Its columns are $(keys(table))."
+                ),
+            )
         end
     end
     isempty(table) && throw(ArgumentError("The table has no columns."))
-    all(column -> column isa AbstractVector, values(table)) || throw(ArgumentError("Every column of the table must be a vector, but the columns have types $(map(typeof, values(table)))."))
-    allequal(map(length, values(table))) || throw(ArgumentError("Every column of the table must have the same length, but their lengths are $(map(length, table))."))
+    all(column -> column isa AbstractVector, values(table)) || throw(
+        ArgumentError(
+            "Every column of the table must be a vector, but the columns have types $(map(typeof, values(table))).",
+        ),
+    )
+    allequal(map(length, values(table))) || throw(
+        ArgumentError(
+            "Every column of the table must have the same length, but their lengths are $(map(length, table)).",
+        ),
+    )
     return nothing
 end
 
 function check_table(table, columns::Tuple{Vararg{Symbol}})
-    throw(ArgumentError("The table must be a NamedTuple with one vector for each column, which Tables.columntable gives for a DataFrame, but it has type $(typeof(table))."))
+    return throw(
+        ArgumentError(
+            "The table must be a NamedTuple with one vector for each column, which Tables.columntable gives for a DataFrame, but it has type $(typeof(table)).",
+        ),
+    )
 end
 
 """
@@ -285,8 +362,12 @@ end
 Return the identifier of the session that row `i` of `table` belongs to. Used by
 [`rows_per_session`](@ref).
 """
-session_id(table::NamedTuple, id_columns::Tuple{Symbol}, i) = getproperty(table, only(id_columns))[i]
-session_id(table::NamedTuple, id_columns::Tuple{Vararg{Symbol}}, i) = NamedTuple{id_columns}(map(column -> getproperty(table, column)[i], id_columns))
+function session_id(table::NamedTuple, id_columns::Tuple{Symbol}, i)
+    return getproperty(table, only(id_columns))[i]
+end
+function session_id(table::NamedTuple, id_columns::Tuple{Vararg{Symbol}}, i)
+    return NamedTuple{id_columns}(map(column -> getproperty(table, column)[i], id_columns))
+end
 
 """
     select_rows(table, columns, rows)
@@ -296,7 +377,9 @@ specification of the column in `table`, at the rows `rows`, as a `NamedTuple` wi
 model's names, each built with [`build_column`](@ref). Used by
 [`MultipleSessionsInfo`](@ref) when it splits a table.
 """
-select_rows(table::NamedTuple, columns::NamedTuple, rows) = map(specification -> build_column(table, specification, rows), columns)
+function select_rows(table::NamedTuple, columns::NamedTuple, rows)
+    return map(specification -> build_column(table, specification, rows), columns)
+end
 
 """
     select_timestep_sizes(table, timestep_sizes, rows)
@@ -305,7 +388,9 @@ Return the sizes of the timesteps of one session: the column named `timestep_siz
 `table` at the rows `rows`, or `timestep_sizes` itself when it is a size for all. Used by
 [`MultipleSessionsInfo`](@ref) when it splits a table.
 """
-select_timestep_sizes(table::NamedTuple, timestep_sizes::Symbol, rows) = getproperty(table, timestep_sizes)[rows]
+function select_timestep_sizes(table::NamedTuple, timestep_sizes::Symbol, rows)
+    return getproperty(table, timestep_sizes)[rows]
+end
 select_timestep_sizes(table::NamedTuple, timestep_sizes, rows) = timestep_sizes
 
 ## Reading what a session is set up with ##
@@ -318,9 +403,11 @@ Return whether a [`SessionInfo`](@ref) has an environment model, or every sessio
 [`MultipleSessionsInfo`](@ref) has, which is decided by the type. Used by
 [`warn_if_environment_is_unused`](@ref) and [`check_environment_parameters`](@ref).
 """
-has_environment(::SessionInfo{<:Any, NoEnvironment}) = false
-has_environment(::SessionInfo{<:Any, <:AbstractEnvironmentModel}) = true
-has_environment(sessions_info::MultipleSessionsInfo) = has_environment(first(sessions_info.sessions))
+has_environment(::SessionInfo{<:Any,NoEnvironment}) = false
+has_environment(::SessionInfo{<:Any,<:AbstractEnvironmentModel}) = true
+function has_environment(sessions_info::MultipleSessionsInfo)
+    return has_environment(first(sessions_info.sessions))
+end
 
 """
     has_missing_observations(session_info)
@@ -328,7 +415,12 @@ has_environment(sessions_info::MultipleSessionsInfo) = has_environment(first(ses
 Return whether any observation in the data of a session is [`MissingValue`](@ref), which an
 environment model fills in. Used by [`warn_if_environment_is_unused`](@ref).
 """
-has_missing_observations(session_info::SessionInfo) = any(column -> any(value -> value isa MissingValue, column), values(session_info.observations))
+function has_missing_observations(session_info::SessionInfo)
+    return any(
+        column -> any(value -> value isa MissingValue, column),
+        values(session_info.observations),
+    )
+end
 
 """
     warn_if_environment_is_unused(session_info)
@@ -340,8 +432,10 @@ does in a session, so it only costs time. The environment is kept as given, sinc
 out would change the variables of a model whose environment samples. Used by the
 constructors of [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
 """
-warn_if_environment_is_unused(::SessionInfo{<:Any, NoEnvironment}) = nothing
-function warn_if_environment_is_unused(session_info::SessionInfo{<:Any, <:AbstractEnvironmentModel})
+warn_if_environment_is_unused(::SessionInfo{<:Any,NoEnvironment}) = nothing
+function warn_if_environment_is_unused(
+    session_info::SessionInfo{<:Any,<:AbstractEnvironmentModel}
+)
     if !has_missing_observations(session_info)
         @warn "An environment model of type $(typeof(session_info.environment)) was given, but no observation in the data is MissingValue(), so it has nothing to fill in and only costs time. Leave the environment out, or mark the observations it should give as MissingValue()."
     end
@@ -363,12 +457,32 @@ Throw an informative error if environment parameters are given for a session, or
 sessions, without an environment model, which is decided by the types. Used by the Turing.jl
 model of several sessions.
 """
-check_environment_parameters(::SessionInfo{<:Any, <:AbstractEnvironmentModel}, environment_parameters::NamedTuple) = nothing
-check_environment_parameters(::SessionInfo{<:Any, NoEnvironment}, environment_parameters::NamedTuple{()}) = nothing
-function check_environment_parameters(::SessionInfo{<:Any, NoEnvironment}, environment_parameters::NamedTuple)
-    throw(ArgumentError("Environment parameters were given, $environment_parameters, but the session has no environment."))
+function check_environment_parameters(
+    ::SessionInfo{<:Any,<:AbstractEnvironmentModel}, environment_parameters::NamedTuple
+)
+    return nothing
 end
-check_environment_parameters(sessions_info::MultipleSessionsInfo, environment_parameters::NamedTuple) = check_environment_parameters(first(sessions_info.sessions), environment_parameters)
+function check_environment_parameters(
+    ::SessionInfo{<:Any,NoEnvironment}, environment_parameters::NamedTuple{()}
+)
+    return nothing
+end
+function check_environment_parameters(
+    ::SessionInfo{<:Any,NoEnvironment}, environment_parameters::NamedTuple
+)
+    return throw(
+        ArgumentError(
+            "Environment parameters were given, $environment_parameters, but the session has no environment.",
+        ),
+    )
+end
+function check_environment_parameters(
+    sessions_info::MultipleSessionsInfo, environment_parameters::NamedTuple
+)
+    return check_environment_parameters(
+        first(sessions_info.sessions), environment_parameters
+    )
+end
 
 """
     recorded_action_names(session_info)
@@ -392,7 +506,11 @@ value in the session column, or a `NamedTuple` of the values when there are seve
 """
 function session_index(sessions_info::MultipleSessionsInfo, session_id)
     i = findfirst(==(session_id), sessions_info.session_ids)
-    i === nothing && throw(ArgumentError("There is no session with the identifier $(repr(session_id)). The identifiers are $(sessions_info.session_ids)."))
+    i === nothing && throw(
+        ArgumentError(
+            "There is no session with the identifier $(repr(session_id)). The identifiers are $(sessions_info.session_ids).",
+        ),
+    )
     return i
 end
 
@@ -415,19 +533,40 @@ Return whether each action of one timestep has a recorded value in the data, as 
 the distribution `cognitive_model` gave for it in `action_distribution`, so it is an error
 when that is [`NoAction`](@ref). Used by the Turing.jl models of a timestep.
 """
-function recorded_on_timestep(data_action::NamedTuple{names}, action_distribution::NamedTuple, cognitive_model) where {names}
-    return NamedTuple{names}(recorded_on_timestep(names, Tuple(data_action), action_distribution, cognitive_model))
+function recorded_on_timestep(
+    data_action::NamedTuple{names}, action_distribution::NamedTuple, cognitive_model
+) where {names}
+    return NamedTuple{names}(
+        recorded_on_timestep(
+            names, Tuple(data_action), action_distribution, cognitive_model
+        ),
+    )
 end
 
-recorded_on_timestep(names::Tuple{}, data_values::Tuple{}, action_distribution, cognitive_model) = ()
-function recorded_on_timestep(names::Tuple, data_values::Tuple, action_distribution, cognitive_model)
+function recorded_on_timestep(
+    names::Tuple{}, data_values::Tuple{}, action_distribution, cognitive_model
+)
+    return ()
+end
+function recorded_on_timestep(
+    names::Tuple, data_values::Tuple, action_distribution, cognitive_model
+)
     name = first(names)
     value = first(data_values)
     recorded = is_recorded(value)
     if recorded && getproperty(action_distribution, name) isa NoAction
-        throw(ArgumentError("The cognitive model of type $(typeof(cognitive_model)) took no action $name on a timestep where the data has $value for it."))
+        throw(
+            ArgumentError(
+                "The cognitive model of type $(typeof(cognitive_model)) took no action $name on a timestep where the data has $value for it.",
+            ),
+        )
     end
-    return (recorded, recorded_on_timestep(Base.tail(names), Base.tail(data_values), action_distribution, cognitive_model)...)
+    return (
+        recorded,
+        recorded_on_timestep(
+            Base.tail(names), Base.tail(data_values), action_distribution, cognitive_model
+        )...,
+    )
 end
 
 """
@@ -441,7 +580,13 @@ kept sets the type of, as for [`push_output!`](@ref). Used by the Turing.jl mode
 session, after its first timestep.
 """
 function initialize_distributions(recorded_action_distributions::NamedTuple)
-    return map(distribution -> distribution isa AbstractNoValue ? Vector{Union{}}() : Vector{typeof(distribution)}(), recorded_action_distributions)
+    return map(
+        distribution -> if distribution isa AbstractNoValue
+            Vector{Union{}}()
+        else
+            Vector{typeof(distribution)}()
+        end, recorded_action_distributions
+    )
 end
 
 """
@@ -453,8 +598,24 @@ that is recorded in the session, and return them. A distribution of another type
 vector widens the vector, as for [`push_output!`](@ref). Used by the Turing.jl model of a
 session, on every timestep.
 """
-function store_distributions(distributions::NamedTuple{names}, recorded_action_distributions::NamedTuple, recorded_on_timestep::NamedTuple) where {names}
-    return NamedTuple{names}(map(name -> getproperty(recorded_on_timestep, name) ? push_output!(getproperty(distributions, name), getproperty(recorded_action_distributions, name)) : getproperty(distributions, name), names))
+function store_distributions(
+    distributions::NamedTuple{names},
+    recorded_action_distributions::NamedTuple,
+    recorded_on_timestep::NamedTuple,
+) where {names}
+    return NamedTuple{names}(
+        map(
+            name -> if getproperty(recorded_on_timestep, name)
+                push_output!(
+                    getproperty(distributions, name),
+                    getproperty(recorded_action_distributions, name),
+                )
+            else
+                getproperty(distributions, name)
+            end,
+            names,
+        ),
+    )
 end
 
 ## Saving what a fitted session returns ##
@@ -470,11 +631,18 @@ on every timestep.
 """
 function saved_session_outputs(cognitive_model, outputs, save_history)
     return merge(
-        entry(Val(:observation), select_names(outputs.observation, observation_selection(save_history))),
+        entry(
+            Val(:observation),
+            select_names(outputs.observation, observation_selection(save_history)),
+        ),
         entry(Val(:action), select_names(outputs.action, action_selection(save_history))),
         (;
-            action_distribution = select_names(outputs.action_distribution, action_distribution_selection(save_history)),
-            state = save_state(cognitive_model, outputs.cognitive_state, state_selection(save_history)),
+            action_distribution=select_names(
+                outputs.action_distribution, action_distribution_selection(save_history)
+            ),
+            state=save_state(
+                cognitive_model, outputs.cognitive_state, state_selection(save_history)
+            ),
         ),
     )
 end
@@ -488,7 +656,11 @@ timestep 0 is [`BeforeFirstTimestep`](@ref) for every action, since none was giv
 by the Turing.jl model of a session, before its first timestep runs.
 """
 function initial_session_outputs(::Val{true}, cognitive_model, previous, save_history)
-    return saved_session_outputs(cognitive_model, merge(previous, (; action_distribution = initial_action(cognitive_model))), save_history)
+    return saved_session_outputs(
+        cognitive_model,
+        merge(previous, (; action_distribution=initial_action(cognitive_model))),
+        save_history,
+    )
 end
 initial_session_outputs(::Val{false}, cognitive_model, previous, save_history) = nothing
 
@@ -502,19 +674,23 @@ of a session, after its first timestep.
 """
 function initialize_session_storage(::Nothing, saved, n_timesteps)
     return (;
-        observations = initialize_storage(saved.observation, n_timesteps),
-        actions = initialize_storage(saved.action, n_timesteps),
-        action_distributions = initialize_storage(saved.action_distribution, n_timesteps),
-        states = initialize_storage(saved.state, n_timesteps),
+        observations=initialize_storage(saved.observation, n_timesteps),
+        actions=initialize_storage(saved.action, n_timesteps),
+        action_distributions=initialize_storage(saved.action_distribution, n_timesteps),
+        states=initialize_storage(saved.state, n_timesteps),
     )
 end
 
 function initialize_session_storage(initial_saved::NamedTuple, saved, n_timesteps)
     return (;
-        observations = initialize_storage(initial_saved.observation, saved.observation, n_timesteps),
-        actions = initialize_storage(initial_saved.action, saved.action, n_timesteps),
-        action_distributions = initialize_storage(initial_saved.action_distribution, saved.action_distribution, n_timesteps),
-        states = initialize_storage(initial_saved.state, saved.state, n_timesteps),
+        observations=initialize_storage(
+            initial_saved.observation, saved.observation, n_timesteps
+        ),
+        actions=initialize_storage(initial_saved.action, saved.action, n_timesteps),
+        action_distributions=initialize_storage(
+            initial_saved.action_distribution, saved.action_distribution, n_timesteps
+        ),
+        states=initialize_storage(initial_saved.state, saved.state, n_timesteps),
     )
 end
 
@@ -527,10 +703,12 @@ by the Turing.jl model of a session, on every timestep after the first.
 """
 function store_session_outputs!(storage, saved, i)
     return (;
-        observations = store_output!(storage.observations, saved.observation, i),
-        actions = store_output!(storage.actions, saved.action, i),
-        action_distributions = store_output!(storage.action_distributions, saved.action_distribution, i),
-        states = store_output!(storage.states, saved.state, i),
+        observations=store_output!(storage.observations, saved.observation, i),
+        actions=store_output!(storage.actions, saved.action, i),
+        action_distributions=store_output!(
+            storage.action_distributions, saved.action_distribution, i
+        ),
+        states=store_output!(storage.states, saved.state, i),
     )
 end
 
@@ -563,13 +741,22 @@ function Base.show(io::IO, ::MIME"text/plain", session_info::SessionInfo)
     print(io, "\nTimesteps: ", session_info.n_timesteps)
     print_data_names(io, "Observations", keys(session_info.observations))
     print_data_names(io, "Actions", keys(session_info.actions))
-    print(io, "\nWho starts: ", session_info.who_starts isa AgentStarts ? "agent" : "environment")
+    print(
+        io,
+        "\nWho starts: ",
+        session_info.who_starts isa AgentStarts ? "agent" : "environment",
+    )
     return nothing
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sessions_info::MultipleSessionsInfo)
     first_session = first(sessions_info.sessions)
-    print(io, "MultipleSessionsInfo\nSessions: ", n_sessions(sessions_info), "\nCognitive model: ")
+    print(
+        io,
+        "MultipleSessionsInfo\nSessions: ",
+        n_sessions(sessions_info),
+        "\nCognitive model: ",
+    )
     print_model_name(io, first_session.cognitive_model)
     print(io, "\nEnvironment: ")
     print_model_name(io, first_session.environment)

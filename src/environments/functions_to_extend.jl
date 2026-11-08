@@ -16,7 +16,9 @@ state, should be sampled from `input.rng`, so that a simulation can be reproduce
 See also [`simulate`](@ref), which has an example.
 """
 function apply_model(environment::AbstractEnvironmentModel, input)
-    error("There is no apply_model method for an environment model of type $(typeof(environment)) with an input of type $(typeof(input)). Each environment model must define CognitiveModeling.apply_model(environment::$(typeof(environment)), input::CognitiveModeling.EnvironmentInput).")
+    return error(
+        "There is no apply_model method for an environment model of type $(typeof(environment)) with an input of type $(typeof(input)). Each environment model must define CognitiveModeling.apply_model(environment::$(typeof(environment)), input::CognitiveModeling.EnvironmentInput).",
+    )
 end
 
 """
@@ -30,7 +32,9 @@ Every environment model must add a method of this function, which throws an erro
 An environment model without a state returns an empty `NamedTuple`, `(;)`.
 """
 function initialize_state(environment::AbstractEnvironmentModel, parameters)
-    error("There is no initialize_state method for an environment model of type $(typeof(environment)). Each environment model must define CognitiveModeling.initialize_state(environment::$(typeof(environment)), parameters), which returns (;) if the environment model has no state.")
+    return error(
+        "There is no initialize_state method for an environment model of type $(typeof(environment)). Each environment model must define CognitiveModeling.initialize_state(environment::$(typeof(environment)), parameters), which returns (;) if the environment model has no state.",
+    )
 end
 
 """
@@ -72,7 +76,9 @@ julia> CognitiveModeling.attribute_names(BernoulliRewards()).observations
 ```
 """
 function attribute_names(environment::AbstractEnvironmentModel)
-    error("There is no attribute_names method for an environment model of type $(typeof(environment)). Each environment model must define CognitiveModeling.attribute_names(environment::$(typeof(environment))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.")
+    return error(
+        "There is no attribute_names method for an environment model of type $(typeof(environment)). Each environment model must define CognitiveModeling.attribute_names(environment::$(typeof(environment))), which returns a ModelAttributes with the names of its parameters, states, observations and actions.",
+    )
 end
 
 ## Functions that an environment model can implement ##

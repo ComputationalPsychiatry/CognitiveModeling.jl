@@ -113,7 +113,19 @@ julia> session_info.recorded
 (choice = Bool[1, 0],)
 ```
 """
-struct SessionInfo{Tcognitive_model, Tenvironment, Tobservations, Tactions, Trecorded, Twho_starts, Ttimestep_sizes, Tsaved_timestep_sizes, Tsave_history, Tprevious_observation, Tprevious_action}
+struct SessionInfo{
+    Tcognitive_model,
+    Tenvironment,
+    Tobservations,
+    Tactions,
+    Trecorded,
+    Twho_starts,
+    Ttimestep_sizes,
+    Tsaved_timestep_sizes,
+    Tsave_history,
+    Tprevious_observation,
+    Tprevious_action,
+}
     cognitive_model::Tcognitive_model
     environment::Tenvironment
     observations::Tobservations
@@ -129,7 +141,9 @@ struct SessionInfo{Tcognitive_model, Tenvironment, Tobservations, Tactions, Trec
 end
 
 #Prepares the session, and warns if an environment has nothing to fill in
-function SessionInfo(cognitive_model::AbstractCognitiveModel, observations, actions; keywords...)
+function SessionInfo(
+    cognitive_model::AbstractCognitiveModel, observations, actions; keywords...
+)
     session_info = prepare_session(cognitive_model, observations, actions; keywords...)
     warn_if_environment_is_unused(session_info)
     return session_info
@@ -137,8 +151,23 @@ end
 
 #The same session with another save history, with the sizes it returns made again
 function SessionInfo(session_info::SessionInfo; save_history::SaveHistory)
-    saved_sizes = saved_timestep_sizes(session_info.timestep_sizes, session_info.n_timesteps, save_history)
-    return SessionInfo(session_info.cognitive_model, session_info.environment, session_info.observations, session_info.actions, session_info.recorded, session_info.n_timesteps, session_info.who_starts, session_info.timestep_sizes, saved_sizes, save_history, session_info.previous_observation, session_info.previous_action)
+    saved_sizes = saved_timestep_sizes(
+        session_info.timestep_sizes, session_info.n_timesteps, save_history
+    )
+    return SessionInfo(
+        session_info.cognitive_model,
+        session_info.environment,
+        session_info.observations,
+        session_info.actions,
+        session_info.recorded,
+        session_info.n_timesteps,
+        session_info.who_starts,
+        session_info.timestep_sizes,
+        saved_sizes,
+        save_history,
+        session_info.previous_observation,
+        session_info.previous_action,
+    )
 end
 
 """
@@ -150,19 +179,21 @@ constructor describes. It leaves out the warning about an environment with nothi
 in, which [`MultipleSessionsInfo`](@ref) gives over all its sessions instead of each.
 """
 function prepare_session(
-        cognitive_model::AbstractCognitiveModel,
-        observations,
-        actions;
-        who_starts::Union{AgentStarts, EnvironmentStarts},
-        environment::Union{NoEnvironment, AbstractEnvironmentModel} = NoEnvironment(),
-        timestep_sizes = 1,
-        impute_missing_actions::Bool = true,
-        save_history::SaveHistory = SaveHistory(),
-        missing_observations::Union{MissingValue, NoObservation} = MissingValue(),
-        missing_actions::Union{MissingValue, NoAction} = MissingValue(),
-        previous_observation = initial_observation(environment isa NoEnvironment ? cognitive_model : environment),
-        previous_action = initial_action(cognitive_model),
-    )
+    cognitive_model::AbstractCognitiveModel,
+    observations,
+    actions;
+    who_starts::Union{AgentStarts,EnvironmentStarts},
+    environment::Union{NoEnvironment,AbstractEnvironmentModel}=NoEnvironment(),
+    timestep_sizes=1,
+    impute_missing_actions::Bool=true,
+    save_history::SaveHistory=SaveHistory(),
+    missing_observations::Union{MissingValue,NoObservation}=MissingValue(),
+    missing_actions::Union{MissingValue,NoAction}=MissingValue(),
+    previous_observation=initial_observation(
+        environment isa NoEnvironment ? cognitive_model : environment
+    ),
+    previous_action=initial_action(cognitive_model),
+)
 
     #Replace missing in the data by the marker for a value that wasn't recorded, or for nothing happening
     observations = replace_missing(observations, missing_observations)
@@ -174,7 +205,11 @@ function prepare_session(
 
     #A vector of timestep sizes must have one size for each timestep
     if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_timesteps
-        throw(DimensionMismatch("timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and the data has $n_timesteps timesteps."))
+        throw(
+            DimensionMismatch(
+                "timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and the data has $n_timesteps timesteps.",
+            ),
+        )
     end
 
     #Missing actions that aren't imputed are passed on as actions that weren't taken
@@ -186,7 +221,20 @@ function prepare_session(
     recorded = recorded_actions(actions)
     saved_sizes = saved_timestep_sizes(timestep_sizes, n_timesteps, save_history)
 
-    return SessionInfo(cognitive_model, environment, observations, actions, recorded, n_timesteps, who_starts, timestep_sizes, saved_sizes, save_history, previous_observation, previous_action)
+    return SessionInfo(
+        cognitive_model,
+        environment,
+        observations,
+        actions,
+        recorded,
+        n_timesteps,
+        who_starts,
+        timestep_sizes,
+        saved_sizes,
+        save_history,
+        previous_observation,
+        previous_action,
+    )
 end
 
 """
@@ -265,38 +313,72 @@ julia> sessions_info.sessions[2].actions
 (choice = Union{MissingValue, Bool}[true, MissingValue(), false],)
 ```
 """
-struct MultipleSessionsInfo{Tsessions <: AbstractVector{<:SessionInfo}, Tsession_ids <: AbstractVector}
+struct MultipleSessionsInfo{
+    Tsessions<:AbstractVector{<:SessionInfo},Tsession_ids<:AbstractVector
+}
     sessions::Tsessions
     session_ids::Tsession_ids
 
     #Only takes sessions of one type, with an identifier for each
-    function MultipleSessionsInfo(sessions::AbstractVector{<:SessionInfo}, session_ids::AbstractVector)
+    function MultipleSessionsInfo(
+        sessions::AbstractVector{<:SessionInfo}, session_ids::AbstractVector
+    )
         isempty(sessions) && throw(ArgumentError("There must be at least one session."))
         if length(sessions) != length(session_ids)
-            throw(DimensionMismatch("There are $(length(sessions)) sessions and $(length(session_ids)) session identifiers, but there must be one identifier for each session."))
+            throw(
+                DimensionMismatch(
+                    "There are $(length(sessions)) sessions and $(length(session_ids)) session identifiers, but there must be one identifier for each session.",
+                ),
+            )
         end
         if !isconcretetype(eltype(sessions))
-            throw(ArgumentError("The sessions must all have the same type, but the vector has element type $(eltype(sessions)). They have one type when they share the cognitive model, the environment and the settings, and their columns have the same element types."))
+            throw(
+                ArgumentError(
+                    "The sessions must all have the same type, but the vector has element type $(eltype(sessions)). They have one type when they share the cognitive model, the environment and the settings, and their columns have the same element types.",
+                ),
+            )
         end
-        return new{typeof(sessions), typeof(session_ids)}(sessions, session_ids)
+        return new{typeof(sessions),typeof(session_ids)}(sessions, session_ids)
     end
 end
 
 #Splits a table into sessions by the values of the session columns, and prepares each of them in the same way
-function MultipleSessionsInfo(cognitive_model::AbstractCognitiveModel, table; observation_columns, action_columns, session_columns, timestep_sizes = 1, keywords...)
+function MultipleSessionsInfo(
+    cognitive_model::AbstractCognitiveModel,
+    table;
+    observation_columns,
+    action_columns,
+    session_columns,
+    timestep_sizes=1,
+    keywords...,
+)
 
     #The columns of each kind, from the names the model uses to the names in the table
     observation_column_map = column_map(observation_columns)
     action_column_map = column_map(action_columns)
     id_columns = as_tuple_of_names(session_columns)
-    check_table(table, (Iterators.flatten(map(columns_used, values(observation_column_map)))..., Iterators.flatten(map(columns_used, values(action_column_map)))..., id_columns..., (timestep_sizes isa Symbol ? (timestep_sizes,) : ())...))
+    check_table(
+        table,
+        (
+            Iterators.flatten(map(columns_used, values(observation_column_map)))...,
+            Iterators.flatten(map(columns_used, values(action_column_map)))...,
+            id_columns...,
+            (timestep_sizes isa Symbol ? (timestep_sizes,) : ())...,
+        ),
+    )
 
     #The rows of each session, and its identifier
     sessions_rows = rows_per_session(table, id_columns)
 
     #Each session is prepared from its rows of the table, and an environment should have something to fill in in some session
     sessions = map(sessions_rows) do (_, rows)
-        return prepare_session(cognitive_model, select_rows(table, observation_column_map, rows), select_rows(table, action_column_map, rows); timestep_sizes = select_timestep_sizes(table, timestep_sizes, rows), keywords...)
+        return prepare_session(
+            cognitive_model,
+            select_rows(table, observation_column_map, rows),
+            select_rows(table, action_column_map, rows);
+            timestep_sizes=select_timestep_sizes(table, timestep_sizes, rows),
+            keywords...,
+        )
     end
     warn_if_environment_is_unused(sessions)
     session_ids = map(first, sessions_rows)
@@ -305,8 +387,13 @@ function MultipleSessionsInfo(cognitive_model::AbstractCognitiveModel, table; ob
 end
 
 #The same sessions with another save history
-function MultipleSessionsInfo(sessions_info::MultipleSessionsInfo; save_history::SaveHistory)
-    return MultipleSessionsInfo(map(session -> SessionInfo(session; save_history), sessions_info.sessions), sessions_info.session_ids)
+function MultipleSessionsInfo(
+    sessions_info::MultipleSessionsInfo; save_history::SaveHistory
+)
+    return MultipleSessionsInfo(
+        map(session -> SessionInfo(session; save_history), sessions_info.sessions),
+        sessions_info.session_ids,
+    )
 end
 
 #Types for the parts of a full model
@@ -337,7 +424,7 @@ after the parameter, such as `learning_rate.session`, so the learning rate of th
 session is `learning_rate.session[3]`. [`turing_full_model`](@ref) can put them under
 `population_model` too.
 """
-struct IndependentSessions{Tpriors <: NamedTuple} <: AbstractPopulationModel
+struct IndependentSessions{Tpriors<:NamedTuple} <: AbstractPopulationModel
     priors::Tpriors
 end
 

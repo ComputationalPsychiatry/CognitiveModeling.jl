@@ -13,7 +13,9 @@ end
 
 #Samples each named action on its own
 function sample_action(rng, action_distributions::NamedTuple)
-    return map(action_distribution -> sample_action(rng, action_distribution), action_distributions)
+    return map(
+        action_distribution -> sample_action(rng, action_distribution), action_distributions
+    )
 end
 
 #An action that isn't taken has nothing to sample
@@ -22,8 +24,12 @@ function sample_action(rng, ::NoAction)
 end
 
 #A number, a string or a symbol is a value, which rand would read as something else or not at all
-function sample_action(rng, value::Union{Number, AbstractString, Symbol})
-    throw(ArgumentError("A cognitive model gave $(repr(value)), of type $(typeof(value)), as what to sample an action from, but it is a value. An action that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))."))
+function sample_action(rng, value::Union{Number,AbstractString,Symbol})
+    return throw(
+        ArgumentError(
+            "A cognitive model gave $(repr(value)), of type $(typeof(value)), as what to sample an action from, but it is a value. An action that isn't random is given in a Deterministic, as in Deterministic($(repr(value))).",
+        ),
+    )
 end
 
 """
@@ -40,7 +46,10 @@ end
 
 #Samples each named observation on its own
 function sample_observation(rng, observation_distributions::NamedTuple)
-    return map(observation_distribution -> sample_observation(rng, observation_distribution), observation_distributions)
+    return map(
+        observation_distribution -> sample_observation(rng, observation_distribution),
+        observation_distributions,
+    )
 end
 
 #An observation that isn't made has nothing to sample
@@ -49,8 +58,12 @@ function sample_observation(rng, ::NoObservation)
 end
 
 #A number, a string or a symbol is a value, which rand would read as something else or not at all
-function sample_observation(rng, value::Union{Number, AbstractString, Symbol})
-    throw(ArgumentError("An environment model gave $(repr(value)), of type $(typeof(value)), as what to sample an observation from, but it is a value. An observation that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))."))
+function sample_observation(rng, value::Union{Number,AbstractString,Symbol})
+    return throw(
+        ArgumentError(
+            "An environment model gave $(repr(value)), of type $(typeof(value)), as what to sample an observation from, but it is a value. An observation that isn't random is given in a Deterministic, as in Deterministic($(repr(value))).",
+        ),
+    )
 end
 
 ## Starting a simulation ##
@@ -75,28 +88,56 @@ Return what the receiver gets of the outputs `x`: all of `x` without a map, and 
 map_names(x, ::Nothing) = x
 
 #The names are in the type, so both the selection and the new names are known at compile time
-function map_names(x::NamedTuple, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceived}
+function map_names(x::NamedTuple, ::NameMap{Tgiven,Treceived}) where {Tgiven,Treceived}
     return NamedTuple{Treceived}(values(NamedTuple{Tgiven}(x)))
 end
 
 #With a map, it must take observations the environment gives, and give exactly those the cognitive model lists
-function check_observations_fit(cognitive_model, environment, cognitive_model_names, environment_names, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceived}
+function check_observations_fit(
+    cognitive_model,
+    environment,
+    cognitive_model_names,
+    environment_names,
+    ::NameMap{Tgiven,Treceived},
+) where {Tgiven,Treceived}
     if !has_every_name(Tgiven, environment_names)
-        throw(ArgumentError("The observation_map takes the observations $Tgiven, but an environment model of type $(typeof(environment)) gives $environment_names. A map can only take observations the environment gives."))
+        throw(
+            ArgumentError(
+                "The observation_map takes the observations $Tgiven, but an environment model of type $(typeof(environment)) gives $environment_names. A map can only take observations the environment gives.",
+            ),
+        )
     end
     if !same_names(Treceived, cognitive_model_names)
-        throw(ArgumentError("The observation_map gives the observations $Treceived, but a cognitive model of type $(typeof(cognitive_model)) lists $cognitive_model_names. A map must give exactly the observations the cognitive model lists."))
+        throw(
+            ArgumentError(
+                "The observation_map gives the observations $Treceived, but a cognitive model of type $(typeof(cognitive_model)) lists $cognitive_model_names. A map must give exactly the observations the cognitive model lists.",
+            ),
+        )
     end
     return nothing
 end
 
 #With a map, it must take actions the cognitive model gives, and give exactly those the environment lists
-function check_actions_fit(cognitive_model, environment, cognitive_model_names, environment_names, ::NameMap{Tgiven, Treceived}) where {Tgiven, Treceived}
+function check_actions_fit(
+    cognitive_model,
+    environment,
+    cognitive_model_names,
+    environment_names,
+    ::NameMap{Tgiven,Treceived},
+) where {Tgiven,Treceived}
     if !has_every_name(Tgiven, cognitive_model_names)
-        throw(ArgumentError("The action_map takes the actions $Tgiven, but a cognitive model of type $(typeof(cognitive_model)) gives $cognitive_model_names. A map can only take actions the cognitive model gives."))
+        throw(
+            ArgumentError(
+                "The action_map takes the actions $Tgiven, but a cognitive model of type $(typeof(cognitive_model)) gives $cognitive_model_names. A map can only take actions the cognitive model gives.",
+            ),
+        )
     end
     if !same_names(Treceived, environment_names)
-        throw(ArgumentError("The action_map gives the actions $Treceived, but an environment model of type $(typeof(environment)) lists $environment_names. A map must give exactly the actions the environment lists."))
+        throw(
+            ArgumentError(
+                "The action_map gives the actions $Treceived, but an environment model of type $(typeof(environment)) lists $environment_names. A map must give exactly the actions the environment lists.",
+            ),
+        )
     end
     return nothing
 end
@@ -122,7 +163,7 @@ end
 function initialize_storage(initial_value, first_value, n_steps)
 
     #Create the vector with room for timestep 0, and put both values in it
-    storage = Vector{Union{typeof(initial_value), typeof(first_value)}}(undef, n_steps + 1)
+    storage = Vector{Union{typeof(initial_value),typeof(first_value)}}(undef, n_steps + 1)
     storage[1] = initial_value
     storage[2] = first_value
 
@@ -146,7 +187,7 @@ function store_output!(storage::Vector{T}, value, t) where {T}
     end
 
     #Otherwise, move the outputs so far to a wider vector which can hold both types
-    wider_storage = Vector{Union{T, typeof(value)}}(undef, length(storage))
+    wider_storage = Vector{Union{T,typeof(value)}}(undef, length(storage))
     copyto!(wider_storage, 1, storage, 1, t - 1)
     wider_storage[t] = value
 
@@ -170,7 +211,7 @@ function push_output!(storage::Vector{T}, value) where {T}
     end
 
     #Otherwise, move the outputs so far to a wider vector which can hold both types
-    wider_storage = Vector{Union{T, typeof(value)}}(undef, length(storage) + 1)
+    wider_storage = Vector{Union{T,typeof(value)}}(undef, length(storage) + 1)
     copyto!(wider_storage, 1, storage, 1, length(storage))
     wider_storage[end] = value
 
@@ -222,7 +263,9 @@ end
 function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::Val{true})
 
     #Create the vector with room for timestep 0, and put the marker and the sizes in it
-    sizes = Vector{Union{BeforeFirstTimestep, eltype(timestep_sizes)}}(undef, n_timesteps + 1)
+    sizes = Vector{Union{BeforeFirstTimestep,eltype(timestep_sizes)}}(
+        undef, n_timesteps + 1
+    )
     sizes[1] = BeforeFirstTimestep()
     copyto!(sizes, 2, timestep_sizes, 1, n_timesteps)
 
@@ -254,19 +297,43 @@ This is its own function so that if an output can have two types, like an observ
 an entry that is sometimes [`NoObservation`](@ref), the compiler can split the call and get a
 concrete type for each.
 """
-function collect_timestep_outputs(environment_output, cognitive_output, observation_from_environment, observation, action, action_to_environment, cognitive_model, environment, save_history, save_environment_history)
+function collect_timestep_outputs(
+    environment_output,
+    cognitive_output,
+    observation_from_environment,
+    observation,
+    action,
+    action_to_environment,
+    cognitive_model,
+    environment,
+    save_history,
+    save_environment_history,
+)
     return (;
         observation_from_environment,
         action,
-        cognitive_state = cognitive_output.new_state,
-        environment_state = environment_output.new_state,
-        saved_observation = select_names(observation, observation_selection(save_history)),
-        saved_action = select_names(action, action_selection(save_history)),
-        saved_action_distribution = select_names(cognitive_output.action_distribution, action_distribution_selection(save_history)),
-        saved_cognitive_state = save_state(cognitive_model, cognitive_output.new_state, state_selection(save_history)),
-        saved_environment_state = save_state(environment, environment_output.new_state, state_selection(save_environment_history)),
-        saved_observation_from_environment = select_names(observation_from_environment, observation_selection(save_environment_history)),
-        saved_action_to_environment = select_names(action_to_environment, action_selection(save_environment_history)),
+        cognitive_state=cognitive_output.new_state,
+        environment_state=environment_output.new_state,
+        saved_observation=select_names(observation, observation_selection(save_history)),
+        saved_action=select_names(action, action_selection(save_history)),
+        saved_action_distribution=select_names(
+            cognitive_output.action_distribution,
+            action_distribution_selection(save_history),
+        ),
+        saved_cognitive_state=save_state(
+            cognitive_model, cognitive_output.new_state, state_selection(save_history)
+        ),
+        saved_environment_state=save_state(
+            environment,
+            environment_output.new_state,
+            state_selection(save_environment_history),
+        ),
+        saved_observation_from_environment=select_names(
+            observation_from_environment, observation_selection(save_environment_history)
+        ),
+        saved_action_to_environment=select_names(
+            action_to_environment, action_selection(save_environment_history)
+        ),
     )
 end
 
@@ -284,19 +351,54 @@ action distributions are [`BeforeFirstTimestep`](@ref) for every action, since n
 yet, and the states are the states before the first timestep. They must be saved before the
 first timestep runs, since it can change a state in place.
 """
-function collect_initial_outputs(::Val{false}, previous_outputs, cognitive_model, environment, observation_map, action_map, save_history, save_environment_history)
+function collect_initial_outputs(
+    ::Val{false},
+    previous_outputs,
+    cognitive_model,
+    environment,
+    observation_map,
+    action_map,
+    save_history,
+    save_environment_history,
+)
     return nothing
 end
 
-function collect_initial_outputs(::Val{true}, previous_outputs, cognitive_model, environment, observation_map, action_map, save_history, save_environment_history)
+function collect_initial_outputs(
+    ::Val{true},
+    previous_outputs,
+    cognitive_model,
+    environment,
+    observation_map,
+    action_map,
+    save_history,
+    save_environment_history,
+)
     return (;
-        saved_observation = select_names(map_names(previous_outputs.observation_from_environment, observation_map), observation_selection(save_history)),
-        saved_action = select_names(previous_outputs.action, action_selection(save_history)),
-        saved_action_distribution = select_names(initial_action(cognitive_model), action_distribution_selection(save_history)),
-        saved_cognitive_state = save_state(cognitive_model, previous_outputs.cognitive_state, state_selection(save_history)),
-        saved_environment_state = save_state(environment, previous_outputs.environment_state, state_selection(save_environment_history)),
-        saved_observation_from_environment = select_names(previous_outputs.observation_from_environment, observation_selection(save_environment_history)),
-        saved_action_to_environment = select_names(map_names(previous_outputs.action, action_map), action_selection(save_environment_history)),
+        saved_observation=select_names(
+            map_names(previous_outputs.observation_from_environment, observation_map),
+            observation_selection(save_history),
+        ),
+        saved_action=select_names(previous_outputs.action, action_selection(save_history)),
+        saved_action_distribution=select_names(
+            initial_action(cognitive_model), action_distribution_selection(save_history)
+        ),
+        saved_cognitive_state=save_state(
+            cognitive_model, previous_outputs.cognitive_state, state_selection(save_history)
+        ),
+        saved_environment_state=save_state(
+            environment,
+            previous_outputs.environment_state,
+            state_selection(save_environment_history),
+        ),
+        saved_observation_from_environment=select_names(
+            previous_outputs.observation_from_environment,
+            observation_selection(save_environment_history),
+        ),
+        saved_action_to_environment=select_names(
+            map_names(previous_outputs.action, action_map),
+            action_selection(save_environment_history),
+        ),
     )
 end
 
@@ -309,25 +411,51 @@ vector starts with what it has for timestep 0, from [`collect_initial_outputs`](
 """
 function initialize_all_storage(::Nothing, outputs, n_steps)
     return (;
-        observations = initialize_storage(outputs.saved_observation, n_steps),
-        actions = initialize_storage(outputs.saved_action, n_steps),
-        action_distributions = initialize_storage(outputs.saved_action_distribution, n_steps),
-        cognitive_states = initialize_storage(outputs.saved_cognitive_state, n_steps),
-        environment_states = initialize_storage(outputs.saved_environment_state, n_steps),
-        observations_from_environment = initialize_storage(outputs.saved_observation_from_environment, n_steps),
-        actions_to_environment = initialize_storage(outputs.saved_action_to_environment, n_steps),
+        observations=initialize_storage(outputs.saved_observation, n_steps),
+        actions=initialize_storage(outputs.saved_action, n_steps),
+        action_distributions=initialize_storage(outputs.saved_action_distribution, n_steps),
+        cognitive_states=initialize_storage(outputs.saved_cognitive_state, n_steps),
+        environment_states=initialize_storage(outputs.saved_environment_state, n_steps),
+        observations_from_environment=initialize_storage(
+            outputs.saved_observation_from_environment, n_steps
+        ),
+        actions_to_environment=initialize_storage(
+            outputs.saved_action_to_environment, n_steps
+        ),
     )
 end
 
 function initialize_all_storage(initial_outputs::NamedTuple, outputs, n_steps)
     return (;
-        observations = initialize_storage(initial_outputs.saved_observation, outputs.saved_observation, n_steps),
-        actions = initialize_storage(initial_outputs.saved_action, outputs.saved_action, n_steps),
-        action_distributions = initialize_storage(initial_outputs.saved_action_distribution, outputs.saved_action_distribution, n_steps),
-        cognitive_states = initialize_storage(initial_outputs.saved_cognitive_state, outputs.saved_cognitive_state, n_steps),
-        environment_states = initialize_storage(initial_outputs.saved_environment_state, outputs.saved_environment_state, n_steps),
-        observations_from_environment = initialize_storage(initial_outputs.saved_observation_from_environment, outputs.saved_observation_from_environment, n_steps),
-        actions_to_environment = initialize_storage(initial_outputs.saved_action_to_environment, outputs.saved_action_to_environment, n_steps),
+        observations=initialize_storage(
+            initial_outputs.saved_observation, outputs.saved_observation, n_steps
+        ),
+        actions=initialize_storage(
+            initial_outputs.saved_action, outputs.saved_action, n_steps
+        ),
+        action_distributions=initialize_storage(
+            initial_outputs.saved_action_distribution,
+            outputs.saved_action_distribution,
+            n_steps,
+        ),
+        cognitive_states=initialize_storage(
+            initial_outputs.saved_cognitive_state, outputs.saved_cognitive_state, n_steps
+        ),
+        environment_states=initialize_storage(
+            initial_outputs.saved_environment_state,
+            outputs.saved_environment_state,
+            n_steps,
+        ),
+        observations_from_environment=initialize_storage(
+            initial_outputs.saved_observation_from_environment,
+            outputs.saved_observation_from_environment,
+            n_steps,
+        ),
+        actions_to_environment=initialize_storage(
+            initial_outputs.saved_action_to_environment,
+            outputs.saved_action_to_environment,
+            n_steps,
+        ),
     )
 end
 
@@ -343,7 +471,9 @@ end
 
 #Untyped, so that there is always a method, whatever the cognitive model is inferred as
 function check_model_output(output, cognitive_model)
-    error("The apply_model method of a cognitive model of type $(typeof(cognitive_model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).")
+    return error(
+        "The apply_model method of a cognitive model of type $(typeof(cognitive_model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
+    )
 end
 
 """
@@ -358,7 +488,9 @@ end
 
 #Untyped, so that there is always a method, whatever the environment is inferred as
 function check_environment_output(output, environment)
-    error("The apply_model method of an environment model of type $(typeof(environment)) must return a CognitiveModeling.EnvironmentOutput, but it returned a value of type $(typeof(output)).")
+    return error(
+        "The apply_model method of an environment model of type $(typeof(environment)) must return a CognitiveModeling.EnvironmentOutput, but it returned a value of type $(typeof(output)).",
+    )
 end
 
 """
@@ -371,22 +503,69 @@ before, and return its outputs.
 
 This is always inlined, because a call here makes the loop several times slower.
 """
-@inline function timestep(::EnvironmentStarts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, timestep_size, previous)
+@inline function timestep(
+    ::EnvironmentStarts,
+    cognitive_model,
+    environment,
+    cognitive_parameters,
+    environment_parameters,
+    save_history,
+    save_environment_history,
+    observation_map,
+    action_map,
+    rng,
+    timestep_size,
+    previous,
+)
 
     #The environment receives the previous action as action_map passes it on
     previous_action_to_environment = map_names(previous.action, action_map)
 
     #Update the environment
-    environment_output = check_environment_output(@inline(apply_model(environment, EnvironmentInput(previous_action_to_environment, previous.environment_state, previous.observation_from_environment, environment_parameters, timestep_size, rng, EnvironmentStarts()))), environment)
+    environment_output = check_environment_output(
+        @inline(
+            apply_model(
+                environment,
+                EnvironmentInput(
+                    previous_action_to_environment,
+                    previous.environment_state,
+                    previous.observation_from_environment,
+                    environment_parameters,
+                    timestep_size,
+                    rng,
+                    EnvironmentStarts(),
+                ),
+            )
+        ),
+        environment,
+    )
 
     #Sample observation
-    observation_from_environment = sample_observation(rng, environment_output.observation_distribution)
+    observation_from_environment = sample_observation(
+        rng, environment_output.observation_distribution
+    )
 
     #The cognitive model receives the observation as observation_map passes it on
     observation = map_names(observation_from_environment, observation_map)
 
     #Run timestep of cognitive model
-    cognitive_output = check_model_output(@inline(apply_model(cognitive_model, ModelInput(observation, previous.cognitive_state, previous.action, cognitive_parameters, timestep_size, rng, EnvironmentStarts()))), cognitive_model)
+    cognitive_output = check_model_output(
+        @inline(
+            apply_model(
+                cognitive_model,
+                ModelInput(
+                    observation,
+                    previous.cognitive_state,
+                    previous.action,
+                    cognitive_parameters,
+                    timestep_size,
+                    rng,
+                    EnvironmentStarts(),
+                ),
+            )
+        ),
+        cognitive_model,
+    )
 
     #Sample action
     action = sample_action(rng, cognitive_output.action_distribution)
@@ -394,7 +573,18 @@ This is always inlined, because a call here makes the loop several times slower.
     #The environment's history has the action as action_map passes it on
     action_to_environment = map_names(action, action_map)
 
-    return collect_timestep_outputs(environment_output, cognitive_output, observation_from_environment, observation, action, action_to_environment, cognitive_model, environment, save_history, save_environment_history)
+    return collect_timestep_outputs(
+        environment_output,
+        cognitive_output,
+        observation_from_environment,
+        observation,
+        action,
+        action_to_environment,
+        cognitive_model,
+        environment,
+        save_history,
+        save_environment_history,
+    )
 end
 
 """
@@ -407,13 +597,42 @@ before, and return its outputs.
 
 This is always inlined, because a call here makes the loop several times slower.
 """
-@inline function timestep(::AgentStarts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, timestep_size, previous)
+@inline function timestep(
+    ::AgentStarts,
+    cognitive_model,
+    environment,
+    cognitive_parameters,
+    environment_parameters,
+    save_history,
+    save_environment_history,
+    observation_map,
+    action_map,
+    rng,
+    timestep_size,
+    previous,
+)
 
     #The cognitive model receives the previous observation as observation_map passes it on
     previous_observation = map_names(previous.observation_from_environment, observation_map)
 
     #Run timestep of cognitive model
-    cognitive_output = check_model_output(@inline(apply_model(cognitive_model, ModelInput(previous_observation, previous.cognitive_state, previous.action, cognitive_parameters, timestep_size, rng, AgentStarts()))), cognitive_model)
+    cognitive_output = check_model_output(
+        @inline(
+            apply_model(
+                cognitive_model,
+                ModelInput(
+                    previous_observation,
+                    previous.cognitive_state,
+                    previous.action,
+                    cognitive_parameters,
+                    timestep_size,
+                    rng,
+                    AgentStarts(),
+                ),
+            )
+        ),
+        cognitive_model,
+    )
 
     #Sample action
     action = sample_action(rng, cognitive_output.action_distribution)
@@ -422,15 +641,44 @@ This is always inlined, because a call here makes the loop several times slower.
     action_to_environment = map_names(action, action_map)
 
     #Update the environment
-    environment_output = check_environment_output(@inline(apply_model(environment, EnvironmentInput(action_to_environment, previous.environment_state, previous.observation_from_environment, environment_parameters, timestep_size, rng, AgentStarts()))), environment)
+    environment_output = check_environment_output(
+        @inline(
+            apply_model(
+                environment,
+                EnvironmentInput(
+                    action_to_environment,
+                    previous.environment_state,
+                    previous.observation_from_environment,
+                    environment_parameters,
+                    timestep_size,
+                    rng,
+                    AgentStarts(),
+                ),
+            )
+        ),
+        environment,
+    )
 
     #Sample observation
-    observation_from_environment = sample_observation(rng, environment_output.observation_distribution)
+    observation_from_environment = sample_observation(
+        rng, environment_output.observation_distribution
+    )
 
     #The cognitive model's history has the observation as observation_map passes it on
     observation = map_names(observation_from_environment, observation_map)
 
-    return collect_timestep_outputs(environment_output, cognitive_output, observation_from_environment, observation, action, action_to_environment, cognitive_model, environment, save_history, save_environment_history)
+    return collect_timestep_outputs(
+        environment_output,
+        cognitive_output,
+        observation_from_environment,
+        observation,
+        action,
+        action_to_environment,
+        cognitive_model,
+        environment,
+        save_history,
+        save_environment_history,
+    )
 end
 
 """
@@ -447,29 +695,76 @@ when the vectors start with timestep 0, and 0 otherwise, so that timestep `t` is
 
 This is its own function so that it's compiled for the types of the first outputs.
 """
-function run_remaining_timesteps(storage, outputs, who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, timestep_sizes, n_steps, offset)
+function run_remaining_timesteps(
+    storage,
+    outputs,
+    who_starts,
+    cognitive_model,
+    environment,
+    cognitive_parameters,
+    environment_parameters,
+    save_history,
+    save_environment_history,
+    observation_map,
+    action_map,
+    rng,
+    timestep_sizes,
+    n_steps,
+    offset,
+)
 
     #Loop through timesteps
     for t in 2:n_steps
 
         #Stop if the environment has ended, and keep only the timesteps that ran
-        if stopping_criterion(environment, outputs.environment_state, environment_parameters)
+        if stopping_criterion(
+            environment, outputs.environment_state, environment_parameters
+        )
             foreach(vector -> resize!(vector, t - 1 + offset), storage)
             return storage, outputs
         end
 
         #Run the timestep, starting from the outputs of the one before
-        outputs = timestep(who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, get_timestep_size(timestep_sizes, t), outputs)
+        outputs = timestep(
+            who_starts,
+            cognitive_model,
+            environment,
+            cognitive_parameters,
+            environment_parameters,
+            save_history,
+            save_environment_history,
+            observation_map,
+            action_map,
+            rng,
+            get_timestep_size(timestep_sizes, t),
+            outputs,
+        )
 
         #Store trial outputs
         storage = (;
-            observations = store_output!(storage.observations, outputs.saved_observation, t + offset),
-            actions = store_output!(storage.actions, outputs.saved_action, t + offset),
-            action_distributions = store_output!(storage.action_distributions, outputs.saved_action_distribution, t + offset),
-            cognitive_states = store_output!(storage.cognitive_states, outputs.saved_cognitive_state, t + offset),
-            environment_states = store_output!(storage.environment_states, outputs.saved_environment_state, t + offset),
-            observations_from_environment = store_output!(storage.observations_from_environment, outputs.saved_observation_from_environment, t + offset),
-            actions_to_environment = store_output!(storage.actions_to_environment, outputs.saved_action_to_environment, t + offset),
+            observations=store_output!(
+                storage.observations, outputs.saved_observation, t + offset
+            ),
+            actions=store_output!(storage.actions, outputs.saved_action, t + offset),
+            action_distributions=store_output!(
+                storage.action_distributions, outputs.saved_action_distribution, t + offset
+            ),
+            cognitive_states=store_output!(
+                storage.cognitive_states, outputs.saved_cognitive_state, t + offset
+            ),
+            environment_states=store_output!(
+                storage.environment_states, outputs.saved_environment_state, t + offset
+            ),
+            observations_from_environment=store_output!(
+                storage.observations_from_environment,
+                outputs.saved_observation_from_environment,
+                t + offset,
+            ),
+            actions_to_environment=store_output!(
+                storage.actions_to_environment,
+                outputs.saved_action_to_environment,
+                t + offset,
+            ),
         )
     end
 
@@ -500,33 +795,96 @@ it received, for the environment's history.
 [`prepare_state_for_saving`](@ref) can return anything, and because the next simulation can
 change a state in place.
 """
-function run_timesteps(previous_outputs, who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, timestep_sizes, n_steps, save_initial_values)
+function run_timesteps(
+    previous_outputs,
+    who_starts,
+    cognitive_model,
+    environment,
+    cognitive_parameters,
+    environment_parameters,
+    save_history,
+    save_environment_history,
+    observation_map,
+    action_map,
+    rng,
+    timestep_sizes,
+    n_steps,
+    save_initial_values,
+)
 
     #The first timestep sets the types of the storage, so there must be at least one
     n_steps >= 1 || throw(ArgumentError("n_steps must be at least 1, but it is $n_steps."))
 
     #A vector of timestep sizes must have one size for each timestep
     if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_steps
-        throw(DimensionMismatch("timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and n_steps is $n_steps."))
+        throw(
+            DimensionMismatch(
+                "timestep_sizes must have one size for each timestep, but it has $(length(timestep_sizes)) sizes and n_steps is $n_steps.",
+            ),
+        )
     end
 
     #An environment which has ended already can't run the first timestep
-    if stopping_criterion(environment, previous_outputs.environment_state, environment_parameters)
-        throw(ArgumentError("The stopping criterion of an environment model of type $(typeof(environment)) is already met before the first timestep, so no timestep can run. An Environment which has ended starts again after reset!."))
+    if stopping_criterion(
+        environment, previous_outputs.environment_state, environment_parameters
+    )
+        throw(
+            ArgumentError(
+                "The stopping criterion of an environment model of type $(typeof(environment)) is already met before the first timestep, so no timestep can run. An Environment which has ended starts again after reset!.",
+            ),
+        )
     end
 
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
-    initial_outputs = collect_initial_outputs(save_initial_values, previous_outputs, cognitive_model, environment, observation_map, action_map, save_history, save_environment_history)
+    initial_outputs = collect_initial_outputs(
+        save_initial_values,
+        previous_outputs,
+        cognitive_model,
+        environment,
+        observation_map,
+        action_map,
+        save_history,
+        save_environment_history,
+    )
 
     #Run the first timestep outside the loop, since its inputs can have other types than all the rest
-    outputs = timestep(who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, get_timestep_size(timestep_sizes, 1), previous_outputs)
+    outputs = timestep(
+        who_starts,
+        cognitive_model,
+        environment,
+        cognitive_parameters,
+        environment_parameters,
+        save_history,
+        save_environment_history,
+        observation_map,
+        action_map,
+        rng,
+        get_timestep_size(timestep_sizes, 1),
+        previous_outputs,
+    )
 
     #Initialize storage for the saved outputs, which starts with timestep 0 when it is kept
     storage = initialize_all_storage(initial_outputs, outputs, n_steps)
     offset = initial_outputs === nothing ? 0 : 1
 
     #Run the remaining timesteps
-    return run_remaining_timesteps(storage, outputs, who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, save_environment_history, observation_map, action_map, rng, timestep_sizes, n_steps, offset)
+    return run_remaining_timesteps(
+        storage,
+        outputs,
+        who_starts,
+        cognitive_model,
+        environment,
+        cognitive_parameters,
+        environment_parameters,
+        save_history,
+        save_environment_history,
+        observation_map,
+        action_map,
+        rng,
+        timestep_sizes,
+        n_steps,
+        offset,
+    )
 end
 
 """
@@ -683,51 +1041,85 @@ error. Observations and actions have no such function, so they must be new
 objects on each timestep.
 """
 function simulate(
-        cognitive_model::AbstractCognitiveModel,
-        environment::AbstractEnvironmentModel;
-        who_starts::Union{AgentStarts, EnvironmentStarts},
-        n_steps::Int,
-        timestep_sizes = 1,
-        cognitive_parameters::NamedTuple,
-        environment_parameters::NamedTuple,
-        rng::AbstractRNG = default_rng(),
-        previous_cognitive_state = initialize_state(cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)),
-        previous_action = initial_action(cognitive_model),
-        previous_environment_state = initialize_state(environment, merge_default_parameters(environment, environment_parameters)),
-        previous_observation = initial_observation(environment),
-        save_history::SaveHistory = SaveHistory(),
-        save_environment_history::SaveHistory = SaveHistory(),
-        observation_map::Union{Nothing, NameMap} = nothing,
-        action_map::Union{Nothing, NameMap} = nothing,
-    )
+    cognitive_model::AbstractCognitiveModel,
+    environment::AbstractEnvironmentModel;
+    who_starts::Union{AgentStarts,EnvironmentStarts},
+    n_steps::Int,
+    timestep_sizes=1,
+    cognitive_parameters::NamedTuple,
+    environment_parameters::NamedTuple,
+    rng::AbstractRNG=default_rng(),
+    previous_cognitive_state=initialize_state(
+        cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
+    ),
+    previous_action=initial_action(cognitive_model),
+    previous_environment_state=initialize_state(
+        environment, merge_default_parameters(environment, environment_parameters)
+    ),
+    previous_observation=initial_observation(environment),
+    save_history::SaveHistory=SaveHistory(),
+    save_environment_history::SaveHistory=SaveHistory(),
+    observation_map::Union{Nothing,NameMap}=nothing,
+    action_map::Union{Nothing,NameMap}=nothing,
+)
 
     #Fill in the default parameters
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
     environment_parameters = merge_default_parameters(environment, environment_parameters)
 
     #Check the names of everything against attribute_names, and that the cognitive model and the environment fit together
-    check_match_attribute_names(cognitive_model, cognitive_parameters, previous_cognitive_state, previous_action)
-    check_match_attribute_names(environment, environment_parameters, previous_environment_state, previous_observation)
+    check_match_attribute_names(
+        cognitive_model, cognitive_parameters, previous_cognitive_state, previous_action
+    )
+    check_match_attribute_names(
+        environment,
+        environment_parameters,
+        previous_environment_state,
+        previous_observation,
+    )
     check_names_fit(cognitive_model, environment, observation_map, action_map)
 
     #Collect what was left from before the first timestep
     previous_outputs = (;
-        observation_from_environment = previous_observation,
-        action = previous_action,
-        cognitive_state = previous_cognitive_state,
-        environment_state = previous_environment_state,
+        observation_from_environment=previous_observation,
+        action=previous_action,
+        cognitive_state=previous_cognitive_state,
+        environment_state=previous_environment_state,
     )
 
     #Run the timesteps, keeping only the states of the environment's selection, since the observations and actions are returned once, starting with timestep 0 when save_history saves the initial values
     save_initial_values = Val(saves_initial_values(save_history))
-    storage, _ = run_timesteps(previous_outputs, who_starts, cognitive_model, environment, cognitive_parameters, environment_parameters, save_history, savehistory_states_only(save_environment_history), observation_map, action_map, rng, timestep_sizes, n_steps, save_initial_values)
+    storage, _ = run_timesteps(
+        previous_outputs,
+        who_starts,
+        cognitive_model,
+        environment,
+        cognitive_parameters,
+        environment_parameters,
+        save_history,
+        savehistory_states_only(save_environment_history),
+        observation_map,
+        action_map,
+        rng,
+        timestep_sizes,
+        n_steps,
+        save_initial_values,
+    )
 
     #The sizes of the timesteps that ran, since the environment can end the simulation early
-    n_timesteps_that_ran = length(storage.observations) - (saves_initial_values(save_history) ? 1 : 0)
-    timestep_sizes_that_ran = returned_timestep_sizes(timestep_sizes, n_timesteps_that_ran, save_initial_values)
+    n_timesteps_that_ran =
+        length(storage.observations) - (saves_initial_values(save_history) ? 1 : 0)
+    timestep_sizes_that_ran = returned_timestep_sizes(
+        timestep_sizes, n_timesteps_that_ran, save_initial_values
+    )
 
     #Return stored outputs
-    return storage.observations, storage.actions, storage.cognitive_states, storage.environment_states, timestep_sizes_that_ran, storage.action_distributions
+    return storage.observations,
+    storage.actions,
+    storage.cognitive_states,
+    storage.environment_states,
+    timestep_sizes_that_ran,
+    storage.action_distributions
 end
 
 """
@@ -815,29 +1207,44 @@ environment.state
 ```
 """
 function simulate!(
-        agent::CognitiveAgent,
-        environment::Environment;
-        who_starts::Union{AgentStarts, EnvironmentStarts},
-        n_steps::Int,
-        timestep_sizes = 1,
-        rng::AbstractRNG = default_rng(),
-        observation_map::Union{Nothing, NameMap} = nothing,
-        action_map::Union{Nothing, NameMap} = nothing,
-    )
+    agent::CognitiveAgent,
+    environment::Environment;
+    who_starts::Union{AgentStarts,EnvironmentStarts},
+    n_steps::Int,
+    timestep_sizes=1,
+    rng::AbstractRNG=default_rng(),
+    observation_map::Union{Nothing,NameMap}=nothing,
+    action_map::Union{Nothing,NameMap}=nothing,
+)
 
     #Check that the cognitive model and the environment fit together
     check_names_fit(agent.cognitive_model, environment.model, observation_map, action_map)
 
     #Collect where the agent and the environment are
     previous_outputs = (;
-        observation_from_environment = environment.previous_observation,
-        action = agent.previous_action,
-        cognitive_state = agent.cognitive_state,
-        environment_state = environment.state,
+        observation_from_environment=environment.previous_observation,
+        action=agent.previous_action,
+        cognitive_state=agent.cognitive_state,
+        environment_state=environment.state,
     )
 
     #Run the timesteps, without timestep 0, which the histories have from where the agent and the environment started
-    storage, last_outputs = run_timesteps(previous_outputs, who_starts, agent.cognitive_model, environment.model, agent.cognitive_parameters, environment.parameters, agent.save_history, environment.save_history, observation_map, action_map, rng, timestep_sizes, n_steps, Val(false))
+    storage, last_outputs = run_timesteps(
+        previous_outputs,
+        who_starts,
+        agent.cognitive_model,
+        environment.model,
+        agent.cognitive_parameters,
+        environment.parameters,
+        agent.save_history,
+        environment.save_history,
+        observation_map,
+        action_map,
+        rng,
+        timestep_sizes,
+        n_steps,
+        Val(false),
+    )
 
     #Update agent and environment
     agent.cognitive_state = last_outputs.cognitive_state
@@ -847,7 +1254,9 @@ function simulate!(
 
     #The sizes of the timesteps that ran, since the environment can end the simulation early
     n_timesteps_that_ran = length(storage.observations)
-    timestep_sizes_that_ran = returned_timestep_sizes(timestep_sizes, n_timesteps_that_ran, Val(false))
+    timestep_sizes_that_ran = returned_timestep_sizes(
+        timestep_sizes, n_timesteps_that_ran, Val(false)
+    )
 
     #Add to the agent's history
     if !saves_nothing(agent.save_history)
@@ -855,7 +1264,10 @@ function simulate!(
         append!(agent.history.actions, storage.actions)
         append!(agent.history.action_distributions, storage.action_distributions)
         append!(agent.history.states, storage.cognitive_states)
-        append!(agent.history.timestep_sizes, each_timestep_size(timestep_sizes_that_ran, n_timesteps_that_ran))
+        append!(
+            agent.history.timestep_sizes,
+            each_timestep_size(timestep_sizes_that_ran, n_timesteps_that_ran),
+        )
     end
 
     #Add to the environment's history
@@ -863,11 +1275,19 @@ function simulate!(
         append!(environment.history.observations, storage.observations_from_environment)
         append!(environment.history.actions, storage.actions_to_environment)
         append!(environment.history.states, storage.environment_states)
-        append!(environment.history.timestep_sizes, each_timestep_size(timestep_sizes_that_ran, n_timesteps_that_ran))
+        append!(
+            environment.history.timestep_sizes,
+            each_timestep_size(timestep_sizes_that_ran, n_timesteps_that_ran),
+        )
     end
 
     #Return stored outputs
-    return storage.observations, storage.actions, storage.cognitive_states, storage.environment_states, timestep_sizes_that_ran, storage.action_distributions
+    return storage.observations,
+    storage.actions,
+    storage.cognitive_states,
+    storage.environment_states,
+    timestep_sizes_that_ran,
+    storage.action_distributions
 end
 
 """
@@ -884,24 +1304,54 @@ own function so that it's compiled for the types in an agent's untyped fields, w
 `simulate!` on a single observation several times faster, and makes the check of the
 observation's names cost nothing.
 """
-function timestep(cognitive_model, observation, previous_cognitive_state, previous_action, cognitive_parameters, timestep_size, rng, save_history)
+function timestep(
+    cognitive_model,
+    observation,
+    previous_cognitive_state,
+    previous_action,
+    cognitive_parameters,
+    timestep_size,
+    rng,
+    save_history,
+)
 
     #Check that the observation has the names the cognitive model lists
     check_observation_names(cognitive_model, observation)
 
     #Run timestep of cognitive model
-    cognitive_output = check_model_output(@inline(apply_model(cognitive_model, ModelInput(observation, previous_cognitive_state, previous_action, cognitive_parameters, timestep_size, rng, UnknownWhoStarts()))), cognitive_model)
+    cognitive_output = check_model_output(
+        @inline(
+            apply_model(
+                cognitive_model,
+                ModelInput(
+                    observation,
+                    previous_cognitive_state,
+                    previous_action,
+                    cognitive_parameters,
+                    timestep_size,
+                    rng,
+                    UnknownWhoStarts(),
+                ),
+            )
+        ),
+        cognitive_model,
+    )
 
     #Sample action
     action = sample_action(rng, cognitive_output.action_distribution)
 
     return (;
         action,
-        cognitive_state = cognitive_output.new_state,
-        saved_observation = select_names(observation, observation_selection(save_history)),
-        saved_action = select_names(action, action_selection(save_history)),
-        saved_action_distribution = select_names(cognitive_output.action_distribution, action_distribution_selection(save_history)),
-        saved_cognitive_state = save_state(cognitive_model, cognitive_output.new_state, state_selection(save_history)),
+        cognitive_state=cognitive_output.new_state,
+        saved_observation=select_names(observation, observation_selection(save_history)),
+        saved_action=select_names(action, action_selection(save_history)),
+        saved_action_distribution=select_names(
+            cognitive_output.action_distribution,
+            action_distribution_selection(save_history),
+        ),
+        saved_cognitive_state=save_state(
+            cognitive_model, cognitive_output.new_state, state_selection(save_history)
+        ),
     )
 end
 
@@ -981,23 +1431,36 @@ cognitive_state
 ```
 """
 function simulate(
-        cognitive_model::AbstractCognitiveModel,
-        observation;
-        cognitive_parameters::NamedTuple,
-        timestep_size = 1,
-        rng::AbstractRNG = default_rng(),
-        previous_cognitive_state = initialize_state(cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)),
-        previous_action = initial_action(cognitive_model),
-    )
+    cognitive_model::AbstractCognitiveModel,
+    observation;
+    cognitive_parameters::NamedTuple,
+    timestep_size=1,
+    rng::AbstractRNG=default_rng(),
+    previous_cognitive_state=initialize_state(
+        cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
+    ),
+    previous_action=initial_action(cognitive_model),
+)
 
     #Fill in the default parameters
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
 
     #Check the names of the parameters, the state and the previous action against attribute_names
-    check_match_attribute_names(cognitive_model, cognitive_parameters, previous_cognitive_state, previous_action)
+    check_match_attribute_names(
+        cognitive_model, cognitive_parameters, previous_cognitive_state, previous_action
+    )
 
     #Run the timestep, where nothing is selected for saving, since everything is returned
-    outputs = timestep(cognitive_model, observation, previous_cognitive_state, previous_action, cognitive_parameters, timestep_size, rng, SaveHistory())
+    outputs = timestep(
+        cognitive_model,
+        observation,
+        previous_cognitive_state,
+        previous_action,
+        cognitive_parameters,
+        timestep_size,
+        rng,
+        SaveHistory(),
+    )
 
     return outputs.action, outputs.cognitive_state
 end
@@ -1056,10 +1519,21 @@ agent.history.states
  (expected_reward = 0.875,)
 ```
 """
-function simulate!(agent::CognitiveAgent, observation; timestep_size = 1, rng::AbstractRNG = default_rng())
+function simulate!(
+    agent::CognitiveAgent, observation; timestep_size=1, rng::AbstractRNG=default_rng()
+)
 
     #Run the timestep
-    outputs = timestep(agent.cognitive_model, observation, agent.cognitive_state, agent.previous_action, agent.cognitive_parameters, timestep_size, rng, agent.save_history)
+    outputs = timestep(
+        agent.cognitive_model,
+        observation,
+        agent.cognitive_state,
+        agent.previous_action,
+        agent.cognitive_parameters,
+        timestep_size,
+        rng,
+        agent.save_history,
+    )
 
     #Update the agent
     agent.cognitive_state = outputs.cognitive_state
