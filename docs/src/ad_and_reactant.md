@@ -12,8 +12,9 @@ with a state saved with `deepcopy`. Code in the package's extensions is differen
 suites of its own, each with its own environment, beside the other tests of the extension.
 The one for Turing.jl, in `test/extensions/turing/ad`, differentiates the log density of
 Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
-starting, with imputed actions, with an environment filling in observations, with
-observations imputed from an environment's distributions, with a reward that isn't given on
+starting, with imputed actions, with an environment filling in observations, with an
+environment which doesn't run because every observation is in the data, with observations
+imputed from an environment's distributions, with a reward that isn't given on
 every timestep, and with a model which samples within each timestep. That keeps the
 package's own code tested without Turing.jl, since the backends work without it and with
 other probabilistic programming languages. Every gradient is compared with finite

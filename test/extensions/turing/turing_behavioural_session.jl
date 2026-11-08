@@ -862,11 +862,8 @@ end
             logjoint(recorded, (;)) +
               logpdf(Normal(0.5, 1.0), 0.7) +
               logpdf(Normal(0.5, 1.0), -0.4)
-        #With the data complete, the environment has nothing to do, which gives a warning, and it adds no latents
-        model = @test_logs (
-            :warn,
-            r"An environment model of type NoisyRewards was given, but no observation in the data is MissingValue\(\), so it has nothing to fill in and only costs time",
-        ) session_for_test(
+        #With the data complete, the environment doesn't run, with no warning, so the session is the same as one without it
+        model = @test_logs session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             (; reward=[0.7, 1.0, -0.4]),
@@ -897,6 +894,24 @@ end
         )
         @test (@test_logs match_mode = :any returned(model, drifts)).observations[2:end] ==
             [(; reward=0.75), (; reward=0.25)]
+        #With every reward in the data, it doesn't run, so there are no drifts, and the session is the same as one without it
+        complete = session_for_test(
+            SessionRescorlaWagner(),
+            SESSION_PARAMETERS,
+            (; reward=[1.0, 0.0]),
+            (; choice=[true, false]);
+            environment=DriftingRewards(),
+        )
+        @test isempty(keys(rand(Xoshiro(1), complete)))
+        @test logjoint(complete, (;)) ≈ logjoint(
+            session_for_test(
+                SessionRescorlaWagner(),
+                SESSION_PARAMETERS,
+                (; reward=[1.0, 0.0]),
+                (; choice=[true, false]),
+            ),
+            (;),
+        )
     end
 
     @testset "A model which samples within a timestep has a variable for each timestep" begin

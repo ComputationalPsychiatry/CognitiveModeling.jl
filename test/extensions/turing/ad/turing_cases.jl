@@ -229,6 +229,15 @@ function environment_session()
         environment=TuringRewardsPreviousChoice(),
     )
 end
+function complete_environment_session()
+    return SessionInfo(
+        TuringRescorlaWagner(),
+        TURING_REWARDS,
+        TURING_CHOICES;
+        who_starts=EnvironmentStarts(),
+        environment=TuringRewardsPreviousChoice(),
+    )
+end
 function imputed_observations_session()
     return SessionInfo(
         TuringRescorlaWagner(),
@@ -275,6 +284,12 @@ const TURING_CASES = [
     (;
         name="turing session with an environment",
         f=log_density_of(fit_with_environment(environment_session())),
+        x=[0.3, 2.0, 0.9],
+        reactant=false,
+    ),
+    (;
+        name="turing session with an environment which doesn't run, since every observation is in the data",
+        f=log_density_of(fit_with_environment(complete_environment_session())),
         x=[0.3, 2.0, 0.9],
         reactant=false,
     ),

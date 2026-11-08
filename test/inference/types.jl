@@ -7,6 +7,17 @@ function CognitiveModeling.attribute_names(::SessionCounter)
     )
 end
 
+#Lists two observations, so that a single vector or a single column name can't say which is which
+struct ObservesRewardAndCue <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::ObservesRewardAndCue)
+    return ModelAttributes(;
+        parameters=:probability,
+        states=:n_timesteps,
+        observations=(:reward, :cue),
+        actions=:choice,
+    )
+end
+
 #An environment which gives the reward, and one which gives nothing
 struct GivesReward <: AbstractEnvironmentModel end
 function CognitiveModeling.attribute_names(::GivesReward)
@@ -188,6 +199,75 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         ).actions.choice isa Vector{Union{Float64,Int}}
     end
 
+    @testset "The environment runs only when an observation is missing, and is kept either way" begin
+        with_missing_reward = SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, MissingValue(), 1.0]),
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        @test with_missing_reward.runs_environment
+        #With every observation in the data, it has nothing to fill in, also when an action is missing, and there is no warning
+        all_rewards = @test_logs SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            (; choice=[true, MissingValue(), true]);
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        @test !all_rewards.runs_environment
+        @test all_rewards.environment === GivesReward()
+        @test CognitiveModeling.has_environment(all_rewards)
+        #Without an environment, nothing runs
+        @test !SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+        ).runs_environment
+        #The copy without the environment is the same session otherwise
+        without = CognitiveModeling.without_environment(with_missing_reward)
+        @test without.environment === NoEnvironment() && !without.runs_environment
+        @test without.observations === with_missing_reward.observations &&
+            without.previous_observation === with_missing_reward.previous_observation
+    end
+
+    @testset "A single vector is the data of the model's only observation or action, whatever its name" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            [1.0, 0.0, 1.0],
+            [true, false, true];
+            who_starts=EnvironmentStarts(),
+        )
+        @test session_info.observations == COUNTER_REWARDS &&
+            session_info.actions == COUNTER_CHOICES
+        #A missing in it becomes the marker, as in a NamedTuple
+        @test isequal(
+            SessionInfo(
+                SessionCounter(),
+                COUNTER_REWARDS,
+                [true, missing, true];
+                who_starts=EnvironmentStarts(),
+            ).actions.choice,
+            [true, MissingValue(), true],
+        )
+        #NamedTuples with the model's names are the data written as a row for each timestep, which is still an error
+        @test_throws "must each be a NamedTuple with one vector for each name" SessionInfo(
+            SessionCounter(),
+            [(; reward=1.0)],
+            [(; choice=true)];
+            who_starts=EnvironmentStarts(),
+        )
+        #A model with several observations needs them by name
+        @test_throws "The observations are a single vector, which can only be the data of a model's only one, but a cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue)." SessionInfo(
+            ObservesRewardAndCue(),
+            [1.0, 0.0, 1.0],
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+        )
+    end
+
     @testset "The data, the names and the environment are checked" begin
         @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a cognitive model of type SessionCounter as (:reward,)." SessionInfo(
             SessionCounter(),
@@ -208,7 +288,10 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         )
         @test_throws "must each be a NamedTuple with one vector for each name" SessionInfo(
-            SessionCounter(), [1.0, 0.0], COUNTER_CHOICES; who_starts=EnvironmentStarts()
+            SessionCounter(),
+            Dict(:reward => [1.0, 0.0, 1.0]),
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
         )
         @test_throws "timestep_sizes must have one size for each timestep, but it has 2 sizes and the data has 3 timesteps." SessionInfo(
             SessionCounter(),
@@ -217,31 +300,12 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
             timestep_sizes=[1.0, 2.0],
         )
-        #Without an environment, no observation can be missing, and with one, some observation should be, since the environment has nothing to do otherwise
+        #Without an environment, no observation can be missing
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to fill them in." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-        )
-        unused = @test_logs (
-            :warn,
-            r"An environment model of type GivesReward was given, but no observation in the data is MissingValue\(\), so it has nothing to fill in and only costs time",
-        ) SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            COUNTER_CHOICES;
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
-        )
-        @test unused.environment === GivesReward()
-        #A missing action alone doesn't need an environment
-        @test_logs (:warn, r"has nothing to fill in") SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            (; choice=[true, MissingValue(), true]);
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
         )
         #The environment must list the same names as the model
         @test_throws "A cognitive model of type SessionCounter lists the observations (:reward,), but an environment model of type GivesNoReward gives ()." SessionInfo(
@@ -341,6 +405,41 @@ const COUNTER_TABLE = (;
         @test by_block.sessions[3].observations == (; reward=[0.0])
     end
 
+    @testset "A single column name is the column of the model's only observation or action, whatever its name" begin
+        table = (;
+            id=["S1", "S1", "S2"], outcome=[1.0, 0.0, 1.0], response=[true, false, true]
+        )
+        sessions_info = MultipleSessionsInfo(
+            SessionCounter(),
+            table;
+            observation_columns=:outcome,
+            action_columns=:response,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        @test sessions_info.sessions[1].observations == (; reward=[1.0, 0.0]) &&
+            sessions_info.sessions[2].actions == (; choice=[true])
+        #A name the model lists as the other kind may mean that the two keyword arguments are swapped
+        swapped_table = (; id=["S1", "S1"], reward=[1.0, 0.0], choice=[true, false])
+        @test_throws "observation_columns is :choice, which a cognitive model of type SessionCounter lists among its actions, not its observations. Check that observation_columns and action_columns aren't swapped." MultipleSessionsInfo(
+            SessionCounter(),
+            swapped_table;
+            observation_columns=:choice,
+            action_columns=:reward,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        #A model with several observations needs the column of each
+        @test_throws "A cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue), so observation_columns must give the column of each by name, such as (reward = :reward, cue = :cue), and not the single name :outcome." MultipleSessionsInfo(
+            ObservesRewardAndCue(),
+            table;
+            observation_columns=:outcome,
+            action_columns=:response,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+    end
+
     @testset "An attribute can be built from several columns, and the session identifier is looked up" begin
         table = (;
             id=["S1", "S1", "S2"],
@@ -421,7 +520,7 @@ const COUNTER_TABLE = (;
         ).sessions[1].timestep_sizes == 0.5
     end
 
-    @testset "An environment must have something to fill in in some session, not in every one" begin
+    @testset "An environment runs only in the sessions where an observation is missing" begin
         table = (; COUNTER_TABLE..., outcome=[1.0, 0.0, 1.0, missing, 0.0])
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
@@ -433,12 +532,11 @@ const COUNTER_TABLE = (;
             environment=GivesReward(),
         )
         @test CognitiveModeling.has_environment(sessions_info)
-        @test !CognitiveModeling.has_missing_observations(sessions_info.sessions[1]) &&
-            CognitiveModeling.has_missing_observations(sessions_info.sessions[2])
-        @test_logs (
-            :warn,
-            r"no observation in the data of any session is MissingValue\(\), so it has nothing to fill in",
-        ) MultipleSessionsInfo(
+        @test !sessions_info.sessions[1].runs_environment &&
+            sessions_info.sessions[2].runs_environment
+        #The sessions still have one type, and with no observation missing in any, none runs it, with no warning
+        @test isconcretetype(eltype(sessions_info.sessions))
+        all_rewards = @test_logs MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
             observation_columns=(; reward=:outcome),
@@ -447,6 +545,7 @@ const COUNTER_TABLE = (;
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         )
+        @test !any(session -> session.runs_environment, all_rewards.sessions)
         #A copy with another save history for every session
         copy = MultipleSessionsInfo(
             sessions_info; save_history=SaveHistory(; states=:n_timesteps)
@@ -546,6 +645,59 @@ Cognitive model: SessionCounter
 Environment: none
 Observations: reward
 Actions: choice"""
+    end
+end
+
+@testset "predictive_sessions" begin
+    @testset "Every action is missing, and the observations stay those in the data without an environment" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            (; choice=[true, missing, true]);
+            who_starts=AgentStarts(),
+            timestep_sizes=[1.0, 2.0, 1.0],
+            save_history=SaveHistory(; states=:n_timesteps),
+            impute_missing_actions=false,
+        )
+        predictive = predictive_sessions(session_info)
+        @test predictive.actions == (; choice=fill(MissingValue(), 3))
+        @test predictive.observations === session_info.observations
+        @test isempty(predictive.recorded) && !predictive.runs_environment
+        #Everything else is kept
+        @test predictive.who_starts === AgentStarts() && predictive.n_timesteps == 3
+        @test predictive.timestep_sizes == [1.0, 2.0, 1.0]
+        @test predictive.save_history === session_info.save_history
+        @test predictive.previous_observation === session_info.previous_observation
+    end
+
+    @testset "With an environment, every observation is missing too, so the environment runs" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        predictive = predictive_sessions(session_info)
+        @test predictive.observations == (; reward=fill(MissingValue(), 3))
+        @test predictive.runs_environment && predictive.environment === GivesReward()
+    end
+
+    @testset "Several sessions are each copied, with their identifiers" begin
+        sessions_info = MultipleSessionsInfo(
+            SessionCounter(),
+            COUNTER_TABLE;
+            observation_columns=:outcome,
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        predictive = predictive_sessions(sessions_info)
+        @test predictive.session_ids == sessions_info.session_ids
+        @test [session.n_timesteps for session in predictive.sessions] == [2, 3]
+        @test all(
+            session -> all(==(MissingValue()), session.actions.choice), predictive.sessions
+        )
     end
 end
 

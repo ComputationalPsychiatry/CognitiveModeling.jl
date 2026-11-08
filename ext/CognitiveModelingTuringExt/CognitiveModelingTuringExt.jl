@@ -14,7 +14,11 @@ using CognitiveModeling:
     check_model_output,
     check_environment_output
 using CognitiveModeling:
-    check_environment_parameters, recorded_action_names, recorded_on_timestep, n_sessions
+    check_environment_parameters,
+    recorded_action_names,
+    recorded_on_timestep,
+    n_sessions,
+    without_environment
 using CognitiveModeling:
     initialize_distributions, store_distributions, row, entry, has_missing_value
 using CognitiveModeling:
@@ -24,7 +28,7 @@ using CognitiveModeling:
     store_session_outputs!
 using CognitiveModeling:
     select_names, saves_initial_values, get_timestep_size, initialize_storage, store_output!
-using Random: default_rng
+using Random: AbstractRNG, default_rng
 using Turing
 using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName

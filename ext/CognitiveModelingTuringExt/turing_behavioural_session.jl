@@ -248,6 +248,17 @@ Turing.@model function CognitiveModeling.turing_behavioural_session(
     cognitive_parameters,
     environment_parameters=(;),
 )
+    #A session with every observation in the data runs without its environment, which has nothing to fill in, so it has the variables of a session without one
+    if !session_info.runs_environment
+        saved_values ~ to_submodel(
+            turing_behavioural_session(
+                without_environment(session_info), cognitive_parameters
+            ),
+            false,
+        )
+        return saved_values
+    end
+
     cognitive_model = session_info.cognitive_model
     environment = session_info.environment
 

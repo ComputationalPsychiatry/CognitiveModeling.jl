@@ -34,7 +34,9 @@ samples within a timestep has its own variables for each timestep, such as
 `timestep[3].noise`. An environment model runs on every timestep too, with the prefix
 `timestep[t].environment`, and what it gives for an observation is used where the data has
 [`MissingValue`](@ref): the missing observation is imputed from it, as a latent variable with
-that distribution, or as the value itself if it is a [`Deterministic`](@ref). A missing
+that distribution, or as the value itself if it is a [`Deterministic`](@ref). When no
+observation in the data is missing, the environment doesn't run, and the session is the
+same as one without an environment, with the same variables. A missing
 action is a latent variable with the cognitive model's action distribution on that timestep,
 named `timestep[3].choice.imputed`, and a missing observation imputed from a distribution is
 named `timestep[3].environment.reward.imputed`. The sampler must handle the type of a latent

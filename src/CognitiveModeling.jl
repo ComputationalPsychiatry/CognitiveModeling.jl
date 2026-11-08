@@ -30,13 +30,13 @@ export EnvironmentInput, EnvironmentOutput, CommonRLEnvironment
 export CognitiveAgent, Environment, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
 export simulate, simulate!, reset!
-export SessionInfo, MultipleSessionsInfo, NoEnvironment
+export SessionInfo, MultipleSessionsInfo, NoEnvironment, predictive_sessions
 export AbstractPopulationModel,
     IndependentSessions, AbstractDownstreamModel, NoDownstreamModel
 export NoParallelisation, ParallelSessions
 export turing_behavioural_session,
     turing_multiple_behavioural_sessions, turing_full_model, turing_catch_invalid_parameters
-export session_values_chain
+export session_values_chain, predict_session_values
 
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names

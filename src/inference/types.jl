@@ -38,14 +38,16 @@ session in a table.
 
 # Arguments
 - `cognitive_model::AbstractCognitiveModel`: the cognitive model.
-- `observations::NamedTuple`: the observations in the data, with one vector for each name
-  and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data must
-  have every observation the model lists in [`attribute_names`](@ref), and can have more. An
-  observation that wasn't recorded is [`MissingValue`](@ref), which `environment` fills in,
-  and one that wasn't made is [`NoObservation`](@ref).
-- `actions::NamedTuple`: the actions in the data, in the same form, with exactly the actions
-  the model lists. An action that was taken but not recorded is `MissingValue()`, and is
-  imputed unless `impute_missing_actions` is `false`. An action that wasn't taken is
+- `observations`: the observations in the data, as a `NamedTuple` with one vector for each
+  name and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data
+  must have every observation the model lists in [`attribute_names`](@ref), and can have
+  more. When the model lists one observation, a single vector, `[1.0, 0.0, 1.0]`, is the data
+  of that observation, whatever its name. An observation that wasn't recorded is
+  [`MissingValue`](@ref), which `environment` fills in, and one that wasn't made is
+  [`NoObservation`](@ref).
+- `actions`: the actions in the data, in the same forms, with exactly the actions the model
+  lists. An action that was taken but not recorded is `MissingValue()`, and is imputed
+  unless `impute_missing_actions` is `false`. An action that wasn't taken is
   [`NoAction`](@ref), and isn't scored.
 
 # Keyword arguments
@@ -56,12 +58,12 @@ session in a table.
 - `environment::Union{NoEnvironment, AbstractEnvironmentModel}=NoEnvironment()`: an
   environment model which fills in the observations that are `MissingValue()`. It must list
   the same observations and the same actions as `cognitive_model`, since a session takes no
-  maps of names. Without it, the data can't have missing observations. With it, some
-  observation should be missing, and a warning says so otherwise, since filling them in is
-  all an environment does in a session: a missing action is imputed from the cognitive
-  model's own distribution for it, and nothing in the log density depends on an environment
-  whose observations are all in the data, not even its parameters. Such an environment only
-  costs time.
+  maps of names. Without it, the data can't have missing observations. A session whose
+  observations are all in the data runs without it, since filling them in is all an
+  environment does in a session: a missing action is imputed from the cognitive model's own
+  distribution for it, and nothing in the log density depends on an environment whose
+  observations are all in the data, not even its parameters. The session then has none of
+  the environment's variables either. The environment is kept in the session all the same.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
 - `impute_missing_actions::Bool=true`: whether an action that is `MissingValue()` is
   imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
@@ -80,9 +82,11 @@ session in a table.
   they come from [`initialize_state`](@ref) with the parameters that are fitted.
 
 Each argument is kept in a field of the same name, with the two replacements made in the
-data, except `impute_missing_actions`, whose work is done here. There are three fields more:
-`recorded`, the recorded actions of each name which are scored, `n_timesteps`, and
-`saved_timestep_sizes`, the sizes a fitted session returns with what it saves.
+data, except `impute_missing_actions`, whose work is done here. There are four fields more:
+`runs_environment`, whether the environment runs, which it does when an observation in the
+data is missing, `recorded`, the recorded actions of each name which are scored,
+`n_timesteps`, and `saved_timestep_sizes`, the sizes a fitted session returns with what it
+saves.
 
     SessionInfo(session_info; save_history)
 
@@ -128,6 +132,7 @@ struct SessionInfo{
 }
     cognitive_model::Tcognitive_model
     environment::Tenvironment
+    runs_environment::Bool
     observations::Tobservations
     actions::Tactions
     recorded::Trecorded
@@ -140,13 +145,11 @@ struct SessionInfo{
     previous_action::Tprevious_action
 end
 
-#Prepares the session, and warns if an environment has nothing to fill in
+#Prepares the session
 function SessionInfo(
     cognitive_model::AbstractCognitiveModel, observations, actions; keywords...
 )
-    session_info = prepare_session(cognitive_model, observations, actions; keywords...)
-    warn_if_environment_is_unused(session_info)
-    return session_info
+    return prepare_session(cognitive_model, observations, actions; keywords...)
 end
 
 #The same session with another save history, with the sizes it returns made again
@@ -157,6 +160,7 @@ function SessionInfo(session_info::SessionInfo; save_history::SaveHistory)
     return SessionInfo(
         session_info.cognitive_model,
         session_info.environment,
+        session_info.runs_environment,
         session_info.observations,
         session_info.actions,
         session_info.recorded,
@@ -174,9 +178,9 @@ end
     prepare_session(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
 Return the [`SessionInfo`](@ref) of one session, with the checks of the data and the names,
-the replacements of `missing` in the data, and what is scored and returned prepared, as its
-constructor describes. It leaves out the warning about an environment with nothing to fill
-in, which [`MultipleSessionsInfo`](@ref) gives over all its sessions instead of each.
+the replacements of `missing` in the data, whether the environment runs, and what is scored
+and returned prepared, as its constructor describes. Used by `SessionInfo` and
+[`MultipleSessionsInfo`](@ref).
 """
 function prepare_session(
     cognitive_model::AbstractCognitiveModel,
@@ -194,6 +198,10 @@ function prepare_session(
     ),
     previous_action=initial_action(cognitive_model),
 )
+
+    #A single vector is the data of the model's only observation or action
+    observations = named_data(observations, cognitive_model, :observations)
+    actions = named_data(actions, cognitive_model, :actions)
 
     #Replace missing in the data by the marker for a value that wasn't recorded, or for nothing happening
     observations = replace_missing(observations, missing_observations)
@@ -217,6 +225,10 @@ function prepare_session(
         actions = without_missing_actions(actions)
     end
 
+    #The environment runs only when it has an observation to fill in
+    runs_environment =
+        environment isa AbstractEnvironmentModel && has_missing_observations(observations)
+
     #The recorded actions are scored at the end, and the sizes of the timesteps are returned with what is saved
     recorded = recorded_actions(actions)
     saved_sizes = saved_timestep_sizes(timestep_sizes, n_timesteps, save_history)
@@ -224,6 +236,7 @@ function prepare_session(
     return SessionInfo(
         cognitive_model,
         environment,
+        runs_environment,
         observations,
         actions,
         recorded,
@@ -252,8 +265,8 @@ A `missing` in a column becomes [`MissingValue`](@ref), or the marker for nothin
 as the keyword arguments `missing_observations` and `missing_actions` of `SessionInfo` say.
 Every session must come out with the same type, which they do when they share the models and
 the settings, since the timesteps of different sessions are then compiled once. An
-environment should have an observation to fill in in some session, not in every one, and the
-warning comes when there is none in any.
+environment runs only in the sessions where an observation is missing, as for
+[`SessionInfo`](@ref).
 
     MultipleSessionsInfo(sessions_info; save_history)
 
@@ -266,10 +279,14 @@ The same sessions with another `save_history` for every one, see [`SessionInfo`]
   1.0, 1.0], choice = [true, false, true, true])`.
 
 # Keyword arguments
-- `observation_columns`: the columns with the observations, as the names the model lists in
-  [`attribute_names`](@ref) when the columns are named the same, such as `:reward` or
-  `(:reward, :cue)`, or as a `NamedTuple` from the model's name to the column's, such as
-  `(; reward = :outcome)`, so that one model fits tables with other names. An attribute whose
+- `observation_columns`: the columns with the observations. When the model lists one
+  observation, a single name, such as `:outcome`, is its column, whatever the observation is
+  called. Several observations are given as the names the model lists in
+  [`attribute_names`](@ref) when the columns are named the same, such as `(:reward, :cue)`,
+  or as a `NamedTuple` from the model's name to the column's, such as `(; reward = :outcome,
+  cue = :stimulus)`, so that one model fits tables with other names. A single name that the
+  model lists as one of its actions is an error, since the two keyword arguments may then be
+  swapped. An attribute whose
   value is made of several columns is specified by how to build it from them: a `NamedTuple`
   of column names for a `NamedTuple` in each row, `(; ssm_action = (; choice = :choicecol,
   rt = :rtcol))`, a `Tuple` of column names for a `Tuple`, `(; ssm_action = (:choicecol,
@@ -354,8 +371,8 @@ function MultipleSessionsInfo(
 )
 
     #The columns of each kind, from the names the model uses to the names in the table
-    observation_column_map = column_map(observation_columns)
-    action_column_map = column_map(action_columns)
+    observation_column_map = column_map(observation_columns, cognitive_model, :observations)
+    action_column_map = column_map(action_columns, cognitive_model, :actions)
     id_columns = as_tuple_of_names(session_columns)
     check_table(
         table,
@@ -370,7 +387,7 @@ function MultipleSessionsInfo(
     #The rows of each session, and its identifier
     sessions_rows = rows_per_session(table, id_columns)
 
-    #Each session is prepared from its rows of the table, and an environment should have something to fill in in some session
+    #Each session is prepared from its rows of the table
     sessions = map(sessions_rows) do (_, rows)
         return prepare_session(
             cognitive_model,
@@ -380,7 +397,6 @@ function MultipleSessionsInfo(
             keywords...,
         )
     end
-    warn_if_environment_is_unused(sessions)
     session_ids = map(first, sessions_rows)
 
     return MultipleSessionsInfo(sessions, session_ids)
@@ -393,6 +409,62 @@ function MultipleSessionsInfo(
     return MultipleSessionsInfo(
         map(session -> SessionInfo(session; save_history), sessions_info.sessions),
         sessions_info.session_ids,
+    )
+end
+
+"""
+    predictive_sessions(session_info)
+    predictive_sessions(sessions_info)
+
+Return a copy of a [`SessionInfo`](@ref), or of every session in a
+[`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
+observation too when the session has an environment model, so that a Turing.jl model of the
+copy simulates them. This is for predictive checks: `predict` with the chain of a model
+fitted to the sessions, or sampling the model of the copy from its prior, simulates each
+session again, with the same number of timesteps, the same settings and the same
+environment. The observations of a session without an environment stay those in the data,
+as for an experiment whose observations are fixed in advance. Every missing action is
+imputed, whatever `impute_missing_actions` the session was prepared with.
+
+# Examples
+```jldoctest
+julia> struct Counter <: AbstractCognitiveModel end
+
+julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; parameters = :probability, states = :n_timesteps, observations = :reward, actions = :choice);
+
+julia> session_info = SessionInfo(Counter(), [1.0, 0.0, 1.0], [true, false, true]; who_starts = EnvironmentStarts());
+
+julia> predictive_sessions(session_info).actions
+(choice = [MissingValue(), MissingValue(), MissingValue()],)
+```
+"""
+function predictive_sessions(session_info::SessionInfo)
+
+    #Every action is missing, and every observation too when there is an environment to give them
+    actions = map(column -> fill(MissingValue(), length(column)), session_info.actions)
+    observations = if has_environment(session_info)
+        map(column -> fill(MissingValue(), length(column)), session_info.observations)
+    else
+        session_info.observations
+    end
+
+    #The copy is prepared again with the settings of the session, so that what is scored and whether the environment runs follow from the new data
+    return prepare_session(
+        session_info.cognitive_model,
+        observations,
+        actions;
+        who_starts=session_info.who_starts,
+        environment=session_info.environment,
+        timestep_sizes=session_info.timestep_sizes,
+        save_history=session_info.save_history,
+        previous_observation=session_info.previous_observation,
+        previous_action=session_info.previous_action,
+    )
+end
+
+function predictive_sessions(sessions_info::MultipleSessionsInfo)
+    return MultipleSessionsInfo(
+        map(predictive_sessions, sessions_info.sessions), sessions_info.session_ids
     )
 end
 

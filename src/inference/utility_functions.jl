@@ -190,7 +190,7 @@ end
 function check_data(cognitive_model::AbstractCognitiveModel, observations, actions)
     return throw(
         ArgumentError(
-            "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), but they have types $(typeof(observations)) and $(typeof(actions)).",
+            "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), or a single vector when the model lists one, but they have types $(typeof(observations)) and $(typeof(actions)).",
         ),
     )
 end
@@ -206,7 +206,7 @@ with one, it must list the same observations and actions as `cognitive_model`. U
 function check_environment_fits(
     cognitive_model::AbstractCognitiveModel, ::NoEnvironment, observations::NamedTuple
 )
-    if any(column -> any(value -> value isa MissingValue, column), values(observations))
+    if has_missing_observations(observations)
         throw(
             ArgumentError(
                 "The observations have entries that are MissingValue(), but no environment was given to fill them in.",
@@ -228,16 +228,84 @@ end
 ## Splitting a table into sessions ##
 
 """
-    column_map(names)
+    column_map(columns, cognitive_model, kind)
 
-Return the columns of one kind of attribute as a `NamedTuple` from the name the model uses to
-the specification of the column: a `NamedTuple` as it is, and a single name, a tuple of names
-or a vector of names as the same names in both places. A specification is the name of a
-column, or how to build one from several, see [`columns_used`](@ref). Used by
-[`MultipleSessionsInfo`](@ref) when it splits a table.
+Return the columns of `kind`, `:observations` or `:actions`, as a `NamedTuple` from the name
+the model uses to the specification of the column: a `NamedTuple` as it is, and a tuple or a
+vector of names as the same names in both places. A single name is the column of the
+model's only attribute of that kind, whatever the column is called. It is an error when the
+model lists several, and when the model lists the name as an attribute of the other kind
+only, since `observation_columns` and `action_columns` may then be swapped. When the model
+lists none, it is a column of that name. A specification is the name of a column, or how to
+build one from several, see [`columns_used`](@ref). Used by [`MultipleSessionsInfo`](@ref)
+when it splits a table.
 """
-column_map(names::NamedTuple) = names
-column_map(names) = NamedTuple{as_tuple_of_names(names)}(as_tuple_of_names(names))
+column_map(columns::NamedTuple, cognitive_model, kind::Symbol) = columns
+function column_map(column::Symbol, cognitive_model, kind::Symbol)
+    attributes = check_type_attribute_names(
+        attribute_names(cognitive_model), cognitive_model
+    )
+    names = getproperty(attributes, kind)
+    other_kind = kind === :observations ? :actions : :observations
+    keyword = kind === :observations ? "observation_columns" : "action_columns"
+
+    #A name the model lists as an attribute of the other kind only may mean that the two keyword arguments are swapped
+    if column in getproperty(attributes, other_kind) && !(column in names)
+        throw(
+            ArgumentError(
+                "$keyword is $(repr(column)), which a cognitive model of type $(typeof(cognitive_model)) lists among its $other_kind, not its $kind. Check that observation_columns and action_columns aren't swapped.",
+            ),
+        )
+    end
+
+    #A single name is the column of the model's only attribute of that kind
+    if length(names) == 1
+        return NamedTuple{names}((column,))
+    elseif length(names) > 1
+        throw(
+            ArgumentError(
+                "A cognitive model of type $(typeof(cognitive_model)) lists the $kind $names, so $keyword must give the column of each by name, such as $(NamedTuple{names}(names)), and not the single name $(repr(column)).",
+            ),
+        )
+    end
+
+    #A model with no attributes of that kind gets the column under its own name
+    return NamedTuple{(column,)}((column,))
+end
+function column_map(columns, cognitive_model, kind::Symbol)
+    return NamedTuple{as_tuple_of_names(columns)}(as_tuple_of_names(columns))
+end
+
+"""
+    named_data(data, cognitive_model, kind)
+
+Return the data of `kind`, `:observations` or `:actions`, as a `NamedTuple` of vectors: a
+single vector as the data of the model's only attribute of that kind, which is an error when
+the model lists another number of them, and anything else as it is, for
+[`check_data`](@ref) to check. A vector of `NamedTuple`s with the model's names is the data
+written as one row for each timestep, which is returned as it is, for `check_data` to report.
+Used by [`SessionInfo`](@ref).
+"""
+named_data(data, cognitive_model, kind::Symbol) = data
+function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
+    attributes = check_type_attribute_names(
+        attribute_names(cognitive_model), cognitive_model
+    )
+    names = getproperty(attributes, kind)
+
+    #NamedTuples with the model's names are the data written as one row for each timestep, which check_data reports
+    eltype(data) <: NamedTuple{names} && return data
+
+    #Otherwise the vector is the data of the model's only attribute of that kind
+    if length(names) != 1
+        throw(
+            ArgumentError(
+                "The $kind are a single vector, which can only be the data of a model's only one, but a cognitive model of type $(typeof(cognitive_model)) lists the $kind $names. Give them as a NamedTuple with one vector for each name.",
+            ),
+        )
+    end
+    return NamedTuple{names}((data,))
+end
 
 """
     columns_used(specification)
@@ -400,8 +468,9 @@ select_timestep_sizes(table::NamedTuple, timestep_sizes, rows) = timestep_sizes
     has_environment(sessions_info)
 
 Return whether a [`SessionInfo`](@ref) has an environment model, or every session of a
-[`MultipleSessionsInfo`](@ref) has, which is decided by the type. Used by
-[`warn_if_environment_is_unused`](@ref) and [`check_environment_parameters`](@ref).
+[`MultipleSessionsInfo`](@ref) has, which is decided by the type. A session can have an
+environment which doesn't run, see [`SessionInfo`](@ref). Used by
+[`check_environment_parameters`](@ref).
 """
 has_environment(::SessionInfo{<:Any,NoEnvironment}) = false
 has_environment(::SessionInfo{<:Any,<:AbstractEnvironmentModel}) = true
@@ -410,43 +479,40 @@ function has_environment(sessions_info::MultipleSessionsInfo)
 end
 
 """
-    has_missing_observations(session_info)
+    has_missing_observations(observations)
 
-Return whether any observation in the data of a session is [`MissingValue`](@ref), which an
-environment model fills in. Used by [`warn_if_environment_is_unused`](@ref).
+Return whether any entry of `observations`, the observations in the data of a session with
+one vector for each name, is [`MissingValue`](@ref), which an environment model fills in.
+Used by [`SessionInfo`](@ref), to decide whether the environment runs, and by
+[`check_environment_fits`](@ref).
 """
-function has_missing_observations(session_info::SessionInfo)
-    return any(
-        column -> any(value -> value isa MissingValue, column),
-        values(session_info.observations),
+function has_missing_observations(observations::NamedTuple)
+    return any(column -> any(value -> value isa MissingValue, column), values(observations))
+end
+
+"""
+    without_environment(session_info)
+
+Return the session with `NoEnvironment()` as its environment and everything else the same,
+so that it runs as a session without an environment. Used by the Turing.jl model of a
+session whose environment doesn't run, since every observation is in the data.
+"""
+function without_environment(session_info::SessionInfo)
+    return SessionInfo(
+        session_info.cognitive_model,
+        NoEnvironment(),
+        false,
+        session_info.observations,
+        session_info.actions,
+        session_info.recorded,
+        session_info.n_timesteps,
+        session_info.who_starts,
+        session_info.timestep_sizes,
+        session_info.saved_timestep_sizes,
+        session_info.save_history,
+        session_info.previous_observation,
+        session_info.previous_action,
     )
-end
-
-"""
-    warn_if_environment_is_unused(session_info)
-    warn_if_environment_is_unused(sessions)
-
-Warn if a session, or every session in a vector of them, has an environment model but no
-observation that is [`MissingValue`](@ref), since filling those in is all an environment
-does in a session, so it only costs time. The environment is kept as given, since leaving it
-out would change the variables of a model whose environment samples. Used by the
-constructors of [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
-"""
-warn_if_environment_is_unused(::SessionInfo{<:Any,NoEnvironment}) = nothing
-function warn_if_environment_is_unused(
-    session_info::SessionInfo{<:Any,<:AbstractEnvironmentModel}
-)
-    if !has_missing_observations(session_info)
-        @warn "An environment model of type $(typeof(session_info.environment)) was given, but no observation in the data is MissingValue(), so it has nothing to fill in and only costs time. Leave the environment out, or mark the observations it should give as MissingValue()."
-    end
-    return nothing
-end
-
-function warn_if_environment_is_unused(sessions::AbstractVector{<:SessionInfo})
-    if has_environment(first(sessions)) && !any(has_missing_observations, sessions)
-        @warn "An environment model of type $(typeof(first(sessions).environment)) was given, but no observation in the data of any session is MissingValue(), so it has nothing to fill in and only costs time. Leave the environment out, or mark the observations it should give as MissingValue()."
-    end
-    return nothing
 end
 
 """

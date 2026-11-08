@@ -108,6 +108,23 @@ end
             sessions_by_hand(with_false, fill(0.3, 3), fill(2.0, 3))
     end
 
+    @testset "An environment runs only in the sessions where an observation is missing, so only they have its variables" begin
+        #S1 misses a reward, and S2 and S3 have all of theirs
+        table = (; FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0])
+        sessions_info = sessions_for_test(
+            SessionRescorlaWagner(),
+            table;
+            environment=DriftingRewards(),
+            impute_missing_actions=false,
+        )
+        model = turing_multiple_behavioural_sessions(
+            sessions_info, (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
+        )
+        values = @test_logs match_mode = :any rand(Xoshiro(1), model)
+        @test Set(keys(values)) ==
+            Set([@varname(session[1].timestep[t].environment.drift) for t in 1:3])
+    end
+
     @testset "Sessions whose saved values have different types are returned in one vector which holds them all" begin
         #S3's missing choice isn't imputed, so S3 saves NoAction() there, which the other sessions don't
         sessions_info = sessions_for_test(;

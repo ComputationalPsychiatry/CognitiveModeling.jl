@@ -145,11 +145,25 @@ end
     )
 
     @testset "The columns of a kind map the model's names to the table's" begin
-        @test CognitiveModeling.column_map((; reward=:outcome)) === (; reward=:outcome)
-        @test CognitiveModeling.column_map(:reward) === (; reward=:reward)
-        @test CognitiveModeling.column_map((:reward, :cue)) === (; reward=:reward, cue=:cue)
-        @test CognitiveModeling.column_map([:reward, :cue]) === (; reward=:reward, cue=:cue)
-        @test_throws MethodError CognitiveModeling.column_map("reward")
+        @test CognitiveModeling.column_map(
+            (; reward=:outcome), SessionCounter(), :observations
+        ) === (; reward=:outcome)
+        @test CognitiveModeling.column_map(:reward, SessionCounter(), :observations) ===
+            (; reward=:reward)
+        #A single name is the column of the model's only observation or action, whatever it is called
+        @test CognitiveModeling.column_map(:outcome, SessionCounter(), :observations) ===
+            (; reward=:outcome)
+        @test CognitiveModeling.column_map(:response, SessionCounter(), :actions) ===
+            (; choice=:response)
+        @test CognitiveModeling.column_map(
+            (:reward, :cue), ObservesRewardAndCue(), :observations
+        ) === (; reward=:reward, cue=:cue)
+        @test CognitiveModeling.column_map(
+            [:reward, :cue], ObservesRewardAndCue(), :observations
+        ) === (; reward=:reward, cue=:cue)
+        @test_throws MethodError CognitiveModeling.column_map(
+            "reward", SessionCounter(), :observations
+        )
     end
 
     @testset "A column can be built from several, as a NamedTuple, a Tuple or what a function gives" begin
