@@ -50,6 +50,12 @@ function CognitiveModeling.apply_model(model::RepeatsPreviousChoice, input::Mode
 end
 CognitiveModeling.attribute_names(model::RepeatsPreviousChoice) = ModelAttributes(; parameters = (), states = (), observations = (), actions = :choice)
 
+#Keeps who started as its state, to check what the model is told
+struct RecordsWhoStarts <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters) = (; who_starts = UnknownWhoStarts())
+CognitiveModeling.apply_model(model::RecordsWhoStarts, input::ModelInput) = ModelOutput((; choice = Deterministic(true)), (; who_starts = input.who_starts))
+CognitiveModeling.attribute_names(model::RecordsWhoStarts) = ModelAttributes(; parameters = (), states = :who_starts, observations = :reward, actions = :choice)
+
 #Throws the error for invalid parameters when the learning rate is above 1
 struct RejectsHighLearningRate <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RejectsHighLearningRate, parameters) = (; expected_reward = 0.5)

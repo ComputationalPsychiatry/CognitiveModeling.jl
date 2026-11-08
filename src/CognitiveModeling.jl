@@ -19,6 +19,7 @@ include("inference/types.jl")
 include("inference/functions_to_extend.jl")
 include("inference/utility_functions.jl")
 include("inference/turing_models.jl")
+include("inference/chains.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
@@ -33,6 +34,7 @@ export SessionInfo, MultipleSessionsInfo, NoEnvironment
 export AbstractPopulationModel, IndependentSessions, AbstractDownstreamModel, NoDownstreamModel
 export NoParallelisation, ParallelSessions
 export turing_behavioural_session, turing_multiple_behavioural_sessions, turing_full_model, turing_catch_invalid_parameters
+export session_values_chain
 
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names

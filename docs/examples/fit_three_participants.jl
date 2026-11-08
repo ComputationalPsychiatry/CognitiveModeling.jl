@@ -88,14 +88,18 @@ chain = sample(model, NUTS(), 1000)
 
 ## The results ##
 
-#The model was fitted without saving the expected values, which is fastest. A copy which saves them gives them for every sample
-model_with_states = turing_full_model(population_model, MultipleSessionsInfo(sessions_info; save_history = SaveHistory(; states = :expected_value)))
-results = returned(model_with_states, chain)
+#The model was fitted without saving the expected values, which is fastest. session_values_chain reruns it on every sample
+#with sessions that save them, and gives a chain with the parameters and the expected values of each participant,
+#named after them, as P1.learning_rate and P1.expected_value
+session_values = session_values_chain(model, chain; save_history = SaveHistory(; states = :expected_value))
+
+#The participants, as the first part of those names
+participants = Symbol.(sessions_info.session_ids)
 
 #The fitted parameters of each participant, as averages over the samples
-for (i, participant) in enumerate(sessions_info.session_ids)
-    learning_rate = mean(result.cognitive_parameters.learning_rate[i] for result in results)
-    noise = mean(result.cognitive_parameters.noise[i] for result in results)
+for participant in participants
+    learning_rate = mean(session_values[@varname($participant.learning_rate)])
+    noise = mean(session_values[@varname($participant.noise)])
     println(participant, ": learning rate ", round(learning_rate; digits = 2), ", noise ", round(noise; digits = 2))
 end
 
@@ -111,13 +115,19 @@ FM.forestplot(chain, @varname(learning_rate.session))
 #The same as densities
 FM.ridgeline(chain, @varname(learning_rate.session))
 
+#The learning rates again, named after the participants
+FM.forestplot(session_values, [@varname($participant.learning_rate) for participant in participants])
+
+#The expected values of the first participant over the trials. The first is from before the first trial
+FM.forestplot(session_values, @varname(P1.expected_value))
+
 #The expected value of each participant over the trials, with the median and a 90 % interval over the samples, against their predictions and the outcomes
 figure = Figure(; size = (900, 330))
-for (i, participant) in enumerate(sessions_info.session_ids)
-    axis = Axis(figure[1, i]; title = participant, xlabel = "Trial", ylabel = i == 1 ? "Expected value" : "")
+for (i, participant) in enumerate(participants)
+    axis = Axis(figure[1, i]; title = string(participant), xlabel = "Trial", ylabel = i == 1 ? "Expected value" : "")
 
-    #The states start with timestep 0, before the first trial
-    expected_values = [result.saved_behavioural_values[i].states[t].expected_value for result in vec(results), t in 1:6]
+    #The expected values with a row for each sample and a column for each trial, starting with trial 0, before the first
+    expected_values = stack(vec(session_values[@varname($participant.expected_value)]); dims = 1)
     timesteps = 0:5
     band!(axis, timesteps, [quantile(column, 0.05) for column in eachcol(expected_values)], [quantile(column, 0.95) for column in eachcol(expected_values)]; color = (:steelblue, 0.3))
     lines!(axis, timesteps, [median(column) for column in eachcol(expected_values)]; color = :steelblue, label = "Expected value")

@@ -40,6 +40,9 @@ function CognitiveModeling.apply_model(environment::OnlyNormalEnvironment, input
     return EnvironmentOutput((; reward = Deterministic(1.0)), (; n_timesteps = input.previous_state.n_timesteps + 1))
 end
 
+#A model without methods of its own
+struct ModelWithoutMethods <: AbstractCognitiveModel end
+
 #A population model and a downstream model without methods of their own
 struct PopulationModelWithoutMethod <: AbstractPopulationModel end
 struct DownstreamModelWithoutMethod <: AbstractDownstreamModel end

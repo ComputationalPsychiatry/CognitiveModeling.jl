@@ -43,23 +43,30 @@ jobs:
           files: lcov.info
           use_oidc: true
           fail_ci_if_error: false
-  ad_and_reactant:
-    name: AD and Reactant - ${{ matrix.name }}
+  separate_environments:
+    name: Separate environment - ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       actions: write # lets julia-actions/cache delete old caches
       contents: read
+      id-token: write # lets codecov-action authenticate with OIDC
     strategy:
       fail-fast: false
       matrix:
-        # Each suite has its own environment. The one for the Turing.jl extension is with the extension's other tests
+        # Each suite has its own environment. The Turing.jl extension's tests have one because Turing.jl holds
+        # FlexiChains.jl at an older version than the main suite tests, and they run as the main suite does, with
+        # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own inside it
         include:
           - name: ad
             path: test/ad_and_reactant/ad
           - name: reactant
             path: test/ad_and_reactant/reactant
           - name: turing
+            path: test/extensions/turing
+            julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
+            coverage: true
+          - name: turing ad
             path: test/extensions/turing/ad
     steps:
       - uses: actions/checkout@v7
@@ -70,7 +77,15 @@ jobs:
       - name: Install the test environment
         run: julia --color=yes --project=${{ matrix.path }} -e 'using Pkg; Pkg.instantiate()'
       - name: Run the tests
-        run: julia --color=yes --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl
+        run: julia --color=yes ${{ matrix.julia_flags }} --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl
+      - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.coverage
+      - uses: codecov/codecov-action@v7
+        if: matrix.coverage
+        with:
+          files: lcov.info
+          use_oidc: true
+          fail_ci_if_error: false
   premade:
     name: PremadeCognitiveModels
     runs-on: ubuntu-latest

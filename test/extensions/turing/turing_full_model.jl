@@ -66,6 +66,16 @@ end
         @test (@test_logs match_mode = :any logjoint(model, imputed)) ≈ sessions_by_hand(with_false, fill(0.3, 3), fill(2.0, 3))
     end
 
+    @testset "Sessions whose saved values have different types are returned in one vector which holds them all" begin
+        #S3's missing choice isn't imputed, so S3 saves NoAction() there, which the other sessions don't
+        sessions_info = sessions_for_test(; impute_missing_actions = false, save_history = SaveHistory(; actions = :choice))
+        model = turing_multiple_behavioural_sessions(sessions_info, (; learning_rate = [0.2, 0.3, 0.4], inverse_temperature = [1.0, 2.0, 3.0]))
+        saved = returned(model, (;))
+        @test saved[1].actions == [(; choice = BeforeFirstTimestep()), (; choice = true), (; choice = false), (; choice = true)]
+        @test saved[3].actions == [(; choice = BeforeFirstTimestep()), (; choice = true), (; choice = true), (; choice = NoAction()), (; choice = true)]
+        @test logjoint(model, (;)) ≈ sessions_by_hand(FULL_TABLE, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0])
+    end
+
     @testset "The parameters must have one value for each session" begin
         model = turing_multiple_behavioural_sessions(sessions_for_test(; impute_missing_actions = false), (; learning_rate = [0.3, 0.3], inverse_temperature = [2.0, 2.0]))
         @test_throws BoundsError logjoint(model, (;))
@@ -204,6 +214,10 @@ end
         threadsafe = Turing.DynamicPPL.setthreadsafe(in_parallel, true)
         @test logjoint(threadsafe, (;)) ≈ logjoint(in_sequence, (;))
         @test returned(threadsafe, (;))[2].states == returned(in_sequence, (;))[2].states
+        #Sessions whose saved values have different types give what they give in sequence, since S3 saves NoAction() for its missing choice
+        saving_actions = sessions_for_test(; impute_missing_actions = false, save_history = SaveHistory(; actions = :choice))
+        in_parallel_saving_actions = Turing.DynamicPPL.setthreadsafe(turing_multiple_behavioural_sessions(saving_actions, parameters; parallelisation = ParallelSessions()), true)
+        @test returned(in_parallel_saving_actions, (;)) == returned(turing_multiple_behavioural_sessions(saving_actions, parameters), (;))
         #The full model passes it on
         full = Turing.DynamicPPL.setthreadsafe(turing_full_model(IndependentSessions(FULL_PRIORS), sessions_info; parallelisation = ParallelSessions()), true)
         given = Dict(@varname(learning_rate.session) => [0.2, 0.3, 0.4], @varname(inverse_temperature.session) => [1.0, 2.0, 3.0])

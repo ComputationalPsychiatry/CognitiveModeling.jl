@@ -142,11 +142,21 @@ end
     end
 end
 
+#Distributions written by hand, which stand in for the ones a model gives, so that the tests need no package of
+#distributions. The type parameter lets two of them have different types, as Normal{Float64} and Normal{Float32} do
+struct NormalByHand{T <: Real}
+    mean::T
+    standard_deviation::T
+end
+struct BernoulliByHand
+    probability::Float64
+end
+
 #A model for the error messages about scoring
 struct ScoringModel <: AbstractCognitiveModel end
 
 @testset "Scoring the recorded actions" begin
-    distributions = (; choice = Normal(0.0, 1.0), bet = NoAction())
+    distributions = (; choice = NormalByHand(0.0, 1.0), bet = NoAction())
 
     @testset "An action is recorded on a timestep when the data has a value, and a recorded action where the model took none is an error" begin
         @test CognitiveModeling.recorded_on_timestep((; choice = 0.5, bet = NoAction()), distributions, ScoringModel()) === (; choice = true, bet = false)
@@ -156,9 +166,9 @@ struct ScoringModel <: AbstractCognitiveModel end
     end
 
     @testset "What a session saves of a timestep is selected by the SaveHistory, with the action distributions" begin
-        outputs = (; observation = (; reward = 1.0), action = (; choice = true), action_distribution = (; choice = Bernoulli(0.7)), cognitive_state = (; expected_reward = 0.5))
+        outputs = (; observation = (; reward = 1.0), action = (; choice = true), action_distribution = (; choice = BernoulliByHand(0.7)), cognitive_state = (; expected_reward = 0.5))
         saved = CognitiveModeling.saved_session_outputs(ScoringModel(), outputs, SaveHistory(; action_distributions = :choice, states = SaveEverything()))
-        @test saved === (; observation = (;), action = (;), action_distribution = (; choice = Bernoulli(0.7)), state = (; expected_reward = 0.5))
+        @test saved === (; observation = (;), action = (;), action_distribution = (; choice = BernoulliByHand(0.7)), state = (; expected_reward = 0.5))
         #Timestep 0 has BeforeFirstTimestep for every action distribution
         previous = (; observation = (; reward = BeforeFirstTimestep()), action = (; choice = BeforeFirstTimestep()), cognitive_state = (; expected_reward = 0.5))
         CognitiveModeling.attribute_names(::ScoringModel) = ModelAttributes(; parameters = (), states = :expected_reward, observations = :reward, actions = :choice)
@@ -169,20 +179,20 @@ struct ScoringModel <: AbstractCognitiveModel end
         storage = CognitiveModeling.initialize_session_storage(initial, saved, 2)
         @test length(storage.action_distributions) == 3 && storage.action_distributions[1] === (; choice = BeforeFirstTimestep())
         storage = CognitiveModeling.store_session_outputs!(storage, saved, 3)
-        @test storage.action_distributions[3] === (; choice = Bernoulli(0.7)) && storage.states[3] === (; expected_reward = 0.5)
+        @test storage.action_distributions[3] === (; choice = BernoulliByHand(0.7)) && storage.states[3] === (; expected_reward = 0.5)
         @test length(CognitiveModeling.initialize_session_storage(nothing, saved, 2).states) == 2
     end
 
     @testset "The vectors of distributions are typed by the first timestep, and widened when a later one differs" begin
-        initial = CognitiveModeling.initialize_distributions((; choice = Normal(0.0, 1.0), bet = NoAction()))
-        @test initial.choice isa Vector{Normal{Float64}} && isempty(initial.choice)
+        initial = CognitiveModeling.initialize_distributions((; choice = NormalByHand(0.0, 1.0), bet = NoAction()))
+        @test initial.choice isa Vector{NormalByHand{Float64}} && isempty(initial.choice)
         @test initial.bet isa Vector{Union{}}
-        stored = CognitiveModeling.store_distributions(initial, (; choice = Normal(0.0, 1.0), bet = NoAction()), (; choice = true, bet = false))
-        @test stored.choice == [Normal(0.0, 1.0)] && isempty(stored.bet)
-        stored = CognitiveModeling.store_distributions(stored, (; choice = Normal(1.0, 1.0), bet = Normal(2.0, 0.5)), (; choice = false, bet = true))
-        @test stored.choice == [Normal(0.0, 1.0)] && stored.bet == [Normal(2.0, 0.5)] && stored.bet isa Vector{Normal{Float64}}
+        stored = CognitiveModeling.store_distributions(initial, (; choice = NormalByHand(0.0, 1.0), bet = NoAction()), (; choice = true, bet = false))
+        @test stored.choice == [NormalByHand(0.0, 1.0)] && isempty(stored.bet)
+        stored = CognitiveModeling.store_distributions(stored, (; choice = NormalByHand(1.0, 1.0), bet = NormalByHand(2.0, 0.5)), (; choice = false, bet = true))
+        @test stored.choice == [NormalByHand(0.0, 1.0)] && stored.bet == [NormalByHand(2.0, 0.5)] && stored.bet isa Vector{NormalByHand{Float64}}
         #A distribution of another type widens the vector
-        stored = CognitiveModeling.store_distributions(stored, (; choice = Normal(1.0f0, 1.0f0), bet = Normal(2.0, 0.5)), (; choice = true, bet = false))
-        @test stored.choice isa Vector{Union{Normal{Float64}, Normal{Float32}}} && length(stored.choice) == 2
+        stored = CognitiveModeling.store_distributions(stored, (; choice = NormalByHand(1.0f0, 1.0f0), bet = NormalByHand(2.0, 0.5)), (; choice = true, bet = false))
+        @test stored.choice isa Vector{Union{NormalByHand{Float64}, NormalByHand{Float32}}} && length(stored.choice) == 2
     end
 end

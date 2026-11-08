@@ -52,19 +52,22 @@ end
 
 Turing.jl model which runs every session in `sessions_info` as a submodel with the prefix
 `session[i]`, and returns a vector with what each returned. The first session runs outside
-the loop, so that the vector has its type. With [`NoParallelisation`](@ref) the sessions run
-one after the other, and with [`ParallelSessions`](@ref) over the threads Julia was started
-with, which needs the model that is evaluated to be marked thread-safe, since the log density
-is silently wrong otherwise.
+the loop, so that the vector has its type. Sessions of one type can still save values of
+different types, such as an action that is `NoAction()` in one session only, and a session
+whose values have another type widens the vector, as [`store_output!`](@ref) does. With
+[`NoParallelisation`](@ref) the sessions run one after the other, and with
+[`ParallelSessions`](@ref) over the threads Julia was started with, which needs the model
+that is evaluated to be marked thread-safe, since the log density is silently wrong
+otherwise.
 """
 Turing.@model function turing_run_sessions(::NoParallelisation, sessions_info, cognitive_parameters, environment_parameters)
     sessions = sessions_info.sessions
     first_saved ~ to_submodel(prefix(turing_behavioural_session(sessions[1], row(cognitive_parameters, 1), environment_parameters), @varname(session[1])), false)
-    saved_values = Vector{typeof(first_saved)}(undef, length(sessions))
-    saved_values[1] = first_saved
+    saved_values = initialize_storage(first_saved, length(sessions))
     for i in 2:length(sessions)
         saved ~ to_submodel(prefix(turing_behavioural_session(sessions[i], row(cognitive_parameters, i), environment_parameters), @varname(session[i])), false)
-        saved_values[i] = saved
+        #A session whose saved values have another type widens the vector
+        saved_values = store_output!(saved_values, saved, i)
     end
     return saved_values
 end
@@ -75,14 +78,45 @@ Turing.@model function turing_run_sessions(::ParallelSessions, sessions_info, co
     end
     sessions = sessions_info.sessions
     first_saved ~ to_submodel(prefix(turing_behavioural_session(sessions[1], row(cognitive_parameters, 1), environment_parameters), @varname(session[1])), false)
-    saved_values = Vector{typeof(first_saved)}(undef, length(sessions))
-    saved_values[1] = first_saved
+    saved_values = initialize_storage(first_saved, length(sessions))
+    #A vector can't be widened while other threads write to it, so saved values of another type are put aside until the threads are done
+    saved_with_other_types = Vector{Any}(undef, length(sessions))
     #Written as Base.Threads.@threads, which is the same macro, so that DynamicPPL doesn't warn about thread safety when the package loads. The check above takes the warning's place
     Base.Threads.@threads for i in 2:length(sessions)
         saved ~ to_submodel(prefix(turing_behavioural_session(sessions[i], row(cognitive_parameters, i), environment_parameters), @varname(session[i])), false)
-        saved_values[i] = saved
+        if saved isa eltype(saved_values)
+            saved_values[i] = saved
+        else
+            saved_with_other_types[i] = saved
+        end
     end
+    saved_values = include_other_types(saved_values, saved_with_other_types)
     return saved_values
+end
+
+"""
+    include_other_types(saved_values, saved_with_other_types)
+
+Return `saved_values`, what each session saved, with the values in
+`saved_with_other_types` put in their places, widening the vector as
+[`store_output!`](@ref) does. A session whose saved values didn't fit the type of
+`saved_values` has them in its place in `saved_with_other_types`, and is left unassigned in
+`saved_values`. When there are none, `saved_values` is returned as it is. Used by
+[`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the threads are done.
+"""
+function include_other_types(saved_values::Vector, saved_with_other_types::Vector{Any})
+    #In the common case, every session saved values of one type
+    if !any(i -> isassigned(saved_with_other_types, i), eachindex(saved_with_other_types))
+        return saved_values
+    end
+
+    #Otherwise, store each session's values again, in order, so that the vector widens as it goes
+    widened = initialize_storage(saved_values[1], length(saved_values))
+    for i in 2:length(saved_values)
+        saved = isassigned(saved_with_other_types, i) ? saved_with_other_types[i] : saved_values[i]
+        widened = store_output!(widened, saved, i)
+    end
+    return widened
 end
 
 

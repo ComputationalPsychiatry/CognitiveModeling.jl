@@ -12,7 +12,7 @@ Pages = ["api.md"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "environments/common_rl_environment.jl", "simulation/save_history.jl", "simulation/types.jl", "simulation/simulate.jl", "inference/types.jl", "inference/turing_models.jl"]
+Pages = ["CognitiveModeling.jl", "defining_models/types.jl", "environments/types.jl", "environments/common_rl_environment.jl", "simulation/save_history.jl", "simulation/types.jl", "simulation/simulate.jl", "inference/types.jl", "inference/turing_models.jl", "inference/chains.jl"]
 ```
 
 ## Defining models and environments

@@ -37,7 +37,13 @@ julia --project=test/ad_and_reactant/ad -e 'using Pkg; Pkg.instantiate(); includ
 julia --project=test/ad_and_reactant/reactant -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/reactant/runtests.jl")'
 ```
 
-Automatic differentiation of the Turing.jl extension is tested in an environment of its own, with its own cases, beside the extension's other tests:
+The Turing.jl extension is tested in an environment of its own, since Turing.jl holds FlexiChains.jl at an older version than the main tests use:
+
+```bash
+julia --project=test/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/runtests.jl")'
+```
+
+Automatic differentiation of the Turing.jl extension is tested in another environment, with its own cases:
 
 ```bash
 julia --project=test/extensions/turing/ad -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/ad/runtests.jl")'

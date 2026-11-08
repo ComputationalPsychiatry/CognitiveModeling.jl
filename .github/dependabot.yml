@@ -10,11 +10,13 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: "julia"
-    # "/" is the workspace root, which also covers test/ and docs/
+    # "/" is the workspace root, which also covers test/
     directories:
       - "/"
+      - "/docs"
       - "/test/ad_and_reactant/ad"
       - "/test/ad_and_reactant/reactant"
+      - "/test/extensions/turing"
       - "/test/extensions/turing/ad"
     target-branch: "dev"
     schedule:
