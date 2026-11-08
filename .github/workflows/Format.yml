@@ -8,15 +8,11 @@ on:
   pull_request:
 
 jobs:
-  runic:
-    name: Runic
+  juliaformatter:
+    name: JuliaFormatter
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v3
+      # Formats every Julia file with the style in .JuliaFormatter.toml, and fails if any changed
+      - uses: julia-actions/julia-format@v4
         with:
-          version: '1'
-      - uses: julia-actions/cache@v3
-      - uses: fredrikekre/runic-action@v1
-        with:
-          version: '1'
+          version: '2'

@@ -14,13 +14,13 @@ include("../test_cases.jl")
 #package uses for loops.
 const BACKENDS = [
     "ForwardDiff" => AutoForwardDiff(),
-    "ForwardDiff, chunk size 1" => AutoForwardDiff(; chunksize = 1),
+    "ForwardDiff, chunk size 1" => AutoForwardDiff(; chunksize=1),
     "ReverseDiff" => AutoReverseDiff(),
-    "ReverseDiff, compiled tape" => AutoReverseDiff(; compile = true),
-    "Enzyme forward" => AutoEnzyme(; mode = Forward),
-    "Enzyme reverse" => AutoEnzyme(; mode = Reverse),
-    "Enzyme forward, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Forward)),
-    "Enzyme reverse, runtime activity" => AutoEnzyme(; mode = set_runtime_activity(Reverse)),
+    "ReverseDiff, compiled tape" => AutoReverseDiff(; compile=true),
+    "Enzyme forward" => AutoEnzyme(; mode=Forward),
+    "Enzyme reverse" => AutoEnzyme(; mode=Reverse),
+    "Enzyme forward, runtime activity" => AutoEnzyme(; mode=set_runtime_activity(Forward)),
+    "Enzyme reverse, runtime activity" => AutoEnzyme(; mode=set_runtime_activity(Reverse)),
     "Mooncake reverse" => AutoMooncake(),
     "Mooncake forward" => AutoMooncakeForward(),
 ]
