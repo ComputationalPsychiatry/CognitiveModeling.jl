@@ -15,12 +15,14 @@ Pre-created models live in a separate package, [PremadeCognitiveModels.jl](https
 
 Work happens on `dev`, and `main` holds released code, so open pull requests against `dev`.
 
-The code is formatted with [JuliaFormatter](https://github.com/JuliaEditorSupport/JuliaFormatter.jl) in [Blue style](https://github.com/JuliaDiff/BlueStyle). Install its `jlfmt` app once per machine, and the formatting hook once per clone. The hook then formats the files of every `git commit`:
+The code is formatted with [JuliaFormatter](https://github.com/JuliaEditorSupport/JuliaFormatter.jl) 2.14.10 in [Blue style](https://github.com/JuliaDiff/BlueStyle). Install its `jlfmt` app once per machine, and the formatting hook once per clone. The hook then formats the files of every `git commit`:
 
 ```bash
-julia -e 'import Pkg; Pkg.Apps.add("JuliaFormatter")'
+julia -e 'import Pkg; Pkg.Apps.add(name="JuliaFormatter", version="2.14.10")'
 pre-commit install
 ```
+
+The version is pinned in three places, which change together: this command, the `rev` of the hook in `.pre-commit-config.yaml`, and the `version` in `.github/workflows/Format.yml`. The hook runs the `jlfmt` that is installed, so a different version of it can format differently from the check on GitHub.
 
 Run the main tests:
 

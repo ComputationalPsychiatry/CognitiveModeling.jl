@@ -690,7 +690,7 @@ end
         @test Set(keys(values)) == Set([
             @varname(timestep[2].choice.imputed),
             @varname(timestep[3].bet.imputed),
-            @varname(timestep[4].choice.imputed)
+            @varname(timestep[4].choice.imputed),
         ])
         imputed = [0.1, -0.2, 0.3]
         given = Dict(
@@ -908,7 +908,7 @@ end
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
             @varname(timestep[1].environment.reward.imputed),
-            @varname(timestep[3].environment.reward.imputed)
+            @varname(timestep[3].environment.reward.imputed),
         ])
         #The model observes their values
         rewards = Dict(
@@ -1252,7 +1252,7 @@ end
         @test Set(keys(values)) == Set([
             @varname(timestep[1].noise),
             @varname(timestep[2].noise),
-            @varname(timestep[3].noise)
+            @varname(timestep[3].noise),
         ])
         noises = Dict(@varname(timestep[t].noise) => 0.1 * t for t in 1:3)
         V = 0.5
@@ -1435,7 +1435,7 @@ end
                     turing_behavioural_session(
                         session_info, (; learning_rate, inverse_temperature, initial_value)
                     ),
-                    @varname(session)
+                    @varname(session),
                 ),
                 false,
             )

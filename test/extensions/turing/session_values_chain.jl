@@ -30,7 +30,7 @@ end
             @varname(S2.choice),
             @varname(S2.expected_reward),
             @varname(S3.choice),
-            @varname(S3.expected_reward)
+            @varname(S3.expected_reward),
         ]
         parameters = session_parameters_chain(model, chain)
         @test Turing.FlexiChains.iter_indices(parameters) ==
@@ -41,7 +41,7 @@ end
             @varname(S2.learning_rate),
             @varname(S2.inverse_temperature),
             @varname(S3.learning_rate),
-            @varname(S3.inverse_temperature)
+            @varname(S3.inverse_temperature),
         ]
         @test vec(parameters[@varname(S2.learning_rate)]) == vec(
             map(learning_rates -> learning_rates[2], chain[@varname(learning_rate.session)])
@@ -81,7 +81,7 @@ end
         ) == [
             @varname(S1.expected_reward),
             @varname(S2.expected_reward),
-            @varname(S3.expected_reward)
+            @varname(S3.expected_reward),
         ]
         session_values = session_values_chain(
             turing_catch_invalid_parameters(session_for_test()),

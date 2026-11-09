@@ -300,7 +300,7 @@ end
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
             @varname(cognitive_parameters_model.learning_rate.session),
             @varname(cognitive_parameters_model.inverse_temperature.session),
-            @varname(downstream_model.slope)
+            @varname(downstream_model.slope),
         ])
         without = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
@@ -310,7 +310,7 @@ end
         @test Set(keys(rand(Xoshiro(1), without))) == Set([
             @varname(learning_rate.session),
             @varname(inverse_temperature.session),
-            @varname(slope)
+            @varname(slope),
         ])
         #The log densities are the same with the names changed
         given = Dict(
@@ -415,7 +415,7 @@ end
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
             @varname(learning_rate.session),
             @varname(inverse_temperature.session),
-            @varname(mean_reward.shared)
+            @varname(mean_reward.shared),
         ])
         learning_rates = [0.2, 0.3, 0.4]
         inverse_temperatures = [1.0, 2.0, 3.0]
@@ -600,7 +600,7 @@ end
         @test Set(keys(values)) == Set([
             @varname(learning_rate.session),
             @varname(inverse_temperature.session),
-            @varname(session[1].timestep[2].environment.reward.imputed)
+            @varname(session[1].timestep[2].environment.reward.imputed),
         ])
         #S1's rewards, the imputed one and the two recorded, are scored against its own mean, since its environment runs, and the rewards of the other sessions aren't
         given = Dict(
@@ -646,7 +646,7 @@ end
         )
         @test Set(keys(rand(Xoshiro(1), prefixed))) == Set([
             @varname(cognitive_parameters_model.learning_rate.shared),
-            @varname(environment_parameters_model.learning_rate.shared)
+            @varname(environment_parameters_model.learning_rate.shared),
         ])
         #No warning when the environment's parameters are fixed
         @test_logs turing_full_model(

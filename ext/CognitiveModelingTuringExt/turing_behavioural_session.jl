@@ -59,7 +59,7 @@ Turing.@model function turing_run_full_model(
         cognitive_parameters ~ to_submodel(
             prefix(
                 turing_session_parameters_model(cognitive_parameters_model, sessions_info),
-                @varname(cognitive_parameters_model)
+                @varname(cognitive_parameters_model),
             ),
             false,
         )
@@ -77,7 +77,7 @@ Turing.@model function turing_run_full_model(
                 turing_session_parameters_model(
                     environment_parameters_model, sessions_info
                 ),
-                @varname(environment_parameters_model)
+                @varname(environment_parameters_model),
             ),
             false,
         )
@@ -119,7 +119,7 @@ Turing.@model function turing_run_full_model(
                     cognitive_parameters,
                     sessions_info,
                 ),
-                @varname(downstream_model)
+                @varname(downstream_model),
             ),
             false,
         )
@@ -186,7 +186,7 @@ Turing.@model function turing_run_sessions(
             turing_behavioural_session(
                 sessions[1], row(cognitive_parameters, 1), row(environment_parameters, 1)
             ),
-            @varname(session[1])
+            @varname(session[1]),
         ),
         false,
     )
@@ -199,7 +199,7 @@ Turing.@model function turing_run_sessions(
                     row(cognitive_parameters, i),
                     row(environment_parameters, i),
                 ),
-                @varname(session[i])
+                @varname(session[i]),
             ),
             false,
         )
@@ -225,7 +225,7 @@ Turing.@model function turing_run_sessions(
             turing_behavioural_session(
                 sessions[1], row(cognitive_parameters, 1), row(environment_parameters, 1)
             ),
-            @varname(session[1])
+            @varname(session[1]),
         ),
         false,
     )
@@ -241,7 +241,7 @@ Turing.@model function turing_run_sessions(
                     row(cognitive_parameters, i),
                     row(environment_parameters, i),
                 ),
-                @varname(session[i])
+                @varname(session[i]),
             ),
             false,
         )
@@ -438,7 +438,7 @@ Turing.@model function turing_run_timesteps(
             turing_behavioural_timestep(
                 session_info, 1, cognitive_parameters, environment_parameters, previous
             ),
-            @varname(timestep[1])
+            @varname(timestep[1]),
         ),
         false,
     )
@@ -470,7 +470,7 @@ Turing.@model function turing_run_timesteps(
                 turing_behavioural_timestep(
                     session_info, t, cognitive_parameters, environment_parameters, outputs
                 ),
-                @varname(timestep[t])
+                @varname(timestep[t]),
             ),
             false,
         )
@@ -795,7 +795,7 @@ Turing.@model function turing_behavioural_timestep(
                     session_info.observations,
                     t,
                 ),
-                @varname(environment)
+                @varname(environment),
             ),
             false,
         )
@@ -842,7 +842,7 @@ Turing.@model function turing_behavioural_timestep(
                     session_info.observations,
                     t,
                 ),
-                @varname(environment)
+                @varname(environment),
             ),
             false,
         )

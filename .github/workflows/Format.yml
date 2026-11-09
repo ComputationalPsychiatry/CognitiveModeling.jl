@@ -12,7 +12,8 @@ jobs:
     name: JuliaFormatter
     runs-on: ubuntu-latest
     steps:
-      # Formats every Julia file with the style in .JuliaFormatter.toml, and fails if any changed
+      # Formats every Julia file with the style in .JuliaFormatter.toml, and fails if any changed. The version is pinned, and
+      # changes together with the rev of the hook in .pre-commit-config.yaml and the version the README installs
       - uses: julia-actions/julia-format@v4
         with:
-          version: '2'
+          version: '2.14.10'
