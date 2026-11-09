@@ -25,17 +25,27 @@ end
 function CognitiveModeling.initialize_state(model::TemporalDifferenceAgent, parameters)
 
     #The learner, with the learning rate and the discount factor from the parameters
-    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
-    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+    rl_approximator = TabularQApproximator(;
+        n_state=model.n_states, n_action=model.n_actions
+    )
+    rl_learner = TDLearner(
+        rl_approximator, :SARS; α=parameters.learning_rate, γ=parameters.discount
+    )
 
     #The explorer, which picks any action with a probability of epsilon
-    rl_explorer = EpsilonGreedyExplorer(parameters.epsilon; is_break_tie = true)
+    rl_explorer = EpsilonGreedyExplorer(parameters.epsilon; is_break_tie=true)
 
     #The agent&#39;s memory of the last transition, which the learner learns from
-    rl_traces = CircularArraySARTSTraces(; capacity = 1, state = Int64 =&gt; (), action = Int64 =&gt; (), reward = Float64 =&gt; (), terminal = Bool =&gt; ())
+    rl_traces = CircularArraySARTSTraces(;
+        capacity=1,
+        state=Int64 =&gt; (),
+        action=Int64 =&gt; (),
+        reward=Float64 =&gt; (),
+        terminal=Bool =&gt; (),
+    )
     rl_trajectory = Trajectory(rl_traces, DummySampler(), InsertSampleRatioController())
 
-    return (; rl_agent = Agent(QBasedPolicy(rl_learner, rl_explorer), rl_trajectory))
+    return (; rl_agent=Agent(QBasedPolicy(rl_learner, rl_explorer), rl_trajectory))
 end</code></pre><p>On each timestep, the cognitive model takes the agent through the stage of its run loop that fits what was observed, and returns the probabilities its policy gives each action. The agent is changed in place, so the same object is passed on as the new state.</p><pre><code class="language-julia hljs">function CognitiveModeling.apply_model(model::TemporalDifferenceAgent, input::ModelInput)
 
     # Unpack input ##
@@ -58,29 +68,33 @@ end</code></pre><p>On each timestep, the cognitive model takes the agent through
     #The policy gives a distribution over the actions, which the action is sampled from
     Pₜ = RLBase.prob(rl_agent.policy, rl_env)
 
-    return ModelOutput((; move = Pₜ), (; rl_agent))
+    return ModelOutput((; move=Pₜ), (; rl_agent))
 end
 
 function CognitiveModeling.attribute_names(model::TemporalDifferenceAgent)
     return ModelAttributes(;
-        parameters = (:learning_rate, :discount, :epsilon),
-        states = :rl_agent,
-        observations = (:observation, :reward, :terminated),
-        actions = :move,
+        parameters=(:learning_rate, :discount, :epsilon),
+        states=:rl_agent,
+        observations=(:observation, :reward, :terminated),
+        actions=:move,
     )
 end</code></pre><p>Since the agent is changed in place, every saved state would be the same object, showing the values after the last timestep. This method saves a copy of the table of action values on each timestep instead.</p><pre><code class="language-julia hljs">function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceAgent, state)
-    return (; action_values = copy(state.rl_agent.policy.learner.approximator.model))
+    return (; action_values=copy(state.rl_agent.policy.learner.approximator.model))
 end</code></pre><h2 id="Only-the-learner"><a class="docs-heading-anchor" href="#Only-the-learner">Only the learner</a><a id="Only-the-learner-1"></a><a class="docs-heading-anchor-permalink" href="#Only-the-learner" title="Permalink"></a></h2><p>A learner can also be used on its own, with one transition at a time, which needs no environment object and no trajectory. The action probabilities are then the cognitive model&#39;s own: here a softmax over the learner&#39;s action values, with an inverse temperature. The softmax is the one from LogExpFunctions.jl.</p><pre><code class="language-julia hljs">struct TemporalDifferenceLearner &lt;: AbstractCognitiveModel
     n_states::Int
     n_actions::Int
 end
 
 function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, parameters)
-    rl_approximator = TabularQApproximator(; n_state = model.n_states, n_action = model.n_actions)
-    rl_learner = TDLearner(rl_approximator, :SARS; α = parameters.learning_rate, γ = parameters.discount)
+    rl_approximator = TabularQApproximator(;
+        n_state=model.n_states, n_action=model.n_actions
+    )
+    rl_learner = TDLearner(
+        rl_approximator, :SARS; α=parameters.learning_rate, γ=parameters.discount
+    )
 
     #The learner needs the observation before the action too, so that is kept in the state
-    return (; rl_learner, previous_observation = 0)
+    return (; rl_learner, previous_observation=0)
 end
 
 function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::ModelInput)
@@ -93,7 +107,13 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::
     # Update state ##
     #Let the learner learn from what followed the previous action, unless an episode starts
     if !(reward isa AbstractNoValue)
-        rl_transition = (; state = previous_observation, next_state = observation, action = input.previous_action.move, reward, terminal = terminated)
+        rl_transition = (;
+            state=previous_observation,
+            next_state=observation,
+            action=input.previous_action.move,
+            reward,
+            terminal=terminated,
+        )
         RLBase.optimise!(rl_learner, rl_transition)
     end
 
@@ -103,18 +123,20 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::
     #Softmax over the action values
     Pₜ = Categorical(softmax(β .* Qₜ))
 
-    return ModelOutput((; move = Pₜ), (; rl_learner, previous_observation = observation))
+    return ModelOutput((; move=Pₜ), (; rl_learner, previous_observation=observation))
 end
 
 function CognitiveModeling.attribute_names(model::TemporalDifferenceLearner)
     return ModelAttributes(;
-        parameters = (:learning_rate, :discount, :inverse_temperature),
-        states = (:rl_learner, :previous_observation),
-        observations = (:observation, :reward, :terminated),
-        actions = :move,
+        parameters=(:learning_rate, :discount, :inverse_temperature),
+        states=(:rl_learner, :previous_observation),
+        observations=(:observation, :reward, :terminated),
+        actions=:move,
     )
 end
 
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceLearner, state)
-    return (; action_values = copy(state.rl_learner.approximator.model), state.previous_observation)
-end</code></pre><h2 id="Fitting"><a class="docs-heading-anchor" href="#Fitting">Fitting</a><a id="Fitting-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting" title="Permalink"></a></h2><p>This page doesn&#39;t fit the cognitive models yet. When they are fitted with a sampler that uses gradients, use Enzyme.jl in reverse mode with runtime activity as the automatic differentiation backend, which for Turing.jl is <code>AutoEnzyme(; mode = set_runtime_activity(Reverse), function_annotation = Const)</code>. It gave the right gradient of the log density of a session for both cognitive models here, when checked against finite differences with Enzyme.jl 0.13. ForwardDiff.jl and ReverseDiff.jl can&#39;t differentiate either of them, because the learner keeps its learning rate and its discount in <code>Float64</code> fields, which the number types of those two don&#39;t fit in.</p><p>Use the softmax from LogExpFunctions.jl, as above, and not one written by hand. Written in one line, a softmax can get a wrong gradient from Enzyme&#39;s reverse mode, with no error, which the page <a href="../../ad_and_reactant/#Automatic-differentiation-and-Reactant">Automatic differentiation and Reactant</a> describes under its pitfalls.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../interfacing_with_common_rl/">« Interfacing with CommonRLInterface.jl</a><a class="docs-footer-nextpage" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Saturday 7 November 2026 21:14">Saturday 7 November 2026</span>. Using Julia version 1.13.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+    return (;
+        action_values=copy(state.rl_learner.approximator.model), state.previous_observation
+    )
+end</code></pre><h2 id="Fitting"><a class="docs-heading-anchor" href="#Fitting">Fitting</a><a id="Fitting-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting" title="Permalink"></a></h2><p>This page doesn&#39;t fit the cognitive models yet. When they are fitted with a sampler that uses gradients, use Enzyme.jl in reverse mode with runtime activity as the automatic differentiation backend, which for Turing.jl is <code>AutoEnzyme(; mode = set_runtime_activity(Reverse), function_annotation = Const)</code>. It gave the right gradient of the log density of a session for both cognitive models here, when checked against finite differences with Enzyme.jl 0.13. ForwardDiff.jl and ReverseDiff.jl can&#39;t differentiate either of them, because the learner keeps its learning rate and its discount in <code>Float64</code> fields, which the number types of those two don&#39;t fit in.</p><p>Use the softmax from LogExpFunctions.jl, as above, and not one written by hand. Written in one line, a softmax can get a wrong gradient from Enzyme&#39;s reverse mode, with no error, which the page <a href="../../ad_and_reactant/#Automatic-differentiation-and-Reactant">Automatic differentiation and Reactant</a> describes under its pitfalls.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../interfacing_with_common_rl/">« Interfacing with CommonRLInterface.jl</a><a class="docs-footer-nextpage" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Monday 9 November 2026 15:59">Monday 9 November 2026</span>. Using Julia version 1.13.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
