@@ -32,7 +32,7 @@ A simulation stops by itself when the episode ends, since the
 the most timesteps it can take. An episode that
 has ended isn't started again, and an action given to it throws an error. A new call of
 [`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref) of an
-[`Environment`](@ref), since both reset `rl_env` through `initialize_state`.
+[`InstantiatedModel`](@ref), since both reset `rl_env` through `initialize_state`.
 
 # Examples
 ```jldoctest
@@ -52,22 +52,22 @@ CommonRLInterface.terminated(rl_env::Bandit) = rl_env.pulls == 2
 #A model which always pulls the first arm
 struct PullsFirstArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
-CognitiveModeling.apply_model(model::PullsFirstArm, input::ModelInput) = ModelOutput((; arm = Deterministic(1)))
-CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), observations = (:observation, :reward, :terminated), actions = :arm)
+CognitiveModeling.apply_model(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
+CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), inputs = (:observation, :reward, :terminated), outputs = :arm)
 
 #The simulation stops when the episode ends, before it has run all of n_steps
-observations, actions, _, _, _ = simulate(
+simulation = simulate(
     PullsFirstArm(),
     CommonRLEnvironment(Bandit(0); action_name = :arm);
     who_starts = EnvironmentStarts(),
     n_steps = 10,
     cognitive_parameters = (;),
     environment_parameters = (;),
-    save_history = SaveHistory(SaveEverything()),
+    cognitive_save_history = SaveHistory(SaveEverything()),
 )
 
 #Timestep 0, before the first timestep, and then what the environment gave on each timestep
-foreach(println, observations)
+foreach(println, simulation.observations)
 
 # output
 
@@ -86,14 +86,14 @@ function CommonRLEnvironment(rl_env; action_name::Symbol)
     return CommonRLEnvironment{typeof(rl_env),action_name}(rl_env)
 end
 
-#The observations are always the same three, the action is the one named, and rl_env isn't a NamedTuple, so there are no named states
+#The observations it gives are always the same three, the action it receives is the one named, and rl_env isn't a NamedTuple, so there are no named states
 function attribute_names(
     ::CommonRLEnvironment{Trl_env,action_name}
 ) where {Trl_env,action_name}
     return ModelAttributes(;
         parameters=(),
         states=(),
-        observations=(:observation, :reward, :terminated),
-        actions=action_name,
+        inputs=action_name,
+        outputs=(:observation, :reward, :terminated),
     )
 end

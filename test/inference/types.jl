@@ -3,7 +3,7 @@
 struct SessionCounter <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(::SessionCounter)
     return ModelAttributes(;
-        parameters=:probability, states=:n_timesteps, observations=:reward, actions=:choice
+        parameters=:probability, states=:n_timesteps, inputs=:reward, outputs=:choice
     )
 end
 
@@ -13,22 +13,31 @@ function CognitiveModeling.attribute_names(::ObservesRewardAndCue)
     return ModelAttributes(;
         parameters=:probability,
         states=:n_timesteps,
-        observations=(:reward, :cue),
-        actions=:choice,
+        inputs=(:reward, :cue),
+        outputs=:choice,
     )
 end
 
-#An environment which gives the reward, and one which gives nothing
+#An environment which gives the reward, and one which gives nothing. The choice it receives is its input
 struct GivesReward <: AbstractEnvironmentModel end
 function CognitiveModeling.attribute_names(::GivesReward)
-    return ModelAttributes(;
-        parameters=:scale, states=(), observations=:reward, actions=:choice
-    )
+    return ModelAttributes(; parameters=:scale, states=(), inputs=:choice, outputs=:reward)
 end
 struct GivesNoReward <: AbstractEnvironmentModel end
 function CognitiveModeling.attribute_names(::GivesNoReward)
-    return ModelAttributes(; parameters=(), states=(), observations=(), actions=())
+    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=())
 end
+
+#An environment with a parameter of the same name as the counter's
+struct GivesRewardWithProbability <: AbstractEnvironmentModel end
+function CognitiveModeling.attribute_names(::GivesRewardWithProbability)
+    return ModelAttributes(;
+        parameters=:probability, states=(), inputs=:choice, outputs=:reward
+    )
+end
+
+#A parameters model of one's own
+struct ParametersModelOfOwn <: AbstractSessionParametersModel end
 
 @testset "Types for data" begin
     @testset "The marker for a missing value is its own type, apart from those for nothing happening" begin
@@ -62,16 +71,22 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.environment === NoEnvironment()
         @test session_info.observations === COUNTER_REWARDS &&
             session_info.actions === COUNTER_CHOICES
-        @test session_info.recorded == (; choice=[true, false, true])
+        @test session_info.recorded_actions == (; choice=[true, false, true])
+        @test session_info.recorded_observations == (; reward=[1.0, 0.0, 1.0])
         @test session_info.n_timesteps == 3
         @test session_info.who_starts === EnvironmentStarts()
         @test session_info.timestep_sizes == 1
         @test session_info.saved_timestep_sizes == Int[]
-        @test session_info.save_history === SaveHistory()
+        @test session_info.cognitive_save_history === SaveHistory()
+        @test session_info.environment_save_history === SaveHistory()
+        @test session_info.check_stopping_criterion === nothing
+        @test session_info.first_timestep_to_check_stopping == 4
         @test session_info.previous_observation === (; reward=BeforeFirstTimestep())
         @test session_info.previous_action === (; choice=BeforeFirstTimestep())
         @test !CognitiveModeling.has_environment(session_info)
         @test CognitiveModeling.recorded_action_names(session_info) === Val((:choice,))
+        #Without an environment, no observation is scored, so none is named for scoring
+        @test CognitiveModeling.recorded_observation_names(session_info) === Val(())
     end
 
     @testset "The settings are kept as given" begin
@@ -82,7 +97,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=AgentStarts(),
             environment=GivesReward(),
             timestep_sizes=[0.5, 1.0, 1.5],
-            save_history=SaveHistory(; states=:n_timesteps),
+            cognitive_save_history=SaveHistory(; states=:n_timesteps),
+            environment_save_history=SaveHistory(; outputs=:reward),
+            check_stopping_criterion=false,
             previous_action=(; choice=false),
         )
         @test session_info.environment === GivesReward() &&
@@ -92,8 +109,14 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test isequal(
             session_info.saved_timestep_sizes, [BeforeFirstTimestep(), 0.5, 1.0, 1.5]
         )
-        @test session_info.save_history === SaveHistory(; states=:n_timesteps)
+        @test session_info.cognitive_save_history === SaveHistory(; states=:n_timesteps)
+        @test session_info.environment_save_history === SaveHistory(; outputs=:reward)
+        @test session_info.check_stopping_criterion === false
+        @test session_info.first_timestep_to_check_stopping == 4
         @test session_info.previous_action === (; choice=false)
+        #The recorded observations leave out the missing one, and are named for scoring with an environment
+        @test session_info.recorded_observations == (; reward=[1.0, 1.0])
+        @test CognitiveModeling.recorded_observation_names(session_info) === Val((:reward,))
         @test_throws UndefKeywordError SessionInfo(
             SessionCounter(), COUNTER_REWARDS, COUNTER_CHOICES
         )
@@ -106,22 +129,86 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
     end
 
-    @testset "A copy with another save history has the sizes it returns made again, and everything else the same" begin
+    @testset "A copy with other save histories has the sizes it returns made again, and everything else the same" begin
         session_info = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             timestep_sizes=0.5,
+            check_stopping_criterion=false,
         )
-        copy = SessionInfo(session_info; save_history=SaveHistory(; states=:n_timesteps))
-        @test copy.save_history === SaveHistory(; states=:n_timesteps)
+        copy = SessionInfo(
+            session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+        )
+        @test copy.cognitive_save_history === SaveHistory(; states=:n_timesteps)
+        @test copy.environment_save_history === SaveHistory()
         @test isequal(copy.saved_timestep_sizes, [BeforeFirstTimestep(), 0.5, 0.5, 0.5]) &&
             session_info.saved_timestep_sizes == Float64[]
         @test copy.observations === session_info.observations &&
             copy.actions === session_info.actions &&
-            copy.recorded === session_info.recorded
+            copy.recorded_actions == session_info.recorded_actions
         @test copy.who_starts === EnvironmentStarts() && copy.timestep_sizes == 0.5
+        @test copy.check_stopping_criterion === false &&
+            copy.first_timestep_to_check_stopping == 4
+        #Saving the environment's history makes a session with one run its environment
+        with_environment = SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        @test !with_environment.runs_environment
+        saving = SessionInfo(
+            with_environment; environment_save_history=SaveHistory(; outputs=:reward)
+        )
+        @test saving.runs_environment &&
+            saving.environment_save_history === SaveHistory(; outputs=:reward) &&
+            saving.cognitive_save_history === SaveHistory()
+        #Checking the stopping criterion on every timestep makes it run too
+        @test SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+            check_stopping_criterion=true,
+        ).runs_environment
+    end
+
+    @testset "The stopping criterion is checked from the timestep after the last one with data" begin
+        counter_session(observations, actions; keywords...) = SessionInfo(
+            SessionCounter(),
+            observations,
+            actions;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+            keywords...,
+        )
+        #With data on every timestep, the check starts after the last one, and with none it starts at the first
+        @test counter_session(COUNTER_REWARDS, COUNTER_CHOICES).first_timestep_to_check_stopping ==
+            4
+        @test counter_session(
+            (; reward=fill(MissingValue(), 3)), (; choice=fill(MissingValue(), 3))
+        ).first_timestep_to_check_stopping == 1
+        #The last timestep with data in either kind counts, and a marker for nothing happening is data
+        @test counter_session(
+            (; reward=[1.0, MissingValue(), MissingValue()]),
+            (; choice=[true, false, MissingValue()]),
+        ).first_timestep_to_check_stopping == 3
+        @test counter_session(
+            (; reward=[1.0, MissingValue(), NoObservation()]),
+            (; choice=[true, MissingValue(), MissingValue()]),
+        ).first_timestep_to_check_stopping == 4
+        #true checks from the first timestep, and false never
+        @test counter_session(
+            COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=true
+        ).first_timestep_to_check_stopping == 1
+        @test counter_session(
+            COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=false
+        ).first_timestep_to_check_stopping == 4
+        @test CognitiveModeling.last_timestep_with_data((;)) == 0
     end
 
     @testset "A missing in the data becomes MissingValue by default, or the marker for nothing happening" begin
@@ -136,7 +223,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             session_info.observations.reward isa Vector{Union{MissingValue,Float64}}
         @test session_info.actions.choice == [true, MissingValue(), true] &&
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
-        @test session_info.recorded == (; choice=[true, true])
+        @test session_info.recorded_actions == (; choice=[true, true])
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
@@ -178,7 +265,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
         @test session_info.actions.choice == [true, NoAction(), true] &&
             session_info.actions.choice isa Vector{Union{NoAction,Bool}}
-        @test session_info.recorded == (; choice=[true, true])
+        @test session_info.recorded_actions == (; choice=[true, true])
     end
 
     @testset "A column written with a marker in it has the element type Any, and is narrowed to the types it holds" begin
@@ -199,7 +286,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         ).actions.choice isa Vector{Union{Float64,Int}}
     end
 
-    @testset "The environment runs only when an observation is missing, and is kept either way" begin
+    @testset "The environment runs only when an observation or an action is missing, and is kept either way" begin
         with_missing_reward = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
@@ -208,17 +295,34 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             environment=GivesReward(),
         )
         @test with_missing_reward.runs_environment
-        #With every observation in the data, it has nothing to fill in, also when an action is missing, and there is no warning
-        all_rewards = @test_logs SessionInfo(
+        #A missing action makes it run too, since the observations it scores inform the action
+        @test SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             (; choice=[true, MissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
+        ).runs_environment
+        #A missing action that isn't imputed is an action that wasn't taken, so nothing is missing
+        @test !SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            (; choice=[true, MissingValue(), true]);
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+            impute_missing_actions=false,
+        ).runs_environment
+        #With nothing missing, it doesn't run, and there is no warning
+        all_recorded = @test_logs SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
         )
-        @test !all_rewards.runs_environment
-        @test all_rewards.environment === GivesReward()
-        @test CognitiveModeling.has_environment(all_rewards)
+        @test !all_recorded.runs_environment
+        @test all_recorded.environment === GivesReward()
+        @test CognitiveModeling.has_environment(all_recorded)
         #Without an environment, nothing runs
         @test !SessionInfo(
             SessionCounter(),
@@ -269,13 +373,13 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     end
 
     @testset "The data, the names and the environment are checked" begin
-        @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a cognitive model of type SessionCounter as (:reward,)." SessionInfo(
+        @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a cognitive model of type SessionCounter, its inputs, as (:reward,). The data must have every observation the cognitive model lists." SessionInfo(
             SessionCounter(),
             (; cue=[1, 2, 3]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
         )
-        @test_throws "The actions in the data are named (:bet,), but attribute_names lists the actions of a cognitive model of type SessionCounter as (:choice,)." SessionInfo(
+        @test_throws "The actions in the data are named (:bet,), but attribute_names lists the actions of a cognitive model of type SessionCounter, its outputs, as (:choice,)." SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             (; bet=[1, 2, 3]);
@@ -308,7 +412,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         )
         #The environment must list the same names as the model
-        @test_throws "A cognitive model of type SessionCounter lists the observations (:reward,), but an environment model of type GivesNoReward gives ()." SessionInfo(
+        @test_throws "A cognitive model of type SessionCounter lists the observations (:reward,) as its inputs, but an environment model of type GivesNoReward gives (). Without a map, the two must list the same observations." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
@@ -460,11 +564,11 @@ const COUNTER_TABLE = (;
         @test sessions_info.sessions[2].actions.choice == [MissingValue()] &&
             sessions_info.sessions[2].actions.choice isa
               Vector{Union{MissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
-        @test sessions_info.sessions[1].recorded ==
+        @test sessions_info.sessions[1].recorded_actions ==
             (; choice=[(; choice=true, rt=0.5), (; choice=false, rt=0.7)])
         #A session without a recorded value has an empty vector of the same type, so that the sessions share a type
-        @test sessions_info.sessions[2].recorded.choice == [] &&
-            sessions_info.sessions[2].recorded.choice isa
+        @test sessions_info.sessions[2].recorded_actions.choice == [] &&
+            sessions_info.sessions[2].recorded_actions.choice isa
               Vector{@NamedTuple{choice::Bool,rt::Float64}}
         @test MultipleSessionsInfo(
             SessionCounter(),
@@ -497,13 +601,13 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=AgentStarts(),
             timestep_sizes=:dt,
-            save_history=SaveHistory(; states=:n_timesteps),
+            cognitive_save_history=SaveHistory(; states=:n_timesteps),
             impute_missing_actions=false,
         )
         @test all(
             session ->
                 session.who_starts === AgentStarts() &&
-                session.save_history === SaveHistory(; states=:n_timesteps),
+                session.cognitive_save_history === SaveHistory(; states=:n_timesteps),
             sessions_info.sessions,
         )
         @test sessions_info.sessions[1].timestep_sizes == [1.0, 0.5] &&
@@ -520,11 +624,11 @@ const COUNTER_TABLE = (;
         ).sessions[1].timestep_sizes == 0.5
     end
 
-    @testset "An environment runs only in the sessions where an observation is missing" begin
-        table = (; COUNTER_TABLE..., outcome=[1.0, 0.0, 1.0, missing, 0.0])
+    @testset "An environment runs only in the sessions where an observation or an action is missing" begin
+        #S2 misses a choice in COUNTER_TABLE, and S1 nothing
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
-            table;
+            COUNTER_TABLE;
             observation_columns=(; reward=:outcome),
             action_columns=:choice,
             session_columns=:id,
@@ -534,9 +638,9 @@ const COUNTER_TABLE = (;
         @test CognitiveModeling.has_environment(sessions_info)
         @test !sessions_info.sessions[1].runs_environment &&
             sessions_info.sessions[2].runs_environment
-        #The sessions still have one type, and with no observation missing in any, none runs it, with no warning
+        #The sessions still have one type, and with nothing missing in any, none runs it, with no warning
         @test isconcretetype(eltype(sessions_info.sessions))
-        all_rewards = @test_logs MultipleSessionsInfo(
+        all_recorded = @test_logs MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
             observation_columns=(; reward=:outcome),
@@ -544,14 +648,16 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
+            impute_missing_actions=false,
         )
-        @test !any(session -> session.runs_environment, all_rewards.sessions)
+        @test !any(session -> session.runs_environment, all_recorded.sessions)
         #A copy with another save history for every session
         copy = MultipleSessionsInfo(
-            sessions_info; save_history=SaveHistory(; states=:n_timesteps)
+            sessions_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
         )
         @test all(
-            session -> session.save_history === SaveHistory(; states=:n_timesteps),
+            session ->
+                session.cognitive_save_history === SaveHistory(; states=:n_timesteps),
             copy.sessions,
         ) && copy.session_ids == sessions_info.session_ids
     end
@@ -656,17 +762,19 @@ end
             (; choice=[true, missing, true]);
             who_starts=AgentStarts(),
             timestep_sizes=[1.0, 2.0, 1.0],
-            save_history=SaveHistory(; states=:n_timesteps),
+            cognitive_save_history=SaveHistory(; states=:n_timesteps),
             impute_missing_actions=false,
         )
         predictive = predictive_sessions(session_info)
         @test predictive.actions == (; choice=fill(MissingValue(), 3))
         @test predictive.observations === session_info.observations
-        @test isempty(predictive.recorded) && !predictive.runs_environment
+        @test isempty(predictive.recorded_actions) && !predictive.runs_environment
+        #The observations are still data, so the stopping criterion is checked after them, which is never
+        @test predictive.first_timestep_to_check_stopping == 4
         #Everything else is kept
         @test predictive.who_starts === AgentStarts() && predictive.n_timesteps == 3
         @test predictive.timestep_sizes == [1.0, 2.0, 1.0]
-        @test predictive.save_history === session_info.save_history
+        @test predictive.cognitive_save_history === session_info.cognitive_save_history
         @test predictive.previous_observation === session_info.previous_observation
     end
 
@@ -681,6 +789,8 @@ end
         predictive = predictive_sessions(session_info)
         @test predictive.observations == (; reward=fill(MissingValue(), 3))
         @test predictive.runs_environment && predictive.environment === GivesReward()
+        #With nothing recorded, the stopping criterion is checked from the first timestep
+        @test predictive.first_timestep_to_check_stopping == 1
     end
 
     @testset "Several sessions are each copied, with their identifiers" begin
@@ -702,10 +812,152 @@ end
 end
 
 @testset "The parts of a full model, and how the models run" begin
-    @test IndependentSessions((; probability=1)) isa AbstractPopulationModel
-    @test IndependentSessions((; probability=1)).priors === (; probability=1)
-    @test_throws MethodError IndependentSessions([1, 2])
+    @testset "The parameters models hold their values or their priors in a NamedTuple" begin
+        @test NoParameters() isa AbstractSessionParametersModel && isbitstype(NoParameters)
+        @test FixedSessionParameters((; scale=2.0)).parameters === (; scale=2.0)
+        @test FixedParametersBySession((; S1=(; scale=2.0))).parameters_by_session ===
+            (; S1=(; scale=2.0))
+        @test IdenticalSessionParameters((; probability=1)).priors === (; probability=1)
+        @test IndependentSessionParameters((; probability=1)).priors === (; probability=1)
+        @test all(
+            parameters_model -> parameters_model isa AbstractSessionParametersModel,
+            (
+                FixedSessionParameters((;)),
+                FixedParametersBySession((;)),
+                IdenticalSessionParameters((;)),
+                IndependentSessionParameters((;)),
+            ),
+        )
+        @test_throws MethodError FixedSessionParameters([2.0])
+        @test_throws MethodError FixedParametersBySession(Dict(:S1 => (; scale=2.0)))
+        @test_throws MethodError IdenticalSessionParameters([1, 2])
+        @test_throws MethodError IndependentSessionParameters([1, 2])
+    end
+
+    @testset "Whether a parameters model samples is decided by its type, and one of one's own does" begin
+        @test !CognitiveModeling.samples_parameters(NoParameters())
+        @test !CognitiveModeling.samples_parameters(FixedSessionParameters((; scale=2.0)))
+        @test !CognitiveModeling.samples_parameters(FixedParametersBySession((;)))
+        @test CognitiveModeling.samples_parameters(
+            IdenticalSessionParameters((; probability=1))
+        )
+        @test CognitiveModeling.samples_parameters(
+            IndependentSessionParameters((; probability=1))
+        )
+        @test CognitiveModeling.samples_parameters(ParametersModelOfOwn())
+    end
+
     @test NoDownstreamModel() isa AbstractDownstreamModel
     @test isbitstype(NoDownstreamModel) && isbitstype(NoEnvironment)
     @test isbitstype(NoParallelisation) && isbitstype(ParallelSessions)
+
+    @testset "The values of each session are found by its identifier, and become one vector for each parameter in the order of the sessions" begin
+        @test CognitiveModeling.session_symbol("S1") === :S1
+        @test CognitiveModeling.session_symbol(2) === Symbol("2")
+        @test CognitiveModeling.session_symbol((; id="S1", block=2)) === :S1_2
+        values_by_session = (; S2=(; scale=2.0, offset=0.1), S1=(; scale=1.0, offset=0.0))
+        @test CognitiveModeling.parameters_by_session(values_by_session, ["S1", "S2"]) ==
+            (; scale=[1.0, 2.0], offset=[0.0, 0.1])
+        #A session from several columns is found by its identifiers joined with underscores
+        @test CognitiveModeling.parameters_by_session(
+            (; S1_2=(; scale=3.0)), [(; id="S1", block=2)]
+        ) == (; scale=[3.0])
+        #A session without values, or with other parameters than the first, is an error
+        @test_throws "FixedParametersBySession has no values for the session S3. It has values for (:S2, :S1)." CognitiveModeling.parameters_by_session(
+            values_by_session, ["S1", "S3"]
+        )
+        @test_throws "FixedParametersBySession gives the session S2 the parameters (:offset,), and the first session the parameters (:scale,). Every session must have values for the same parameters." CognitiveModeling.parameters_by_session(
+            (; S1=(; scale=1.0), S2=(; offset=0.0)), ["S1", "S2"]
+        )
+    end
+
+    @testset "With sampled environment parameters, every session with an environment runs it" begin
+        #S1 has nothing missing, so it doesn't run its environment until the parameters are sampled
+        sessions_info = MultipleSessionsInfo(
+            SessionCounter(),
+            COUNTER_TABLE;
+            observation_columns=:outcome,
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        @test !sessions_info.sessions[1].runs_environment
+        @test CognitiveModeling.sessions_for_environment_parameters(
+            NoParameters(), sessions_info
+        ) === sessions_info
+        @test CognitiveModeling.sessions_for_environment_parameters(
+            FixedSessionParameters((; scale=2.0)), sessions_info
+        ) === sessions_info
+        for sampling in (
+            IdenticalSessionParameters((; scale=1)),
+            IndependentSessionParameters((; scale=1)),
+            ParametersModelOfOwn(),
+        )
+            sampled = CognitiveModeling.sessions_for_environment_parameters(
+                sampling, sessions_info
+            )
+            @test all(session -> session.runs_environment, sampled.sessions)
+            @test sampled.session_ids == sessions_info.session_ids
+            @test sampled.sessions[1].observations ===
+                sessions_info.sessions[1].observations
+        end
+        #Sessions without an environment still have none to run
+        without = MultipleSessionsInfo(
+            SessionCounter(),
+            COUNTER_TABLE;
+            observation_columns=:outcome,
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        @test !any(
+            session -> session.runs_environment,
+            CognitiveModeling.sessions_for_environment_parameters(
+                IdenticalSessionParameters((; scale=1)), without
+            ).sessions,
+        )
+    end
+
+    @testset "A warning says when both parameters models sample, without prefixes, for models with a parameter of the same name" begin
+        function counter_sessions(; keywords...)
+            return MultipleSessionsInfo(
+                SessionCounter(),
+                COUNTER_TABLE;
+                observation_columns=:outcome,
+                action_columns=:choice,
+                session_columns=:id,
+                who_starts=EnvironmentStarts(),
+                keywords...,
+            )
+        end
+        sessions_info = counter_sessions(; environment=GivesRewardWithProbability())
+        sampled = IndependentSessionParameters((; probability=1))
+        fixed = FixedSessionParameters((; probability=0.5))
+        @test_logs (
+            :warn,
+            "The cognitive model and the environment model both have the parameters (:probability,), and both parameters models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart.",
+        ) CognitiveModeling.warn_if_parameter_names_overlap(
+            sampled, IdenticalSessionParameters((; probability=1)), sessions_info, false
+        )
+        #No warning with the prefixes, when either samples nothing, when the names differ, or without an environment
+        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
+            sampled, sampled, sessions_info, true
+        )
+        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
+            sampled, fixed, sessions_info, false
+        )
+        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
+            fixed, sampled, sessions_info, false
+        )
+        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
+            sampled,
+            IndependentSessionParameters((; scale=1)),
+            counter_sessions(; environment=GivesReward()),
+            false,
+        )
+        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
+            sampled, sampled, counter_sessions(), false
+        )
+    end
 end

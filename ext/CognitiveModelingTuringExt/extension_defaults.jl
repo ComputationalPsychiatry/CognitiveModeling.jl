@@ -2,8 +2,8 @@
 
 #Default implementation of turing_apply_model for both kinds of model, which just calls the normal apply_model function
 #Can be extended for specific cognitive models or environment models that sample within a timestep
-Turing.@model function CognitiveModeling.turing_apply_model(model::AbstractModel, input)
-    return apply_model(model, input)
+Turing.@model function CognitiveModeling.turing_apply_model(model::AbstractModel, context)
+    return apply_model(model, context)
 end
 
 #Default implementation of turing_initialize_state for both kinds of model, which just calls the normal initialize_state function
@@ -24,22 +24,22 @@ Turing.@model function CognitiveModeling.turing_downstream_model(
     return nothing
 end
 
-#Informative error for a population model without a method of its own
-function CognitiveModeling.turing_population_model(
-    population_model::AbstractPopulationModel, sessions_info::MultipleSessionsInfo
+#Informative error for a parameters model without a method of its own
+function CognitiveModeling.turing_session_parameters_model(
+    parameters_model::AbstractSessionParametersModel, sessions_info::MultipleSessionsInfo
 )
     return error(
-        "There is no turing_population_model method for a population model of type $(typeof(population_model)). Each population model must define Turing.@model function CognitiveModeling.turing_population_model(population_model::$(typeof(population_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
+        "There is no turing_session_parameters_model method for a parameters model of type $(typeof(parameters_model)). Each parameters model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::$(typeof(parameters_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
     )
 end
 
-#Informative error for something that isn't a population model, such as the priors on their own
-function CognitiveModeling.turing_population_model(
-    population_model, sessions_info::MultipleSessionsInfo
+#Informative error for something that isn't a parameters model, such as the priors on their own
+function CognitiveModeling.turing_session_parameters_model(
+    parameters_model, sessions_info::MultipleSessionsInfo
 )
     return throw(
         ArgumentError(
-            "The population model must be a subtype of AbstractPopulationModel, such as IndependentSessions(priors) with the priors in a NamedTuple, but it has type $(typeof(population_model)).",
+            "A parameters model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type $(typeof(parameters_model)).",
         ),
     )
 end

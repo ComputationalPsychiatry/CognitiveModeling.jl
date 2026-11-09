@@ -1,37 +1,77 @@
 ## Preparing the data of a session ##
 
 """
-    is_recorded(action)
+    is_recorded(value)
 
-Return whether a single action in the data was taken and recorded, so that it is scored:
-neither [`MissingValue`](@ref) nor [`NoAction`](@ref). Used by [`recorded_actions`](@ref)
-and [`recorded_on_timestep`](@ref).
+Return whether a single action or observation in the data happened and was recorded, so that
+it is scored: neither [`MissingValue`](@ref) nor a marker for nothing happening, such as
+[`NoAction`](@ref) or [`NoObservation`](@ref). Used by [`recorded_values`](@ref) and
+[`recorded_on_timestep`](@ref).
 """
-is_recorded(action) = !(action isa MissingValue || action isa NoAction)
+is_recorded(value) = !(value isa MissingValue || value isa AbstractNoValue)
 
 """
-    recorded_actions(actions)
+    recorded_values(columns)
 
-Return the recorded values of each action in `actions`, a `NamedTuple` with one vector per
-action, as a `NamedTuple` of vectors in the order of the timesteps. Fitting scores these
-against the model's action distributions on the same timesteps. Each vector has the element
-type of its column without [`MissingValue`](@ref) and [`NoAction`](@ref), so that a session
-without recorded values for an action gets an empty vector of the same type as other
-sessions, which scores nothing. An action whose column can only hold those markers is left
-out, which is decided by its type, so that it is the same for every session of a table. Used
-by [`SessionInfo`](@ref), which keeps the result in its field `recorded`.
+Return the recorded values of each action or observation in `columns`, a `NamedTuple` with
+one vector per name, as a `NamedTuple` of vectors in the order of the timesteps. Fitting
+scores these against the distributions the model gave on the same timesteps: the actions
+against the cognitive model's, and the observations against the environment's. Each vector
+has the element type of its column without [`MissingValue`](@ref) and the markers for
+nothing happening, so that a session without recorded values for a name gets an empty
+vector of the same type as other sessions, which scores nothing. A name whose column can
+only hold those markers is left out, which is decided by its type, so that it is the same for
+every session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its
+fields `recorded_actions` and `recorded_observations`.
 """
-function recorded_actions(actions::NamedTuple{names}) where {names}
+function recorded_values(columns::NamedTuple{names}) where {names}
     recorded = map(
-        column -> Vector{Base.typesplit(eltype(column), Union{MissingValue,NoAction})}(
-            filter(is_recorded, column)
-        ),
-        actions,
+        column ->
+            Vector{Base.typesplit(eltype(column), Union{MissingValue,AbstractNoValue})}(
+                filter(is_recorded, column)
+            ),
+        columns,
     )
     names_with_a_type = Tuple(
         name for name in names if eltype(getproperty(recorded, name)) !== Union{}
     )
     return NamedTuple{names_with_a_type}(recorded)
+end
+
+"""
+    first_timestep_to_check_stopping(check_stopping_criterion, observations, actions,
+                                     n_timesteps)
+
+Return the first timestep before which a session checks the [`stopping_criterion`](@ref) of
+its models, from the `check_stopping_criterion` of [`SessionInfo`](@ref): the timestep after
+the last one with data when it is `nothing`, which is 1 when every value is
+[`MissingValue`](@ref), 1 when it is `true`, and `n_timesteps + 1` when it is `false`, so
+that no timestep is checked. Used by `SessionInfo`.
+"""
+function first_timestep_to_check_stopping(
+    ::Nothing, observations::NamedTuple, actions::NamedTuple, n_timesteps
+)
+    return max(last_timestep_with_data(observations), last_timestep_with_data(actions)) + 1
+end
+function first_timestep_to_check_stopping(check::Bool, observations, actions, n_timesteps)
+    return check ? 1 : n_timesteps + 1
+end
+
+"""
+    last_timestep_with_data(columns)
+
+Return the last timestep on which any column in `columns`, a `NamedTuple` of vectors, has a
+value that isn't [`MissingValue`](@ref), and 0 when none has. A marker for nothing happening
+counts as data, since it says that the timestep happened. Used by
+[`first_timestep_to_check_stopping`](@ref).
+"""
+function last_timestep_with_data(columns::NamedTuple)
+    last_timestep = 0
+    for column in columns
+        t = findlast(value -> !(value isa MissingValue), column)
+        t === nothing || (last_timestep = max(last_timestep, t))
+    end
+    return last_timestep
 end
 
 """
@@ -153,22 +193,22 @@ observations and one for the actions, doesn't have the observations and the acti
 of timesteps otherwise. Used by [`SessionInfo`](@ref).
 """
 function check_data(
-    cognitive_model::AbstractCognitiveModel, observations::NamedTuple, actions::NamedTuple
+    cognitive_model::AbstractModel, observations::NamedTuple, actions::NamedTuple
 )
     attributes = check_type_attribute_names(
         attribute_names(cognitive_model), cognitive_model
     )
-    if !has_every_name(attributes.observations, keys(observations))
+    if !has_every_name(attributes.inputs, keys(observations))
         throw(
             ArgumentError(
-                "The observations in the data are named $(keys(observations)), but attribute_names lists the observations of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.observations). The data must have every observation the cognitive model lists.",
+                "The observations in the data are named $(keys(observations)), but attribute_names lists the observations of $(describe_model(cognitive_model)), its inputs, as $(attributes.inputs). The data must have every observation the cognitive model lists.",
             ),
         )
     end
-    if !same_names(keys(actions), attributes.actions)
+    if !same_names(keys(actions), attributes.outputs)
         throw(
             ArgumentError(
-                "The actions in the data are named $(keys(actions)), but attribute_names lists the actions of a cognitive model of type $(typeof(cognitive_model)) as $(attributes.actions).",
+                "The actions in the data are named $(keys(actions)), but attribute_names lists the actions of $(describe_model(cognitive_model)), its outputs, as $(attributes.outputs).",
             ),
         )
     end
@@ -187,7 +227,7 @@ function check_data(
 end
 
 #The same for the data that isn't a NamedTuple of vectors
-function check_data(cognitive_model::AbstractCognitiveModel, observations, actions)
+function check_data(cognitive_model::AbstractModel, observations, actions)
     return throw(
         ArgumentError(
             "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), or a single vector when the model lists one, but they have types $(typeof(observations)) and $(typeof(actions)).",
@@ -204,9 +244,9 @@ with one, it must list the same observations and actions as `cognitive_model`. U
 [`SessionInfo`](@ref).
 """
 function check_environment_fits(
-    cognitive_model::AbstractCognitiveModel, ::NoEnvironment, observations::NamedTuple
+    cognitive_model::AbstractModel, ::NoEnvironment, observations::NamedTuple
 )
-    if has_missing_observations(observations)
+    if has_missing_entries(observations)
         throw(
             ArgumentError(
                 "The observations have entries that are MissingValue(), but no environment was given to fill them in.",
@@ -217,15 +257,27 @@ function check_environment_fits(
 end
 
 function check_environment_fits(
-    cognitive_model::AbstractCognitiveModel,
-    environment::AbstractEnvironmentModel,
-    observations::NamedTuple,
+    cognitive_model::AbstractModel, environment::AbstractModel, observations::NamedTuple
 )
     check_names_fit(cognitive_model, environment)
     return nothing
 end
 
 ## Splitting a table into sessions ##
+
+"""
+    data_names(cognitive_model, kind)
+
+Return the names that [`attribute_names`](@ref) of `cognitive_model` lists for the data of
+`kind`, `:observations` or `:actions`: its inputs for the observations and its outputs for
+the actions. Used by [`column_map`](@ref) and [`named_data`](@ref).
+"""
+function data_names(cognitive_model, kind::Symbol)
+    attributes = check_type_attribute_names(
+        attribute_names(cognitive_model), cognitive_model
+    )
+    return kind === :observations ? attributes.inputs : attributes.outputs
+end
 
 """
     column_map(columns, cognitive_model, kind)
@@ -242,18 +294,15 @@ when it splits a table.
 """
 column_map(columns::NamedTuple, cognitive_model, kind::Symbol) = columns
 function column_map(column::Symbol, cognitive_model, kind::Symbol)
-    attributes = check_type_attribute_names(
-        attribute_names(cognitive_model), cognitive_model
-    )
-    names = getproperty(attributes, kind)
+    names = data_names(cognitive_model, kind)
     other_kind = kind === :observations ? :actions : :observations
     keyword = kind === :observations ? "observation_columns" : "action_columns"
 
     #A name the model lists as an attribute of the other kind only may mean that the two keyword arguments are swapped
-    if column in getproperty(attributes, other_kind) && !(column in names)
+    if column in data_names(cognitive_model, other_kind) && !(column in names)
         throw(
             ArgumentError(
-                "$keyword is $(repr(column)), which a cognitive model of type $(typeof(cognitive_model)) lists among its $other_kind, not its $kind. Check that observation_columns and action_columns aren't swapped.",
+                "$keyword is $(repr(column)), which $(describe_model(cognitive_model)) lists among its $other_kind, not its $kind. Check that observation_columns and action_columns aren't swapped.",
             ),
         )
     end
@@ -264,7 +313,7 @@ function column_map(column::Symbol, cognitive_model, kind::Symbol)
     elseif length(names) > 1
         throw(
             ArgumentError(
-                "A cognitive model of type $(typeof(cognitive_model)) lists the $kind $names, so $keyword must give the column of each by name, such as $(NamedTuple{names}(names)), and not the single name $(repr(column)).",
+                "$(uppercasefirst(describe_model(cognitive_model))) lists the $kind $names, so $keyword must give the column of each by name, such as $(NamedTuple{names}(names)), and not the single name $(repr(column)).",
             ),
         )
     end
@@ -288,10 +337,7 @@ Used by [`SessionInfo`](@ref).
 """
 named_data(data, cognitive_model, kind::Symbol) = data
 function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
-    attributes = check_type_attribute_names(
-        attribute_names(cognitive_model), cognitive_model
-    )
-    names = getproperty(attributes, kind)
+    names = data_names(cognitive_model, kind)
 
     #NamedTuples with the model's names are the data written as one row for each timestep, which check_data reports
     eltype(data) <: NamedTuple{names} && return data
@@ -473,21 +519,21 @@ environment which doesn't run, see [`SessionInfo`](@ref). Used by
 [`check_environment_parameters`](@ref).
 """
 has_environment(::SessionInfo{<:Any,NoEnvironment}) = false
-has_environment(::SessionInfo{<:Any,<:AbstractEnvironmentModel}) = true
+has_environment(::SessionInfo{<:Any,<:AbstractModel}) = true
 function has_environment(sessions_info::MultipleSessionsInfo)
     return has_environment(first(sessions_info.sessions))
 end
 
 """
-    has_missing_observations(observations)
+    has_missing_entries(columns)
 
-Return whether any entry of `observations`, the observations in the data of a session with
-one vector for each name, is [`MissingValue`](@ref), which an environment model fills in.
-Used by [`SessionInfo`](@ref), to decide whether the environment runs, and by
+Return whether any entry of `columns`, the observations or the actions in the data of a
+session with one vector for each name, is [`MissingValue`](@ref). Used by
+[`SessionInfo`](@ref), to decide whether the environment runs, and by
 [`check_environment_fits`](@ref).
 """
-function has_missing_observations(observations::NamedTuple)
-    return any(column -> any(value -> value isa MissingValue, column), values(observations))
+function has_missing_entries(columns::NamedTuple)
+    return any(column -> any(value -> value isa MissingValue, column), values(columns))
 end
 
 """
@@ -504,12 +550,187 @@ function without_environment(session_info::SessionInfo)
         false,
         session_info.observations,
         session_info.actions,
-        session_info.recorded,
+        session_info.recorded_actions,
+        session_info.recorded_observations,
         session_info.n_timesteps,
         session_info.who_starts,
         session_info.timestep_sizes,
         session_info.saved_timestep_sizes,
-        session_info.save_history,
+        session_info.cognitive_save_history,
+        session_info.environment_save_history,
+        session_info.check_stopping_criterion,
+        session_info.first_timestep_to_check_stopping,
+        session_info.previous_observation,
+        session_info.previous_action,
+    )
+end
+
+"""
+    samples_parameters(parameters_model)
+
+Return whether a parameters model samples the parameters it gives, which is decided by its
+type: `false` for [`NoParameters`](@ref), [`FixedSessionParameters`](@ref) and
+[`FixedParametersBySession`](@ref), and `true` for every other kind, also those of one's own.
+Used by [`sessions_for_environment_parameters`](@ref) and
+[`warn_if_parameter_names_overlap`](@ref).
+"""
+samples_parameters(parameters_model) = true
+samples_parameters(::NoParameters) = false
+samples_parameters(::FixedSessionParameters) = false
+samples_parameters(::FixedParametersBySession) = false
+
+"""
+    sessions_for_environment_parameters(environment_parameters_model, sessions_info)
+
+Return the sessions as a [`turing_full_model`](@ref) runs them with
+`environment_parameters_model`: as they are when it samples nothing, and otherwise with every
+session that has an environment running it, so that the observations in the data inform the
+parameters. Used by `turing_full_model`.
+"""
+function sessions_for_environment_parameters(
+    environment_parameters_model, sessions_info::MultipleSessionsInfo
+)
+    samples_parameters(environment_parameters_model) || return sessions_info
+    return MultipleSessionsInfo(
+        map(running_environment, sessions_info.sessions), sessions_info.session_ids
+    )
+end
+
+"""
+    warn_if_parameter_names_overlap(cognitive_parameters_model, environment_parameters_model,
+                                    sessions_info, include_submodel_prefixes)
+
+Warn when the cognitive model and the environment model of the sessions list a parameter of
+the same name, both parameters models sample, and the variables have no prefixes, since
+their variables can then have the same names, and a name that both use is one variable,
+which Turing.jl's `sample` rejects. Whether both sample is decided by their types. Used by
+[`turing_full_model`](@ref) when it creates the model, outside the model's body, which is
+differentiated.
+"""
+function warn_if_parameter_names_overlap(
+    cognitive_parameters_model,
+    environment_parameters_model,
+    sessions_info::MultipleSessionsInfo,
+    include_submodel_prefixes::Bool,
+)
+    include_submodel_prefixes && return nothing
+    samples_parameters(cognitive_parameters_model) || return nothing
+    samples_parameters(environment_parameters_model) || return nothing
+    session_info = first(sessions_info.sessions)
+    has_environment(session_info) || return nothing
+    cognitive_names = attribute_names(session_info.cognitive_model).parameters
+    environment_names = attribute_names(session_info.environment).parameters
+    shared_names = Tuple(name for name in cognitive_names if name in environment_names)
+    if !isempty(shared_names)
+        @warn "The cognitive model and the environment model both have the parameters $shared_names, and both parameters models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart."
+    end
+    return nothing
+end
+
+"""
+    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
+
+Warn when a session in `sessions_info` saves anything and `downstream_model` is
+[`NoDownstreamModel`](@ref), since saving costs about 5 % of each gradient and nothing in the
+model uses the saved values: they are read after the fit with
+[`session_values_chain`](@ref), from sessions that save nothing. Used by
+[`turing_full_model`](@ref) when it creates the model.
+"""
+function warn_if_saving_without_downstream_model(
+    sessions_info::MultipleSessionsInfo, downstream_model
+)
+    downstream_model isa NoDownstreamModel || return nothing
+    sessions_save_anything(sessions_info) || return nothing
+    @warn "The sessions save values, which costs about 5 % of each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_values_chain(model, chain; cognitive_save_history, environment_save_history) then gives the saved values of every sample afterwards."
+    return nothing
+end
+
+"""
+    sessions_save_anything(sessions_info)
+
+Return whether the save history of either model of any session in `sessions_info` selects
+anything. Used by [`warn_if_saving_without_downstream_model`](@ref).
+"""
+function sessions_save_anything(sessions_info::MultipleSessionsInfo)
+    for session in sessions_info.sessions
+        if !saves_nothing(session.cognitive_save_history) ||
+            !saves_nothing(session.environment_save_history)
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    session_symbol(session_id)
+
+Return the identifier of a session as a `Symbol`: the value of a single session column, and
+the values of several joined by underscores, as in `S1_2`. Used to name the entries of
+[`session_values_chain`](@ref) and to find the values of each session in
+[`FixedParametersBySession`](@ref).
+"""
+session_symbol(session_id) = Symbol(session_id)
+session_symbol(session_id::NamedTuple) = Symbol(join(map(string, values(session_id)), "_"))
+
+"""
+    parameters_by_session(values_by_session, session_ids)
+
+Return the values of each session in `values_by_session`, a `NamedTuple` with an entry for
+each session named by its identifier as [`session_symbol`](@ref) names it, as one vector for
+each parameter with a value for every session, in the order of `session_ids`. A session
+without values, or with other parameters than the first, is an error. Used by the Turing.jl
+model of [`FixedParametersBySession`](@ref).
+"""
+function parameters_by_session(values_by_session::NamedTuple, session_ids)
+    values_of_each = map(session_ids) do session_id
+        name = session_symbol(session_id)
+        if !haskey(values_by_session, name)
+            throw(
+                ArgumentError(
+                    "FixedParametersBySession has no values for the session $name. It has values for $(keys(values_by_session)).",
+                ),
+            )
+        end
+        return getproperty(values_by_session, name)
+    end
+    names = keys(first(values_of_each))
+    for (session_id, values) in zip(session_ids, values_of_each)
+        if keys(values) != names
+            throw(
+                ArgumentError(
+                    "FixedParametersBySession gives the session $(session_symbol(session_id)) the parameters $(keys(values)), and the first session the parameters $names. Every session must have values for the same parameters.",
+                ),
+            )
+        end
+    end
+    return NamedTuple{names}(
+        map(name -> [getproperty(values, name) for values in values_of_each], names)
+    )
+end
+
+"""
+    running_environment(session_info)
+
+Return the session with its environment running when it has one, and everything else the
+same. Used by [`sessions_for_environment_parameters`](@ref).
+"""
+function running_environment(session_info::SessionInfo)
+    return SessionInfo(
+        session_info.cognitive_model,
+        session_info.environment,
+        has_environment(session_info),
+        session_info.observations,
+        session_info.actions,
+        session_info.recorded_actions,
+        session_info.recorded_observations,
+        session_info.n_timesteps,
+        session_info.who_starts,
+        session_info.timestep_sizes,
+        session_info.saved_timestep_sizes,
+        session_info.cognitive_save_history,
+        session_info.environment_save_history,
+        session_info.check_stopping_criterion,
+        session_info.first_timestep_to_check_stopping,
         session_info.previous_observation,
         session_info.previous_action,
     )
@@ -524,7 +745,7 @@ sessions, without an environment model, which is decided by the types. Used by t
 model of several sessions.
 """
 function check_environment_parameters(
-    ::SessionInfo{<:Any,<:AbstractEnvironmentModel}, environment_parameters::NamedTuple
+    ::SessionInfo{<:Any,<:AbstractModel}, environment_parameters::NamedTuple
 )
     return nothing
 end
@@ -552,13 +773,19 @@ end
 
 """
     recorded_action_names(session_info)
+    recorded_observation_names(session_info)
 
-Return the names of the actions that have recorded values in the data of a session, which
-are scored against the model's distributions, in a `Val`, so that the timesteps are compiled
-knowing them. Used by the Turing.jl model of a session, to select the distributions it
-scores.
+Return the names of the actions, or of the observations, that have recorded values in the
+data of a session, which are scored against the distributions the cognitive model, or the
+environment model, gave for them, in a `Val`, so that the timesteps are compiled knowing
+them. A session without an environment scores no observations, so it has no such names. Used
+by the Turing.jl model of a session, to select the distributions it scores.
 """
-recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorded))
+recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorded_actions))
+recorded_observation_names(::SessionInfo{<:Any,NoEnvironment}) = Val(())
+function recorded_observation_names(session_info::SessionInfo{<:Any,<:AbstractModel})
+    return Val(keys(session_info.recorded_observations))
+end
 
 """
     session_index(sessions_info, session_id)
@@ -566,7 +793,7 @@ recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorde
 Return the index `i` of the session with the identifier `session_id` in a
 [`MultipleSessionsInfo`](@ref), so that its variables are under `session[i]`, its saved
 values are element `i` of what [`turing_multiple_behavioural_sessions`](@ref) returns, and its
-parameters are element `i` of each vector a population model gives. The identifier is the
+parameters are element `i` of each vector a parameters model gives. The identifier is the
 value in the session column, or a `NamedTuple` of the values when there are several, as in
 `sessions_info.session_ids`. Used by users reading a chain, not by the models.
 """
@@ -583,90 +810,86 @@ end
 """
     n_sessions(sessions_info)
 
-Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a population model
-samples the parameters of. Used by [`turing_population_model`](@ref) methods, such as the
-one for [`IndependentSessions`](@ref).
+Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a parameters model
+gives the parameters of. Used by [`turing_session_parameters_model`](@ref) methods, such as
+the one for [`IndependentSessionParameters`](@ref).
 """
 n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
-## Scoring the recorded actions ##
+## Scoring the recorded values ##
 
 """
-    recorded_on_timestep(data_action, action_distribution, cognitive_model)
+    recorded_on_timestep(data_output, output_distribution, model)
 
-Return whether each action of one timestep has a recorded value in the data, as a
-`NamedTuple` of `Bool`s with the names of `data_action`. A recorded action is scored against
-the distribution `cognitive_model` gave for it in `action_distribution`, so it is an error
-when that is [`NoAction`](@ref). Used by the Turing.jl models of a timestep.
+Return whether each output of `model` on one timestep has a recorded value in the data, as a
+`NamedTuple` of `Bool`s with the names of `data_output`: the actions of a cognitive model, or
+the observations an environment model gives. A recorded value is scored against the
+distribution the model gave for it in `output_distribution`, so it is an error when the
+model gave nothing for it, [`NoAction`](@ref) or [`NoObservation`](@ref). Used by the
+Turing.jl model of a timestep.
 """
 function recorded_on_timestep(
-    data_action::NamedTuple{names}, action_distribution::NamedTuple, cognitive_model
+    data_output::NamedTuple{names}, output_distribution::NamedTuple, model
 ) where {names}
     return NamedTuple{names}(
-        recorded_on_timestep(
-            names, Tuple(data_action), action_distribution, cognitive_model
-        ),
+        recorded_on_timestep(names, Tuple(data_output), output_distribution, model)
     )
 end
 
 function recorded_on_timestep(
-    names::Tuple{}, data_values::Tuple{}, action_distribution, cognitive_model
+    names::Tuple{}, data_values::Tuple{}, output_distribution, model
 )
     return ()
 end
-function recorded_on_timestep(
-    names::Tuple, data_values::Tuple, action_distribution, cognitive_model
-)
+function recorded_on_timestep(names::Tuple, data_values::Tuple, output_distribution, model)
     name = first(names)
     value = first(data_values)
     recorded = is_recorded(value)
-    if recorded && getproperty(action_distribution, name) isa NoAction
+    if recorded && getproperty(output_distribution, name) isa AbstractNoValue
         throw(
             ArgumentError(
-                "The cognitive model of type $(typeof(cognitive_model)) took no action $name on a timestep where the data has $value for it.",
+                "$(uppercasefirst(describe_model(model))) gave no output $name on a timestep where the data has $value for it.",
             ),
         )
     end
     return (
         recorded,
         recorded_on_timestep(
-            Base.tail(names), Base.tail(data_values), action_distribution, cognitive_model
+            Base.tail(names), Base.tail(data_values), output_distribution, model
         )...,
     )
 end
 
 """
-    initialize_distributions(recorded_action_distributions)
+    initialize_distributions(recorded_distributions)
 
-Return an empty vector for the distributions of each action that is recorded in a session,
+Return an empty vector for the distributions of each output that is recorded in a session,
 typed by the distribution the model gave on the first timestep, so that the vectors keep one
-type through the session when every timestep gives the same type. An action the model
-doesn't take on the first timestep gets a `Vector{Union{}}()`, which the first distribution
+type through the session when every timestep gives the same type. An output the model
+doesn't give on the first timestep gets a `Vector{Union{}}()`, which the first distribution
 kept sets the type of, as for [`push_output!`](@ref). Used by the Turing.jl model of a
 session, after its first timestep.
 """
-function initialize_distributions(recorded_action_distributions::NamedTuple)
-    return map(
-        distribution -> if distribution isa AbstractNoValue
-            Vector{Union{}}()
-        else
-            Vector{typeof(distribution)}()
-        end, recorded_action_distributions
-    )
+function initialize_distributions(recorded_distributions::NamedTuple)
+    return map(distribution -> if distribution isa AbstractNoValue
+        Vector{Union{}}()
+    else
+        Vector{typeof(distribution)}()
+    end, recorded_distributions)
 end
 
 """
-    store_distributions(distributions, recorded_action_distributions, recorded_on_timestep)
+    store_distributions(distributions, recorded_distributions, recorded_on_timestep)
 
-Add the distributions of the actions that are recorded on one timestep, where
-`recorded_on_timestep` says which, to the vectors in `distributions`, one for each action
+Add the distributions of the outputs that are recorded on one timestep, where
+`recorded_on_timestep` says which, to the vectors in `distributions`, one for each output
 that is recorded in the session, and return them. A distribution of another type than its
 vector widens the vector, as for [`push_output!`](@ref). Used by the Turing.jl model of a
 session, on every timestep.
 """
 function store_distributions(
     distributions::NamedTuple{names},
-    recorded_action_distributions::NamedTuple,
+    recorded_distributions::NamedTuple,
     recorded_on_timestep::NamedTuple,
 ) where {names}
     return NamedTuple{names}(
@@ -674,7 +897,7 @@ function store_distributions(
             name -> if getproperty(recorded_on_timestep, name)
                 push_output!(
                     getproperty(distributions, name),
-                    getproperty(recorded_action_distributions, name),
+                    getproperty(recorded_distributions, name),
                 )
             else
                 getproperty(distributions, name)
@@ -687,76 +910,131 @@ end
 ## Saving what a fitted session returns ##
 
 """
-    saved_session_outputs(cognitive_model, outputs, save_history)
+    saved_session_outputs(session_info, outputs)
 
-Return what a session saves of the outputs of one timestep, or of where it starts, as
-`save_history` selects it: the observation, the action, the action distribution and the
-state, in a `NamedTuple` with those names. The observation and the action can have one of
-two types, so they go in through [`entry`](@ref). Used by the Turing.jl model of a session,
-on every timestep.
+Return what a session saves of the outputs of one timestep, or of where it starts, as the
+save histories of `session_info` select it, in a `NamedTuple` with the cognitive model's
+`state`, `observation`, `action` and `action_distribution`, and with an environment its
+`environment_state`, `environment_observation`, `environment_action` and
+`environment_observation_distribution`. The observation and the action can have one of two
+types, so they go in through [`entry`](@ref). Used by the Turing.jl model of a session, on
+every timestep.
 """
-function saved_session_outputs(cognitive_model, outputs, save_history)
+function saved_session_outputs(session_info::SessionInfo{<:Any,NoEnvironment}, outputs)
+    return saved_cognitive_outputs(
+        session_info.cognitive_model, outputs, session_info.cognitive_save_history
+    )
+end
+
+function saved_session_outputs(session_info::SessionInfo{<:Any,<:AbstractModel}, outputs)
+    environment = session_info.environment
+    save_history = session_info.environment_save_history
     return merge(
-        entry(
-            Val(:observation),
-            select_names(outputs.observation, observation_selection(save_history)),
+        saved_cognitive_outputs(
+            session_info.cognitive_model, outputs, session_info.cognitive_save_history
         ),
-        entry(Val(:action), select_names(outputs.action, action_selection(save_history))),
         (;
-            action_distribution=select_names(
-                outputs.action_distribution, action_distribution_selection(save_history)
+            environment_state=save_state(
+                environment, outputs.environment_state, state_selection(save_history)
             ),
+        ),
+        entry(
+            Val(:environment_observation),
+            select_names(outputs.observation, output_selection(save_history)),
+        ),
+        entry(
+            Val(:environment_action),
+            select_names(outputs.action, input_selection(save_history)),
+        ),
+        (;
+            environment_observation_distribution=select_names(
+                outputs.observation_distribution,
+                output_distribution_selection(save_history),
+            ),
+        ),
+    )
+end
+
+"""
+    saved_cognitive_outputs(cognitive_model, outputs, save_history)
+
+Return what `save_history` selects of the cognitive model's part of the outputs of one
+timestep: `state`, `observation`, `action` and `action_distribution`. Used by
+[`saved_session_outputs`](@ref).
+"""
+function saved_cognitive_outputs(cognitive_model, outputs, save_history)
+    return merge(
+        (;
             state=save_state(
                 cognitive_model, outputs.cognitive_state, state_selection(save_history)
             ),
         ),
+        entry(
+            Val(:observation),
+            select_names(outputs.observation, input_selection(save_history)),
+        ),
+        entry(Val(:action), select_names(outputs.action, output_selection(save_history))),
+        (;
+            action_distribution=select_names(
+                outputs.action_distribution, output_distribution_selection(save_history)
+            ),
+        ),
     )
 end
 
 """
-    initial_session_outputs(save_initial_values::Val, cognitive_model, previous, save_history)
+    initial_session_outputs(save_initial_values::Val, session_info, previous)
 
 Return what a session saves from before the first timestep, as timestep 0, when
-`save_history` saves the initial values, and `nothing` otherwise. The action distribution of
-timestep 0 is [`BeforeFirstTimestep`](@ref) for every action, since none was given yet. Used
-by the Turing.jl model of a session, before its first timestep runs.
+`save_initial_values` is `Val(true)`, and `nothing` otherwise. The distributions of
+timestep 0 are [`BeforeFirstTimestep`](@ref) for every output of each model, since none was
+given yet. Used by the Turing.jl model of a session, before its first timestep runs.
 """
-function initial_session_outputs(::Val{true}, cognitive_model, previous, save_history)
+function initial_session_outputs(::Val{true}, session_info::SessionInfo, previous)
     return saved_session_outputs(
-        cognitive_model,
-        merge(previous, (; action_distribution=initial_action(cognitive_model))),
-        save_history,
+        session_info,
+        merge(
+            previous,
+            (;
+                action_distribution=initial_output(session_info.cognitive_model),
+                observation_distribution=initial_output_of_environment(session_info),
+            ),
+        ),
     )
 end
-initial_session_outputs(::Val{false}, cognitive_model, previous, save_history) = nothing
+initial_session_outputs(::Val{false}, session_info::SessionInfo, previous) = nothing
+
+"""
+    initial_output_of_environment(session_info)
+
+Return the output of the environment of a session from before the first timestep, every
+observation it lists as [`BeforeFirstTimestep`](@ref), or an empty `NamedTuple` without an
+environment. Used by [`initial_session_outputs`](@ref).
+"""
+initial_output_of_environment(::SessionInfo{<:Any,NoEnvironment}) = (;)
+function initial_output_of_environment(session_info::SessionInfo{<:Any,<:AbstractModel})
+    return initial_output(session_info.environment)
+end
 
 """
     initialize_session_storage(initial_saved, saved, n_timesteps)
 
-Return the vectors for what a session saves over `n_timesteps` timesteps, typed by `saved`,
-what the first timestep saved, as [`initialize_storage`](@ref) makes them. They start with
-`initial_saved`, what timestep 0 saved, when it isn't `nothing`. Used by the Turing.jl model
-of a session, after its first timestep.
+Return the vectors for what a session saves over `n_timesteps` timesteps, one for each entry
+of `saved`, what the first timestep saved, and typed by it, as [`initialize_storage`](@ref)
+makes them. They start with `initial_saved`, what timestep 0 saved, when it isn't `nothing`.
+Used by the Turing.jl model of a session, after its first timestep.
 """
-function initialize_session_storage(::Nothing, saved, n_timesteps)
-    return (;
-        observations=initialize_storage(saved.observation, n_timesteps),
-        actions=initialize_storage(saved.action, n_timesteps),
-        action_distributions=initialize_storage(saved.action_distribution, n_timesteps),
-        states=initialize_storage(saved.state, n_timesteps),
-    )
+function initialize_session_storage(::Nothing, saved::NamedTuple, n_timesteps)
+    return map(value -> initialize_storage(value, n_timesteps), saved)
 end
 
-function initialize_session_storage(initial_saved::NamedTuple, saved, n_timesteps)
-    return (;
-        observations=initialize_storage(
-            initial_saved.observation, saved.observation, n_timesteps
-        ),
-        actions=initialize_storage(initial_saved.action, saved.action, n_timesteps),
-        action_distributions=initialize_storage(
-            initial_saved.action_distribution, saved.action_distribution, n_timesteps
-        ),
-        states=initialize_storage(initial_saved.state, saved.state, n_timesteps),
+function initialize_session_storage(
+    initial_saved::NamedTuple, saved::NamedTuple, n_timesteps
+)
+    return map(
+        (initial_value, value) -> initialize_storage(initial_value, value, n_timesteps),
+        initial_saved,
+        saved,
     )
 end
 
@@ -767,15 +1045,88 @@ Store `saved`, what one timestep saved, as element `i` of each vector in `storag
 return the storage, which [`store_output!`](@ref) widens when a value has a new type. Used
 by the Turing.jl model of a session, on every timestep after the first.
 """
-function store_session_outputs!(storage, saved, i)
+function store_session_outputs!(storage::NamedTuple, saved::NamedTuple, i)
+    return map((vector, value) -> store_output!(vector, value, i), storage, saved)
+end
+
+"""
+    session_saved_values(storage, timestep_sizes, session_info)
+
+Return what a session saved as [`turing_behavioural_session`](@ref) returns it, from the
+vectors in `storage`: the cognitive model's under `states`, `observations`, `actions` and
+`action_distributions`, the environment's under `environment` when the session has one, and
+`timestep_sizes`. Used by the Turing.jl model of a session, at its end.
+"""
+function session_saved_values(
+    storage, timestep_sizes, session_info::SessionInfo{<:Any,NoEnvironment}
+)
     return (;
-        observations=store_output!(storage.observations, saved.observation, i),
-        actions=store_output!(storage.actions, saved.action, i),
-        action_distributions=store_output!(
-            storage.action_distributions, saved.action_distribution, i
-        ),
-        states=store_output!(storage.states, saved.state, i),
+        states=storage.state,
+        observations=storage.observation,
+        actions=storage.action,
+        action_distributions=storage.action_distribution,
+        timestep_sizes,
     )
+end
+
+function session_saved_values(
+    storage, timestep_sizes, session_info::SessionInfo{<:Any,<:AbstractModel}
+)
+    return (;
+        states=storage.state,
+        observations=storage.observation,
+        actions=storage.action,
+        action_distributions=storage.action_distribution,
+        environment=(;
+            states=storage.environment_state,
+            observations=storage.environment_observation,
+            actions=storage.environment_action,
+            observation_distributions=storage.environment_observation_distribution,
+        ),
+        timestep_sizes,
+    )
+end
+
+"""
+    with_empty_environment_entry(saved_values)
+
+Return `saved_values`, what a session without an environment saved, with an `environment`
+entry whose vectors hold an empty `NamedTuple` for each saved timestep, for a session which
+has an environment but didn't run it, so that every session with an environment returns the
+same entries, in the same order as [`session_saved_values`](@ref) gives them, since the
+model's return otherwise has two types. Used by the Turing.jl model of a session.
+"""
+function with_empty_environment_entry(saved_values::NamedTuple)
+    empty_vector = fill((;), length(saved_values.states))
+    return (;
+        saved_values.states,
+        saved_values.observations,
+        saved_values.actions,
+        saved_values.action_distributions,
+        environment=(;
+            states=empty_vector,
+            observations=empty_vector,
+            actions=empty_vector,
+            observation_distributions=empty_vector,
+        ),
+        saved_values.timestep_sizes,
+    )
+end
+
+"""
+    saved_values_until(storage, n_saved)
+    timestep_sizes_until(timestep_sizes, n_saved)
+
+Return the vectors in `storage`, what a session saved, each cut to its first `n_saved`
+elements, and the vector of timestep sizes cut the same way, for a session that ended before
+its data did when a [`stopping_criterion`](@ref) was met. An empty vector of sizes, for a
+session that saves nothing, is kept. Used by the Turing.jl model of a session.
+"""
+function saved_values_until(storage::NamedTuple, n_saved)
+    return map(vector -> resize!(vector, n_saved), storage)
+end
+function timestep_sizes_until(timestep_sizes::AbstractVector, n_saved)
+    return isempty(timestep_sizes) ? timestep_sizes : timestep_sizes[1:n_saved]
 end
 
 ## Display ##

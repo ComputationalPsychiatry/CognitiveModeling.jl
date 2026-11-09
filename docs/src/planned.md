@@ -11,6 +11,7 @@ This page lists what is planned and not written yet. The list will grow.
 - Evidence accumulation models, such as attention-based models.
 - Bayesian models made with RxInfer.jl.
 - Active inference models, which a separate package is being made for.
+- An example of a cognitive model which uses Turing.jl to select its actions.
 
 ## Interfaces
 

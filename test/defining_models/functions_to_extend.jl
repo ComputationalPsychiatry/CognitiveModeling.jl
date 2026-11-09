@@ -1,37 +1,46 @@
 struct ModelWithoutMethods <: AbstractCognitiveModel end
 struct EnvironmentWithoutMethods <: AbstractEnvironmentModel end
 
-#Leaves the input without a type annotation, which must not be ambiguous with the fallback
-struct ModelWithUnannotatedInput <: AbstractCognitiveModel end
-function CognitiveModeling.apply_model(model::ModelWithUnannotatedInput, input)
+#Leaves the context without a type annotation, which must not be ambiguous with the fallback
+struct ModelWithUnannotatedContext <: AbstractCognitiveModel end
+function CognitiveModeling.apply_model(model::ModelWithUnannotatedContext, context)
     return ModelOutput((; choice=0.7))
 end
 
 @testset "Functions to extend" begin
-    model_input = ModelInput((; reward=NoObservation()), (;), (; choice=NoAction()), (;))
-    environment_input = EnvironmentInput(
+    model_context = ModelContext(
+        (; reward=NoObservation()), (;), (; choice=NoAction()), (;)
+    )
+    environment_context = ModelContext(
         (; choice=NoAction()), (;), (; reward=NoObservation()), (;)
     )
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "CognitiveModeling.apply_model(model::ModelWithoutMethods, input::CognitiveModeling.ModelInput)" CognitiveModeling.apply_model(
-            ModelWithoutMethods(), model_input
+        @test_throws "There is no apply_model method for a cognitive model of type ModelWithoutMethods with a context of type" CognitiveModeling.apply_model(
+            ModelWithoutMethods(), model_context
         )
-        @test_throws "CognitiveModeling.apply_model(environment::EnvironmentWithoutMethods, input::CognitiveModeling.EnvironmentInput)" CognitiveModeling.apply_model(
-            EnvironmentWithoutMethods(), environment_input
+        @test_throws "CognitiveModeling.apply_model(model::ModelWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_model(
+            ModelWithoutMethods(), model_context
+        )
+        #An environment model gets the same message, named as one
+        @test_throws "There is no apply_model method for an environment model of type EnvironmentWithoutMethods with a context of type" CognitiveModeling.apply_model(
+            EnvironmentWithoutMethods(), environment_context
+        )
+        @test_throws "CognitiveModeling.apply_model(model::EnvironmentWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_model(
+            EnvironmentWithoutMethods(), environment_context
         )
     end
 
-    @testset "A timestep method can leave its input without a type" begin
-        @test CognitiveModeling.apply_model(ModelWithUnannotatedInput(), model_input).action_distribution.choice ==
+    @testset "A timestep method can leave its context without a type" begin
+        @test CognitiveModeling.apply_model(ModelWithUnannotatedContext(), model_context).output_distribution.choice ==
             0.7
     end
 
     @testset "A missing method for the initial state gives an informative error" begin
-        @test_throws "CognitiveModeling.initialize_state(model::ModelWithoutMethods, parameters)" CognitiveModeling.initialize_state(
+        @test_throws "There is no initialize_state method for a cognitive model of type ModelWithoutMethods. Each model must define CognitiveModeling.initialize_state(model::ModelWithoutMethods, parameters)" CognitiveModeling.initialize_state(
             ModelWithoutMethods(), (;)
         )
-        @test_throws "CognitiveModeling.initialize_state(environment::EnvironmentWithoutMethods, parameters)" CognitiveModeling.initialize_state(
+        @test_throws "There is no initialize_state method for an environment model of type EnvironmentWithoutMethods. Each model must define CognitiveModeling.initialize_state(model::EnvironmentWithoutMethods, parameters)" CognitiveModeling.initialize_state(
             EnvironmentWithoutMethods(), (;)
         )
     end
@@ -46,13 +55,19 @@ end
         @test CognitiveModeling.prepare_state_for_saving(
             EnvironmentWithoutMethods(), state
         ) === state
+        #Neither kind of model ends by default, whatever its state and parameters
+        @test CognitiveModeling.stopping_criterion(model, state, (;)) === false
+        @test CognitiveModeling.stopping_criterion(
+            EnvironmentWithoutMethods(), state, (; last_timestep=0)
+        ) === false
+        @test CognitiveModeling.stopping_criterion(model, nothing, (;)) === false
     end
 
     @testset "A missing method for the names gives an informative error" begin
-        @test_throws "CognitiveModeling.attribute_names(model::ModelWithoutMethods)" CognitiveModeling.attribute_names(
+        @test_throws "There is no attribute_names method for a cognitive model of type ModelWithoutMethods. Each model must define CognitiveModeling.attribute_names(model::ModelWithoutMethods), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs." CognitiveModeling.attribute_names(
             ModelWithoutMethods()
         )
-        @test_throws "CognitiveModeling.attribute_names(environment::EnvironmentWithoutMethods)" CognitiveModeling.attribute_names(
+        @test_throws "There is no attribute_names method for an environment model of type EnvironmentWithoutMethods. Each model must define CognitiveModeling.attribute_names(model::EnvironmentWithoutMethods), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs." CognitiveModeling.attribute_names(
             EnvironmentWithoutMethods()
         )
     end
@@ -64,6 +79,7 @@ end
             :attribute_names,
             :prepare_state_for_saving,
             :default_parameters,
+            :stopping_criterion,
             :turing_apply_model,
         )
             @test Base.ispublic(CognitiveModeling, name)

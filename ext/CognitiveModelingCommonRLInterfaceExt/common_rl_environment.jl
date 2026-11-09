@@ -6,26 +6,26 @@ end
 
 #Gives the observation the environment is at when there is no action to take, and acts otherwise
 function CognitiveModeling.apply_model(
-    environment::CommonRLEnvironment{Trl_env,action_name}, input::EnvironmentInput
+    environment::CommonRLEnvironment{Trl_env,action_name}, context::ModelContext
 ) where {Trl_env,action_name}
-    rl_env = input.previous_state
-    action = getproperty(input.action, action_name)
+    rl_env = context.previous_state
+    action = getproperty(context.input, action_name)
 
     #Before the first action, and when the model takes none, the environment stays where it is
     if action isa AbstractNoValue
-        return EnvironmentOutput(observation_without_action(rl_env), rl_env)
+        return ModelOutput(observation_without_action(rl_env), rl_env)
     end
 
     #An episode that has ended can't take another action, and isn't started again here
     if terminated(rl_env)
         error(
-            "The episode of the environment of type $(typeof(rl_env)) from CommonRLInterface.jl has ended, so it can't take the action $action_name. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an Environment.",
+            "The episode of the environment of type $(typeof(rl_env)) from CommonRLInterface.jl has ended, so it can't take the action $action_name. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an InstantiatedModel.",
         )
     end
 
     #Take the model's action, and give what follows from it, with nothing left to sample
     reward = act!(rl_env, action)
-    return EnvironmentOutput(
+    return ModelOutput(
         (;
             observation=Deterministic(observe(rl_env)),
             reward=Deterministic(reward),

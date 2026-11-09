@@ -13,12 +13,12 @@ struct TuringRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::TuringRescorlaWagner, input::ModelInput)
-    V₋₁ = input.previous_state.expected_reward
-    r = input.observation.reward
-    Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + input.parameters.learning_rate * (r - V₋₁)
+function CognitiveModeling.apply_model(model::TuringRescorlaWagner, context::ModelContext)
+    V₋₁ = context.previous_state.expected_reward
+    r = context.input.reward
+    Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
     return ModelOutput(
-        (; choice=BernoulliLogit(input.parameters.inverse_temperature * (Vₜ - 0.5))),
+        (; choice=BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))),
         (; expected_reward=Vₜ),
     )
 end
@@ -26,8 +26,8 @@ function CognitiveModeling.attribute_names(model::TuringRescorlaWagner)
     return ModelAttributes(;
         parameters=(:learning_rate, :inverse_temperature),
         states=:expected_reward,
-        observations=:reward,
-        actions=:choice,
+        inputs=:reward,
+        outputs=:choice,
     )
 end
 
@@ -36,19 +36,19 @@ struct TuringContinuousAction <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringContinuousAction, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::TuringContinuousAction, input::ModelInput)
-    V₋₁ = input.previous_state.expected_reward
-    Vₜ = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
+function CognitiveModeling.apply_model(model::TuringContinuousAction, context::ModelContext)
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput(
-        (; choice=Normal(Vₜ, input.parameters.noise_scale)), (; expected_reward=Vₜ)
+        (; choice=Normal(Vₜ, context.parameters.noise_scale)), (; expected_reward=Vₜ)
     )
 end
 function CognitiveModeling.attribute_names(model::TuringContinuousAction)
     return ModelAttributes(;
         parameters=(:learning_rate, :noise_scale),
         states=:expected_reward,
-        observations=:reward,
-        actions=:choice,
+        inputs=:reward,
+        outputs=:choice,
     )
 end
 
@@ -58,13 +58,13 @@ function CognitiveModeling.initialize_state(model::TuringNoisyModel, parameters)
     return (; expected_reward=0.5)
 end
 Turing.@model function CognitiveModeling.turing_apply_model(
-    model::TuringNoisyModel, input::ModelInput
+    model::TuringNoisyModel, context::ModelContext
 )
-    noise ~ Normal(0, input.parameters.noise_scale)
+    noise ~ Normal(0, context.parameters.noise_scale)
     Vₜ =
-        input.previous_state.expected_reward +
-        input.parameters.learning_rate *
-        (input.observation.reward - input.previous_state.expected_reward) +
+        context.previous_state.expected_reward +
+        context.parameters.learning_rate *
+        (context.input.reward - context.previous_state.expected_reward) +
         noise
     return ModelOutput((; choice=Normal(Vₜ, 1.0)), (; expected_reward=Vₜ))
 end
@@ -72,8 +72,8 @@ function CognitiveModeling.attribute_names(model::TuringNoisyModel)
     return ModelAttributes(;
         parameters=(:learning_rate, :noise_scale),
         states=:expected_reward,
-        observations=:reward,
-        actions=:choice,
+        inputs=:reward,
+        outputs=:choice,
     )
 end
 
@@ -85,30 +85,26 @@ function CognitiveModeling.initialize_state(
     return (;)
 end
 function CognitiveModeling.apply_model(
-    environment::TuringRewardsPreviousChoice, input::EnvironmentInput
+    environment::TuringRewardsPreviousChoice, context::ModelContext
 )
-    reward = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
-    return EnvironmentOutput((; reward=Deterministic(reward * input.parameters.scale)))
+    reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
+    return ModelOutput((; reward=Deterministic(reward * context.parameters.scale)))
 end
 function CognitiveModeling.attribute_names(environment::TuringRewardsPreviousChoice)
-    return ModelAttributes(;
-        parameters=:scale, states=(), observations=:reward, actions=:choice
-    )
+    return ModelAttributes(; parameters=:scale, states=(), inputs=:choice, outputs=:reward)
 end
 
 # Gives a distribution around the previous choice to sample the reward from, so that a missing reward is a latent
 struct TuringNoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::TuringNoisyRewards, parameters) = (;)
 function CognitiveModeling.apply_model(
-    environment::TuringNoisyRewards, input::EnvironmentInput
+    environment::TuringNoisyRewards, context::ModelContext
 )
-    reward = input.action.choice isa AbstractNoValue ? 0.5 : input.action.choice
-    return EnvironmentOutput((; reward=Normal(reward * input.parameters.scale, 1.0)))
+    reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
+    return ModelOutput((; reward=Normal(reward * context.parameters.scale, 1.0)))
 end
 function CognitiveModeling.attribute_names(environment::TuringNoisyRewards)
-    return ModelAttributes(;
-        parameters=:scale, states=(), observations=:reward, actions=:choice
-    )
+    return ModelAttributes(; parameters=:scale, states=(), inputs=:choice, outputs=:reward)
 end
 
 const TURING_REWARDS = (; reward=[1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0])
@@ -135,6 +131,22 @@ const TURING_MISSING_REWARDS = (;
         MissingValue(),
         1.0,
         1.0,
+    ]
+)
+# The rewards TuringRewardsPreviousChoice gives with a scale of 1, the previous choice and 0.5 before the first, with some missing, so that
+# the recorded ones match what it gives, which they must, since a Deterministic is scored as a point mass
+const TURING_MISSING_PREVIOUS_CHOICE_REWARDS = (;
+    reward=[
+        MissingValue(),
+        1.0,
+        MissingValue(),
+        1.0,
+        MissingValue(),
+        0.0,
+        0.0,
+        MissingValue(),
+        1.0,
+        0.0,
     ]
 )
 
@@ -184,6 +196,23 @@ Turing.@model function fit_with_environment(session_info)
     return nothing
 end
 
+# The same with the environment's scale fixed at 1, for an environment which gives its rewards without randomness: the recorded rewards
+# are scored as point masses, which a fitted scale would make -Inf everywhere but at one value
+Turing.@model function fit_with_fixed_environment(session_info)
+    learning_rate ~ Turing.Flat()
+    inverse_temperature ~ Turing.Flat()
+    session ~ to_submodel(
+        prefix(
+            turing_behavioural_session(
+                session_info, (; learning_rate, inverse_temperature), (; scale=1.0)
+            ),
+            @varname(session)
+        ),
+        false,
+    )
+    return nothing
+end
+
 # Three sessions of the Rescorla-Wagner model, through the full model with independent priors on each session's parameters
 const TURING_TABLE = (;
     id=repeat([1, 2, 3]; inner=10),
@@ -199,8 +228,28 @@ const TURING_SESSIONS = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
 )
 const TURING_FULL_MODEL = turing_full_model(
-    IndependentSessions((; learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat())),
+    IndependentSessionParameters((;
+        learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
+    )),
     TURING_SESSIONS,
+)
+
+# The same sessions with an environment whose parameter is sampled once for all of them, so that every session scores its rewards
+const TURING_SESSIONS_WITH_ENVIRONMENT = MultipleSessionsInfo(
+    TuringRescorlaWagner(),
+    TURING_TABLE;
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:id,
+    who_starts=EnvironmentStarts(),
+    environment=TuringNoisyRewards(),
+)
+const TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS = turing_full_model(
+    IndependentSessionParameters((;
+        learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
+    )),
+    TURING_SESSIONS_WITH_ENVIRONMENT;
+    environment_parameters_model=IdenticalSessionParameters((; scale=Turing.Flat())),
 )
 
 #The session of each case, prepared once
@@ -223,7 +272,7 @@ end
 function environment_session()
     return SessionInfo(
         TuringRescorlaWagner(),
-        TURING_MISSING_REWARDS,
+        TURING_MISSING_PREVIOUS_CHOICE_REWARDS,
         TURING_CHOICES;
         who_starts=EnvironmentStarts(),
         environment=TuringRewardsPreviousChoice(),
@@ -283,12 +332,12 @@ const TURING_CASES = [
     ),
     (;
         name="turing session with an environment",
-        f=log_density_of(fit_with_environment(environment_session())),
-        x=[0.3, 2.0, 0.9],
+        f=log_density_of(fit_with_fixed_environment(environment_session())),
+        x=[0.3, 2.0],
         reactant=false,
     ),
     (;
-        name="turing session with an environment which doesn't run, since every observation is in the data",
+        name="turing session with an environment which doesn't run, since nothing in the data is missing",
         f=log_density_of(fit_with_environment(complete_environment_session())),
         x=[0.3, 2.0, 0.9],
         reactant=false,
@@ -325,6 +374,12 @@ const TURING_CASES = [
         name="turing full model with three sessions and independent priors",
         f=log_density_of(TURING_FULL_MODEL),
         x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with an environment parameter shared by the sessions",
+        f=log_density_of(TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.9],
         reactant=false,
     ),
 ]

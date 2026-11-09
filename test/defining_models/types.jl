@@ -6,39 +6,41 @@ using Random: Xoshiro, default_rng
     parameters = (; learning_rate=0.1)
     previous_action = (; choice=NoAction())
 
-    @testset "ModelInput sets the timestep size to 1 if it isn't specified" begin
-        @test ModelInput(observation, state, previous_action, parameters).timestep_size ===
+    @testset "ModelContext sets the timestep size to 1 if it isn't specified" begin
+        @test ModelContext(observation, state, previous_action, parameters).timestep_size ===
             1
-        @test ModelInput(observation, state, previous_action, parameters, 0.5).timestep_size ===
+        @test ModelContext(observation, state, previous_action, parameters, 0.5).timestep_size ===
             0.5
     end
 
-    @testset "EnvironmentInput sets the timestep size to 1 if it isn't specified" begin
-        @test EnvironmentInput(previous_action, state, observation, parameters).timestep_size ===
-            1
-        @test EnvironmentInput(previous_action, state, observation, parameters, 0.5).timestep_size ===
+    @testset "ModelContext for an environment model has the action as its input and the observation as its previous output" begin
+        environment_context = ModelContext(previous_action, state, observation, parameters)
+        @test environment_context.input === previous_action
+        @test environment_context.previous_output === observation
+        @test environment_context.timestep_size === 1
+        @test ModelContext(previous_action, state, observation, parameters, 0.5).timestep_size ===
             0.5
     end
 
-    @testset "The inputs use the default generator if it isn't specified" begin
-        @test ModelInput(observation, state, previous_action, parameters).rng ===
+    @testset "ModelContext uses the default generator if it isn't specified" begin
+        @test ModelContext(observation, state, previous_action, parameters).rng ===
             default_rng()
-        @test EnvironmentInput(previous_action, state, observation, parameters).rng ===
+        @test ModelContext(previous_action, state, observation, parameters).rng ===
             default_rng()
         rng = Xoshiro(1)
-        @test ModelInput(observation, state, previous_action, parameters, 1, rng).rng ===
+        @test ModelContext(observation, state, previous_action, parameters, 1, rng).rng ===
             rng
-        @test EnvironmentInput(previous_action, state, observation, parameters, 1, rng).rng ===
+        @test ModelContext(previous_action, state, observation, parameters, 1, rng).rng ===
             rng
     end
 
-    @testset "ModelInput says who starts, and unknown if it isn't specified" begin
-        @test ModelInput(observation, state, previous_action, parameters).who_starts ===
+    @testset "ModelContext says who starts, and unknown if it isn't specified" begin
+        @test ModelContext(observation, state, previous_action, parameters).who_starts ===
             UnknownWhoStarts()
-        @test ModelInput(
+        @test ModelContext(
             observation, state, previous_action, parameters, 1, default_rng(), AgentStarts()
         ).who_starts === AgentStarts()
-        @test ModelInput(
+        @test ModelContext(
             observation,
             state,
             previous_action,
@@ -49,7 +51,7 @@ using Random: Xoshiro, default_rng
         ).who_starts === EnvironmentStarts()
         #It is in the type, so a model can choose by it at compile time
         @test typeof(
-            ModelInput(
+            ModelContext(
                 observation,
                 state,
                 previous_action,
@@ -60,9 +62,9 @@ using Random: Xoshiro, default_rng
             ),
         ).parameters[end] === AgentStarts
         @test isbitstype(UnknownWhoStarts)
-        @test EnvironmentInput(previous_action, state, observation, parameters).who_starts ===
+        @test ModelContext(previous_action, state, observation, parameters).who_starts ===
             UnknownWhoStarts()
-        @test EnvironmentInput(
+        @test ModelContext(
             previous_action,
             state,
             observation,
@@ -73,10 +75,10 @@ using Random: Xoshiro, default_rng
         ).who_starts === EnvironmentStarts()
     end
 
-    @testset "ModelOutput only takes named action distributions" begin
-        @test ModelOutput((; choice=0.7)).action_distribution === (; choice=0.7)
-        @test ModelOutput((;)).action_distribution === (;)
-        @test ModelOutput((; choice=NoAction())).action_distribution ===
+    @testset "ModelOutput only takes named output distributions" begin
+        @test ModelOutput((; choice=0.7)).output_distribution === (; choice=0.7)
+        @test ModelOutput((;)).output_distribution === (;)
+        @test ModelOutput((; choice=NoAction())).output_distribution ===
             (; choice=NoAction())
         @test_throws MethodError ModelOutput(NoAction())
         @test_throws MethodError ModelOutput(0.7)
@@ -88,46 +90,44 @@ using Random: Xoshiro, default_rng
         @test ModelOutput((; choice=0.7), state).new_state === state
     end
 
-    @testset "EnvironmentOutput only takes named observation distributions" begin
-        @test EnvironmentOutput((; reward=Deterministic(1.0))).observation_distribution ===
+    @testset "ModelOutput for an environment model only takes named observation distributions" begin
+        @test ModelOutput((; reward=Deterministic(1.0))).output_distribution ===
             (; reward=Deterministic(1.0))
-        @test EnvironmentOutput((;)).observation_distribution === (;)
-        @test EnvironmentOutput((; reward=NoObservation())).observation_distribution ===
+        @test ModelOutput((; reward=NoObservation())).output_distribution ===
             (; reward=NoObservation())
-        @test_throws MethodError EnvironmentOutput(NoObservation())
-        @test_throws MethodError EnvironmentOutput(Deterministic(1.0))
+        @test_throws MethodError ModelOutput(NoObservation())
+        @test_throws MethodError ModelOutput(Deterministic(1.0))
     end
 
-    @testset "EnvironmentOutput sets the new state to an empty NamedTuple if it isn't specified" begin
-        @test EnvironmentOutput(observation).new_state === (;)
-        @test EnvironmentOutput(observation, state).new_state === state
+    @testset "ModelOutput for an environment model sets the new state to an empty NamedTuple if it isn't specified" begin
+        @test ModelOutput(observation).new_state === (;)
+        @test ModelOutput(observation, state).new_state === state
     end
 
     @testset "The constructors are type stable" begin
-        @test @inferred(ModelInput(observation, state, previous_action, parameters)) isa
-            ModelInput
+        @test @inferred(ModelContext(observation, state, previous_action, parameters)) isa
+            ModelContext
         @test @inferred(
-            ModelInput(observation, state, previous_action, parameters, 0.5)
-        ) isa ModelInput
+            ModelContext(observation, state, previous_action, parameters, 0.5)
+        ) isa ModelContext
+        @test @inferred(ModelContext(previous_action, state, observation, parameters)) isa
+            ModelContext
         @test @inferred(
-            EnvironmentInput(previous_action, state, observation, parameters)
-        ) isa EnvironmentInput
-        @test @inferred(
-            EnvironmentInput(previous_action, state, observation, parameters, 0.5)
-        ) isa EnvironmentInput
+            ModelContext(previous_action, state, observation, parameters, 0.5)
+        ) isa ModelContext
         @test @inferred(ModelOutput((; choice=0.7))) isa ModelOutput
         @test @inferred(ModelOutput((; choice=0.7), state)) isa ModelOutput
         @test @inferred(ModelOutput((;))) isa ModelOutput
-        @test @inferred(EnvironmentOutput(observation)) isa EnvironmentOutput
-        @test @inferred(EnvironmentOutput(observation, state)) isa EnvironmentOutput
+        @test @inferred(ModelOutput(observation)) isa ModelOutput
+        @test @inferred(ModelOutput(observation, state)) isa ModelOutput
     end
 
     @testset "The types hold their values directly, so they don't allocate" begin
         @test isbitstype(
-            typeof(ModelInput(observation, state, previous_action, parameters))
+            typeof(ModelContext(observation, state, previous_action, parameters))
         )
         @test isbitstype(typeof(ModelOutput((; choice=0.7))))
-        @test isbitstype(typeof(EnvironmentOutput((; reward=Deterministic(1.0)))))
+        @test isbitstype(typeof(ModelOutput((; reward=Deterministic(1.0)))))
     end
 
     @testset "Sampling from a Deterministic gives its value" begin
@@ -153,14 +153,14 @@ using Random: Xoshiro, default_rng
         attributes = ModelAttributes(;
             parameters=(:learning_rate, :noise),
             states=(:expected_reward,),
-            observations=(:reward,),
-            actions=(:choice,),
+            inputs=(:reward,),
+            outputs=(:choice,),
         )
         @test attributes.parameters === (:learning_rate, :noise)
         @test attributes.states === (:expected_reward,)
-        @test attributes.observations === (:reward,)
-        @test attributes.actions === (:choice,)
-        @test propertynames(attributes) == (:parameters, :states, :observations, :actions)
+        @test attributes.inputs === (:reward,)
+        @test attributes.outputs === (:choice,)
+        @test propertynames(attributes) == (:parameters, :states, :inputs, :outputs)
         @test_throws FieldError attributes.names
     end
 
@@ -168,32 +168,67 @@ using Random: Xoshiro, default_rng
         attributes = ModelAttributes(;
             parameters=:learning_rate,
             states=[:expected_reward, :surprise],
-            observations=(),
-            actions=(),
+            inputs=(),
+            outputs=(),
         )
         @test attributes.parameters === (:learning_rate,)
         @test attributes.states === (:expected_reward, :surprise)
-        @test attributes.observations === ()
+        @test attributes.inputs === ()
     end
 
     @testset "ModelAttributes needs all four kinds, and only takes names" begin
         @test_throws UndefKeywordError ModelAttributes(;
-            parameters=(:learning_rate,), states=(), observations=()
+            parameters=(:learning_rate,), states=(), inputs=()
         )
         @test_throws MethodError ModelAttributes(;
-            parameters=("learning_rate",), states=(), observations=(), actions=()
+            parameters=("learning_rate",), states=(), inputs=(), outputs=()
         )
         @test_throws MethodError ModelAttributes(;
-            parameters=(:learning_rate, 1), states=(), observations=(), actions=()
+            parameters=(:learning_rate, 1), states=(), inputs=(), outputs=()
         )
+    end
+
+    @testset "ModelAttributes only takes a name once, within a kind and across the kinds" begin
+        #A name used for two kinds says which two
+        @test_throws "The name choice is used for both a state and an output, but a model can only use a name for one attribute." ModelAttributes(;
+            parameters=:learning_rate, states=:choice, inputs=:reward, outputs=:choice
+        )
+        @test_throws "The name reward is used for both a parameter and an input, but a model can only use a name for one attribute." ModelAttributes(;
+            parameters=:reward, states=(), inputs=:reward, outputs=:choice
+        )
+        @test_throws "The name arm is used for both an input and an output, but a model can only use a name for one attribute." ModelAttributes(;
+            parameters=(), states=(), inputs=:arm, outputs=:arm
+        )
+        #A name used twice within a kind shows the names of that kind
+        @test_throws "The states are named (:a, :a), but a model can only use a name for one attribute." ModelAttributes(;
+            parameters=(), states=(:a, :a), inputs=(), outputs=()
+        )
+        @test_throws "The parameters are named (:a, :b, :a), but a model can only use a name for one attribute." ModelAttributes(;
+            parameters=[:a, :b, :a], states=(), inputs=(), outputs=()
+        )
+        @test_throws ArgumentError ModelAttributes(;
+            parameters=(), states=(), inputs=(:reward, :reward), outputs=()
+        )
+        #Distinct names pass, however many kinds have names
+        @test ModelAttributes(;
+            parameters=(:learning_rate, :noise),
+            states=:expected_reward,
+            inputs=:reward,
+            outputs=:choice,
+        ) isa ModelAttributes
+        @test ModelAttributes(; parameters=(), states=(), inputs=(), outputs=()) isa
+            ModelAttributes
+        @test CognitiveModeling.check_unique_attribute_names(
+            ModelAttributes(; parameters=:a, states=:b, inputs=:c, outputs=:d)
+        ) === nothing
     end
 
     @testset "ModelAttributes keeps the names in the type, so constructing it from literals is inferred" begin
         from_literals() = ModelAttributes(;
             parameters=(:learning_rate,),
             states=:expected_reward,
-            observations=(),
-            actions=(:choice,),
+            inputs=(),
+            outputs=(:choice,),
         )
         @test Base.return_types(from_literals, Tuple{})[1] ===
             ModelAttributes{(:learning_rate,),(:expected_reward,),(),(:choice,)}

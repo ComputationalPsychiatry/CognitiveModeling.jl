@@ -1,24 +1,49 @@
 """
     AbstractModel
 
-Supertype for cognitive models and environment models, which the functions that treat the
-two in the same way take. A model is a subtype of [`AbstractCognitiveModel`](@ref) or of
-[`AbstractEnvironmentModel`](@ref), and not of this type itself.
+Supertype for cognitive models and environment models, which every function that a model
+implements or is used with takes. A model is a subtype of [`AbstractCognitiveModel`](@ref)
+or of [`AbstractEnvironmentModel`](@ref), and not of this type itself.
+
+The two kinds work the same way: on each timestep a model receives an input and gives an
+output, in a [`ModelContext`](@ref) and a [`ModelOutput`](@ref). In a simulation or a fitted
+session, the outputs of the cognitive model are its actions, which are the inputs of the
+environment model, and the outputs of the environment model are the observations, which are
+the inputs of the cognitive model. A cognitive model can therefore also serve as the
+environment of another.
 """
 abstract type AbstractModel end
 
 """
     AbstractCognitiveModel
 
-Supertype for cognitive models.
+Supertype for cognitive models, whose inputs are observations and whose outputs are actions.
 
 # Implementation
 Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
 [`attribute_names`](@ref) for it. A model can also add methods of
-[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
-[`turing_apply_model`](@ref).
+[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref),
+[`stopping_criterion`](@ref), [`turing_apply_model`](@ref) and
+[`turing_initialize_state`](@ref).
 """
 abstract type AbstractCognitiveModel <: AbstractModel end
+
+"""
+    AbstractEnvironmentModel
+
+Supertype for environment models, whose inputs are the actions of a cognitive model and
+whose outputs are its observations.
+
+# Implementation
+Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
+[`apply_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
+optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref),
+[`stopping_criterion`](@ref), [`turing_apply_model`](@ref) and
+[`turing_initialize_state`](@ref).
+
+See also [`simulate`](@ref), which has an example.
+"""
+abstract type AbstractEnvironmentModel <: AbstractModel end
 
 #Types for cases where there is no observation or action
 
@@ -28,7 +53,7 @@ abstract type AbstractCognitiveModel <: AbstractModel end
 Supertype for what stands in for an observation or an action that isn't there:
 [`NoObservation`](@ref), [`NoAction`](@ref) and [`BeforeFirstTimestep`](@ref). A model which
 treats them all the same can check for it, as in
-`input.observation.reward isa AbstractNoValue`.
+`context.input.reward isa AbstractNoValue`.
 """
 abstract type AbstractNoValue end
 
@@ -56,11 +81,11 @@ struct NoAction <: AbstractNoValue end
 Stand-in for an observation or an action from before the first timestep, when there is none
 yet, as one entry of a `NamedTuple`, such as `(; choice = BeforeFirstTimestep())`.
 
-A cognitive model receives it for every previous action on its first timestep, and for every
-observation too when the agent starts. An environment model receives it for every previous
-observation on its first timestep, and for every action too when the environment starts.
-[`NoObservation`](@ref) and [`NoAction`](@ref) are different: they say that nothing was
-observed or done on a timestep that did run.
+A model receives it for every previous output on its first timestep, and for every input
+too when the other side hasn't moved yet: a cognitive model when the agent starts, and an
+environment model when the environment starts. [`NoObservation`](@ref) and
+[`NoAction`](@ref) are different: they say that nothing was observed or done on a timestep
+that did run.
 
 Before the first timestep is timestep 0, which a simulation, a history and a fitted session
 start with when their [`SaveHistory`](@ref) saves the initial values, as it does by
@@ -92,7 +117,7 @@ julia> using Random: Xoshiro
 julia> rand(Xoshiro(1), Deterministic(1.0))
 1.0
 
-julia> ModelOutput((; choice = Deterministic(true))).action_distribution.choice.value
+julia> ModelOutput((; choice = Deterministic(true))).output_distribution.choice.value
 true
 ```
 """
@@ -114,9 +139,9 @@ Make the agent move first on each timestep of a simulation or a fitted session.
 
 On a timestep, the cognitive model updates and acts on the previous observation, and the
 environment then responds to its action. On the first timestep, the cognitive model receives
-an observation with every entry [`BeforeFirstTimestep`](@ref). The model receives it as the
-`who_starts` of its [`ModelInput`](@ref), so that it can act before it updates when that is
-what it means.
+an observation with every entry [`BeforeFirstTimestep`](@ref). Both models receive it as the
+`who_starts` of their [`ModelContext`](@ref), so that a cognitive model can act before it
+updates when that is what it means.
 
 See also [`EnvironmentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
 [`SessionInfo`](@ref).
@@ -130,8 +155,8 @@ Make the environment move first on each timestep of a simulation or a fitted ses
 
 On a timestep, the environment gives an observation in response to the previous action, and
 the cognitive model then updates and acts on it. On the first timestep, the environment
-receives an action with every entry [`BeforeFirstTimestep`](@ref). The model receives it as
-the `who_starts` of its [`ModelInput`](@ref).
+receives an action with every entry [`BeforeFirstTimestep`](@ref). Both models receive it as
+the `who_starts` of their [`ModelContext`](@ref).
 
 See also [`AgentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
 [`SessionInfo`](@ref).
@@ -141,117 +166,118 @@ struct EnvironmentStarts end
 """
     UnknownWhoStarts()
 
-The `who_starts` of a [`ModelInput`](@ref) when neither side is known to move first on a
-timestep, as when a model runs on a single observation with [`simulate`](@ref), or is used
-outside a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other
+The `who_starts` of a [`ModelContext`](@ref) when neither side is known to move first on a
+timestep, as when a model runs on a single input with [`simulate`](@ref), or is used outside
+a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other
 two, which a simulation or a fitted session passes on from its own `who_starts`.
 """
 struct UnknownWhoStarts end
 
 """
-    ModelInput(observation, previous_state, previous_action, parameters, timestep_size=1,
-               rng=default_rng(), who_starts=UnknownWhoStarts())
+    ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
+                 rng=default_rng(), who_starts=UnknownWhoStarts())
 
 Everything a model needs to run a single timestep, which [`apply_model`](@ref) receives.
 
-Each argument is kept in a field of the same name, such as `input.observation`.
+Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
+model the input is its observation and the output its action, and for an environment model
+the input is the action of the cognitive model and the output the observation it gives.
 
 # Arguments
-- `observation`: what the model observes on this timestep, in a `NamedTuple` with the names
-  the environment gave them, as in `input.observation.reward`. An observation that isn't
-  made on this timestep is [`NoObservation`](@ref). On the first timestep when the agent
-  starts, every observation is [`BeforeFirstTimestep`](@ref).
+- `input`: what the model receives on this timestep, in a `NamedTuple` with the names the
+  other side gave the entries, as in `context.input.reward`. An entry that isn't there on
+  this timestep is [`NoObservation`](@ref) or [`NoAction`](@ref). On the first timestep,
+  when the other side hasn't moved yet, every entry is [`BeforeFirstTimestep`](@ref).
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
-- `previous_action`: the actions from the previous timestep, in a `NamedTuple` with the
-  names the model gave them, as in `input.previous_action.choice`. On the first timestep,
-  each of them is [`BeforeFirstTimestep`](@ref).
-- `parameters`: the cognitive parameters of the model. Will generally be a NamedTuple. 
+- `previous_output`: what the model gave on the previous timestep, in a `NamedTuple` with
+  the names the model gave the entries, as in `context.previous_output.choice`. On the first
+  timestep, each of them is [`BeforeFirstTimestep`](@ref).
+- `parameters`: the parameters of the model, in a `NamedTuple`.
 - `timestep_size=1`: how much time this timestep covers.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
   is random, so that a simulation can be reproduced.
 - `who_starts=UnknownWhoStarts()`: who moves first on the timestep, [`AgentStarts`](@ref) or
   [`EnvironmentStarts`](@ref) as the simulation or the fitted session was told, or
   [`UnknownWhoStarts`](@ref) when neither is known. A model which can update before it acts
-  or act before it updates can choose by it: with `EnvironmentStarts()` the observation is
-  this timestep's, and with `AgentStarts()` the previous timestep's. It is kept in the type,
-  so that choosing costs nothing.
+  or act before it updates can choose by it: for a cognitive model, with
+  `EnvironmentStarts()` the input is this timestep's observation, and with `AgentStarts()`
+  the previous timestep's. It is kept in the type, so that choosing costs nothing.
 
 # Examples
 ```jldoctest
-julia> observation = (; reward = 1.0);
+julia> input = (; reward = 1.0);
 
 julia> state = (; expected_reward = 0.5);
 
 julia> parameters = (; learning_rate = 0.1);
 
-julia> previous_action = (; choice = BeforeFirstTimestep());
+julia> previous_output = (; choice = BeforeFirstTimestep());
 
-julia> ModelInput(observation, state, previous_action, parameters).timestep_size
+julia> ModelContext(input, state, previous_output, parameters).timestep_size
 1
 
-julia> ModelInput(observation, state, previous_action, parameters, 0.5).timestep_size
+julia> ModelContext(input, state, previous_output, parameters, 0.5).timestep_size
 0.5
 
-julia> ModelInput(observation, state, previous_action, parameters).who_starts
+julia> ModelContext(input, state, previous_output, parameters).who_starts
 UnknownWhoStarts()
 ```
 """
-struct ModelInput{Tobservation,Tstate,Taction,Tparameters,Ttimestep_size,Trng,Twho_starts}
-    observation::Tobservation
+struct ModelContext{Tinput,Tstate,Toutput,Tparameters,Ttimestep_size,Trng,Twho_starts}
+    input::Tinput
     previous_state::Tstate
-    previous_action::Taction
+    previous_output::Toutput
     parameters::Tparameters
     timestep_size::Ttimestep_size
     rng::Trng
     who_starts::Twho_starts
 end
 
-#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified
-function ModelInput(
-    observation,
+#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified. An integer keeps Float32 models in Float32
+function ModelContext(
+    input,
     previous_state,
-    previous_action,
+    previous_output,
     parameters,
     timestep_size=1,
     rng::AbstractRNG=default_rng(),
     who_starts=UnknownWhoStarts(),
 )
-    return ModelInput{
-        typeof(observation),
+    return ModelContext{
+        typeof(input),
         typeof(previous_state),
-        typeof(previous_action),
+        typeof(previous_output),
         typeof(parameters),
         typeof(timestep_size),
         typeof(rng),
         typeof(who_starts),
     }(
-        observation,
-        previous_state,
-        previous_action,
-        parameters,
-        timestep_size,
-        rng,
-        who_starts,
+        input, previous_state, previous_output, parameters, timestep_size, rng, who_starts
     )
 end
 
 """
-    ModelOutput(action_distribution, new_state=(;))
+    ModelOutput(output_distribution, new_state=(;))
 
 The outputs of a model for a single timestep, which [`apply_model`](@ref) returns.
 
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
 # Arguments
-- `action_distribution::NamedTuple`: what the actions on this timestep are sampled from, in
-  a `NamedTuple` with one entry for each action, such as `(; choice = Bernoulli(0.7))`.
-  Each entry can be anything that works with `rand`, such as a distribution from
-  Distributions.jl, or a [`Deterministic`](@ref) for an action that isn't random, and the
-  sampled actions keep the names. An action that isn't taken on this timestep is
-  [`NoAction`](@ref), and a model without actions gives an empty `NamedTuple`, `(;)`.
-- `new_state=(;)`: the cognitive state of the model after this timestep, which is the
-  `previous_state` of the next one.
+- `output_distribution::NamedTuple`: what the model's outputs on this timestep are sampled
+  from, in a `NamedTuple` with one entry for each output, such as
+  `(; choice = Bernoulli(0.7))` for the action of a cognitive model, or
+  `(; reward = Bernoulli(0.8))` for the observation an environment model gives. Each entry
+  can be anything that works with `rand`, such as a distribution from Distributions.jl, or a
+  [`Deterministic`](@ref) for an output that isn't random, and the sampled outputs keep the
+  names. An output that isn't given on this timestep is [`NoAction`](@ref) for a cognitive
+  model and [`NoObservation`](@ref) for an environment model, and a model without outputs
+  gives an empty `NamedTuple`, `(;)`.
+- `new_state=(;)`: the state of the model after this timestep, which is the
+  `previous_state` of the next one. The outputs are sampled after it is made, so it can't
+  depend on them: the model receives them as `context.previous_output` on the next
+  timestep.
 
 # Examples
 ```jldoctest
@@ -263,63 +289,72 @@ julia> ModelOutput((; choice = Bernoulli(0.7)), (; expected_reward = 0.5)).new_s
 julia> ModelOutput((; choice = Bernoulli(0.7))).new_state
 NamedTuple()
 
-julia> ModelOutput((; choice = NoAction(), bet = Bernoulli(0.2))).action_distribution.choice
+julia> ModelOutput((; choice = NoAction(), bet = Bernoulli(0.2))).output_distribution.choice
 NoAction()
 ```
 """
-struct ModelOutput{Taction,Tstate}
-    action_distribution::Taction
+struct ModelOutput{Toutput,Tstate}
+    output_distribution::Toutput
     new_state::Tstate
 
-    #Only takes named action distributions, so that the model names every action
-    function ModelOutput(action_distribution::NamedTuple, new_state=(;))
-        return new{typeof(action_distribution),typeof(new_state)}(
-            action_distribution, new_state
+    #Only takes named output distributions, so that the model names every output
+    function ModelOutput(output_distribution::NamedTuple, new_state=(;))
+        return new{typeof(output_distribution),typeof(new_state)}(
+            output_distribution, new_state
         )
     end
 end
 
 """
-    ModelAttributes(; parameters, states, observations, actions)
+    ModelAttributes(; parameters, states, inputs, outputs)
 
 The names of the attributes of a model, which [`attribute_names`](@ref) returns.
 
-An environment model returns one too, where the observations are those it gives and the
-actions those it receives, the other way round from a cognitive model.
+For a cognitive model the inputs are its observations and the outputs its actions, and for
+an environment model the inputs are the actions it receives and the outputs the observations
+it gives.
 
 Each argument is a `Tuple` of `Symbol`s, which is kept in the type, so that the names are
 known at compile time, and read as a property of the same name, such as
 `attributes.parameters`. A single `Symbol` is put in a tuple, and a `Vector` of them is made
-into one. All four must be given, and `()` means that the model has none of that kind.
+into one. All four must be given, and `()` means that the model has none of that kind. A name
+can only be used once across the four kinds, so that it says which attribute of the model is
+meant wherever the attributes are named together, and an `ArgumentError` is thrown otherwise.
 
 # Examples
 ```jldoctest
 julia> attributes = ModelAttributes(;
            parameters = (:learning_rate, :inverse_temperature),
            states = :expected_reward,
-           observations = [:reward],
-           actions = (),
+           inputs = [:reward],
+           outputs = (),
        )
 ModelAttributes
 Parameters: learning_rate, inverse_temperature
 States: expected_reward
-Observations: reward
-Actions: none
+Inputs: reward
+Outputs: none
 
 julia> attributes.states
 (:expected_reward,)
+
+julia> ModelAttributes(; parameters = :choice, states = (), inputs = (), outputs = :choice)
+ERROR: ArgumentError: The name choice is used for both a parameter and an output, but a model can only use a name for one attribute.
+[...]
 ```
 """
-struct ModelAttributes{Tparameters,Tstates,Tobservations,Tactions} end
+struct ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs} end
 
-#Takes the names by keyword, puts a single name or a vector of names in a tuple, and keeps them in the type
-function ModelAttributes(; parameters, states, observations, actions)
-    return ModelAttributes{
+#Takes the names by keyword, puts a single name or a vector of names in a tuple, checks that each is used once, and keeps them in the type
+function ModelAttributes(; parameters, states, inputs, outputs)
+    attributes = ModelAttributes{
         as_tuple_of_names(parameters),
         as_tuple_of_names(states),
-        as_tuple_of_names(observations),
-        as_tuple_of_names(actions),
+        as_tuple_of_names(inputs),
+        as_tuple_of_names(outputs),
     }()
+    check_unique_attribute_names(attributes)
+    return attributes
 end
 
 """
@@ -332,24 +367,89 @@ as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
 as_tuple_of_names(name::Symbol) = (name,)
 as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
 
+"""
+    check_unique_attribute_names(attributes)
+
+Throw an `ArgumentError` if a name in `attributes`, a [`ModelAttributes`](@ref), is used for
+more than one attribute, within a kind or across the kinds, and return nothing otherwise.
+Whether the names are unique is decided from the type, by [`unique_names`](@ref), so that
+the check costs nothing when they are, and the message is only made when they aren't. Used
+by the constructor of `ModelAttributes`.
+"""
+function check_unique_attribute_names(attributes::ModelAttributes)
+    all_names = (
+        attributes.parameters...,
+        attributes.states...,
+        attributes.inputs...,
+        attributes.outputs...,
+    )
+    unique_names(all_names) || throw_duplicate_attribute_name(attributes)
+    return nothing
+end
+
+"""
+    unique_names(names)
+
+Return whether no name in the tuple `names` appears twice. It is unrolled over the names
+with [`has_name`](@ref), so that the compiler decides it from the names alone when it knows
+them, which `allunique` doesn't guarantee.
+"""
+unique_names(::Tuple{}) = true
+function unique_names(names::Tuple)
+    return !has_name(first(names), Base.tail(names)) && unique_names(Base.tail(names))
+end
+
+"""
+    throw_duplicate_attribute_name(attributes)
+
+Throw the `ArgumentError` of [`check_unique_attribute_names`](@ref), naming the first name
+of `attributes` that is used twice and the kinds it is used for. It is only called when
+there is one, so it doesn't need to be fast.
+"""
+@noinline function throw_duplicate_attribute_name(attributes::ModelAttributes)
+    kinds = (
+        ("a parameter", "parameters", attributes.parameters),
+        ("a state", "states", attributes.states),
+        ("an input", "inputs", attributes.inputs),
+        ("an output", "outputs", attributes.outputs),
+    )
+    for (i, (kind, kinds_name, names)) in enumerate(kinds)
+        allunique(names) || throw(
+            ArgumentError(
+                "The $kinds_name are named $names, but a model can only use a name for one attribute.",
+            ),
+        )
+        for (other_kind, _, other_names) in kinds[(i + 1):end], name in names
+            if name in other_names
+                throw(
+                    ArgumentError(
+                        "The name $name is used for both $kind and $other_kind, but a model can only use a name for one attribute.",
+                    ),
+                )
+            end
+        end
+    end
+    return nothing
+end
+
 #Reads the names in the type as properties
 function Base.getproperty(
-    attributes::ModelAttributes{Tparameters,Tstates,Tobservations,Tactions}, name::Symbol
-) where {Tparameters,Tstates,Tobservations,Tactions}
+    attributes::ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs}, name::Symbol
+) where {Tparameters,Tstates,Tinputs,Toutputs}
     if name === :parameters
         return Tparameters
     elseif name === :states
         return Tstates
-    elseif name === :observations
-        return Tobservations
-    elseif name === :actions
-        return Tactions
+    elseif name === :inputs
+        return Tinputs
+    elseif name === :outputs
+        return Toutputs
     else
         throw(FieldError(typeof(attributes), name))
     end
 end
 
-Base.propertynames(::ModelAttributes) = (:parameters, :states, :observations, :actions)
+Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs)
 
 """
     InvalidParametersError(message)

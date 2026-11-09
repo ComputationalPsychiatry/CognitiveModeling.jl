@@ -41,10 +41,11 @@ const KNOWN_FAILURES = [
         cases=[
             "turing session with imputed actions",
             "turing session with an environment",
-            "turing session with an environment which doesn't run, since every observation is in the data",
+            "turing session with an environment which doesn't run, since nothing in the data is missing",
             "turing session with imputed observations",
             "turing session with noise in each timestep",
             "turing full model with three sessions and independent priors",
+            "turing full model with an environment parameter shared by the sessions",
         ],
     ),
     (;

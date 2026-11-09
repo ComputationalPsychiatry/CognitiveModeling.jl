@@ -70,304 +70,162 @@ function Base.show(io::IO, ::NameMap{Tgiven,Treceived}) where {Tgiven,Treceived}
 end
 
 """
-    AgentHistory(observations, actions, action_distributions, states, timestep_sizes)
+    ModelHistory(states, inputs, outputs, output_distributions, timestep_sizes)
 
-The history of observations, actions, action distributions and states of a
-[`CognitiveAgent`](@ref), which [`simulate!`](@ref) adds to.
+What has happened to an [`InstantiatedModel`](@ref), which [`simulate!`](@ref) adds to.
 
-Each argument is kept in a field of the same name, such as `history.actions`. The agent's
-[`SaveHistory`](@ref) selects what is kept of each kind, and when it selects nothing at all,
-the vectors stay empty. Each vector starts with timestep 0, where the agent started, when the
-`SaveHistory` saves the initial values, which it does by default, so that element `t + 1` is
-timestep `t`.
+Each argument is kept in a field of the same name, such as `history.states`. The names are
+the model's own: for a cognitive model the inputs are its observations and the outputs its
+actions, and for an environment model the inputs are the actions it received and the outputs
+the observations it gave. The model's [`SaveHistory`](@ref) selects what is kept of each
+kind, and when it selects nothing at all, the vectors stay empty. Each vector starts with
+timestep 0, where the model started, when the `SaveHistory` saves the initial values, which
+it does by default, so that element `t + 1` is timestep `t`.
 
 # Arguments
-- `observations::Vector{Any}`: the observations, starting at timestep 0 with one where
-  every observation the model lists is [`BeforeFirstTimestep`](@ref).
-- `actions::Vector{Any}`: the actions, starting at timestep 0 with the agent's previous
-  action, which by default has every action as `BeforeFirstTimestep()`.
-- `action_distributions::Vector{Any}`: what the model gave each action to be sampled from,
-  starting at timestep 0 with `BeforeFirstTimestep()` for every action, since nothing was
-  given yet.
 - `states::Vector{Any}`: the states of the model, starting at timestep 0 with its initial
   state. Later states are those after each timestep. All of them are as returned by
   [`prepare_state_for_saving`](@ref).
+- `inputs::Vector{Any}`: what the model received on each timestep, starting at timestep 0
+  with every input the model lists as [`BeforeFirstTimestep`](@ref), since it has received
+  nothing before the simulation.
+- `outputs::Vector{Any}`: what the model gave on each timestep, starting at timestep 0 with
+  its previous output, which by default has every output as `BeforeFirstTimestep()`.
+- `output_distributions::Vector{Any}`: what the model gave each output to be sampled from,
+  starting at timestep 0 with `BeforeFirstTimestep()` for every output, since nothing was
+  given yet.
 - `timestep_sizes::Vector{Any}`: how much time each timestep covered, starting with
   `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
   other vectors.
 """
-struct AgentHistory
-    observations::Vector{Any}
-    actions::Vector{Any}
-    action_distributions::Vector{Any}
+struct ModelHistory
     states::Vector{Any}
+    inputs::Vector{Any}
+    outputs::Vector{Any}
+    output_distributions::Vector{Any}
     timestep_sizes::Vector{Any}
 end
 
 """
-    CognitiveAgent(cognitive_model, cognitive_parameters; save_history=SaveHistory())
-    CognitiveAgent(cognitive_model, cognitive_parameters, cognitive_state, previous_action;
-                   save_history=SaveHistory())
+    InstantiatedModel(model, parameters; save_history=SaveHistory())
+    InstantiatedModel(model, parameters, state, previous_output; save_history=SaveHistory())
 
-An instantiated cognitive model with its parameters, current state, and previous action, which [`simulate!`](@ref) can
-update iteratively.
+A cognitive model or an environment model with its parameters, current state and previous
+output, which [`simulate!`](@ref) can update iteratively.
 
-Each argument is kept in a field of the same name, such as `agent.cognitive_state`.
-Parameters that aren't given take the values in [`default_parameters`](@ref), if the model
-provides defaults for them. The state defaults to the output of [`initialize_state`](@ref)
-with the full parameters, and the previous action to every action being
-[`BeforeFirstTimestep`](@ref). The model must have a method of [`attribute_names`](@ref),
-and the names of the parameters, of the previous action, and of the state when it is a
-`NamedTuple`, must be those it lists, or an error is thrown.
+Each argument is kept in a field of the same name, such as `agent.state`. Parameters that
+aren't given take the values in [`default_parameters`](@ref), if the model provides defaults
+for them. The state defaults to the output of [`initialize_state`](@ref) with the full
+parameters, and the previous output to every output being [`BeforeFirstTimestep`](@ref). The
+model must have a method of [`attribute_names`](@ref), and the names of the parameters, of
+the previous output, and of the state when it is a `NamedTuple`, must be those it lists, or
+an error is thrown.
 
-`agent.history` holds an [`AgentHistory`](@ref) with where the agent started, which is
+`agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a
-[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
-stay empty, and `SaveHistory(SaveEverything())` saves everything. Observations and actions
-can only be selected by name among those the model lists, since the history starts from
-those names.
+[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history` stay
+empty, and `SaveHistory(SaveEverything())` saves everything. Inputs and outputs can only be
+selected by name among those the model lists, since the history starts from those names.
 
-See also [`Environment`](@ref).
+The same type serves as the agent and as the environment of a simulation, since both are
+models. See also [`simulate!`](@ref) and [`reset!`](@ref).
 """
-mutable struct CognitiveAgent{
-    Tcognitive_model<:AbstractCognitiveModel,
-    Tcognitive_parameters,
-    Tsave_history<:SaveHistory,
-}
-    cognitive_model::Tcognitive_model
-    cognitive_parameters::Tcognitive_parameters
-    #Not typed, because they can change type, for example from BeforeFirstTimestep() to a Bool inside the action
-    cognitive_state::Any
-    previous_action::Any
-    history::AgentHistory
-    save_history::Tsave_history
-end
-
-#Starts the agent from its initial state, with no action taken yet
-function CognitiveAgent(
-    cognitive_model::AbstractCognitiveModel,
-    cognitive_parameters;
-    save_history::SaveHistory=SaveHistory(),
-)
-    cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
-    return CognitiveAgent(
-        cognitive_model,
-        cognitive_parameters,
-        initialize_state(cognitive_model, cognitive_parameters),
-        initial_action(cognitive_model);
-        save_history,
-    )
-end
-
-#Fills in the default parameters, checks the names, and starts the history where the agent starts, with what is selected of it
-function CognitiveAgent(
-    cognitive_model::AbstractCognitiveModel,
-    cognitive_parameters,
-    cognitive_state,
-    previous_action;
-    save_history::SaveHistory=SaveHistory(),
-)
-
-    #Fill in the default parameters
-    cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
-
-    #Check that the parameters, the state and the previous action have the names the model lists
-    check_match_attribute_names(
-        cognitive_model, cognitive_parameters, cognitive_state, previous_action
-    )
-
-    #Check that the observations and actions selected for the history are among those the model lists
-    check_savehistory_selection_names(save_history, cognitive_model)
-
-    #Start the history from where the agent starts
-    history = starting_history(
-        cognitive_model, cognitive_state, previous_action, save_history
-    )
-
-    return CognitiveAgent(
-        cognitive_model,
-        cognitive_parameters,
-        cognitive_state,
-        previous_action,
-        history,
-        save_history,
-    )
-end
-
-"""
-    starting_history(cognitive_model, cognitive_state, previous_action, save_history)
-    starting_history(environment_model, state, previous_observation, save_history)
-
-Return the history that an agent or an environment starts with: an [`AgentHistory`](@ref) or
-an [`EnvironmentHistory`](@ref) with what `save_history` selects of where it starts, as
-timestep 0, and [`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has
-run yet. When nothing is selected, or `save_history` doesn't save the initial values, the
-vectors are empty.
-
-An agent hasn't observed anything when it starts, and an environment hasn't received an
-action, so that entry has every name the model lists as `BeforeFirstTimestep()`.
-[`reset!`](@ref) starts from the same history as the constructors.
-"""
-function starting_history(
-    cognitive_model::AbstractCognitiveModel,
-    cognitive_state,
-    previous_action,
-    save_history::SaveHistory,
-)
-    if saves_nothing(save_history) || !saves_initial_values(save_history)
-        return AgentHistory(Any[], Any[], Any[], Any[], Any[])
-    end
-    return AgentHistory(
-        Any[select_names(
-            initial_observation(cognitive_model), observation_selection(save_history)
-        )],
-        Any[select_names(previous_action, action_selection(save_history))],
-        Any[select_names(
-            initial_action(cognitive_model), action_distribution_selection(save_history)
-        )],
-        Any[save_state(cognitive_model, cognitive_state, state_selection(save_history))],
-        Any[BeforeFirstTimestep()],
-    )
-end
-
-"""
-    EnvironmentHistory(observations, actions, states, timestep_sizes)
-
-What has happened to an [`Environment`](@ref), which [`simulate!`](@ref) adds to.
-
-Each argument is kept in a field of the same name, such as `history.states`. The
-environment's [`SaveHistory`](@ref) selects what is kept of each observation, action and
-state, and when it selects nothing at all, the vectors stay empty. Each vector starts with
-timestep 0, where the environment started, when the `SaveHistory` saves the initial
-values, which it does by default. The observations are those the environment gave and the
-actions those it received, which are the same as in the agent's history unless a
-[`NameMap`](@ref) selects or renames them.
-
-# Arguments
-- `observations::Vector{Any}`: the observations the environment gave, starting with its
-  previous observation at timestep 0, which by default has every observation as
-  [`BeforeFirstTimestep`](@ref).
-- `actions::Vector{Any}`: the actions on each timestep, starting at timestep 0 with every
-  action the environment lists as `BeforeFirstTimestep()`, since it has received none
-  before the simulation.
-- `states::Vector{Any}`: the states of the environment, starting at timestep 0 with its
-  initial state. Later states are those after each timestep. All of them are as returned by
-  [`prepare_state_for_saving`](@ref).
-- `timestep_sizes::Vector{Any}`: how much time each timestep covered, starting with
-  `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
-  other vectors.
-"""
-struct EnvironmentHistory
-    observations::Vector{Any}
-    actions::Vector{Any}
-    states::Vector{Any}
-    timestep_sizes::Vector{Any}
-end
-
-"""
-    Environment(model, parameters; save_history=SaveHistory())
-    Environment(model, parameters, state, previous_observation; save_history=SaveHistory())
-
-An environment model with its parameters and current state, which [`simulate!`](@ref) can
-update iteratively.
-
-Parameters that aren't given take the values in [`default_parameters`](@ref), if the
-environment model provides defaults for them. The state defaults to the output of
-[`initialize_state`](@ref) with the full parameters, and the previous observation to every
-observation being [`BeforeFirstTimestep`](@ref). The environment model must have a method of
-[`attribute_names`](@ref), and the names of the parameters, of the previous observation, and
-of the state when it is a `NamedTuple`, must be those it lists, or an error is thrown.
-
-`environment.history` holds an [`EnvironmentHistory`](@ref) with where the environment
-started, as timestep 0, and what happens to it, as selected by `save_history`, a
-[`SaveHistory`](@ref). By default nothing is selected and the vectors in
-`environment.history` stay empty, and `SaveHistory(SaveEverything())` saves everything.
-Observations and actions can only be selected by name among those the environment model
-lists, since the history starts from those names.
-
-See also [`CognitiveAgent`](@ref).
-"""
-mutable struct Environment{
-    Tmodel<:AbstractEnvironmentModel,Tparameters,Tsave_history<:SaveHistory
+mutable struct InstantiatedModel{
+    Tmodel<:AbstractModel,Tparameters,Tsave_history<:SaveHistory
 }
     model::Tmodel
     parameters::Tparameters
+    #Not typed, because they can change type, for example from BeforeFirstTimestep() to a Bool inside the output
     state::Any
-    previous_observation::Any
-    history::EnvironmentHistory
+    previous_output::Any
+    history::ModelHistory
     save_history::Tsave_history
 end
 
-#Starts the environment from its initial state, with no observation given yet
-function Environment(
-    model::AbstractEnvironmentModel, parameters; save_history::SaveHistory=SaveHistory()
+#Starts the model from its initial state, with nothing given yet
+function InstantiatedModel(
+    model::AbstractModel, parameters; save_history::SaveHistory=SaveHistory()
 )
     parameters = merge_default_parameters(model, parameters)
-    return Environment(
+    return InstantiatedModel(
         model,
         parameters,
         initialize_state(model, parameters),
-        initial_observation(model);
+        initial_output(model);
         save_history,
     )
 end
 
-#Fills in the default parameters, checks the names, and starts the history where the environment starts, with what is selected of it
-function Environment(
-    model::AbstractEnvironmentModel,
+#Fills in the default parameters, checks the names, and starts the history where the model starts, with what is selected of it
+function InstantiatedModel(
+    model::AbstractModel,
     parameters,
     state,
-    previous_observation;
+    previous_output;
     save_history::SaveHistory=SaveHistory(),
 )
 
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check that the parameters, the state and the previous observation have the names the environment model lists
-    check_match_attribute_names(model, parameters, state, previous_observation)
+    #Check that the parameters, the state and the previous output have the names the model lists
+    check_match_attribute_names(model, parameters, state, previous_output)
 
-    #Check that the observations and actions selected for the history are among those the environment model lists
+    #Check that the inputs and outputs selected for the history are among those the model lists
     check_savehistory_selection_names(save_history, model)
 
-    #Start the history from where the environment starts
-    history = starting_history(model, state, previous_observation, save_history)
+    #Start the history from where the model starts
+    history = starting_history(model, state, previous_output, save_history)
 
-    return Environment(
-        model, parameters, state, previous_observation, history, save_history
+    return InstantiatedModel(
+        model, parameters, state, previous_output, history, save_history
     )
 end
 
-#The history of an environment which starts in a state and after an observation, as for an agent
+"""
+    starting_history(model, state, previous_output, save_history)
+
+Return the history that an [`InstantiatedModel`](@ref) starts with: a [`ModelHistory`](@ref)
+with what `save_history` selects of where it starts, as timestep 0, and
+[`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has run yet. When
+nothing is selected, or `save_history` doesn't save the initial values, the vectors are
+empty.
+
+A model hasn't received anything when it starts, so that entry has every input the model
+lists as `BeforeFirstTimestep()`, and so has every output distribution. [`reset!`](@ref)
+starts from the same history as the constructors.
+"""
 function starting_history(
-    model::AbstractEnvironmentModel, state, previous_observation, save_history::SaveHistory
+    model::AbstractModel, state, previous_output, save_history::SaveHistory
 )
     if saves_nothing(save_history) || !saves_initial_values(save_history)
-        return EnvironmentHistory(Any[], Any[], Any[], Any[])
+        return ModelHistory(Any[], Any[], Any[], Any[], Any[])
     end
-    return EnvironmentHistory(
-        Any[select_names(previous_observation, observation_selection(save_history))],
-        Any[select_names(initial_action(model), action_selection(save_history))],
+    return ModelHistory(
         Any[save_state(model, state, state_selection(save_history))],
+        Any[select_names(initial_input(model), input_selection(save_history))],
+        Any[select_names(previous_output, output_selection(save_history))],
+        Any[select_names(
+            initial_output(model), output_distribution_selection(save_history)
+        )],
         Any[BeforeFirstTimestep()],
     )
 end
 
 """
-    reset!(agent::CognitiveAgent)
-    reset!(environment::Environment)
+    reset!(instantiated_model::InstantiatedModel)
 
-Put `agent` or `environment` back to where a new one starts, and return it.
+Put `instantiated_model` back to where a new one starts, and return it.
 
-The state becomes the output of [`initialize_state`](@ref) with the parameters it has. The
-previous action of an agent has every action as [`BeforeFirstTimestep`](@ref) again, and so
-has every observation of the previous observation of an environment. The history is a new
-one which starts from there, as timestep 0 when the [`SaveHistory`](@ref) saves the initial
-values, so a history that was read before the reset, as in `history = agent.history`, is
-kept as it was. The model, the parameters and the `SaveHistory` stay the same.
+The state becomes the output of [`initialize_state`](@ref) with the parameters it has, and
+the previous output has every output as [`BeforeFirstTimestep`](@ref) again. The history is a
+new one which starts from there, as timestep 0 when the [`SaveHistory`](@ref) saves the
+initial values, so a history that was read before the reset, as in
+`history = agent.history`, is kept as it was. The model, the parameters and the
+`SaveHistory` stay the same.
 
-An agent or an environment that was created with a state, a previous action or a previous
-observation of its own doesn't return to those. Create a new one for that.
+An instantiated model that was created with a state or a previous output of its own doesn't
+return to those. Create a new one for that.
 
 # Examples
 ```jldoctest
@@ -380,55 +238,39 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, input::ModelInput)
-    V₋₁ = input.previous_state.expected_reward
-    Vₜ = V₋₁ + input.parameters.learning_rate * (input.observation.reward - V₋₁)
+function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))
 end
 
 function CognitiveModeling.attribute_names(model::RescorlaWagner)
-    return ModelAttributes(; parameters = :learning_rate, states = :expected_reward, observations = :reward, actions = :choice)
+    return ModelAttributes(; parameters = :learning_rate, states = :expected_reward, inputs = :reward, outputs = :choice)
 end
 
-agent = CognitiveAgent(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
+agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
 
 simulate!(agent, (; reward = 1.0))
 simulate!(agent, (; reward = 1.0))
 reset!(agent)
 
-agent.cognitive_state, agent.previous_action, agent.history.states
+agent.state, agent.previous_output, agent.history.states
 
 # output
 
 ((expected_reward = 0.5,), (choice = BeforeFirstTimestep(),), Any[(expected_reward = 0.5,)])
 ```
 """
-function reset! end
-
-#Starts the agent again from its initial state, with no action taken yet and a new history
-function reset!(agent::CognitiveAgent)
-    agent.cognitive_state = initialize_state(
-        agent.cognitive_model, agent.cognitive_parameters
+function reset!(instantiated_model::InstantiatedModel)
+    instantiated_model.state = initialize_state(
+        instantiated_model.model, instantiated_model.parameters
     )
-    agent.previous_action = initial_action(agent.cognitive_model)
-    agent.history = starting_history(
-        agent.cognitive_model,
-        agent.cognitive_state,
-        agent.previous_action,
-        agent.save_history,
+    instantiated_model.previous_output = initial_output(instantiated_model.model)
+    instantiated_model.history = starting_history(
+        instantiated_model.model,
+        instantiated_model.state,
+        instantiated_model.previous_output,
+        instantiated_model.save_history,
     )
-    return agent
-end
-
-#Starts the environment again from its initial state, with no observation given yet and a new history
-function reset!(environment::Environment)
-    environment.state = initialize_state(environment.model, environment.parameters)
-    environment.previous_observation = initial_observation(environment.model)
-    environment.history = starting_history(
-        environment.model,
-        environment.state,
-        environment.previous_observation,
-        environment.save_history,
-    )
-    return environment
+    return instantiated_model
 end

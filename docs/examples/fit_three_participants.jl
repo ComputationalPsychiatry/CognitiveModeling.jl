@@ -17,16 +17,18 @@ function CognitiveModeling.initialize_state(model::PredictingRescorlaWagner, par
     return (; expected_value=parameters.initial_value)
 end
 
-function CognitiveModeling.apply_model(model::PredictingRescorlaWagner, input::ModelInput)
+function CognitiveModeling.apply_model(
+    model::PredictingRescorlaWagner, context::ModelContext
+)
 
-    ## Unpack input ##
+    ## Unpack the context ##
     #The outcome observed on the previous trial, which is BeforeFirstTimestep() on the first
-    r = input.observation.outcome
+    r = context.input.outcome
     #Expected value from the previous state
-    V₋₁ = input.previous_state.expected_value
+    V₋₁ = context.previous_state.expected_value
     #Learning rate and noise parameters
-    α = input.parameters.learning_rate
-    σ = input.parameters.noise
+    α = context.parameters.learning_rate
+    σ = context.parameters.noise
 
     ## Update state ##
     #Learn from the prediction error, when there is an outcome to learn from
@@ -41,8 +43,8 @@ function CognitiveModeling.attribute_names(model::PredictingRescorlaWagner)
     return ModelAttributes(;
         parameters=(:learning_rate, :noise, :initial_value),
         states=:expected_value,
-        observations=:outcome,
-        actions=:prediction,
+        inputs=:outcome,
+        outputs=:prediction,
     )
 end
 
@@ -106,10 +108,12 @@ sessions_info = MultipleSessionsInfo(
 ## The Turing model ##
 
 #Each participant has their own parameters, all from the same priors. The initial value isn't fitted, so it takes its default.
-#The parameters are named after the population model's names, so the learning rate of the third participant is learning_rate.session[3]
-population_model = IndependentSessions((; learning_rate=Beta(2, 2), noise=LogNormal(-2, 1)))
+#The parameters are named after the parameters model's names, so the learning rate of the third participant is learning_rate.session[3]
+cognitive_parameters_model = IndependentSessionParameters((;
+    learning_rate=Beta(2, 2), noise=LogNormal(-2, 1)
+))
 
-model = turing_full_model(population_model, sessions_info)
+model = turing_full_model(cognitive_parameters_model, sessions_info)
 
 ## Fitting ##
 
@@ -118,19 +122,20 @@ chain = sample(model, NUTS(), 1000)
 ## The results ##
 
 #The model was fitted without saving the expected values, which is fastest. session_values_chain reruns it on every sample
-#with sessions that save them, and gives a chain with the parameters and the expected values of each participant,
-#named after them, as P1.learning_rate and P1.expected_value
+#with sessions that save them, and gives a chain with the expected values of each participant, named after them, as
+#P1.expected_value. session_parameters_chain gives the parameters of each participant the same way, as P1.learning_rate
 session_values = session_values_chain(
-    model, chain; save_history=SaveHistory(; states=:expected_value)
+    model, chain; cognitive_save_history=SaveHistory(; states=:expected_value)
 )
+session_parameters = session_parameters_chain(model, chain)
 
 #The participants, as the first part of those names
 participants = Symbol.(sessions_info.session_ids)
 
 #The fitted parameters of each participant, as averages over the samples
 for participant in participants
-    learning_rate = mean(session_values[@varname($participant.learning_rate)])
-    noise = mean(session_values[@varname($participant.noise)])
+    learning_rate = mean(session_parameters[@varname($participant.learning_rate)])
+    noise = mean(session_parameters[@varname($participant.noise)])
     println(
         participant,
         ": learning rate ",
@@ -153,7 +158,8 @@ FM.ridgeline(chain, @varname(learning_rate.session))
 
 #The learning rates again, named after the participants
 FM.forestplot(
-    session_values, [@varname($participant.learning_rate) for participant in participants]
+    session_parameters,
+    [@varname($participant.learning_rate) for participant in participants],
 )
 
 #The expected values of the first participant over the trials. The first is from before the first trial

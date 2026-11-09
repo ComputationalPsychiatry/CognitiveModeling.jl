@@ -4,34 +4,44 @@
         bet=Any[MissingValue(), MissingValue(), 1.0, 2.0, MissingValue()],
     )
 
-    @testset "The recorded actions of each name are kept in order, with the type of the column without the markers" begin
-        recorded = CognitiveModeling.recorded_actions(
+    @testset "The recorded values of each name are kept in order, with the type of the column without the markers" begin
+        recorded = CognitiveModeling.recorded_values(
             CognitiveModeling.replace_missing(actions, MissingValue())
         )
         @test recorded.choice == [true, false, true] && recorded.choice isa Vector{Bool}
         @test recorded.bet == [1.0, 2.0] && recorded.bet isa Vector{Float64}
-        @test CognitiveModeling.recorded_actions((; choice=[true, false])) ==
+        @test CognitiveModeling.recorded_values((; choice=[true, false])) ==
             (; choice=[true, false])
-        #An action without recorded values is kept as an empty vector of the type other sessions have, so that the sessions share a type
-        never = CognitiveModeling.recorded_actions((;
+        #A name without recorded values is kept as an empty vector of the type other sessions have, so that the sessions share a type
+        never = CognitiveModeling.recorded_values((;
             choice=Vector{Union{MissingValue,Bool}}([MissingValue()]),
             skipped=Vector{Union{NoAction,Float64}}([NoAction(), NoAction()]),
         ))
         @test never.choice == Bool[] && never.choice isa Vector{Bool}
         @test never.skipped == Float64[] && never.skipped isa Vector{Float64}
-        #An action whose column can only hold the markers is left out, by its type
-        @test CognitiveModeling.recorded_actions((;
+        #A name whose column can only hold the markers is left out, by its type
+        @test CognitiveModeling.recorded_values((;
             choice=[true], never=[NoAction(), NoAction()], skipped=[MissingValue()]
         )) == (; choice=[true])
-        @test CognitiveModeling.recorded_actions((;)) === (;)
+        @test CognitiveModeling.recorded_values((;)) === (;)
+        #The same for observations, where nothing happening is NoObservation
+        observed = CognitiveModeling.recorded_values((;
+            reward=Vector{Union{Float64,NoObservation,MissingValue}}([
+                1.0, NoObservation(), MissingValue(), 0.0
+            ]),
+        ))
+        @test observed.reward == [1.0, 0.0] && observed.reward isa Vector{Float64}
+        @test CognitiveModeling.is_recorded(1.0) &&
+            !CognitiveModeling.is_recorded(NoObservation()) &&
+            !CognitiveModeling.is_recorded(MissingValue())
     end
 
     @testset "Missing actions can be replaced by NoAction, which leaves the recorded ones as they are" begin
         replaced = CognitiveModeling.without_missing_actions(actions)
         @test replaced.choice == [true, NoAction(), false, NoAction(), true]
         @test replaced.bet == [NoAction(), NoAction(), 1.0, 2.0, NoAction()]
-        @test CognitiveModeling.recorded_actions(replaced) ==
-            CognitiveModeling.recorded_actions(actions)
+        @test CognitiveModeling.recorded_values(replaced) ==
+            CognitiveModeling.recorded_values(actions)
         #The columns of the data aren't changed, and columns that can't hold a missing value keep their type
         @test actions.choice[2] === MissingValue()
         @test CognitiveModeling.without_missing_actions((; choice=[true, false])).choice isa
@@ -253,13 +263,22 @@ struct BernoulliByHand
     probability::Float64
 end
 
-#A model for the error messages about scoring
+#A model for the error messages about scoring, and an environment for the record of one
 struct ScoringModel <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::ScoringModel)
+    return ModelAttributes(;
+        parameters=(), states=:expected_reward, inputs=:reward, outputs=:choice
+    )
+end
+struct ScoringEnvironment <: AbstractEnvironmentModel end
+function CognitiveModeling.attribute_names(::ScoringEnvironment)
+    return ModelAttributes(; parameters=(), states=:level, inputs=:choice, outputs=:reward)
+end
 
-@testset "Scoring the recorded actions" begin
+@testset "Scoring the recorded values" begin
     distributions = (; choice=NormalByHand(0.0, 1.0), bet=NoAction())
 
-    @testset "An action is recorded on a timestep when the data has a value, and a recorded action where the model took none is an error" begin
+    @testset "An output is recorded on a timestep when the data has a value, and a recorded value where the model gave nothing is an error" begin
         @test CognitiveModeling.recorded_on_timestep(
             (; choice=0.5, bet=NoAction()), distributions, ScoringModel()
         ) === (; choice=true, bet=false)
@@ -267,28 +286,41 @@ struct ScoringModel <: AbstractCognitiveModel end
             (; choice=MissingValue(), bet=MissingValue()), distributions, ScoringModel()
         ) === (; choice=false, bet=false)
         @test CognitiveModeling.recorded_on_timestep((;), (;), ScoringModel()) === (;)
-        @test_throws "The cognitive model of type ScoringModel took no action bet on a timestep where the data has 2.0 for it." CognitiveModeling.recorded_on_timestep(
+        @test_throws "A cognitive model of type ScoringModel gave no output bet on a timestep where the data has 2.0 for it." CognitiveModeling.recorded_on_timestep(
             (; choice=0.5, bet=2.0), distributions, ScoringModel()
+        )
+        #The same for the observations an environment gives
+        @test CognitiveModeling.recorded_on_timestep(
+            (; reward=1.0), (; reward=NormalByHand(0.0, 1.0)), ScoringEnvironment()
+        ) === (; reward=true)
+        @test_throws "An environment model of type ScoringEnvironment gave no output reward on a timestep where the data has 1.0 for it." CognitiveModeling.recorded_on_timestep(
+            (; reward=1.0), (; reward=NoObservation()), ScoringEnvironment()
         )
     end
 
-    @testset "What a session saves of a timestep is selected by the SaveHistory, with the action distributions" begin
+    @testset "What a session saves of a timestep is selected by the save histories, for the cognitive model alone or for both models" begin
         outputs = (;
             observation=(; reward=1.0),
             action=(; choice=true),
             action_distribution=(; choice=BernoulliByHand(0.7)),
             cognitive_state=(; expected_reward=0.5),
         )
-        saved = CognitiveModeling.saved_session_outputs(
+        #The SaveHistory is in the cognitive model's own names, so the action distributions are its output distributions
+        session_info = SessionInfo(
             ScoringModel(),
-            outputs,
-            SaveHistory(; action_distributions=:choice, states=SaveEverything()),
+            (; reward=[1.0, 0.0]),
+            (; choice=[true, false]);
+            who_starts=EnvironmentStarts(),
+            cognitive_save_history=SaveHistory(;
+                output_distributions=:choice, states=SaveEverything()
+            ),
         )
+        saved = CognitiveModeling.saved_session_outputs(session_info, outputs)
         @test saved === (;
+            state=(; expected_reward=0.5),
             observation=(;),
             action=(;),
             action_distribution=(; choice=BernoulliByHand(0.7)),
-            state=(; expected_reward=0.5),
         )
         #Timestep 0 has BeforeFirstTimestep for every action distribution
         previous = (;
@@ -296,30 +328,102 @@ struct ScoringModel <: AbstractCognitiveModel end
             action=(; choice=BeforeFirstTimestep()),
             cognitive_state=(; expected_reward=0.5),
         )
-        CognitiveModeling.attribute_names(::ScoringModel) = ModelAttributes(;
-            parameters=(),
-            states=:expected_reward,
-            observations=:reward,
-            actions=:choice,
+        saving_everything = SessionInfo(
+            session_info; cognitive_save_history=SaveHistory(SaveEverything())
         )
         initial = CognitiveModeling.initial_session_outputs(
-            Val(true), ScoringModel(), previous, SaveHistory(SaveEverything())
+            Val(true), saving_everything, previous
         )
         @test initial.action_distribution === (; choice=BeforeFirstTimestep()) &&
             initial.action === (; choice=BeforeFirstTimestep())
         @test CognitiveModeling.initial_session_outputs(
-            Val(false), ScoringModel(), previous, SaveHistory(SaveEverything())
+            Val(false), saving_everything, previous
         ) === nothing
         #The storage starts with timestep 0 when it is kept, and later timesteps go in by index
         storage = CognitiveModeling.initialize_session_storage(initial, saved, 2)
-        @test length(storage.action_distributions) == 3 &&
-            storage.action_distributions[1] === (; choice=BeforeFirstTimestep())
+        @test length(storage.action_distribution) == 3 &&
+            storage.action_distribution[1] === (; choice=BeforeFirstTimestep())
         storage = CognitiveModeling.store_session_outputs!(storage, saved, 3)
-        @test storage.action_distributions[3] === (; choice=BernoulliByHand(0.7)) &&
-            storage.states[3] === (; expected_reward=0.5)
+        @test storage.action_distribution[3] === (; choice=BernoulliByHand(0.7)) &&
+            storage.state[3] === (; expected_reward=0.5)
         @test length(
-            CognitiveModeling.initialize_session_storage(nothing, saved, 2).states
+            CognitiveModeling.initialize_session_storage(nothing, saved, 2).state
         ) == 2
+        #What is returned names the kinds by their role, with timestep sizes
+        returned_values = CognitiveModeling.session_saved_values(
+            storage, [1, 1, 1], session_info
+        )
+        @test keys(returned_values) ==
+            (:states, :observations, :actions, :action_distributions, :timestep_sizes)
+        @test returned_values.action_distributions === storage.action_distribution
+        #With an environment, its record is saved too, as its save history selects it, and returned under environment
+        with_environment = SessionInfo(
+            ScoringModel(),
+            (; reward=[1.0, 0.0]),
+            (; choice=[true, false]);
+            who_starts=EnvironmentStarts(),
+            environment=ScoringEnvironment(),
+            cognitive_save_history=SaveHistory(; states=SaveEverything()),
+            environment_save_history=SaveHistory(;
+                states=:level, outputs=:reward, output_distributions=SaveEverything()
+            ),
+        )
+        environment_outputs = merge(
+            outputs,
+            (;
+                environment_state=(; level=0.3),
+                observation_distribution=(; reward=NormalByHand(0.0, 1.0)),
+            ),
+        )
+        saved_both = CognitiveModeling.saved_session_outputs(
+            with_environment, environment_outputs
+        )
+        @test saved_both === (;
+            state=(; expected_reward=0.5),
+            observation=(;),
+            action=(;),
+            action_distribution=(;),
+            environment_state=(; level=0.3),
+            environment_observation=(; reward=1.0),
+            environment_action=(;),
+            environment_observation_distribution=(; reward=NormalByHand(0.0, 1.0)),
+        )
+        initial_both = CognitiveModeling.initial_session_outputs(
+            Val(true),
+            with_environment,
+            merge(previous, (; environment_state=(; level=0.0))),
+        )
+        @test initial_both.environment_observation_distribution ===
+              (; reward=BeforeFirstTimestep()) &&
+            initial_both.environment_state === (; level=0.0)
+        storage_both = CognitiveModeling.initialize_session_storage(
+            initial_both, saved_both, 2
+        )
+        storage_both = CognitiveModeling.store_session_outputs!(storage_both, saved_both, 3)
+        returned_both = CognitiveModeling.session_saved_values(
+            storage_both, [1, 1, 1], with_environment
+        )
+        @test keys(returned_both) == (
+            :states,
+            :observations,
+            :actions,
+            :action_distributions,
+            :environment,
+            :timestep_sizes,
+        )
+        @test keys(returned_both.environment) ==
+            (:states, :observations, :actions, :observation_distributions)
+        @test returned_both.environment.states ==
+            [(; level=0.0), (; level=0.3), (; level=0.3)]
+        #A session whose environment doesn't run gets an empty record of it, and a session that ends early is cut
+        with_empty = CognitiveModeling.with_empty_environment_entry(returned_values)
+        @test with_empty.environment.states == fill((;), 3) &&
+            with_empty.environment.observation_distributions == fill((;), 3)
+        cut = CognitiveModeling.saved_values_until(storage, 2)
+        @test length(cut.state) == 2 && length(cut.action_distribution) == 2
+        @test CognitiveModeling.timestep_sizes_until([BeforeFirstTimestep(), 1, 1], 2) ==
+            [BeforeFirstTimestep(), 1]
+        @test CognitiveModeling.timestep_sizes_until(Int[], 2) == Int[]
     end
 
     @testset "The vectors of distributions are typed by the first timestep, and widened when a later one differs" begin

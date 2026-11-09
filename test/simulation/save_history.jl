@@ -1,18 +1,20 @@
 @testset "SaveHistory" begin
     @testset "It keeps each selection as a tuple of names, or as the marker for everything" begin
         save_history = SaveHistory(;
-            observations=SaveEverything(),
-            actions=(:choice,),
+            inputs=SaveEverything(),
+            outputs=(:choice,),
             states=(:expected_reward, :surprise),
         )
-        @test save_history.observations === SaveEverything()
-        @test save_history.actions === (:choice,)
+        @test save_history.inputs === SaveEverything()
+        @test save_history.outputs === (:choice,)
         @test save_history.states === (:expected_reward, :surprise)
-        @test propertynames(save_history) == (
-            :observations, :actions, :action_distributions, :states, :save_initial_values
-        )
-        @test save_history.action_distributions === ()
+        @test propertynames(save_history) ==
+            (:states, :inputs, :outputs, :output_distributions, :save_initial_values)
+        @test save_history.output_distributions === ()
         @test_throws FieldError save_history.parameters
+        #The kinds are named as the model's own, not by their role in a simulation
+        @test_throws FieldError save_history.observations
+        @test_throws FieldError save_history.actions
     end
 
     @testset "It saves the initial values by default, and can leave them out" begin
@@ -27,38 +29,36 @@
             SaveHistory(; save_initial_values=false)
         )
         @test_throws TypeError SaveHistory(; save_initial_values=1)
-        #It stays as it is when only the states are kept, and doesn't matter when nothing is saved
-        @test CognitiveModeling.savehistory_states_only(
-            SaveHistory(SaveEverything(); save_initial_values=false)
-        ) === SaveHistory(; states=SaveEverything(), save_initial_values=false)
-        @test SaveHistory(SaveEverything()).action_distributions === SaveEverything()
-        @test SaveHistory(; action_distributions=:choice).action_distributions ===
+        @test SaveHistory(SaveEverything()).output_distributions === SaveEverything()
+        @test SaveHistory(; output_distributions=:choice).output_distributions ===
             (:choice,)
         @test CognitiveModeling.saves_nothing(SaveHistory(; save_initial_values=false))
     end
 
     @testset "A single name or a vector of names is put in a tuple" begin
-        save_history = SaveHistory(; actions=:choice, states=[:expected_reward, :surprise])
-        @test save_history.actions === (:choice,)
+        save_history = SaveHistory(; outputs=:choice, states=[:expected_reward, :surprise])
+        @test save_history.outputs === (:choice,)
         @test save_history.states === (:expected_reward, :surprise)
     end
 
     @testset "A kind that isn't given saves nothing, and SaveEverything() saves everything" begin
-        @test SaveHistory().observations ===
-            SaveHistory().actions ===
-            SaveHistory().states ===
+        @test SaveHistory().states ===
+            SaveHistory().inputs ===
+            SaveHistory().outputs ===
+            SaveHistory().output_distributions ===
             ()
-        @test SaveHistory(; states=:expected_reward).observations === ()
+        @test SaveHistory(; states=:expected_reward).inputs === ()
         everything = SaveHistory(SaveEverything())
-        @test everything.observations ===
-            everything.actions ===
-            everything.states ===
+        @test everything.states ===
+            everything.inputs ===
+            everything.outputs ===
+            everything.output_distributions ===
             SaveEverything()
         @test everything === SaveHistory(;
-            observations=SaveEverything(),
-            actions=SaveEverything(),
-            action_distributions=SaveEverything(),
             states=SaveEverything(),
+            inputs=SaveEverything(),
+            outputs=SaveEverything(),
+            output_distributions=SaveEverything(),
         )
     end
 
@@ -70,13 +70,13 @@
 
     @testset "The selections are in the type, so constructing it from literals is inferred, and holding it costs nothing" begin
         from_literals() =
-            SaveHistory(; actions=:choice, states=(:expected_reward, :surprise))
+            SaveHistory(; outputs=:choice, states=(:expected_reward, :surprise))
         @test Base.return_types(from_literals, Tuple{})[1] ===
-            SaveHistory{(),(:choice,),(),(:expected_reward, :surprise),true}
+            SaveHistory{(:expected_reward, :surprise),(),(:choice,),(),true}
         without_initial_values() =
             SaveHistory(; states=:expected_reward, save_initial_values=false)
         @test Base.return_types(without_initial_values, Tuple{})[1] ===
-            SaveHistory{(),(),(),(:expected_reward,),false}
+            SaveHistory{(:expected_reward,),(),(),(),false}
         @test @inferred(SaveHistory(SaveEverything())) isa SaveHistory
         @test @inferred(SaveHistory()) isa SaveHistory
         @test isbitstype(typeof(SaveHistory(; states=:expected_reward)))
@@ -86,22 +86,22 @@
     @testset "The REPL shows the selections on one line each" begin
         @test repr(
             "text/plain",
-            SaveHistory(; actions=:choice, states=(:expected_reward, :surprise)),
+            SaveHistory(; outputs=:choice, states=(:expected_reward, :surprise)),
         ) == """
 SaveHistory
-Observations: none
-Actions: choice
-Action distributions: none
 States: expected_reward, surprise
+Inputs: none
+Outputs: choice
+Output distributions: none
 Initial values: saved"""
         @test repr(
             "text/plain", SaveHistory(SaveEverything(); save_initial_values=false)
         ) == """
 SaveHistory
-Observations: everything
-Actions: everything
-Action distributions: everything
 States: everything
+Inputs: everything
+Outputs: everything
+Output distributions: everything
 Initial values: not saved"""
     end
 
@@ -124,13 +124,12 @@ Initial values: not saved"""
             [0.5], Val((:expected_reward,))
         )
         #The selections of a SaveHistory come as Vals, so that the names are known at compile time
-        save_history = SaveHistory(; observations=SaveEverything(), states=:expected_reward)
-        @test CognitiveModeling.observation_selection(save_history) ===
-            Val(SaveEverything())
-        @test CognitiveModeling.action_selection(save_history) === Val(())
+        save_history = SaveHistory(; inputs=SaveEverything(), states=:expected_reward)
+        @test CognitiveModeling.input_selection(save_history) === Val(SaveEverything())
+        @test CognitiveModeling.output_selection(save_history) === Val(())
         @test CognitiveModeling.state_selection(save_history) === Val((:expected_reward,))
-        @test CognitiveModeling.action_distribution_selection(
-            SaveHistory(; action_distributions=:choice)
+        @test CognitiveModeling.output_distribution_selection(
+            SaveHistory(; output_distributions=:choice)
         ) === Val((:choice,))
     end
 
@@ -173,6 +172,7 @@ Initial values: not saved"""
     @testset "saves_nothing is only true when no kind has a selection" begin
         @test CognitiveModeling.saves_nothing(SaveHistory())
         @test !CognitiveModeling.saves_nothing(SaveHistory(; states=:expected_reward))
-        @test !CognitiveModeling.saves_nothing(SaveHistory(; observations=SaveEverything()))
+        @test !CognitiveModeling.saves_nothing(SaveHistory(; inputs=SaveEverything()))
+        @test !CognitiveModeling.saves_nothing(SaveHistory(; output_distributions=:choice))
     end
 end

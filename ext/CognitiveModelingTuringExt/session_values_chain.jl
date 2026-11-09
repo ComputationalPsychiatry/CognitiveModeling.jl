@@ -1,11 +1,16 @@
 ### WHAT FITTED SESSIONS SAVED, READ FROM A CHAIN WITH A MODEL THAT SAVES IT ###
 
-#Makes a copy of the model whose sessions save what save_history selects, reruns it on every sample of the chain, and makes a chain of what the sessions saved
+#Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of what the sessions saved
 function CognitiveModeling.session_values_chain(
-    model::DynamicPPL.Model, chain; save_history::SaveHistory
+    model::DynamicPPL.Model,
+    chain;
+    cognitive_save_history::SaveHistory=SaveHistory(),
+    environment_save_history::SaveHistory=SaveHistory(),
 )
     saving_model = with_session_info(
-        model, info -> with_save_history(info, save_history), "session_values_chain"
+        model,
+        info -> with_save_history(info, cognitive_save_history, environment_save_history),
+        "session_values_chain",
     )
     results = returned(saving_model, chain)
     numbering = sample_numbering(chain)
@@ -17,13 +22,34 @@ function CognitiveModeling.session_values_chain(
     end
 end
 
-#Makes a copy of the model whose sessions are simulated and save what save_history selects, simulates them with predict for every sample of the chain, and makes a chain of what they saved
+#Reruns a full model on every sample of the chain, and makes a chain of the parameters it gave each session
+function CognitiveModeling.session_parameters_chain(model::DynamicPPL.Model, chain)
+    if model.f !== turing_run_full_model
+        throw(
+            ArgumentError(
+                "session_parameters_chain(model, chain) takes a model made by turing_full_model, which gives every session its parameters, but this one is made by $(model.f).",
+            ),
+        )
+    end
+    results = returned(model, chain)
+    return session_parameters_chain(
+        results, model.args.sessions_info; sample_numbering(chain)...
+    )
+end
+
+#Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them with predict for every sample of the chain, and makes a chain of what they saved
 function CognitiveModeling.predict_session_values(
-    rng::AbstractRNG, model::DynamicPPL.Model, chain; save_history::SaveHistory
+    rng::AbstractRNG,
+    model::DynamicPPL.Model,
+    chain;
+    cognitive_save_history::SaveHistory=SaveHistory(),
+    environment_save_history::SaveHistory=SaveHistory(),
 )
     predictive_model = with_session_info(
         model,
-        info -> predictive_sessions(with_save_history(info, save_history)),
+        info -> predictive_sessions(
+            with_save_history(info, cognitive_save_history, environment_save_history)
+        ),
         "predict_session_values",
     )
     #Everything within the timesteps is simulated again, with the parameters of each sample
@@ -40,9 +66,9 @@ function CognitiveModeling.predict_session_values(
 end
 
 function CognitiveModeling.predict_session_values(
-    model::DynamicPPL.Model, chain; save_history::SaveHistory
+    model::DynamicPPL.Model, chain; keywords...
 )
-    return predict_session_values(default_rng(), model, chain; save_history)
+    return predict_session_values(default_rng(), model, chain; keywords...)
 end
 
 """
@@ -97,14 +123,21 @@ function returned_with_simulation(
 end
 
 """
-    with_save_history(info, save_history)
+    with_save_history(info, cognitive_save_history, environment_save_history)
 
 Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions save
-what `save_history` selects. Used by `session_values_chain` and `predict_session_values`.
+what the two save histories select. Used by `session_values_chain` and
+`predict_session_values`.
 """
-with_save_history(info::SessionInfo, save_history) = SessionInfo(info; save_history)
-function with_save_history(info::MultipleSessionsInfo, save_history)
-    return MultipleSessionsInfo(info; save_history)
+function with_save_history(
+    info::SessionInfo, cognitive_save_history, environment_save_history
+)
+    return SessionInfo(info; cognitive_save_history, environment_save_history)
+end
+function with_save_history(
+    info::MultipleSessionsInfo, cognitive_save_history, environment_save_history
+)
+    return MultipleSessionsInfo(info; cognitive_save_history, environment_save_history)
 end
 
 """
@@ -127,7 +160,7 @@ function with_session_info(
     if model.f === CognitiveModeling.turing_behavioural_session
         new_args = merge(args, (; session_info=change(args.session_info)))
     elseif model.f === CognitiveModeling.turing_multiple_behavioural_sessions ||
-        model.f === CognitiveModeling.turing_full_model
+        model.f === turing_run_full_model
         new_args = merge(args, (; sessions_info=change(args.sessions_info)))
     elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
         new_args = merge(
@@ -136,7 +169,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; save_history) takes a model made by turing_full_model, turing_multiple_behavioural_sessions or turing_behavioural_session, but this one is made by $(model.f). For a model of one's own, give session_values_chain the results of returned(model, chain) instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioural_sessions or turing_behavioural_session, but this one is made by $(model.f). For a model of one's own, give session_values_chain the results of returned(model, chain) instead.",
             ),
         )
     end

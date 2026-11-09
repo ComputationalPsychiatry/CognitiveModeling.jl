@@ -3,8 +3,8 @@ function CognitiveModeling.attribute_names(model::ModelWithAttributes)
     return ModelAttributes(;
         parameters=(:learning_rate, :action_noise),
         states=:expected_reward,
-        observations=:reward,
-        actions=:choice,
+        inputs=:reward,
+        outputs=:choice,
     )
 end
 
@@ -16,29 +16,28 @@ end
 #Says that it has no observations, which is different from not saying anything
 struct ModelWithoutObservations <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithoutObservations)
-    return ModelAttributes(; parameters=:noise, states=(), observations=(), actions=:choice)
+    return ModelAttributes(; parameters=:noise, states=(), inputs=(), outputs=:choice)
 end
 
 #Gets its names from its supertype
 abstract type FamilyOfModels <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::FamilyOfModels)
-    return ModelAttributes(;
-        parameters=(), states=:shared_state, observations=(), actions=()
-    )
+    return ModelAttributes(; parameters=(), states=:shared_state, inputs=(), outputs=())
 end
 struct ModelInFamily <: FamilyOfModels end
 
 #Returns a NamedTuple instead of a ModelAttributes
 struct ReturnsNamedTupleOfNames <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ReturnsNamedTupleOfNames)
-    return (; parameters=(:noise,), states=(), observations=(), actions=())
+    return (; parameters=(:noise,), states=(), inputs=(), outputs=())
 end
 
-#Environment models with names, without them, and with names that aren't a ModelAttributes
+#Environment models with names, without them, and with names that aren't a ModelAttributes. The inputs of an
+#environment are the actions it receives, and its outputs the observations it gives
 struct EnvironmentWithAttributes <: AbstractEnvironmentModel end
 function CognitiveModeling.attribute_names(environment::EnvironmentWithAttributes)
     return ModelAttributes(;
-        parameters=:reward_probability, states=(), observations=:reward, actions=:choice
+        parameters=:reward_probability, states=(), inputs=:choice, outputs=:reward
     )
 end
 struct EnvironmentWithFields <: AbstractEnvironmentModel
@@ -46,7 +45,7 @@ struct EnvironmentWithFields <: AbstractEnvironmentModel
 end
 struct EnvironmentReturnsNamedTupleOfNames <: AbstractEnvironmentModel end
 function CognitiveModeling.attribute_names(environment::EnvironmentReturnsNamedTupleOfNames)
-    return (; parameters=(), states=(), observations=(:reward,), actions=())
+    return (; parameters=(), states=(), inputs=(), outputs=(:reward,))
 end
 
 @testset "Utility functions" begin
@@ -56,12 +55,12 @@ end
             Type: ModelWithAttributes
             Parameters: learning_rate, action_noise
             States: expected_reward
-            Observations: reward
-            Actions: choice"""
+            Inputs: reward
+            Outputs: choice"""
         @test occursin(
             "Attributes: not specified", repr("text/plain", ModelWithFields(4, 0.5))
         )
-        @test occursin("Observations: none", repr("text/plain", ModelWithoutObservations()))
+        @test occursin("Inputs: none", repr("text/plain", ModelWithoutObservations()))
         @test occursin("States: shared_state", repr("text/plain", ModelInFamily()))
     end
 
@@ -71,8 +70,8 @@ end
             Type: EnvironmentWithAttributes
             Parameters: reward_probability
             States: none
-            Observations: reward
-            Actions: choice"""
+            Inputs: choice
+            Outputs: reward"""
         @test occursin(
             "Attributes: not specified", repr("text/plain", EnvironmentWithFields(2))
         )
@@ -110,15 +109,15 @@ end
         attributes = ModelAttributes(;
             parameters=(:learning_rate, :noise),
             states=:expected_reward,
-            observations=(),
-            actions=:choice,
+            inputs=(),
+            outputs=:choice,
         )
         @test repr("text/plain", attributes) == """
             ModelAttributes
             Parameters: learning_rate, noise
             States: expected_reward
-            Observations: none
-            Actions: choice"""
+            Inputs: none
+            Outputs: choice"""
     end
 
     @testset "Everywhere else a model is printed on one line, with its fields" begin
