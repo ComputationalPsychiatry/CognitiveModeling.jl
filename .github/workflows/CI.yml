@@ -56,7 +56,8 @@ jobs:
       matrix:
         # Each suite has its own environment. The Turing.jl extension's tests have one because Turing.jl holds
         # FlexiChains.jl at an older version than the main suite tests, and they run as the main suite does, with
-        # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own inside it
+        # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own inside it.
+        # The two tutorials that the documentation shows without running have one each, with the packages they use
         include:
           - name: ad
             path: test/ad_and_reactant/ad
@@ -68,6 +69,10 @@ jobs:
             coverage: true
           - name: turing ad
             path: test/extensions/turing/ad
+          - name: reinforcement learning tutorial
+            path: test/tutorials/reinforcement_learning
+          - name: pomdps tutorial
+            path: test/tutorials/pomdps
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3

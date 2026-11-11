@@ -7,7 +7,7 @@
 #
 # This page shows such a cognitive model. It doesn't simulate or fit it yet, and its code
 # isn't run when the documentation is built, to keep the documentation's environment small.
-# It was run by hand with POMDPs.jl 1.0, POMDPTools.jl 1.1 and QMDP.jl 0.1.
+# The package's tests run it instead, with POMDPs.jl 1.0, POMDPTools.jl 1.1 and QMDP.jl 0.1.
 
 using CognitiveModeling
 using Distributions: DiscreteNonParametric
@@ -49,18 +49,18 @@ end
 # timestep there is no previous action, which [`AbstractNoValue`](@ref) covers, and the
 # belief is left as it is.
 
-function CognitiveModeling.apply_model(model::BayesianObserver, input::ModelInput)
+function CognitiveModeling.apply_model(model::BayesianObserver, context::ModelContext)
 
-    ## Unpack input ##
-    belief = input.previous_state.belief
-    previous_choice = input.previous_action.choice
-    β = input.parameters.inverse_temperature
+    ## Unpack the context ##
+    belief = context.previous_state.belief
+    previous_choice = context.previous_output.choice
+    β = context.parameters.inverse_temperature
 
     ## Update state ##
     #Update the belief from the previous action and what was observed after it
     if !(previous_choice isa AbstractNoValue)
         belief = POMDPs.update(
-            model.pomdp_updater, belief, previous_choice, input.observation.observation
+            model.pomdp_updater, belief, previous_choice, context.input.observation
         )
     end
 
@@ -77,8 +77,8 @@ function CognitiveModeling.attribute_names(model::BayesianObserver)
     return ModelAttributes(;
         parameters=:inverse_temperature,
         states=:belief,
-        observations=:observation,
-        actions=:choice,
+        inputs=:observation,
+        outputs=:choice,
     )
 end
 
@@ -86,9 +86,13 @@ end
 #
 # A problem from POMDPModels.jl gives a cognitive model for its task, such as
 # `BayesianObserver(TigerPOMDP())`. The problem can be used as the environment too, through
-# [`CommonRLEnvironment`](@ref). That environment also gives `reward` and `terminated`,
-# which this cognitive model doesn't list, so a [`NameMap`](@ref) must select the
-# observation for it: `observation_map = NameMap(:observation)`.
+# [`CommonRLEnvironment`](@ref), as in
+# `CommonRLEnvironment(POMDPCommonRLEnv{Any}(TigerPOMDP()); action_name = :choice)`. The
+# `{Any}` makes POMDPTools.jl give the observations as they are, which the updater needs.
+# Without it, as with `convert`, each observation is put in an array, and the updater throws
+# an error. That environment also gives `reward` and `terminated`, which this cognitive
+# model doesn't list, so a [`NameMap`](@ref) must select the observation for it:
+# `observation_map = NameMap(:observation)`.
 #
 # The learners in TabularTDLearning.jl can't be used this way. They are solvers which run
 # every episode themselves, so there is no single timestep to call.

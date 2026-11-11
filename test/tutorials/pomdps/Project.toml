@@ -1,0 +1,26 @@
+[deps]
+CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+CommonRLInterface = "d842c3ba-07a1-494f-bbec-f5741b0a3e98"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
+POMDPTools = "7588e00f-9cae-40de-98dc-e0c70c48cdd7"
+POMDPs = "a93abf59-7444-517b-a68a-c42f96afdd7d"
+QMDP = "3aa3ecc9-5a5d-57c8-8188-3e47bd8068d2"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+CognitiveModeling = {path = "../../.."}
+
+[compat]
+CommonRLInterface = "0.3"
+Distributions = "0.25"
+LogExpFunctions = "1"
+POMDPModels = "0.4"
+POMDPTools = "1"
+POMDPs = "1"
+QMDP = "0.1"
+Random = "1"
+Test = "1"
+julia = "1.13"

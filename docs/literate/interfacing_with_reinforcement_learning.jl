@@ -7,8 +7,8 @@
 #
 # This page shows two such cognitive models. It doesn't simulate or fit them yet, and its
 # code isn't run when the documentation is built, because ReinforcementLearning.jl is a
-# large package to have in the documentation's environment. It was run by hand with
-# ReinforcementLearningCore.jl 0.15.
+# large package to have in the documentation's environment. The package's tests run it
+# instead, with ReinforcementLearningCore.jl 0.15.
 
 using CognitiveModeling
 using Distributions: Categorical
@@ -20,10 +20,10 @@ using ReinforcementLearningCore: EpsilonGreedyExplorer, PreEpisodeStage, PostAct
 using ReinforcementLearningTrajectories: Trajectory, CircularArraySARTSTraces
 using ReinforcementLearningTrajectories: DummySampler, InsertSampleRatioController
 
-# Both models list the observations `observation`, `reward` and `terminated`, which are the
-# names that [`CommonRLEnvironment`](@ref) gives, so they can be used with an environment
-# from ReinforcementLearning.jl as they are. The observation must be the number of the state
-# the environment is in, since the learners here keep a table of values.
+# Both models list the observations `observation`, `reward` and `terminated` as their
+# inputs, which are the names that [`CommonRLEnvironment`](@ref) gives, so they can be used
+# with an environment from ReinforcementLearning.jl as they are. The observation must be the
+# number of the state the environment is in, since the learners here keep a table of values.
 #
 # Both also need the environment to move first on each timestep, with
 # [`EnvironmentStarts`](@ref), so that there is an observation to act on. On the first
@@ -87,11 +87,13 @@ end
 # that fits what was observed, and returns the probabilities its policy gives each action.
 # The agent is changed in place, so the same object is passed on as the new state.
 
-function CognitiveModeling.apply_model(model::TemporalDifferenceAgent, input::ModelInput)
+function CognitiveModeling.apply_model(
+    model::TemporalDifferenceAgent, context::ModelContext
+)
 
-    ## Unpack input ##
-    rl_agent = input.previous_state.rl_agent
-    (; observation, reward, terminated) = input.observation
+    ## Unpack the context ##
+    rl_agent = context.previous_state.rl_agent
+    (; observation, reward, terminated) = context.input
 
     ## Update state ##
     if reward isa AbstractNoValue
@@ -101,7 +103,7 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceAgent, input::Mo
     else
         #Give the agent what followed its previous action, and let it learn from it
         rl_env = ObservedByAgent(observation, reward, terminated, model.n_actions)
-        push!(rl_agent, PostActStage(), rl_env, input.previous_action.move)
+        push!(rl_agent, PostActStage(), rl_env, context.previous_output.move)
         RLBase.optimise!(rl_agent, PostActStage())
     end
 
@@ -116,17 +118,19 @@ function CognitiveModeling.attribute_names(model::TemporalDifferenceAgent)
     return ModelAttributes(;
         parameters=(:learning_rate, :discount, :epsilon),
         states=:rl_agent,
-        observations=(:observation, :reward, :terminated),
-        actions=:move,
+        inputs=(:observation, :reward, :terminated),
+        outputs=:move,
     )
 end
 
 # Since the agent is changed in place, every saved state would be the same object, showing
-# the values after the last timestep. This method saves a copy of the table of action values
-# on each timestep instead.
+# the agent after the last timestep. This method saves a copy of the agent on each timestep
+# instead, made with `deepcopy`. It keeps the name `rl_agent`, since a [`SaveHistory`](@ref)
+# selects states by the names in `attribute_names`. The table of action values of a saved
+# agent is in `rl_agent.policy.learner.approximator.model`.
 
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceAgent, state)
-    return (; action_values=copy(state.rl_agent.policy.learner.approximator.model))
+    return (; rl_agent=deepcopy(state.rl_agent))
 end
 
 # ## Only the learner
@@ -153,12 +157,14 @@ function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, pa
     return (; rl_learner, previous_observation=0)
 end
 
-function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::ModelInput)
+function CognitiveModeling.apply_model(
+    model::TemporalDifferenceLearner, context::ModelContext
+)
 
-    ## Unpack input ##
-    (; rl_learner, previous_observation) = input.previous_state
-    (; observation, reward, terminated) = input.observation
-    β = input.parameters.inverse_temperature
+    ## Unpack the context ##
+    (; rl_learner, previous_observation) = context.previous_state
+    (; observation, reward, terminated) = context.input
+    β = context.parameters.inverse_temperature
 
     ## Update state ##
     #Let the learner learn from what followed the previous action, unless an episode starts
@@ -166,7 +172,7 @@ function CognitiveModeling.apply_model(model::TemporalDifferenceLearner, input::
         rl_transition = (;
             state=previous_observation,
             next_state=observation,
-            action=input.previous_action.move,
+            action=context.previous_output.move,
             reward,
             terminal=terminated,
         )
@@ -186,15 +192,15 @@ function CognitiveModeling.attribute_names(model::TemporalDifferenceLearner)
     return ModelAttributes(;
         parameters=(:learning_rate, :discount, :inverse_temperature),
         states=(:rl_learner, :previous_observation),
-        observations=(:observation, :reward, :terminated),
-        actions=:move,
+        inputs=(:observation, :reward, :terminated),
+        outputs=:move,
     )
 end
 
+# The learner is changed in place too, so a copy of it is saved in the same way.
+
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceLearner, state)
-    return (;
-        action_values=copy(state.rl_learner.approximator.model), state.previous_observation
-    )
+    return (; rl_learner=deepcopy(state.rl_learner), state.previous_observation)
 end
 
 # ## Fitting

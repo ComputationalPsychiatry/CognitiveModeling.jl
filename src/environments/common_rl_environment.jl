@@ -5,9 +5,14 @@ An environment model around `rl_env`, an environment from CommonRLInterface.jl, 
 CommonRLInterface.jl to be loaded. `action_name` is the name of the cognitive model's action
 that `act!` receives, such as `:arm`.
 
-Environments from POMDPs.jl and ReinforcementLearning.jl can be used through it, with
-`convert(CommonRLInterface.AbstractEnv, x)`, which POMDPTools.jl defines for a `POMDP` or
-`MDP` and ReinforcementLearningBase.jl for its environments.
+Environments from POMDPs.jl and ReinforcementLearning.jl can be used through it.
+POMDPTools.jl wraps a `POMDP` as `POMDPCommonRLEnv{Any}(pomdp)` and an `MDP` as
+`MDPCommonRLEnv{Any}(mdp)`, which give each observation, or each state of an `MDP`, as the
+problem gives it. Its `convert(CommonRLInterface.AbstractEnv, pomdp)` gives the same
+environment with each converted to an array, which a cognitive model that reads them as the
+problem gives them, such as one with a belief updater of POMDPTools.jl, can't use.
+ReinforcementLearningBase.jl defines `convert(CommonRLInterface.AbstractEnv, rl_env)` for
+its environments.
 
 `rl_env` itself is the state: `initialize_state` resets it with CommonRLInterface.jl's
 `reset!` and returns it, every timestep changes it in place with `act!` and passes it on as
