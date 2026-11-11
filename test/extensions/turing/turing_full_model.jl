@@ -19,13 +19,13 @@ struct MeasurementRegression{T} <: AbstractDownstreamModel
 end
 Turing.@model function CognitiveModeling.turing_downstream_model(
     downstream_model::MeasurementRegression,
-    saved_behavioural_values,
+    saved_behavioral_values,
     cognitive_parameters,
     sessions_info::MultipleSessionsInfo,
 )
     slope ~ Normal(0, 1)
     last_expected_rewards = [
-        saved.states[end].expected_reward for saved in saved_behavioural_values
+        saved.states[end].expected_reward for saved in saved_behavioral_values
     ]
     downstream_model.measurements ~ MvNormal(slope .* last_expected_rewards, 1.0)
     return slope
@@ -108,7 +108,7 @@ function sessions_by_hand(table, learning_rates, inverse_temperatures)
     return log_density
 end
 
-@testset "turing_multiple_behavioural_sessions" begin
+@testset "turing_multiple_behavioral_sessions" begin
     @testset "Each session runs with its own parameters under session[i], and the log density is the sum over the sessions" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
@@ -116,7 +116,7 @@ end
         )
         learning_rates = [0.2, 0.3, 0.4]
         inverse_temperatures = [1.0, 2.0, 3.0]
-        model = turing_multiple_behavioural_sessions(
+        model = turing_multiple_behavioral_sessions(
             sessions_info,
             (; learning_rate=learning_rates, inverse_temperature=inverse_temperatures),
         )
@@ -131,7 +131,7 @@ end
     end
 
     @testset "A missing action in one session is a latent under that session, and leaves the others as they are" begin
-        model = turing_multiple_behavioural_sessions(
+        model = turing_multiple_behavioral_sessions(
             sessions_for_test(),
             (; learning_rate=[0.3, 0.3, 0.3], inverse_temperature=[2.0, 2.0, 2.0]),
         )
@@ -154,7 +154,7 @@ end
             environment=DriftingRewards(),
             impute_missing_actions=false,
         )
-        model = turing_multiple_behavioural_sessions(
+        model = turing_multiple_behavioral_sessions(
             sessions_info, (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
@@ -168,7 +168,7 @@ end
             impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; outputs=:choice),
         )
-        model = turing_multiple_behavioural_sessions(
+        model = turing_multiple_behavioral_sessions(
             sessions_info,
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0]),
         )
@@ -191,7 +191,7 @@ end
     end
 
     @testset "The parameters must have one value for each session" begin
-        model = turing_multiple_behavioural_sessions(
+        model = turing_multiple_behavioral_sessions(
             sessions_for_test(; impute_missing_actions=false),
             (; learning_rate=[0.3, 0.3], inverse_temperature=[2.0, 2.0]),
         )
@@ -211,7 +211,7 @@ end
         )
         parameters = (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
         saved = returned(
-            turing_multiple_behavioural_sessions(
+            turing_multiple_behavioral_sessions(
                 sessions_info, parameters, (; scale=[2.0, 1.0, 3.0])
             ),
             (;),
@@ -221,10 +221,10 @@ end
             saved[3].observations[3] == (; reward=3.0)
         #Without environment parameters, its defaults are used
         @test returned(
-            turing_multiple_behavioural_sessions(sessions_info, parameters), (;)
+            turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
         )[1].observations[3] == (; reward=1.0)
         @test_throws "Environment parameters were given, (scale = [2.0, 2.0, 2.0],), but the session has no environment." logjoint(
-            turing_multiple_behavioural_sessions(
+            turing_multiple_behavioral_sessions(
                 sessions_for_test(; impute_missing_actions=false),
                 parameters,
                 (; scale=fill(2.0, 3)),
@@ -274,14 +274,14 @@ end
         @test keys(result) == (
             :cognitive_parameters,
             :environment_parameters,
-            :saved_behavioural_values,
+            :saved_behavioral_values,
             :downstream_values,
         )
         @test result.environment_parameters === (;)
         @test result.cognitive_parameters ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
-        @test length(result.saved_behavioural_values) == 3
-        @test result.saved_behavioural_values[2].states[2].expected_reward ≈
+        @test length(result.saved_behavioral_values) == 3
+        @test result.saved_behavioral_values[2].states[2].expected_reward ≈
             0.5 + 0.3 * (0.0 - 0.5)
         @test result.downstream_values === nothing
     end
@@ -361,7 +361,7 @@ end
         @test result.downstream_values == 0.8
         last_expected_rewards = [
             session.states[end].expected_reward for
-            session in result.saved_behavioural_values
+            session in result.saved_behavioral_values
         ]
         @test loglikelihood(model, given) ≈
             sessions_by_hand(FULL_TABLE, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0]) +
@@ -685,7 +685,7 @@ end
         results = returned(model, chain)
         @test length(results) == 50
         @test length(results[1].cognitive_parameters.learning_rate) == 3
-        @test [length(session.states) for session in results[1].saved_behavioural_values] == [4, 3, 5]
+        @test [length(session.states) for session in results[1].saved_behavioral_values] == [4, 3, 5]
         #With the missing choice imputed, its latent is sampled too, by a sampler for discrete variables
         with_imputed = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS), sessions_for_test()
@@ -713,20 +713,20 @@ end
         )
         parameters = (; learning_rate=[0.3, 1.5, 0.3])
         @test_throws "The learning rate must be at most 1." logjoint(
-            turing_multiple_behavioural_sessions(sessions_info, parameters), (;)
+            turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
         )
         caught = turing_catch_invalid_parameters(
-            turing_multiple_behavioural_sessions(sessions_info, parameters)
+            turing_multiple_behavioral_sessions(sessions_info, parameters)
         )
         @test logjoint(caught, (;)) == -Inf && returned(caught, (;)) === nothing
         #Valid parameters are unaffected
         valid = turing_catch_invalid_parameters(
-            turing_multiple_behavioural_sessions(
+            turing_multiple_behavioral_sessions(
                 sessions_info, (; learning_rate=fill(0.3, 3))
             ),
         )
         @test logjoint(valid, (;)) ≈ logjoint(
-            turing_multiple_behavioural_sessions(
+            turing_multiple_behavioral_sessions(
                 sessions_info, (; learning_rate=fill(0.3, 3))
             ),
             (;),
@@ -768,9 +768,9 @@ end
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
-        in_sequence = turing_multiple_behavioural_sessions(sessions_info, parameters)
-        in_parallel = turing_multiple_behavioural_sessions(
-            sessions_info, parameters; parallelisation=ParallelSessions()
+        in_sequence = turing_multiple_behavioral_sessions(sessions_info, parameters)
+        in_parallel = turing_multiple_behavioral_sessions(
+            sessions_info, parameters; parallelization=ParallelSessions()
         )
         @test_throws "The sessions run in parallel, so the model that is evaluated must be marked thread-safe with setthreadsafe(model, true) from DynamicPPL." logjoint(
             in_parallel, (;)
@@ -784,20 +784,19 @@ end
             cognitive_save_history=SaveHistory(; outputs=:choice),
         )
         in_parallel_saving_actions = Turing.DynamicPPL.setthreadsafe(
-            turing_multiple_behavioural_sessions(
-                saving_actions, parameters; parallelisation=ParallelSessions()
+            turing_multiple_behavioral_sessions(
+                saving_actions, parameters; parallelization=ParallelSessions()
             ),
             true,
         )
-        @test returned(in_parallel_saving_actions, (;)) == returned(
-            turing_multiple_behavioural_sessions(saving_actions, parameters), (;)
-        )
+        @test returned(in_parallel_saving_actions, (;)) ==
+            returned(turing_multiple_behavioral_sessions(saving_actions, parameters), (;))
         #The full model passes it on
         full = Turing.DynamicPPL.setthreadsafe(
             saving_full_model(
                 IndependentSessionParameters(FULL_PRIORS),
                 sessions_info;
-                parallelisation=ParallelSessions(),
+                parallelization=ParallelSessions(),
             ),
             true,
         )
@@ -823,11 +822,11 @@ end
         chain = sample(Xoshiro(2), unsaved, NUTS(), 20; progress=false)
         results = returned(saving, chain)
         @test length(results) == 20
-        @test [length(session.states) for session in results[1].saved_behavioural_values] == [4, 3, 5]
-        @test returned(unsaved, chain)[1].saved_behavioural_values[1].states == fill((;), 4)
+        @test [length(session.states) for session in results[1].saved_behavioral_values] == [4, 3, 5]
+        @test returned(unsaved, chain)[1].saved_behavioral_values[1].states == fill((;), 4)
         #The first state of each session is the initial one, and the parameters are the chain's
         learning_rates = results[1].cognitive_parameters.learning_rate
-        @test results[1].saved_behavioural_values[1].states[2].expected_reward ≈
+        @test results[1].saved_behavioral_values[1].states[2].expected_reward ≈
             0.5 + learning_rates[1] * (1.0 - 0.5)
     end
 

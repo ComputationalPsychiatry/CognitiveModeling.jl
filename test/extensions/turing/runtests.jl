@@ -31,7 +31,7 @@ end
     end
 
     include("extension_defaults.jl")
-    include("turing_behavioural_session.jl")
+    include("turing_behavioral_session.jl")
     include("turing_full_model.jl")
     include("session_parameters_models.jl")
     include("session_values_chain.jl")

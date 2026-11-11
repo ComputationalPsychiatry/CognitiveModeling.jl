@@ -1,8 +1,8 @@
 ## Turing.jl models which users call, defined in the Turing extension ##
 
 """
-    turing_behavioural_session(session_info::SessionInfo, cognitive_parameters)
-    turing_behavioural_session(session_info::SessionInfo, cognitive_parameters,
+    turing_behavioral_session(session_info::SessionInfo, cognitive_parameters)
+    turing_behavioral_session(session_info::SessionInfo, cognitive_parameters,
                                environment_parameters=(;))
 
 Create a Turing.jl model of one session: the cognitive model in `session_info` goes through
@@ -11,8 +11,8 @@ against the action distributions it gives. The second form is for a session with
 environment model, which takes its parameters too. This needs Turing.jl to be loaded.
 
 The model is a building block for a Turing.jl model which samples the parameters, as a
-submodel with its own prefix: `to_submodel(prefix(turing_behavioural_session(...),
-@varname(session)), false)`. [`turing_multiple_behavioural_sessions`](@ref) runs one for
+submodel with its own prefix: `to_submodel(prefix(turing_behavioral_session(...),
+@varname(session)), false)`. [`turing_multiple_behavioral_sessions`](@ref) runs one for
 each of several sessions, and [`turing_full_model`](@ref) samples their parameters too.
 
 # Arguments
@@ -116,7 +116,7 @@ session_info = SessionInfo(
     inverse_temperature ~ LogNormal(0, 1)
     session ~ to_submodel(
         prefix(
-            turing_behavioural_session(session_info, (; learning_rate, inverse_temperature)),
+            turing_behavioral_session(session_info, (; learning_rate, inverse_temperature)),
             @varname(session),
         ),
         false,
@@ -130,24 +130,24 @@ chain = sample(fit_one_session(session_info), NUTS(), 1000)
 trajectories = returned(fit_one_session(session_info), chain)
 ```
 """
-function turing_behavioural_session end
+function turing_behavioral_session end
 
 """
-    turing_multiple_behavioural_sessions(sessions_info::MultipleSessionsInfo,
+    turing_multiple_behavioral_sessions(sessions_info::MultipleSessionsInfo,
                                          cognitive_parameters, environment_parameters=(;);
-                                         parallelisation=NoParallelisation())
+                                         parallelization=NoParallelization())
 
-Create a Turing.jl model which runs [`turing_behavioural_session`](@ref) for every session
+Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for every session
 in `sessions_info`, each with its own cognitive parameters, as a submodel with the prefix
 `session[i]`, so that a latent variable of the third session is named like
 `session[3].timestep[2].choice.imputed`. Which session `i` is stands in
 `sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for an identifier.
 Environment parameters can only be given when the sessions have an environment model. With
-`parallelisation = ParallelSessions()`, the sessions run over the threads Julia was
+`parallelization = ParallelSessions()`, the sessions run over the threads Julia was
 started with. **The model that is evaluated, which is the outermost one, must then be
 marked with `setthreadsafe(model, true)` from DynamicPPL**, since the log density of a
 threaded model that isn't is wrong with no error; the sessions throw an error when it isn't
-marked. See `parallelisation` in [`turing_full_model`](@ref). This needs Turing.jl to be
+marked. See `parallelization` in [`turing_full_model`](@ref). This needs Turing.jl to be
 loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
@@ -156,7 +156,7 @@ see [`turing_session_parameters_model`](@ref), and `environment_parameters` is i
 form. It returns a vector with what each session returns, in the same order. The model is a
 building block for a Turing.jl model which samples the parameters of the sessions in some
 way of its own, as a submodel without a prefix:
-`to_submodel(turing_multiple_behavioural_sessions(sessions_info, parameters), false)`.
+`to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
 [`turing_full_model`](@ref) does this with parameters models.
 
 The session identifiers aren't in the names of the variables because each identifier would
@@ -164,18 +164,18 @@ give its sessions a prefix of its own type, and DynamicPPL compiles the code of 
 once for each: with 40 sessions, the first evaluation took 1.5 s instead of 0.2, and every
 one after it 44 ns per timestep instead of 9.
 """
-function turing_multiple_behavioural_sessions end
+function turing_multiple_behavioral_sessions end
 
 """
     turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
                       environment_parameters_model=NoParameters(),
                       downstream_model=NoDownstreamModel(), catch_invalid_parameters=false,
-                      parallelisation=NoParallelisation(), include_submodel_prefixes=false)
+                      parallelization=NoParallelization(), include_submodel_prefixes=false)
 
 Create the Turing.jl model which fits a cognitive model to several sessions, in three parts:
 `cognitive_parameters_model` gives or samples the cognitive parameters of every session, and
 `environment_parameters_model` those of the environment model, the sessions in
-`sessions_info` run with them as [`turing_multiple_behavioural_sessions`](@ref), and
+`sessions_info` run with them as [`turing_multiple_behavioral_sessions`](@ref), and
 `downstream_model` can do something with what they saved, such as a regression of a
 measurement on a state. This needs Turing.jl to be loaded.
 
@@ -201,7 +201,7 @@ measurement on a state. This needs Turing.jl to be loaded.
   model returns `nothing` for a rejected sample, without running the downstream model. A
   downstream model with variables of its own then lacks them in a rejected draw, so a
   sampler can't start from one: give it valid `initial_params` in that case.
-- `parallelisation=NoParallelisation()`: whether the sessions run over the threads Julia was
+- `parallelization=NoParallelization()`: whether the sessions run over the threads Julia was
   started with, with `ParallelSessions()`. **The model must then be marked with
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
   threaded model has a wrong log density with no error, so the sessions throw an error
@@ -223,10 +223,10 @@ so the learning rate of the third session is `learning_rate.session[3]`, and wit
 `IdenticalSessionParameters` it is one value, such as `learning_rate.shared`. The variables
 of the sessions are under `session[i]`, and those of the downstream model as it names them,
 or under `downstream_model` with the prefixes. The model returns
-`(; cognitive_parameters, environment_parameters, saved_behavioural_values, downstream_values)`:
+`(; cognitive_parameters, environment_parameters, saved_behavioral_values, downstream_values)`:
 the cognitive parameters and the environment parameters of every session as the parameters
 models gave them, what each session saved, as a vector of what
-[`turing_behavioural_session`](@ref) returns, and what the downstream model returned.
+[`turing_behavioral_session`](@ref) returns, and what the downstream model returned.
 `returned(model, chain)` gives them for each sample, so a fitted state is read from the
 chain without simulating again.
 
@@ -250,7 +250,7 @@ table = (;
     choice = [true, false, true, false, missing, true],
 )
 
-#The sessions, with the RescorlaWagner model of turing_behavioural_session
+#The sessions, with the RescorlaWagner model of turing_behavioral_session
 sessions_info = MultipleSessionsInfo(
     RescorlaWagner(),
     table;
@@ -273,7 +273,7 @@ chain = sample(model, NUTS(), 1000)
 #The parameters and the expected rewards of every session, for each sample
 results = returned(model, chain)
 results[1].cognitive_parameters.learning_rate
-results[1].saved_behavioural_values[2].states
+results[1].saved_behavioral_values[2].states
 
 #The same fit without saving, and the states read from the chain afterwards
 unsaved = turing_full_model(cognitive_parameters_model, MultipleSessionsInfo(sessions_info; cognitive_save_history = SaveHistory()))
@@ -300,7 +300,7 @@ as in
     learning_rate ~ Beta(2, 2)
     session ~ to_submodel(
         turing_catch_invalid_parameters(
-            turing_behavioural_session(session_info, (; learning_rate)),
+            turing_behavioral_session(session_info, (; learning_rate)),
         ),
         false,
     )

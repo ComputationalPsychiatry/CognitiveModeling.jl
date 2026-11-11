@@ -1,5 +1,5 @@
 """
-Computational modeling of cognition and behaviour.
+Computational modeling of cognition and behavior.
 """
 module CognitiveModeling
 
@@ -36,9 +36,9 @@ export AbstractSessionParametersModel,
     IdenticalSessionParameters,
     IndependentSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
-export NoParallelisation, ParallelSessions
-export turing_behavioural_session,
-    turing_multiple_behavioural_sessions, turing_full_model, turing_catch_invalid_parameters
+export NoParallelization, ParallelSessions
+export turing_behavioral_session,
+    turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 export session_values_chain, session_parameters_chain, predict_session_values
 
 #What users call with the package's name, as in CognitiveModeling.apply_model

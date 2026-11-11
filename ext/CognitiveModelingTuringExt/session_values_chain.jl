@@ -144,7 +144,7 @@ end
     with_session_info(model, change, function_name)
 
 Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
-`turing_multiple_behavioural_sessions` or `turing_behavioural_session`, or one of them
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or one of them
 inside `turing_catch_invalid_parameters`, whose session info is what `change` makes of its
 own: a `SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its
 other arguments, its keyword arguments and whether it is marked thread-safe stay as they
@@ -157,9 +157,9 @@ function with_session_info(
     function_name::AbstractString,
 ) where {F,argnames,defaultnames,missings,Targs,Tdefaults,Ctx,Threaded}
     args = model.args
-    if model.f === CognitiveModeling.turing_behavioural_session
+    if model.f === CognitiveModeling.turing_behavioral_session
         new_args = merge(args, (; session_info=change(args.session_info)))
-    elseif model.f === CognitiveModeling.turing_multiple_behavioural_sessions ||
+    elseif model.f === CognitiveModeling.turing_multiple_behavioral_sessions ||
         model.f === turing_run_full_model
         new_args = merge(args, (; sessions_info=change(args.sessions_info)))
     elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
@@ -169,7 +169,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioural_sessions or turing_behavioural_session, but this one is made by $(model.f). For a model of one's own, give session_values_chain the results of returned(model, chain) instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_values_chain the results of returned(model, chain) instead.",
             ),
         )
     end
@@ -185,7 +185,7 @@ Return the session info a model made by `with_session_info` runs: the `SessionIn
 single session, or the `MultipleSessionsInfo` of several. Used by `session_values_chain`.
 """
 function info_of(model::DynamicPPL.Model)
-    if model.f === CognitiveModeling.turing_behavioural_session
+    if model.f === CognitiveModeling.turing_behavioral_session
         return model.args.session_info
     elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
         return info_of(model.args.model)

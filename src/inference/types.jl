@@ -30,7 +30,7 @@ struct NoEnvironment end
 """
     SessionInfo(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
-Everything about one behavioural session that is fixed within a generative model to be
+Everything about one behavioral session that is fixed within a generative model to be
 fitted: the data, the models and the settings, checked and prepared once. An inference
 backend's model of the session takes it together with the parameters, which are what
 changes between evaluations. [`MultipleSessionsInfo`](@ref) makes one for each session in a
@@ -353,7 +353,7 @@ end
                          session_columns, <keyword arguments>)
     MultipleSessionsInfo(sessions, session_ids)
 
-Multiple behavioural sessions in a generative model that are fitted together, as a vector of
+Multiple behavioral sessions in a generative model that are fitted together, as a vector of
 [`SessionInfo`](@ref) with an identifier for each, which an inference backend's models of
 several sessions take.
 
@@ -708,17 +708,17 @@ struct NoDownstreamModel <: AbstractDownstreamModel end
 ## Types for how the models of several sessions run ##
 
 """
-    NoParallelisation()
+    NoParallelization()
 
-The default `parallelisation` of an inference backend's models of several sessions: the
+The default `parallelization` of an inference backend's models of several sessions: the
 sessions run one after the other. See [`ParallelSessions`](@ref) for the other choice.
 """
-struct NoParallelisation end
+struct NoParallelization end
 
 """
     ParallelSessions()
 
-Given as `parallelisation` to an inference backend's model of several sessions, it spreads
+Given as `parallelization` to an inference backend's model of several sessions, it spreads
 the sessions over the threads Julia was started with, as `Threads.@threads` does. What the
 model then needs, which automatic differentiation packages work with it and how much faster
 it is are described in the documentation of each inference backend.

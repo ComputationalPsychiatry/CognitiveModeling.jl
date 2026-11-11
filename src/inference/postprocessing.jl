@@ -9,7 +9,7 @@
                          environment_save_history=SaveHistory())
 
 Return what fitted sessions saved, for every sample, as a `FlexiChain` from FlexiChains.jl
-with the same samples as the fit, so that it can be summarised and plotted like the chain
+with the same samples as the fit, so that it can be summarized and plotted like the chain
 itself. This needs FlexiChains.jl to be loaded, which Turing.jl loads. The names of the
 entries are the `VarName`s that FlexiChains.jl uses, written as
 `@varname(P1.expected_value)` with FlexiChains.jl 0.6, which Turing.jl uses, and as
@@ -22,9 +22,9 @@ returns:
   session are named after its identifier, such as `P1.expected_value`. The parameters of the
   sessions are a chain of their own, see [`session_parameters_chain`](@ref), and what a
   downstream model returned isn't included.
-- [`turing_multiple_behavioural_sessions`](@ref), given with its `MultipleSessionsInfo`,
+- [`turing_multiple_behavioral_sessions`](@ref), given with its `MultipleSessionsInfo`,
   named in the same way.
-- [`turing_behavioural_session`](@ref), given without a session info, with no session
+- [`turing_behavioral_session`](@ref), given without a session info, with no session
   identifier in the names, such as `expected_value`.
 In a model of one's own around these, that model must return what they return, for
 `returned` to give it.
@@ -110,7 +110,7 @@ return what they saved as a `FlexiChain`, as [`session_values_chain`](@ref) make
 is for prior and posterior predictive checks, and needs Turing.jl to be loaded.
 
 `model` is made by [`turing_full_model`](@ref),
-[`turing_multiple_behavioural_sessions`](@ref) or [`turing_behavioural_session`](@ref), or
+[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
 is such a model inside [`turing_catch_invalid_parameters`](@ref). Its sessions are prepared
 with [`prepare_for_prediction`](@ref), so that every action is simulated, and every
 observation too when the sessions have an environment, and they save what the two save

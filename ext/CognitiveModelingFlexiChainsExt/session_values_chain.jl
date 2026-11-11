@@ -11,15 +11,15 @@ function CognitiveModeling.session_values_chain(
     first_result = first(results)
     entries = empty_entries()
 
-    if first_result isa NamedTuple && hasproperty(first_result, :saved_behavioural_values)
-        #The results of a full model hold what each session saved under saved_behavioural_values
-        check_number_of_sessions(first_result.saved_behavioural_values, sessions_info)
+    if first_result isa NamedTuple && hasproperty(first_result, :saved_behavioral_values)
+        #The results of a full model hold what each session saved under saved_behavioral_values
+        check_number_of_sessions(first_result.saved_behavioral_values, sessions_info)
         for (i, session_id) in enumerate(sessions_info.session_ids)
             add_session_entries!(
                 entries,
                 results,
                 (session_name(session_id),),
-                result -> result.saved_behavioural_values[i],
+                result -> result.saved_behavioral_values[i],
             )
         end
     elseif first_result isa AbstractVector
@@ -34,7 +34,7 @@ function CognitiveModeling.session_values_chain(
         #Anything else isn't known
         throw(
             ArgumentError(
-                "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioural_sessions returns for each sample, but they are of type $(typeof(first_result)). The results of a single session are given without a session info.",
+                "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample, but they are of type $(typeof(first_result)). The results of a single session are given without a session info.",
             ),
         )
     end
@@ -53,7 +53,7 @@ function CognitiveModeling.session_values_chain(
     if !(first_result isa NamedTuple && hasproperty(first_result, :states))
         throw(
             ArgumentError(
-                "Without a session info, the results must be what turing_behavioural_session returns for each sample, but they are of type $(typeof(first_result)). The results of a full model or of several sessions are given with their MultipleSessionsInfo.",
+                "Without a session info, the results must be what turing_behavioral_session returns for each sample, but they are of type $(typeof(first_result)). The results of a full model or of several sessions are given with their MultipleSessionsInfo.",
             ),
         )
     end
@@ -80,7 +80,7 @@ function CognitiveModeling.session_parameters_chain(
             ),
         )
     end
-    check_number_of_sessions(first_result.saved_behavioural_values, sessions_info)
+    check_number_of_sessions(first_result.saved_behavioral_values, sessions_info)
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
         name_of_session = session_name(session_id)

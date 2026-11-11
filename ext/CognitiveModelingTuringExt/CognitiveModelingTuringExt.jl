@@ -49,7 +49,7 @@ using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
-include("turing_behavioural_session.jl")
+include("turing_behavioral_session.jl")
 include("session_parameters_models.jl")
 include("session_values_chain.jl")
 

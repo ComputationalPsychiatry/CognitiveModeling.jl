@@ -156,9 +156,7 @@ Turing.@model function fit_rescorla_wagner(session_info)
     inverse_temperature ~ Turing.Flat()
     session ~ to_submodel(
         prefix(
-            turing_behavioural_session(
-                session_info, (; learning_rate, inverse_temperature)
-            ),
+            turing_behavioral_session(session_info, (; learning_rate, inverse_temperature)),
             @varname(session),
         ),
         false,
@@ -171,7 +169,7 @@ Turing.@model function fit_with_imputed_actions(session_info)
     noise_scale ~ Turing.Flat()
     session ~ to_submodel(
         prefix(
-            turing_behavioural_session(session_info, (; learning_rate, noise_scale)),
+            turing_behavioral_session(session_info, (; learning_rate, noise_scale)),
             @varname(session),
         ),
         false,
@@ -186,7 +184,7 @@ Turing.@model function fit_with_environment(session_info)
     scale ~ Turing.Flat()
     session ~ to_submodel(
         prefix(
-            turing_behavioural_session(
+            turing_behavioral_session(
                 session_info, (; learning_rate, inverse_temperature), (; scale)
             ),
             @varname(session),
@@ -203,7 +201,7 @@ Turing.@model function fit_with_fixed_environment(session_info)
     inverse_temperature ~ Turing.Flat()
     session ~ to_submodel(
         prefix(
-            turing_behavioural_session(
+            turing_behavioral_session(
                 session_info, (; learning_rate, inverse_temperature), (; scale=1.0)
             ),
             @varname(session),

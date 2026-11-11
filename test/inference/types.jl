@@ -946,7 +946,7 @@ end
 
     @test NoDownstreamModel() isa AbstractDownstreamModel
     @test isbitstype(NoDownstreamModel) && isbitstype(NoEnvironment)
-    @test isbitstype(NoParallelisation) && isbitstype(ParallelSessions)
+    @test isbitstype(NoParallelization) && isbitstype(ParallelSessions)
 
     @testset "The values of each session are found by its identifier, and become one vector for each parameter in the order of the sessions" begin
         @test CognitiveModeling.session_name("S1") === :S1

@@ -378,14 +378,14 @@ function session_for_test(
 )
     session_info = SessionInfo(model, observations, actions; who_starts, keywords...)
     session = if environment_parameters === nothing
-        turing_behavioural_session(session_info, parameters)
+        turing_behavioral_session(session_info, parameters)
     else
-        turing_behavioural_session(session_info, parameters, environment_parameters)
+        turing_behavioral_session(session_info, parameters, environment_parameters)
     end
     return catch_invalid_parameters ? turing_catch_invalid_parameters(session) : session
 end
 
-@testset "turing_behavioural_session" begin
+@testset "turing_behavioral_session" begin
     @testset "The session starts with BeforeFirstTimestep for the previous action, and for the observation when the agent starts" begin
         #RepeatsPreviousChoice chooses at random when there is no previous action, and repeats its choice with 0.9 otherwise
         @test logjoint(
@@ -547,7 +547,7 @@ end
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
         @test session_info.recorded_actions == (; choice=[true, false])
         #The model doesn't learn from the observation that wasn't made, and the missing choice is imputed
-        model = turing_behavioural_session(session_info, SESSION_PARAMETERS)
+        model = turing_behavioral_session(session_info, SESSION_PARAMETERS)
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), model))) ==
             [@varname(timestep[2].choice.imputed)]
         #A column whose element type allows missing gets the marker in its type even without a missing, so that sessions of one table have one type
@@ -1501,7 +1501,7 @@ end
             initial_value ~ Beta(2, 2)
             session ~ to_submodel(
                 prefix(
-                    turing_behavioural_session(
+                    turing_behavioral_session(
                         session_info, (; learning_rate, inverse_temperature, initial_value)
                     ),
                     @varname(session),

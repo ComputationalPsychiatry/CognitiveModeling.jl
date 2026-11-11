@@ -62,7 +62,7 @@ end
             @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
         #A model that isn't a full model gives no parameters
         @test_throws "session_parameters_chain(model, chain) takes a model made by turing_full_model" session_parameters_chain(
-            turing_multiple_behavioural_sessions(
+            turing_multiple_behavioral_sessions(
                 sessions_info,
                 (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[2.0, 2.0, 2.0]),
             ),
@@ -72,7 +72,7 @@ end
 
     @testset "The same works for several sessions and a single session, also inside the wrapper for invalid parameters" begin
         cognitive_save_history = SaveHistory(; states=:expected_reward)
-        sessions = turing_multiple_behavioural_sessions(
+        sessions = turing_multiple_behavioral_sessions(
             sessions_info,
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[2.0, 2.0, 2.0]),
         )

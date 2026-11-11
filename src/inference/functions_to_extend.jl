@@ -111,7 +111,7 @@ observations in the data inform the environment's parameters.
 function turing_session_parameters_model end
 
 """
-    turing_downstream_model(downstream_model, saved_behavioural_values, cognitive_parameters,
+    turing_downstream_model(downstream_model, saved_behavioral_values, cognitive_parameters,
                             sessions_info::MultipleSessionsInfo)
 
 Create the Turing.jl model which runs after the sessions in a [`turing_full_model`](@ref),
@@ -126,8 +126,8 @@ The model can return anything, which the full model returns as its `downstream_v
 # Implementation
 A downstream model is a subtype of [`AbstractDownstreamModel`](@ref) with a method of this
 function, which can ignore any of the arguments. A regression of some measurement on a state
-of the cognitive model, for instance, reads the state from `saved_behavioural_values`, a
-vector with the saved values of each session as [`turing_behavioural_session`](@ref) returns
+of the cognitive model, for instance, reads the state from `saved_behavioral_values`, a
+vector with the saved values of each session as [`turing_behavioral_session`](@ref) returns
 them, so the `cognitive_save_history` of the sessions must select that state.
 """
 function turing_downstream_model end

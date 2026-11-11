@@ -43,7 +43,7 @@ function chain_sessions(session_columns=:participant)
 end
 
 ## Results made by hand, so that no PPL is needed ##
-#What a session returns, in the shape turing_behavioural_session gives it: for each kind, a vector over the timesteps from
+#What a session returns, in the shape turing_behavioral_session gives it: for each kind, a vector over the timesteps from
 #timestep 0, with an empty NamedTuple on every timestep when nothing of that kind is saved, and the environment's record
 #under environment when the session has one
 function session_result(
@@ -107,12 +107,12 @@ end
 
 #What a full model returns, with the parameters of every session for both models
 function full_model_result(
-    cognitive_parameters, saved_behavioural_values; environment_parameters=(;)
+    cognitive_parameters, saved_behavioral_values; environment_parameters=(;)
 )
     return (;
         cognitive_parameters,
         environment_parameters,
-        saved_behavioural_values,
+        saved_behavioral_values,
         downstream_values=nothing,
     )
 end
@@ -338,10 +338,10 @@ end
         @test_throws "There are no results to make a chain of." session_values_chain(
             Matrix{Any}(undef, 0, 1)
         )
-        @test_throws "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioural_sessions returns" session_values_chain(
+        @test_throws "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioral_sessions returns" session_values_chain(
             reshape([one_session], 1, 1), chain_sessions()
         )
-        @test_throws "Without a session info, the results must be what turing_behavioural_session returns" session_values_chain(
+        @test_throws "Without a session info, the results must be what turing_behavioral_session returns" session_values_chain(
             reshape([[one_session]], 1, 1)
         )
         @test_throws "A sample has nothing as its result" session_values_chain(
