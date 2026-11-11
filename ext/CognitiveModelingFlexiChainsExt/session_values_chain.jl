@@ -18,7 +18,7 @@ function CognitiveModeling.session_values_chain(
             add_session_entries!(
                 entries,
                 results,
-                (session_symbol(session_id),),
+                (session_name(session_id),),
                 result -> result.saved_behavioural_values[i],
             )
         end
@@ -27,7 +27,7 @@ function CognitiveModeling.session_values_chain(
         check_number_of_sessions(first_result, sessions_info)
         for (i, session_id) in enumerate(sessions_info.session_ids)
             add_session_entries!(
-                entries, results, (session_symbol(session_id),), result -> result[i]
+                entries, results, (session_name(session_id),), result -> result[i]
             )
         end
     else
@@ -83,14 +83,14 @@ function CognitiveModeling.session_parameters_chain(
     check_number_of_sessions(first_result.saved_behavioural_values, sessions_info)
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
-        session_name = session_symbol(session_id)
+        name_of_session = session_name(session_id)
         add_parameter_entries!(
-            entries, results, (session_name,), result -> result.cognitive_parameters, i
+            entries, results, (name_of_session,), result -> result.cognitive_parameters, i
         )
         add_parameter_entries!(
             entries,
             results,
-            (session_name, :environment),
+            (name_of_session, :environment),
             result -> result.environment_parameters,
             i,
         )

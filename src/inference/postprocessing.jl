@@ -43,8 +43,9 @@ timesteps for every sample, which starts with timestep 0 when the initial values
 so that element `t + 1` is timestep `t`, as everywhere in the package. The observations, the
 actions and the distributions of timestep 0 are [`BeforeFirstTimestep`](@ref), so a summary
 of those entries needs timestep 0 left out. An identifier from several session columns is
-joined with underscores, as in `S1_2`. `iter_indices` and `chain_indices` number the samples
-as the chain that was fitted does.
+named by the name and the value of each column, as in `id_S1__block_2`, which
+[`CognitiveModeling.session_name`](@ref) gives. `iter_indices` and `chain_indices` number
+the samples as the chain that was fitted does.
 
 The third form, in the Turing extension, takes a model made by one of the three functions,
 or such a model inside [`turing_catch_invalid_parameters`](@ref), and a chain sampled from

@@ -667,43 +667,91 @@ function sessions_save_anything(sessions_info::MultipleSessionsInfo)
 end
 
 """
-    session_symbol(session_id)
+    session_name(session_id)
 
-Return the identifier of a session as a `Symbol`: the value of a single session column, and
-the values of several joined by underscores, as in `S1_2`. Used to name the entries of
-[`session_values_chain`](@ref) and to find the values of each session in
-[`FixedParametersBySession`](@ref).
+Return the name of a session, as a `Symbol`, from its identifier: the value of a single
+session column, as in `S1`, and the name and the value of each of several columns, joined
+by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The chains of a
+fit name the entries of a session after it, such as `S1.learning_rate`, and
+[`FixedParametersBySession`](@ref) can find the values of a session by it.
+
+A name that isn't a valid Julia identifier, such as that of the identifier `1` or
+`"sub-01"`, can't be typed into a `VarName`, but interpolation puts in any name: after
+`using CognitiveModeling: session_name`, the learning rate of a session is
+`chain[@varname(\$(session_name(session_id)).learning_rate)]`.
+
+# Examples
+```jldoctest
+julia> CognitiveModeling.session_name("S1")
+:S1
+
+julia> CognitiveModeling.session_name((; id = "S1", block = 2))
+:id_S1__block_2
+```
 """
-session_symbol(session_id) = Symbol(session_id)
-session_symbol(session_id::NamedTuple) = Symbol(join(map(string, values(session_id)), "_"))
+function session_name(session_id)
+
+    #Asserted, since the compiler can't infer that Symbol gives a Symbol for an identifier of any type
+    return Symbol(session_id)::Symbol
+end
+function session_name(session_id::NamedTuple)
+    return Symbol(
+        join((string(name, "_", value) for (name, value) in pairs(session_id)), "__")
+    )
+end
+
+"""
+    check_unique_session_names(session_ids)
+
+Throw an informative error if two sessions have the same name, as [`session_name`](@ref)
+gives it, since the chains of a fit and [`FixedParametersBySession`](@ref) find a session by
+its name. Two sessions have the same name when they have the same identifier, or when their
+identifiers give the same text, such as `1` and `"1"`. Used by
+[`MultipleSessionsInfo`](@ref).
+"""
+function check_unique_session_names(session_ids::AbstractVector)
+    names = map(session_name, session_ids)
+    allunique(names) && return nothing
+    for (i, name) in enumerate(names)
+        first_i = findfirst(==(name), names)
+        first_i == i && continue
+        first_id = session_ids[first_i]
+        session_id = session_ids[i]
+        if isequal(first_id, session_id)
+            throw(
+                ArgumentError(
+                    "The session identifier $(repr(session_id)) is given for more than one session. Every session must have an identifier of its own.",
+                ),
+            )
+        end
+        throw(
+            ArgumentError(
+                "The session identifiers $(repr(first_id)) and $(repr(session_id)) both give the session name $name, which the chains of a fit and FixedParametersBySession find a session by. Every session must have a name of its own.",
+            ),
+        )
+    end
+    return nothing
+end
 
 """
     parameters_by_session(values_by_session, session_ids)
 
-Return the values of each session in `values_by_session`, a `NamedTuple` with an entry for
-each session named by its identifier as [`session_symbol`](@ref) names it, as one vector for
-each parameter with a value for every session, in the order of `session_ids`. A session
-without values, or with other parameters than the first, is an error. Used by the Turing.jl
-model of [`FixedParametersBySession`](@ref).
+Return the values of each session in `values_by_session`, as
+[`FixedParametersBySession`](@ref) holds them, as one vector for each parameter with a value
+for every session, in the order of `session_ids`, with the values of each session found by
+[`values_of_session`](@ref). A session with other parameters than the first is an error.
+Used by the models of `FixedParametersBySession` in the inference backends.
 """
-function parameters_by_session(values_by_session::NamedTuple, session_ids)
-    values_of_each = map(session_ids) do session_id
-        name = session_symbol(session_id)
-        if !haskey(values_by_session, name)
-            throw(
-                ArgumentError(
-                    "FixedParametersBySession has no values for the session $name. It has values for $(keys(values_by_session)).",
-                ),
-            )
-        end
-        return getproperty(values_by_session, name)
-    end
+function parameters_by_session(values_by_session, session_ids)
+    values_of_each = map(
+        session_id -> values_of_session(values_by_session, session_id), session_ids
+    )
     names = keys(first(values_of_each))
     for (session_id, values) in zip(session_ids, values_of_each)
         if keys(values) != names
             throw(
                 ArgumentError(
-                    "FixedParametersBySession gives the session $(session_symbol(session_id)) the parameters $(keys(values)), and the first session the parameters $names. Every session must have values for the same parameters.",
+                    "FixedParametersBySession gives the session $(repr(session_id)) the parameters $(keys(values)), and the first session the parameters $names. Every session must have values for the same parameters.",
                 ),
             )
         end
@@ -711,6 +759,37 @@ function parameters_by_session(values_by_session::NamedTuple, session_ids)
     return NamedTuple{names}(
         map(name -> [getproperty(values, name) for values in values_of_each], names)
     )
+end
+
+"""
+    values_of_session(values_by_session, session_id)
+
+Return the values of the session with the identifier `session_id` in `values_by_session`:
+the entry named by the session's name, as [`session_name`](@ref) gives it, in a
+`NamedTuple`, and the value stored under the identifier itself in a dictionary. A session
+without values is an error. Used by [`parameters_by_session`](@ref).
+"""
+function values_of_session(values_by_session::NamedTuple, session_id)
+    name = session_name(session_id)
+    if !haskey(values_by_session, name)
+        throw(
+            ArgumentError(
+                "FixedParametersBySession has no values for the session $name. It has values for $(keys(values_by_session)).",
+            ),
+        )
+    end
+    return getproperty(values_by_session, name)
+end
+
+function values_of_session(values_by_session::AbstractDict, session_id)
+    if !haskey(values_by_session, session_id)
+        throw(
+            ArgumentError(
+                "FixedParametersBySession has no values for the session $(repr(session_id)). It has values for the sessions $(collect(keys(values_by_session))).",
+            ),
+        )
+    end
+    return values_by_session[session_id]
 end
 
 """

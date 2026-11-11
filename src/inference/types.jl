@@ -452,6 +452,7 @@ struct MultipleSessionsInfo{
                 ),
             )
         end
+        check_unique_session_names(session_ids)
         if !isconcretetype(eltype(sessions))
             throw(
                 ArgumentError(
@@ -617,14 +618,18 @@ end
 """
     FixedParametersBySession(parameters_by_session)
 
-The parameters model of a [`turing_full_model`](@ref) which gives each session values of its
-own, with nothing sampled. `parameters_by_session` is a `NamedTuple` with an entry for each
-session, named by the session's identifier, with the values of that session, such as
-`(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`. An identifier from several session columns
-is named by its values joined with underscores, as in `S1_2`. Every session must have values
-for the same parameters. The values are kept in the field `parameters_by_session`.
+The parameters model of a full model which gives each session values of its own, with
+nothing sampled. `parameters_by_session` holds the values of each session, either in a
+`NamedTuple` with an entry for each session, named by the session's name as
+[`CognitiveModeling.session_name`](@ref) gives it, such as
+`(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`, or in a dictionary from each session's
+identifier to its values, such as `Dict("S1" => (; scale = 2.0), "S2" => (; scale = 3.0))`.
+An identifier from several session columns is the `NamedTuple` of their values, so its
+entry is named like `id_S1__block_2`, and its key is like `(; id = "S1", block = 2)`. Every
+session must have values for the same parameters. The values are kept in the field
+`parameters_by_session`.
 """
-struct FixedParametersBySession{Tparameters_by_session<:NamedTuple} <:
+struct FixedParametersBySession{Tparameters_by_session<:Union{NamedTuple,AbstractDict}} <:
        AbstractSessionParametersModel
     parameters_by_session::Tparameters_by_session
 end

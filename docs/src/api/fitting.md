@@ -27,4 +27,5 @@ These are public, but not exported.
 ```@docs
 CognitiveModeling.n_sessions
 CognitiveModeling.session_index
+CognitiveModeling.session_name
 ```

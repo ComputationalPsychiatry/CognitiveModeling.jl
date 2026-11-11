@@ -46,6 +46,6 @@ public apply_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public turing_apply_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
-public ModelHistory, n_sessions, session_index
+public ModelHistory, n_sessions, session_index, session_name
 
 end

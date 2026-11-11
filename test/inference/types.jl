@@ -806,6 +806,13 @@ const COUNTER_TABLE = (;
         @test_throws "There must be at least one session." MultipleSessionsInfo(
             typeof(session)[], String[]
         )
+        #Every session needs a name of its own, which its identifier gives
+        @test_throws "The session identifier \"A\" is given for more than one session." MultipleSessionsInfo(
+            [session, session], ["A", "A"]
+        )
+        @test_throws "The session identifiers 1 and \"1\" both give the session name 1," MultipleSessionsInfo(
+            [session, session], Any[1, "1"]
+        )
     end
 
     @testset "The REPL shows a summary" begin
@@ -904,7 +911,7 @@ end
             ),
         )
         @test_throws MethodError FixedSessionParameters([2.0])
-        @test_throws MethodError FixedParametersBySession(Dict(:S1 => (; scale=2.0)))
+        @test_throws MethodError FixedParametersBySession([(; scale=2.0)])
         @test_throws MethodError IdenticalSessionParameters([1, 2])
         @test_throws MethodError IndependentSessionParameters([1, 2])
     end
@@ -927,22 +934,32 @@ end
     @test isbitstype(NoParallelisation) && isbitstype(ParallelSessions)
 
     @testset "The values of each session are found by its identifier, and become one vector for each parameter in the order of the sessions" begin
-        @test CognitiveModeling.session_symbol("S1") === :S1
-        @test CognitiveModeling.session_symbol(2) === Symbol("2")
-        @test CognitiveModeling.session_symbol((; id="S1", block=2)) === :S1_2
+        @test CognitiveModeling.session_name("S1") === :S1
+        @test CognitiveModeling.session_name(2) === Symbol("2")
+        @test CognitiveModeling.session_name((; id="S1", block=2)) === :id_S1__block_2
         values_by_session = (; S2=(; scale=2.0, offset=0.1), S1=(; scale=1.0, offset=0.0))
         @test CognitiveModeling.parameters_by_session(values_by_session, ["S1", "S2"]) ==
             (; scale=[1.0, 2.0], offset=[0.0, 0.1])
-        #A session from several columns is found by its identifiers joined with underscores
+        #A session from several columns is found by the name and the value of each column
         @test CognitiveModeling.parameters_by_session(
-            (; S1_2=(; scale=3.0)), [(; id="S1", block=2)]
+            (; id_S1__block_2=(; scale=3.0)), [(; id="S1", block=2)]
         ) == (; scale=[3.0])
         #A session without values, or with other parameters than the first, is an error
         @test_throws "FixedParametersBySession has no values for the session S3. It has values for (:S2, :S1)." CognitiveModeling.parameters_by_session(
             values_by_session, ["S1", "S3"]
         )
-        @test_throws "FixedParametersBySession gives the session S2 the parameters (:offset,), and the first session the parameters (:scale,). Every session must have values for the same parameters." CognitiveModeling.parameters_by_session(
+        @test_throws "FixedParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have values for the same parameters." CognitiveModeling.parameters_by_session(
             (; S1=(; scale=1.0), S2=(; offset=0.0)), ["S1", "S2"]
+        )
+        #The values can be in a dictionary from each session's identifier too, of one column or of several
+        @test CognitiveModeling.parameters_by_session(
+            Dict("S2" => (; scale=2.0), "S1" => (; scale=1.0)), ["S1", "S2"]
+        ) == (; scale=[1.0, 2.0])
+        @test CognitiveModeling.parameters_by_session(
+            Dict((; id="S1", block=2) => (; scale=3.0)), [(; id="S1", block=2)]
+        ) == (; scale=[3.0])
+        @test_throws "FixedParametersBySession has no values for the session \"S3\". It has values for the sessions [\"S1\"]." CognitiveModeling.parameters_by_session(
+            Dict("S1" => (; scale=1.0)), ["S1", "S3"]
         )
     end
 

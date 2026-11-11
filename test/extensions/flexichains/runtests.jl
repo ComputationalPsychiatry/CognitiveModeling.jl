@@ -303,7 +303,7 @@ end
         @test entry(chain, "expected_value")[1] == [0.0, 0.0, 0.5]
     end
 
-    @testset "Identifiers from several session columns are joined with underscores, and a state that isn't a NamedTuple is one entry" begin
+    @testset "Identifiers from several session columns are named by each column's name and value, and a state that isn't a NamedTuple is one entry" begin
         sessions = [
             session_result(1; states=[0.0, 0.5]),
             session_result(1; states=[0.0, 0.0]),
@@ -312,8 +312,12 @@ end
         chain = session_values_chain(
             reshape([sessions], 1, 1), chain_sessions((:participant, :block))
         )
-        @test entry_names(chain) == ["P1_1.states", "P1_2.states", "P2_1.states"]
-        @test entry(chain, "P1_1.states")[1] == [0.0, 0.5]
+        @test entry_names(chain) == [
+            "participant_P1__block_1.states",
+            "participant_P1__block_2.states",
+            "participant_P2__block_1.states",
+        ]
+        @test entry(chain, "participant_P1__block_1.states")[1] == [0.0, 0.5]
     end
 
     @testset "The samples are numbered as given" begin

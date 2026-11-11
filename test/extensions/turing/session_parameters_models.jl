@@ -33,6 +33,18 @@
         @test model() ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         @test isempty(keys(rand(Xoshiro(1), model)))
+        #The same from a dictionary keyed by the sessions' identifiers
+        from_dictionary = CognitiveModeling.turing_session_parameters_model(
+            FixedParametersBySession(
+                Dict(
+                    "S3" => (; learning_rate=0.4, inverse_temperature=3.0),
+                    "S1" => (; learning_rate=0.2, inverse_temperature=1.0),
+                    "S2" => (; learning_rate=0.3, inverse_temperature=2.0),
+                ),
+            ),
+            sessions_info,
+        )
+        @test from_dictionary() == model()
         @test_throws "FixedParametersBySession has no values for the session S3. It has values for (:S1, :S2)." CognitiveModeling.turing_session_parameters_model(
             FixedParametersBySession((;
                 S1=(; learning_rate=0.2), S2=(; learning_rate=0.3)

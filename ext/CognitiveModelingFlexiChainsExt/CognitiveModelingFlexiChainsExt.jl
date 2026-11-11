@@ -1,7 +1,7 @@
 module CognitiveModelingFlexiChainsExt
 
 using CognitiveModeling
-using CognitiveModeling: MultipleSessionsInfo, session_symbol
+using CognitiveModeling: MultipleSessionsInfo, session_name
 using FlexiChains: FlexiChains, FlexiChain, Parameter, VarName
 
 #The names of the entries are the VarName that FlexiChains.jl uses, made with the macro it exports. Version 0.7 uses the
