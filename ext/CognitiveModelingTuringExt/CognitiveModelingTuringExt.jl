@@ -2,8 +2,8 @@ module CognitiveModelingTuringExt
 
 using CognitiveModeling
 using CognitiveModeling:
-    AbstractModel,
-    apply_model,
+    AbstractTimestepModel,
+    apply_timestep_model,
     initialize_state,
     attribute_names,
     describe_model,
@@ -11,7 +11,7 @@ using CognitiveModeling:
     session_trajectories_chain,
     session_parameters_chain
 using CognitiveModeling:
-    turing_apply_model,
+    turing_apply_timestep_model,
     turing_initialize_state,
     turing_session_parameters_model,
     turing_downstream_model,

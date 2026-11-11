@@ -4,7 +4,9 @@ struct SessionRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::SessionRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::SessionRescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::SessionRescorlaWagner, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     r = context.input.reward
     Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
@@ -30,7 +32,9 @@ struct TwoContinuousActions <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TwoContinuousActions, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::TwoContinuousActions, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::TwoContinuousActions, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput(
@@ -51,11 +55,11 @@ struct ActsEverySecondTimestep <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::ActsEverySecondTimestep, parameters)
     return (; n_timesteps=0, timestep_size=0)
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::ActsEverySecondTimestep, context::ModelContext
 )
     n_timesteps = context.previous_state.n_timesteps + 1
-    choice = iseven(n_timesteps) ? Bernoulli(context.parameters.probability) : NoAction()
+    choice = iseven(n_timesteps) ? Bernoulli(context.parameters.probability) : NoValue()
     return ModelOutput((; choice), (; n_timesteps, timestep_size=context.timestep_size))
 end
 function CognitiveModeling.attribute_names(model::ActsEverySecondTimestep)
@@ -72,7 +76,7 @@ struct NoisySessionModel <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::NoisySessionModel, parameters)
     return (; expected_reward=0.5)
 end
-Turing.@model function CognitiveModeling.turing_apply_model(
+Turing.@model function CognitiveModeling.turing_apply_timestep_model(
     model::NoisySessionModel, context::ModelContext
 )
     noise ~ Normal(0, context.parameters.noise_scale)
@@ -91,7 +95,9 @@ end
 #Repeats its previous choice with a probability of 0.9, and chooses at random when there is none
 struct RepeatsPreviousChoice <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RepeatsPreviousChoice, parameters) = (;)
-function CognitiveModeling.apply_model(model::RepeatsPreviousChoice, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::RepeatsPreviousChoice, context::ModelContext
+)
     previous = context.previous_output.choice
     return ModelOutput((; choice=Bernoulli(
         if previous isa AbstractNoValue
@@ -112,7 +118,9 @@ struct RecordsWhoStarts <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters)
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.apply_model(model::RecordsWhoStarts, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::RecordsWhoStarts, context::ModelContext
+)
     return ModelOutput((; choice=Deterministic(true)), (; who_starts=context.who_starts))
 end
 function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
@@ -126,7 +134,7 @@ struct RejectsHighLearningRate <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RejectsHighLearningRate, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::RejectsHighLearningRate, context::ModelContext
 )
     context.parameters.learning_rate > 1 &&
@@ -148,7 +156,9 @@ struct StartsFromParameter <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StartsFromParameter, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.apply_model(model::StartsFromParameter, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::StartsFromParameter, context::ModelContext
+)
     Vₜ =
         context.previous_state.expected_reward +
         context.parameters.learning_rate *
@@ -181,7 +191,9 @@ Turing.@model function CognitiveModeling.turing_initialize_state(
     start_noise ~ Normal(0, 0.1)
     return (; expected_reward=parameters.initial_value + start_noise)
 end
-function CognitiveModeling.apply_model(model::SamplesItsStart, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::SamplesItsStart, context::ModelContext
+)
     Vₜ =
         context.previous_state.expected_reward +
         context.parameters.learning_rate *
@@ -202,7 +214,7 @@ struct RewardsPreviousChoice <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RewardsPreviousChoice, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsPreviousChoice, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : float(context.input.choice)
@@ -221,7 +233,9 @@ CognitiveModeling.default_parameters(environment::RewardsPreviousChoice) = (; sc
 #Gives a symbol as the reward, which can't be scored as a point mass
 struct GivesSymbol <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::GivesSymbol, parameters) = (;)
-function CognitiveModeling.apply_model(environment::GivesSymbol, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::GivesSymbol, context::ModelContext
+)
     return ModelOutput((; reward=Deterministic(:win)))
 end
 function CognitiveModeling.attribute_names(environment::GivesSymbol)
@@ -231,7 +245,9 @@ end
 #Ends after a number of timesteps which is a parameter, counting them in its state, and always pays 1
 struct EndsAfterPulls <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::EndsAfterPulls, parameters) = (; pulls=0)
-function CognitiveModeling.apply_model(environment::EndsAfterPulls, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::EndsAfterPulls, context::ModelContext
+)
     return ModelOutput(
         (; reward=Deterministic(1.0)), (; pulls=context.previous_state.pulls + 1)
     )
@@ -252,8 +268,8 @@ struct StopsWhenSure <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StopsWhenSure, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::StopsWhenSure, context::ModelContext)
-    return apply_model(SessionRescorlaWagner(), context)
+function CognitiveModeling.apply_timestep_model(model::StopsWhenSure, context::ModelContext)
+    return apply_timestep_model(SessionRescorlaWagner(), context)
 end
 function CognitiveModeling.attribute_names(model::StopsWhenSure)
     return ModelAttributes(;
@@ -270,7 +286,9 @@ end
 #Gives no observations at all
 struct GivesNothing <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::GivesNothing, parameters) = (;)
-function CognitiveModeling.apply_model(environment::GivesNothing, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::GivesNothing, context::ModelContext
+)
     return ModelOutput((;))
 end
 function CognitiveModeling.attribute_names(environment::GivesNothing)
@@ -280,9 +298,11 @@ end
 #A bandit which pays a reward of 1 with a probability of 0.8 after a choice of true, and 0.2 after false, so that a reward says something about the choice before it
 struct PaysForChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::PaysForChoice, parameters) = (;)
-function CognitiveModeling.apply_model(environment::PaysForChoice, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::PaysForChoice, context::ModelContext
+)
     choice = context.input.choice
-    choice isa AbstractNoValue && return ModelOutput((; reward=NoObservation()))
+    choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))
     return ModelOutput((; reward=Bernoulli(choice ? 0.8 : 0.2)))
 end
 function CognitiveModeling.attribute_names(environment::PaysForChoice)
@@ -292,7 +312,9 @@ end
 #Gives a distribution to sample its reward from
 struct NoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::NoisyRewards, parameters) = (;)
-function CognitiveModeling.apply_model(environment::NoisyRewards, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::NoisyRewards, context::ModelContext
+)
     return ModelOutput((; reward=Normal(0.5, 1.0)))
 end
 function CognitiveModeling.attribute_names(environment::NoisyRewards)
@@ -302,7 +324,9 @@ end
 #Gives the reward of NoisyRewards under another name, with a cue which isn't random, and takes the choice under another name, for maps of names
 struct NoisyPayoffs <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::NoisyPayoffs, parameters) = (;)
-function CognitiveModeling.apply_model(environment::NoisyPayoffs, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::NoisyPayoffs, context::ModelContext
+)
     return ModelOutput((; payoff=Normal(0.5, 1.0), cue=Deterministic(1.0)))
 end
 function CognitiveModeling.attribute_names(environment::NoisyPayoffs)
@@ -314,7 +338,7 @@ end
 #Samples a drift of its state within each timestep in Turing, and gives the state as a reward which isn't random
 struct DriftingRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::DriftingRewards, parameters) = (; level=0.5)
-Turing.@model function CognitiveModeling.turing_apply_model(
+Turing.@model function CognitiveModeling.turing_apply_timestep_model(
     environment::DriftingRewards, context::ModelContext
 )
     drift ~ Normal(0, 1)
@@ -328,11 +352,10 @@ end
 #Gives no reward before the first choice, and the previous choice afterwards
 struct RewardsAfterFirstChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsAfterFirstChoice, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsAfterFirstChoice, context::ModelContext
 )
-    context.input.choice isa AbstractNoValue &&
-        return ModelOutput((; reward=NoObservation()))
+    context.input.choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))
     return ModelOutput((; reward=Deterministic(float(context.input.choice))))
 end
 function CognitiveModeling.attribute_names(environment::RewardsAfterFirstChoice)
@@ -490,7 +513,7 @@ end
                 RecordsWhoStarts(),
                 (;),
                 (; reward=[1.0, 0.0]),
-                (; choice=[NoAction(), NoAction()]);
+                (; choice=[NoValue(), NoValue()]);
                 who_starts,
                 cognitive_save_history=SaveHistory(; states=:who_starts),
             )
@@ -539,10 +562,10 @@ end
             (; reward=[1.0, missing, 0.0]),
             (; choice=[true, missing, false]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoObservation(),),
+            observation_replacements=(missing => NoValue(),),
         )
-        @test session_info.observations.reward == [1.0, NoObservation(), 0.0] &&
-            session_info.observations.reward isa Vector{Union{NoObservation,Float64}}
+        @test session_info.observations.reward == [1.0, NoValue(), 0.0] &&
+            session_info.observations.reward isa Vector{Union{NoValue,Float64}}
         @test session_info.actions.choice == [true, MissingValue(), false] &&
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
         @test session_info.recorded_actions == (; choice=[true, false])
@@ -562,8 +585,8 @@ end
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
-            action_replacements=(missing => NoAction(),),
-        ).actions.choice isa Vector{Union{NoAction,Bool}}
+            action_replacements=(missing => NoValue(),),
+        ).actions.choice isa Vector{Union{NoValue,Bool}}
         #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." SessionInfo(
             SessionRescorlaWagner(),
@@ -789,9 +812,9 @@ end
         end
         @test logjoint(model, (;)) ≈ expected
         @test logprior(model, (;)) == 0
-        #The log density is that of data which has NoAction there, since neither is scored
+        #The log density is that of data which has NoValue there, since neither is scored
         with_no_action = (;
-            choice=[0.2, NoAction(), 0.4, NoAction()], bet=[1.0, 1.5, NoAction(), 0.8]
+            choice=[0.2, NoValue(), 0.4, NoValue()], bet=[1.0, 1.5, NoValue(), 0.8]
         )
         @test logjoint(model, (;)) ≈ logjoint(
             session_for_test(
@@ -905,7 +928,7 @@ end
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." session_for_test(
             SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES
         )
-        #An observation that the environment doesn't give stays NoObservation
+        #An observation that the environment doesn't give stays NoValue
         model = session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
@@ -915,7 +938,7 @@ end
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         @test returned(model, (;)).observations[2:end] ==
-            [(; reward=NoObservation()), (; reward=1.0), (; reward=0.0)]
+            [(; reward=NoValue()), (; reward=1.0), (; reward=0.0)]
     end
 
     @testset "With maps of names, a session is the same, with the environment's variables and history in its own names" begin
@@ -1348,9 +1371,9 @@ end
             V
     end
 
-    @testset "NoAction in the data or from the model isn't scored, and both get the timestep sizes" begin
-        #The model acts on even timesteps, and the data has NoAction on the odd ones
-        actions = (; choice=[NoAction(), true, NoAction(), false])
+    @testset "NoValue in the data or from the model isn't scored, and both get the timestep sizes" begin
+        #The model acts on even timesteps, and the data has NoValue on the odd ones
+        actions = (; choice=[NoValue(), true, NoValue(), false])
         model = session_for_test(
             ActsEverySecondTimestep(),
             (; probability=0.7),
@@ -1363,17 +1386,17 @@ end
             logpdf(Bernoulli(0.7), true) + logpdf(Bernoulli(0.7), false)
         history = returned(model, (;))
         @test history.actions[2:end] == [
-            (; choice=NoAction()), (; choice=true), (; choice=NoAction()), (; choice=false)
+            (; choice=NoValue()), (; choice=true), (; choice=NoValue()), (; choice=false)
         ]
         @test [state.timestep_size for state in history.states[2:end]] == [0.5, 1.0, 1.5, 2.0]
         @test history.observations == fill((;), 5)
-        #The data can also have NoAction where the model acts, which isn't scored either
+        #The data can also have NoValue where the model acts, which isn't scored either
         @test logjoint(
             session_for_test(
                 ActsEverySecondTimestep(),
                 (; probability=0.7),
                 (;),
-                (; choice=[NoAction(), NoAction(), NoAction(), false]),
+                (; choice=[NoValue(), NoValue(), NoValue(), false]),
             ),
             (;),
         ) ≈ logpdf(Bernoulli(0.7), false)
@@ -1383,13 +1406,13 @@ end
                 ActsEverySecondTimestep(),
                 (; probability=0.7),
                 (;),
-                (; choice=[NoAction(), NoAction(), NoAction(), NoAction()]),
+                (; choice=[NoValue(), NoValue(), NoValue(), NoValue()]),
             ),
             (;),
         ) == 0
         @test logjoint(
             session_for_test(
-                ActsEverySecondTimestep(), (; probability=0.7), (;), (; choice=[NoAction()])
+                ActsEverySecondTimestep(), (; probability=0.7), (;), (; choice=[NoValue()])
             ),
             (;),
         ) == 0

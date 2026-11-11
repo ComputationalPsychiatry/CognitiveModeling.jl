@@ -13,7 +13,9 @@ struct TuringRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::TuringRescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::TuringRescorlaWagner, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     r = context.input.reward
     Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
@@ -36,7 +38,9 @@ struct TuringContinuousAction <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringContinuousAction, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::TuringContinuousAction, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::TuringContinuousAction, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput(
@@ -57,7 +61,7 @@ struct TuringNoisyModel <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringNoisyModel, parameters)
     return (; expected_reward=0.5)
 end
-Turing.@model function CognitiveModeling.turing_apply_model(
+Turing.@model function CognitiveModeling.turing_apply_timestep_model(
     model::TuringNoisyModel, context::ModelContext
 )
     noise ~ Normal(0, context.parameters.noise_scale)
@@ -84,7 +88,7 @@ function CognitiveModeling.initialize_state(
 )
     return (;)
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::TuringRewardsPreviousChoice, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -97,7 +101,7 @@ end
 # Gives a distribution around the previous choice to sample the reward from, so that a missing reward is a latent
 struct TuringNoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::TuringNoisyRewards, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::TuringNoisyRewards, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -115,9 +119,7 @@ const TURING_CONTINUOUS_CHOICES = (;
     choice=[0.3, 0.6, MissingValue(), 0.4, 0.7, MissingValue(), 0.5, 0.2, 0.8, 0.6]
 )
 const TURING_REWARDS_NOT_ALWAYS_GIVEN = (;
-    reward=[
-        1.0, 0.0, NoObservation(), 1.0, 0.0, NoObservation(), 0.0, 0.0, NoObservation(), 1.0
-    ]
+    reward=[1.0, 0.0, NoValue(), 1.0, 0.0, NoValue(), 0.0, 0.0, NoValue(), 1.0]
 )
 const TURING_MISSING_REWARDS = (;
     reward=[

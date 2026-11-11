@@ -12,9 +12,9 @@ Fitting imputes a missing action by sampling it from the model's action distribu
 timestep. It imputes a missing observation from what an environment model gives for the
 observation on that timestep: as a latent variable with that distribution, or as the value
 of a [`Deterministic`](@ref). A value that isn't in the data and isn't to be imputed is
-[`UnimputedMissingValue`](@ref) instead. [`NoAction`](@ref) and [`NoObservation`](@ref) are
-different: they say that nothing was done or observed on the timestep. Unlike `missing`,
-arithmetic on it is an error. By default, a [`SessionInfo`](@ref) replaces `missing` in the
+[`UnimputedMissingValue`](@ref) instead. [`NoValue`](@ref) is different: it says that
+nothing was done or observed on the timestep. Unlike `missing`, arithmetic on it is an
+error. By default, a [`SessionInfo`](@ref) replaces `missing` in the
 data by it.
 """
 struct MissingValue end
@@ -58,7 +58,7 @@ changes between evaluations. [`MultipleSessionsInfo`](@ref) makes one for each s
 table.
 
 # Arguments
-- `cognitive_model::AbstractModel`: the cognitive model, usually an
+- `cognitive_model::AbstractTimestepModel`: the cognitive model, usually an
   [`AbstractCognitiveModel`](@ref).
 - `observations`: the observations in the data, as a `NamedTuple` with one vector for each
   name and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data
@@ -67,18 +67,18 @@ table.
   `[1.0, 0.0, 1.0]`, is the data of that observation, whatever its name. An observation that
   wasn't recorded is [`MissingValue`](@ref), which `environment` imputes, or
   [`UnimputedMissingValue`](@ref), which the model receives as it is, and one that wasn't
-  made is [`NoObservation`](@ref).
+  made is [`NoValue`](@ref).
 - `actions`: the actions in the data, in the same forms, with exactly the actions the model
   lists. An action that was taken but not recorded is `MissingValue()`, which is imputed, or
   `UnimputedMissingValue()`, which isn't, and an action that wasn't taken is
-  [`NoAction`](@ref). None of them is scored.
+  [`NoValue`](@ref). None of them is scored.
 
 # Keyword arguments
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
   observation of the same timestep, `EnvironmentStarts()`, or on the observation of the
   timestep before, `AgentStarts()`, as in [`simulate`](@ref). It has no default, because a
   wrong choice shifts the model by a timestep without any error.
-- `environment::Union{NoEnvironment, AbstractModel}=NoEnvironment()`: an environment
+- `environment::Union{NoEnvironment, AbstractTimestepModel}=NoEnvironment()`: an environment
   model, usually an [`AbstractEnvironmentModel`](@ref), which imputes the observations that
   are `MissingValue()`, and against whose distributions the observations in the data are
   scored. Its outputs must be the inputs of `cognitive_model` and the other way round,
@@ -128,9 +128,9 @@ table.
 - `observation_replacements=(missing => MissingValue(),)` and
   `action_replacements=(missing => MissingValue(),)`: which values in the data are replaced
   by a marker, as pairs from the value to the marker, like those `replace` takes, such as
-  `(missing => MissingValue(), -1 => NoAction())`. The marker is [`MissingValue`](@ref) for
+  `(missing => MissingValue(), -1 => NoValue())`. The marker is [`MissingValue`](@ref) for
   a value that is imputed, [`UnimputedMissingValue`](@ref) for one that isn't, and
-  [`NoObservation`](@ref) or [`NoAction`](@ref) for nothing happening on the timestep. A
+  [`NoValue`](@ref) or [`NoValue`](@ref) for nothing happening on the timestep. A
   value is compared to those of the pairs with `isequal`. A single pair can be given on its
   own, and `()` keeps every value as it is, `missing` too. The markers can also be put in
   the data directly.
@@ -242,7 +242,9 @@ struct SessionInfo{
 end
 
 #Prepares the session
-function SessionInfo(cognitive_model::AbstractModel, observations, actions; keywords...)
+function SessionInfo(
+    cognitive_model::AbstractTimestepModel, observations, actions; keywords...
+)
     return prepare_session(cognitive_model, observations, actions; keywords...)
 end
 
@@ -288,11 +290,11 @@ scored and returned prepared, as its constructor describes. Used by `SessionInfo
 [`MultipleSessionsInfo`](@ref).
 """
 function prepare_session(
-    cognitive_model::AbstractModel,
+    cognitive_model::AbstractTimestepModel,
     observations,
     actions;
     who_starts::Union{AgentStarts,EnvironmentStarts},
-    environment::Union{NoEnvironment,AbstractModel}=NoEnvironment(),
+    environment::Union{NoEnvironment,AbstractTimestepModel}=NoEnvironment(),
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
     include_environment::Union{Nothing,Bool}=nothing,
@@ -419,7 +421,7 @@ those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions 
 The same sessions with other save histories for every one, see [`SessionInfo`](@ref).
 
 # Arguments
-- `cognitive_model::AbstractModel`: the cognitive model, usually an
+- `cognitive_model::AbstractTimestepModel`: the cognitive model, usually an
   [`AbstractCognitiveModel`](@ref).
 - `table`: the data of every session, in columns with one entry for each timestep, such as
   `(; id = ["S1", "S1", "S2", "S2"], reward = [1.0, 0.0, 1.0, 1.0], choice = [true, false, true, true])`,
@@ -554,7 +556,7 @@ end
 
 #Splits a table into sessions by the values of the session columns, and prepares each of them in the same way
 function MultipleSessionsInfo(
-    cognitive_model::AbstractModel,
+    cognitive_model::AbstractTimestepModel,
     table;
     observation_columns,
     action_columns,
@@ -636,7 +638,7 @@ the sessions, or sampling it from its prior, simulates each session again, with 
 number of timesteps at most, the same settings and the same environment. The observations of
 a session without an environment stay those in the data, as for an experiment whose
 observations are fixed in advance. Every action is simulated, whatever it was in the data,
-also one that was [`UnimputedMissingValue`](@ref) or [`NoAction`](@ref). The copy checks the
+also one that was [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). The copy checks the
 [`stopping_criterion`](@ref) of the models as `check_stopping_criterion` says, as for
 [`SessionInfo`](@ref), whatever the session was prepared with: by default after the last
 timestep with data, which in a session with an environment is before every timestep, so

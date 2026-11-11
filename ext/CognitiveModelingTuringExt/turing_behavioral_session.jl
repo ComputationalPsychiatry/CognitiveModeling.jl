@@ -106,7 +106,7 @@ parameter can be given is found by [`sampled_ranges`](@ref). A value outside its
 an `InvalidParametersError` when a session runs. Used by `turing_full_model` when it creates
 the model.
 """
-function warn_if_values_outside_domains(parameters_model, model::AbstractModel)
+function warn_if_values_outside_domains(parameters_model, model::AbstractTimestepModel)
     domains = parameter_domains(model)
     isempty(domains) && return nothing
     for (name, range) in sampled_ranges(parameters_model)
@@ -314,7 +314,7 @@ end
 Turing.jl model which runs every session in `sessions_info` as a submodel with the prefix
 `session[i]`, and returns a vector with what each returned. The first session runs outside
 the loop, so that the vector has its type. Sessions of one type can still save trajectories
-of different types, such as an action that is `NoAction()` in one session only, and a
+of different types, such as an action that is `NoValue()` in one session only, and a
 session whose trajectories have another type widens the vector, as [`store_value!`](@ref)
 does. With
 [`NoParallelization`](@ref) the sessions run one after the other, and with
@@ -469,7 +469,7 @@ end
 
 #The same with an environment, which fills in the observations that are missing in the data, and takes its parameters too
 Turing.@model function CognitiveModeling.turing_behavioral_session(
-    session_info::SessionInfo{<:Any,<:AbstractModel},
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel},
     cognitive_parameters,
     environment_parameters=(;),
 )
@@ -770,7 +770,9 @@ timestep, or an empty `NamedTuple` for a session without an environment, whose o
 aren't scored. Used by [`store_recorded_distributions`](@ref).
 """
 observation_distribution_of(::SessionInfo{<:Any,NoEnvironment}, timestep_values) = (;)
-function observation_distribution_of(::SessionInfo{<:Any,<:AbstractModel}, timestep_values)
+function observation_distribution_of(
+    ::SessionInfo{<:Any,<:AbstractTimestepModel}, timestep_values
+)
     return timestep_values.environment.observation_distribution
 end
 function recorded_observations_on_timestep_of(
@@ -779,7 +781,7 @@ function recorded_observations_on_timestep_of(
     return (;)
 end
 function recorded_observations_on_timestep_of(
-    ::SessionInfo{<:Any,<:AbstractModel}, timestep_values
+    ::SessionInfo{<:Any,<:AbstractTimestepModel}, timestep_values
 )
     return timestep_values.environment.recorded_observations_on_timestep
 end
@@ -902,7 +904,7 @@ Turing.@model function turing_behavioral_timestep(
 end
 
 Turing.@model function turing_behavioral_timestep(
-    session_info::SessionInfo{<:Any,<:AbstractModel},
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel},
     t,
     cognitive_parameters,
     environment_parameters,
@@ -1015,11 +1017,11 @@ end
     turing_model_timestep(model, context, data_columns, t)
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
-environment model: `model` runs on `context` with [`turing_apply_model`](@ref), and its
-outputs are then taken from row `t` of `data_columns`, the data for them, where they are
+environment model: `model` runs on `context` with [`turing_apply_timestep_model`](@ref), and
+its outputs are then taken from row `t` of `data_columns`, the data for them, where they are
 recorded, imputed from what the model gave where they are [`MissingValue`](@ref), as
 [`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
-otherwise, such as `UnimputedMissingValue()` or `NoAction()`. It returns the output, the
+otherwise, such as `UnimputedMissingValue()` or `NoValue()`. It returns the output, the
 model's new state, the distribution it gave for the output and which outputs are recorded on
 the timestep, as [`recorded_on_timestep`](@ref) gives it, so that the recorded values can be
 scored against the distributions at the end of the session. The row is taken here and not
@@ -1027,7 +1029,7 @@ given. Used by [`turing_behavioral_timestep`](@ref).
 """
 Turing.@model function turing_model_timestep(model, context, data_columns, t)
     data_output = row(data_columns, t)
-    model_output ~ to_submodel(turing_apply_model(model, context), false)
+    model_output ~ to_submodel(turing_apply_timestep_model(model, context), false)
     model_output = check_model_output(model_output, model)
     output ~ to_submodel(
         turing_impute_missing_values(data_output, model_output.output_distribution), false
@@ -1098,8 +1100,7 @@ end
 Turing.jl model for one value of the data: a value that is there is taken as it is, and so
 is any marker but [`MissingValue`](@ref), which is a latent variable named `imputed` with
 `distribution`, the value of a [`Deterministic`](@ref), or the marker itself when the model
-gives [`NoAction`](@ref) or [`NoObservation`](@ref) on that timestep. Used by
-[`turing_impute_each_value`](@ref).
+gives [`NoValue`](@ref) on that timestep. Used by [`turing_impute_each_value`](@ref).
 """
 Turing.@model function turing_impute_value(data_value, distribution)
     return data_value

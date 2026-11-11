@@ -5,8 +5,8 @@
 
 Return whether a single action or observation in the data happened and was recorded, so that
 it is scored: neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
-[`UnimputedMissingValue`](@ref), [`NoAction`](@ref) or [`NoObservation`](@ref). Used by
-[`recorded_values`](@ref) and [`recorded_on_timestep`](@ref).
+[`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by [`recorded_values`](@ref) and
+[`recorded_on_timestep`](@ref).
 """
 is_recorded(value) = !(value isa MissingValue || value isa AbstractNoValue)
 
@@ -107,7 +107,7 @@ replacement_pairs(replacements::AbstractVector{<:Pair}) = Tuple(replacements)
 function replacement_pairs(replacements)
     return throw(
         ArgumentError(
-            "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoAction()), but they are $(repr(replacements)).",
+            "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoValue()), but they are $(repr(replacements)).",
         ),
     )
 end
@@ -250,7 +250,7 @@ observations and one for the actions, doesn't have the observations and the acti
 of timesteps otherwise. Used by [`SessionInfo`](@ref).
 """
 function check_data(
-    cognitive_model::AbstractModel, observations::NamedTuple, actions::NamedTuple
+    cognitive_model::AbstractTimestepModel, observations::NamedTuple, actions::NamedTuple
 )
     attributes = check_type_attribute_names(
         attribute_names(cognitive_model), cognitive_model
@@ -284,7 +284,7 @@ function check_data(
 end
 
 #The same for the data that isn't a NamedTuple of vectors
-function check_data(cognitive_model::AbstractModel, observations, actions)
+function check_data(cognitive_model::AbstractTimestepModel, observations, actions)
     return throw(
         ArgumentError(
             "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), or a single vector when the model has only one of them in its attributes, but they have types $(typeof(observations)) and $(typeof(actions)).",
@@ -301,7 +301,7 @@ with one, it must list the same observations and actions as `cognitive_model`. U
 [`SessionInfo`](@ref).
 """
 function check_environment_fits(
-    cognitive_model::AbstractModel,
+    cognitive_model::AbstractTimestepModel,
     ::NoEnvironment,
     observations::NamedTuple,
     observation_map,
@@ -325,8 +325,8 @@ function check_environment_fits(
 end
 
 function check_environment_fits(
-    cognitive_model::AbstractModel,
-    environment::AbstractModel,
+    cognitive_model::AbstractTimestepModel,
+    environment::AbstractTimestepModel,
     observations::NamedTuple,
     observation_map,
     action_map,
@@ -348,7 +348,9 @@ imputed, and for the observation the environment starts from, with
 [`BeforeFirstTimestep`](@ref).
 """
 environment_view(values, ::NoEnvironment, observation_map, filler) = values
-function environment_view(values, environment::AbstractModel, observation_map, filler)
+function environment_view(
+    values, environment::AbstractTimestepModel, observation_map, filler
+)
     outputs = check_type_attribute_names(attribute_names(environment), environment).outputs
     return NamedTuple{outputs}(
         map(name -> value_passed_on(values, name, observation_map, filler), outputs)
@@ -659,7 +661,7 @@ environment which doesn't run, see [`SessionInfo`](@ref). Used by
 [`check_environment_parameters`](@ref).
 """
 has_environment(::SessionInfo{<:Any,NoEnvironment}) = false
-has_environment(::SessionInfo{<:Any,<:AbstractModel}) = true
+has_environment(::SessionInfo{<:Any,<:AbstractTimestepModel}) = true
 function has_environment(sessions_info::MultipleSessionsInfo)
     return has_environment(first(sessions_info.sessions))
 end
@@ -950,7 +952,7 @@ sessions, without an environment model, which is decided by the types. Used by t
 of several sessions.
 """
 function check_environment_parameters(
-    ::SessionInfo{<:Any,<:AbstractModel}, environment_parameters::NamedTuple
+    ::SessionInfo{<:Any,<:AbstractTimestepModel}, environment_parameters::NamedTuple
 )
     return nothing
 end
@@ -988,7 +990,9 @@ they score.
 """
 recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorded_actions))
 recorded_observation_names(::SessionInfo{<:Any,NoEnvironment}) = Val(())
-function recorded_observation_names(session_info::SessionInfo{<:Any,<:AbstractModel})
+function recorded_observation_names(
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel}
+)
     return Val(keys(session_info.recorded_observations))
 end
 
@@ -1031,8 +1035,7 @@ Return whether each output of `model` on one timestep has a recorded value in th
 `NamedTuple` of `Bool`s with the names of `data_output`: the actions of a cognitive model,
 or the observations an environment model gives. A recorded value is scored against the
 distribution the model gave for it in `output_distribution`, so it is an error when the
-model gave nothing for it, [`NoAction`](@ref) or [`NoObservation`](@ref). Used by the
-timesteps of fitted sessions.
+model gave nothing for it, [`NoValue`](@ref). Used by the timesteps of fitted sessions.
 """
 function recorded_on_timestep(
     data_output::NamedTuple{names}, output_distribution::NamedTuple, model
@@ -1136,7 +1139,7 @@ function saved_session_values(
 end
 
 function saved_session_values(
-    session_info::SessionInfo{<:Any,<:AbstractModel}, timestep_values
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel}, timestep_values
 )
     return merge(
         saved_cognitive_values(
@@ -1241,7 +1244,7 @@ function initial_session_values(
 end
 
 function initial_session_values(
-    ::Val{true}, session_info::SessionInfo{<:Any,<:AbstractModel}, previous
+    ::Val{true}, session_info::SessionInfo{<:Any,<:AbstractTimestepModel}, previous
 )
     cognitive_model = session_info.cognitive_model
 
@@ -1308,7 +1311,7 @@ end
 ## Display ##
 
 #Prints the name of a model, or none
-print_model_name(io::IO, model::AbstractModel) = print(io, nameof(typeof(model)))
+print_model_name(io::IO, model::AbstractTimestepModel) = print(io, nameof(typeof(model)))
 print_model_name(io::IO, ::NoEnvironment) = print(io, "none")
 
 #Prints the names of one kind of attribute in the data, or none

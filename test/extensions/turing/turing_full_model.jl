@@ -34,7 +34,7 @@ end
 #An environment which gives a reward around a mean which is a parameter, so that the rewards in the data inform the mean
 struct RewardsAroundMean <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsAroundMean, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsAroundMean, context::ModelContext
 )
     return ModelOutput((; reward=Normal(context.parameters.mean_reward, 1.0)))
@@ -48,7 +48,7 @@ end
 #An environment which gives a reward with a probability which it calls the learning rate, like the cognitive model does
 struct RewardsWithLearningRate <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithLearningRate, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsWithLearningRate, context::ModelContext
 )
     return ModelOutput((; reward=Bernoulli(context.parameters.learning_rate)))
@@ -865,8 +865,10 @@ struct BoundedRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::BoundedRescorlaWagner, parameters)
     return initialize_state(SessionRescorlaWagner(), parameters)
 end
-function CognitiveModeling.apply_model(model::BoundedRescorlaWagner, context::ModelContext)
-    return apply_model(SessionRescorlaWagner(), context)
+function CognitiveModeling.apply_timestep_model(
+    model::BoundedRescorlaWagner, context::ModelContext
+)
+    return apply_timestep_model(SessionRescorlaWagner(), context)
 end
 function CognitiveModeling.attribute_names(model::BoundedRescorlaWagner)
     return CognitiveModeling.attribute_names(SessionRescorlaWagner())

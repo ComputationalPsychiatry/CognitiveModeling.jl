@@ -36,7 +36,7 @@ state ~ to_submodel(turing_initialize_state(cognitive_model, cognitive_parameter
 for t in 1:n_timesteps
 
     #The cognitive model gives a distribution for each action, under the prefix timestep[t]
-    output ~ to_submodel(turing_apply_model(cognitive_model, context))
+    output ~ to_submodel(turing_apply_timestep_model(cognitive_model, context))
 
     #An action that is missing in the data is a latent variable with that distribution
     choice.imputed ~ output.output_distribution.choice
@@ -56,26 +56,26 @@ starts, and scores the recorded observations like the actions.
 The states where the session starts come from [`turing_initialize_state`](@ref) of each
 model with the parameters, so that a starting state which is a parameter is fitted like any
 other, and a model can sample its start. Both models are treated the same way on each
-timestep: [`turing_apply_model`](@ref) of the cognitive model runs as a submodel with the
-prefix `timestep[t]`, so a model which samples within a timestep has its own variables for
-each timestep, such as `timestep[3].noise`, and an environment model runs with the prefix
-`timestep[t].environment`. The outputs of each, the actions and the observations, are then
-taken from the data where they are recorded, and where the data has [`MissingValue`](@ref)
-they are imputed from what the model gave: as a latent variable with that distribution,
-named `timestep[3].choice.imputed` or `timestep[3].environment.reward.imputed`, or as the
-value itself if it is a [`Deterministic`](@ref). Where the data has
-[`UnimputedMissingValue`](@ref), or a marker for nothing happening, the models receive the
-marker as it is, and nothing is sampled or scored for it. The sampler must handle the type
-of a latent variable: a continuous value can be sampled with NUTS, a discrete one needs a
-sampler for discrete variables. The recorded actions are scored at the end as observed
-values, in one `product_distribution` over every action and timestep, against the
-distributions the cognitive model gave for them. The recorded observations are scored the
-same way against the distributions the environment gave, so that they inform the missing
-values and the environment's parameters. A `Deterministic` is scored as a point mass, with a
-log density of 0 for its value and `-Inf` for any other, and only a number or a `Bool` can
-be, so a recorded value the model gives as another kind of `Deterministic` is an error. A
-recorded value where the model gave nothing, [`NoAction`](@ref) or [`NoObservation`](@ref),
-is an error too. When the session doesn't include its environment, as the
+timestep: [`turing_apply_timestep_model`](@ref) of the cognitive model runs as a submodel
+with the prefix `timestep[t]`, so a model which samples within a timestep has its own
+variables for each timestep, such as `timestep[3].noise`, and an environment model runs with
+the prefix `timestep[t].environment`. The outputs of each, the actions and the observations,
+are then taken from the data where they are recorded, and where the data has
+[`MissingValue`](@ref) they are imputed from what the model gave: as a latent variable with
+that distribution, named `timestep[3].choice.imputed` or
+`timestep[3].environment.reward.imputed`, or as the value itself if it is a
+[`Deterministic`](@ref). Where the data has [`UnimputedMissingValue`](@ref), or a marker for
+nothing happening, the models receive the marker as it is, and nothing is sampled or scored
+for it. The sampler must handle the type of a latent variable: a continuous value can be
+sampled with NUTS, a discrete one needs a sampler for discrete variables. The recorded
+actions are scored at the end as observed values, in one `product_distribution` over every
+action and timestep, against the distributions the cognitive model gave for them. The
+recorded observations are scored the same way against the distributions the environment
+gave, so that they inform the missing values and the environment's parameters. A
+`Deterministic` is scored as a point mass, with a log density of 0 for its value and `-Inf`
+for any other, and only a number or a `Bool` can be, so a recorded value the model gives as
+another kind of `Deterministic` is an error. A recorded value where the model gave nothing,
+[`NoValue`](@ref), is an error too. When the session doesn't include its environment, as the
 `include_environment` of `session_info` decides, which by default is when nothing in the
 data is `MissingValue()` and the environment's history isn't saved, the session is the same
 as one without an environment, with the same variables. The [`stopping_criterion`](@ref) of
@@ -113,7 +113,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = parameters.initial_value)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     Pₜ = BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))

@@ -158,7 +158,7 @@ julia> struct LearnsRewards <: AbstractCognitiveModel end
 
 julia> CognitiveModeling.initialize_state(::LearnsRewards, parameters) = (; expected_reward = 0.5);
 
-julia> function CognitiveModeling.apply_model(::LearnsRewards, context::ModelContext)
+julia> function CognitiveModeling.apply_timestep_model(::LearnsRewards, context::ModelContext)
            V = context.previous_state.expected_reward
            V = V + context.parameters.learning_rate * (context.input.reward - V)
            return ModelOutput((; choice = Deterministic(V > 0.5)), (; expected_reward = V))
@@ -182,7 +182,7 @@ LearnsRewards (instantiated cognitive model, 1 timestep simulated)
 ```
 """
 mutable struct InstantiatedModel{
-    Tmodel<:AbstractModel,Tparameters,Tsave_history<:SaveHistory
+    Tmodel<:AbstractTimestepModel,Tparameters,Tsave_history<:SaveHistory
 }
     model::Tmodel
     parameters::Tparameters
@@ -196,7 +196,7 @@ end
 
 #Starts the model from its initial state, with nothing given yet
 function InstantiatedModel(
-    model::AbstractModel, parameters; save_history::SaveHistory=SaveHistory()
+    model::AbstractTimestepModel, parameters; save_history::SaveHistory=SaveHistory()
 )
     parameters = merge_default_parameters(model, parameters)
     return InstantiatedModel(
@@ -210,7 +210,7 @@ end
 
 #Fills in the default parameters, checks the names, and starts the history where the model starts, with what is selected of it
 function InstantiatedModel(
-    model::AbstractModel,
+    model::AbstractTimestepModel,
     parameters,
     state,
     previous_output;
@@ -249,7 +249,7 @@ lists as `BeforeFirstTimestep()`, and so has every output distribution. [`reset!
 starts from the same history as the constructors.
 """
 function starting_history(
-    model::AbstractModel, state, previous_output, save_history::SaveHistory
+    model::AbstractTimestepModel, state, previous_output, save_history::SaveHistory
 )
     if saves_nothing(save_history) || !saves_initial_values(save_history)
         return ModelHistory(Any[], Any[], Any[], Any[], Any[])
@@ -293,7 +293,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))

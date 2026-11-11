@@ -3,37 +3,34 @@ struct EnvironmentWithoutMethods <: AbstractEnvironmentModel end
 
 #Leaves the context without a type annotation, which must not be ambiguous with the fallback
 struct ModelWithUnannotatedContext <: AbstractCognitiveModel end
-function CognitiveModeling.apply_model(model::ModelWithUnannotatedContext, context)
+function CognitiveModeling.apply_timestep_model(model::ModelWithUnannotatedContext, context)
     return ModelOutput((; choice=0.7))
 end
 
 @testset "Functions to extend" begin
-    model_context = ModelContext(
-        (; reward=NoObservation()), (;), (; choice=NoAction()), (;)
-    )
-    environment_context = ModelContext(
-        (; choice=NoAction()), (;), (; reward=NoObservation()), (;)
-    )
+    model_context = ModelContext((; reward=NoValue()), (;), (; choice=NoValue()), (;))
+    environment_context = ModelContext((; choice=NoValue()), (;), (; reward=NoValue()), (;))
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "There is no apply_model method for a cognitive model of type ModelWithoutMethods with a context of type" CognitiveModeling.apply_model(
+        @test_throws "There is no apply_timestep_model method for a cognitive model of type ModelWithoutMethods with a context of type" CognitiveModeling.apply_timestep_model(
             ModelWithoutMethods(), model_context
         )
-        @test_throws "CognitiveModeling.apply_model(model::ModelWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_model(
+        @test_throws "CognitiveModeling.apply_timestep_model(model::ModelWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_timestep_model(
             ModelWithoutMethods(), model_context
         )
         #An environment model gets the same message, named as one
-        @test_throws "There is no apply_model method for an environment model of type EnvironmentWithoutMethods with a context of type" CognitiveModeling.apply_model(
+        @test_throws "There is no apply_timestep_model method for an environment model of type EnvironmentWithoutMethods with a context of type" CognitiveModeling.apply_timestep_model(
             EnvironmentWithoutMethods(), environment_context
         )
-        @test_throws "CognitiveModeling.apply_model(model::EnvironmentWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_model(
+        @test_throws "CognitiveModeling.apply_timestep_model(model::EnvironmentWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.apply_timestep_model(
             EnvironmentWithoutMethods(), environment_context
         )
     end
 
     @testset "A timestep method can leave its context without a type" begin
-        @test CognitiveModeling.apply_model(ModelWithUnannotatedContext(), model_context).output_distribution.choice ==
-            0.7
+        @test CognitiveModeling.apply_timestep_model(
+            ModelWithUnannotatedContext(), model_context
+        ).output_distribution.choice == 0.7
     end
 
     @testset "A missing method for the initial state gives an informative error" begin
@@ -74,13 +71,13 @@ end
 
     @testset "The functions to extend are public, but not exported" begin
         for name in (
-            :apply_model,
+            :apply_timestep_model,
             :initialize_state,
             :attribute_names,
             :prepare_state_for_saving,
             :default_parameters,
             :stopping_criterion,
-            :turing_apply_model,
+            :turing_apply_timestep_model,
         )
             @test Base.ispublic(CognitiveModeling, name)
             @test !Base.isexported(CognitiveModeling, name)

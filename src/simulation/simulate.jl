@@ -4,8 +4,8 @@
 
 Sample an output from what a model returned, using `rand`. Each output in a `NamedTuple` is
 sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an
-entry that is [`NoAction`](@ref) or [`NoObservation`](@ref) is kept. A number, a string or a
-symbol is a value and not something to sample from, and throws an `ArgumentError` which
+entry that is [`NoValue`](@ref) is kept. A number, a string or a symbol is a value and not
+something to sample from, and throws an `ArgumentError` which
 names [`Deterministic`](@ref). Used on each timestep of a simulation, by
 [`simulate_timestep`](@ref).
 """
@@ -43,7 +43,7 @@ cognitive model or an environment model, for the parameters it doesn't have, if 
 provides defaults for them. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and
 fitted sessions.
 """
-function merge_default_parameters(model::AbstractModel, parameters)
+function merge_default_parameters(model::AbstractTimestepModel, parameters)
     return merge(default_parameters(model), parameters)
 end
 
@@ -77,8 +77,8 @@ lists. Used by [`simulate`](@ref), [`simulate!`](@ref), and [`SessionInfo`](@ref
 session with an environment.
 """
 function check_names_fit(
-    cognitive_model::AbstractModel,
-    environment::AbstractModel,
+    cognitive_model::AbstractTimestepModel,
+    environment::AbstractTimestepModel,
     observation_map=nothing,
     action_map=nothing,
 )
@@ -209,7 +209,7 @@ function get_timestep_size(timestep_size, t)
     return timestep_size
 end
 
-#Its own function, so that the compiler can split the call when an output can have two types, like an observation with an entry that is sometimes NoObservation
+#Its own function, so that the compiler can split the call when an output can have two types, like an observation with an entry that is sometimes NoValue
 """
     collect_timestep_values(environment_output, cognitive_output, environment_observation,
                             observation, action, environment_action, cognitive_model,
@@ -277,7 +277,7 @@ function collect_timestep_values(
     )
 end
 
-#A call of its own, so that an observation which can have two types, like one with an entry that is sometimes NoObservation, gives one of two NamedTuples with concrete fields, as the call is split by type
+#A call of its own, so that an observation which can have two types, like one with an entry that is sometimes NoValue, gives one of two NamedTuples with concrete fields, as the call is split by type
 """
     environment_values(state, observation)
 
@@ -482,7 +482,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     #Update the environment
     environment_output = check_model_output(
         @inline(
-            apply_model(
+            apply_timestep_model(
                 environment,
                 ModelContext(
                     previous_environment_action,
@@ -507,7 +507,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     #Update the cognitive model
     cognitive_output = check_model_output(
         @inline(
-            apply_model(
+            apply_timestep_model(
                 cognitive_model,
                 ModelContext(
                     observation,
@@ -575,7 +575,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     #Update the cognitive model
     cognitive_output = check_model_output(
         @inline(
-            apply_model(
+            apply_timestep_model(
                 cognitive_model,
                 ModelContext(
                     previous_observation,
@@ -600,7 +600,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     #Update the environment
     environment_output = check_model_output(
         @inline(
-            apply_model(
+            apply_timestep_model(
                 environment,
                 ModelContext(
                     environment_action,
@@ -644,7 +644,7 @@ Throw an informative error if [`stopping_criterion`](@ref) of `model` is already
 [`simulate_all_timesteps`](@ref), and by fitted sessions, where there is nothing to check
 for an environment a session doesn't have.
 """
-function check_stopping_criterion_not_met(model::AbstractModel, state, parameters)
+function check_stopping_criterion_not_met(model::AbstractTimestepModel, state, parameters)
     if stopping_criterion(model, state, parameters)
         throw(
             ArgumentError(
@@ -887,9 +887,9 @@ model is met, unless `check_stopping_criterion` is `false`, and everything retur
 the timesteps that ran.
 
 # Arguments
-- `cognitive_model::AbstractModel`: the cognitive model, usually an
+- `cognitive_model::AbstractTimestepModel`: the cognitive model, usually an
   [`AbstractCognitiveModel`](@ref).
-- `environment::AbstractModel`: the environment model, usually an
+- `environment::AbstractTimestepModel`: the environment model, usually an
   [`AbstractEnvironmentModel`](@ref). A cognitive model can serve as the environment of
   another when its outputs are what the other lists as its inputs, and vice versa.
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: who moves first on each timestep. It
@@ -953,7 +953,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = BernoulliLogit(Vₜ - 0.5)), (; expected_reward = Vₜ))
@@ -970,7 +970,7 @@ function CognitiveModeling.initialize_state(environment::BernoulliRewards, param
     return (;)
 end
 
-function CognitiveModeling.apply_model(environment::BernoulliRewards, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(environment::BernoulliRewards, context::ModelContext)
     return ModelOutput((; reward = Bernoulli(context.parameters.reward_probability)))
 end
 
@@ -1003,7 +1003,7 @@ simulation.states
 # Extended help
 The return type is concrete as long as the types of the outputs don't change between
 timesteps. If they do, like an observation with an entry that is sometimes
-[`NoObservation`](@ref), the vector for that output holds a `Union` of the types. The same
+[`NoValue`](@ref), the vector for that output holds a `Union` of the types. The same
 goes for timestep 0 when it has other types than the timesteps after it, which the
 observations and actions usually do, since they are `BeforeFirstTimestep()` there.
 
@@ -1014,8 +1014,8 @@ error. Observations and actions have no such function, so they must be new
 objects on each timestep.
 """
 function simulate(
-    cognitive_model::AbstractModel,
-    environment::AbstractModel;
+    cognitive_model::AbstractTimestepModel,
+    environment::AbstractTimestepModel;
     who_starts::Union{AgentStarts,EnvironmentStarts},
     n_steps::Int,
     timestep_sizes=1,
@@ -1146,7 +1146,7 @@ function CognitiveModeling.initialize_state(model::RandomChoices, parameters)
     return (;)
 end
 
-function CognitiveModeling.apply_model(model::RandomChoices, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RandomChoices, context::ModelContext)
     return ModelOutput((; choice = Bernoulli(0.5)))
 end
 
@@ -1160,7 +1160,7 @@ function CognitiveModeling.initialize_state(model::TimestepCounter, parameters)
     return (; n_timesteps = 0)
 end
 
-function CognitiveModeling.apply_model(model::TimestepCounter, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::TimestepCounter, context::ModelContext)
     n_timesteps = context.previous_state.n_timesteps + 1
     return ModelOutput((; timestep = Deterministic(n_timesteps)), (; n_timesteps))
 end
@@ -1296,7 +1296,7 @@ function simulate_timestep(
     #Update the model
     model_output = check_model_output(
         @inline(
-            apply_model(
+            apply_timestep_model(
                 model,
                 ModelContext(
                     input,
@@ -1349,10 +1349,9 @@ or an `ArgumentError` is thrown. Parameters that aren't given take the values in
 parameters, the state and the previous output are checked as in a full simulation.
 
 # Arguments
-- `model::AbstractModel`: the model.
+- `model::AbstractTimestepModel`: the model.
 - `input::NamedTuple`: what the model receives on this timestep, such as `(; reward = 1.0)`
-  for a cognitive model. An entry that isn't there is [`NoObservation`](@ref) or
-  [`NoAction`](@ref).
+  for a cognitive model. An entry that isn't there is [`NoValue`](@ref).
 - `parameters::NamedTuple`: the parameters of `model`, with its default values for those
   that aren't given, if it provides any.
 - `timestep_size=1`: how much time this timestep covers.
@@ -1374,7 +1373,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))
@@ -1406,7 +1405,7 @@ state
 ```
 """
 function simulate(
-    model::AbstractModel,
+    model::AbstractTimestepModel,
     input;
     parameters::NamedTuple,
     timestep_size=1,
@@ -1453,8 +1452,7 @@ for [`simulate`](@ref). The input must be a `NamedTuple` with every input the mo
 # Arguments
 - `instantiated_model::InstantiatedModel`: the model to update.
 - `input::NamedTuple`: what the model receives on this timestep, such as `(; reward = 1.0)`
-  for a cognitive model. An entry that isn't there is [`NoObservation`](@ref) or
-  [`NoAction`](@ref).
+  for a cognitive model. An entry that isn't there is [`NoValue`](@ref).
 - `timestep_size=1`: how much time this timestep covers.
 - `rng::AbstractRNG=default_rng()`: the random number generator to sample from.
 
@@ -1469,7 +1467,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))

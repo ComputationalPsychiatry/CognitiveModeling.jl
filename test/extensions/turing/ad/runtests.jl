@@ -51,7 +51,7 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="Enzyme reverse throws an IllegalTypeAnalysisException, with and without runtime activity, for a session whose observations are NoObservation on some timesteps, so that a row of the data is one of two NamedTuples",
+        bug="Enzyme reverse throws an IllegalTypeAnalysisException, with and without runtime activity, for a session whose observations are NoValue on some timesteps, so that a row of the data is one of two NamedTuples",
         backends=["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases=[
             "turing session with a reward that isn't always given, environment starts",

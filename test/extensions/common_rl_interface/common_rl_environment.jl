@@ -29,9 +29,9 @@ CommonRLInterface.terminated(rl_env::PlainBandit) = rl_env.pulls >= 3
 #model uses a name for one attribute
 struct PullsArm <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::PullsArm, parameters)
-    return (; last_reward=NoObservation())
+    return (; last_reward=NoValue())
 end
-function CognitiveModeling.apply_model(model::PullsArm, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::PullsArm, context::ModelContext)
     return ModelOutput(
         (; arm=Deterministic(context.parameters.arm_to_pull)),
         (; last_reward=context.input.reward),
@@ -49,7 +49,7 @@ end
 #Has two actions, of which a map passes one on to the environment, and lists only the reward
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
-function CognitiveModeling.apply_model(model::PullsTwoArms, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::PullsTwoArms, context::ModelContext)
     return ModelOutput((; first=Deterministic(1), second=Deterministic(2)))
 end
 function CognitiveModeling.attribute_names(model::PullsTwoArms)
@@ -112,13 +112,12 @@ end
         simulation = run_bandit(CountingBandit(0, 0))
         observations = simulation.observations
         #The first observation has no reward, since nothing has been done yet
-        @test observations[1] ===
-            (; observation=0, reward=NoObservation(), terminated=false)
+        @test observations[1] === (; observation=0, reward=NoValue(), terminated=false)
         @test observations[2] == (; observation=1, reward=1.0, terminated=false)
         @test observations[4] == (; observation=3, reward=1.0, terminated=true)
         #The model gets the actions it took and the rewards
         @test all(action -> action === (; arm=1), simulation.actions)
-        @test [state.last_reward for state in simulation.states] == [NoObservation(), 1.0, 1.0, 1.0]
+        @test [state.last_reward for state in simulation.states] == [NoValue(), 1.0, 1.0, 1.0]
         #The environment's own history has the same observations, as it gave them, and the actions it received
         @test simulation.environment.observations == observations
         @test simulation.environment.actions == simulation.actions
@@ -151,7 +150,7 @@ end
         observations = run_bandit(rl_env).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
         #An episode that has ended isn't started again by an action given to it by hand
-        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.apply_model(
+        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.apply_timestep_model(
             environment, ModelContext((; arm=1), rl_env, observations[end], (;))
         )
         @test rl_env.pulls == 3
@@ -160,8 +159,8 @@ end
     @testset "Before the first action, and when the model takes none, the environment stays where it is" begin
         rl_env = CountingBandit(0, 0)
         environment = CommonRLEnvironment(rl_env; action_name=:arm)
-        for no_action in (BeforeFirstTimestep(), NoAction())
-            output = CognitiveModeling.apply_model(
+        for no_action in (BeforeFirstTimestep(), NoValue())
+            output = CognitiveModeling.apply_timestep_model(
                 environment,
                 ModelContext(
                     (; arm=no_action),
@@ -172,7 +171,7 @@ end
             )
             @test output.output_distribution === (;
                 observation=Deterministic(0),
-                reward=NoObservation(),
+                reward=NoValue(),
                 terminated=Deterministic(false),
             )
             @test rl_env.pulls == 0
@@ -182,7 +181,7 @@ end
     @testset "What the environment gives after an action is passed on as it is, with nothing sampled" begin
         rl_env = CountingBandit(0, 0)
         environment = CommonRLEnvironment(rl_env; action_name=:arm)
-        output = CognitiveModeling.apply_model(
+        output = CognitiveModeling.apply_timestep_model(
             environment,
             ModelContext(
                 (; arm=1),
@@ -281,7 +280,7 @@ end
         observations =
             simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
-        @test observations[1].reward === NoObservation()
+        @test observations[1].reward === NoValue()
     end
 
     @testset "Maps of names pass on what a model with other names lists" begin

@@ -59,7 +59,7 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="Enzyme reverse throws an EnzymeNoTypeError when numbers are copied into a vector whose element type is a Union: here when an observation is NoObservation on some timesteps and the vector of saved observations is widened to hold it, and when a vector of timestep sizes is copied into the one simulate returns, which starts with BeforeFirstTimestep for timestep 0",
+        bug="Enzyme reverse throws an EnzymeNoTypeError when numbers are copied into a vector whose element type is a Union: here when an observation is NoValue on some timesteps and the vector of saved observations is widened to hold it, and when a vector of timestep sizes is copied into the one simulate returns, which starts with BeforeFirstTimestep for timestep 0",
         backends=["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases=[
             "simulate with a reward that isn't always given, environment starts",

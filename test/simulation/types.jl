@@ -45,8 +45,8 @@
         @test CognitiveModeling.map_names(outputs, NameMap()) === (;)
         #Markers are passed on like any value
         @test CognitiveModeling.map_names(
-            (; payoff=NoObservation()), NameMap(:payoff => :reward)
-        ) === (; reward=NoObservation())
+            (; payoff=NoValue()), NameMap(:payoff => :reward)
+        ) === (; reward=NoValue())
         @test_throws FieldError CognitiveModeling.map_names(
             outputs, NameMap(:nope => :reward)
         )

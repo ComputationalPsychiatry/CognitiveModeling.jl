@@ -4,7 +4,7 @@ using Random: Xoshiro, default_rng
     observation = (; reward=1.0)
     state = (; expected_reward=0.5)
     parameters = (; learning_rate=0.1)
-    previous_action = (; choice=NoAction())
+    previous_action = (; choice=NoValue())
 
     @testset "ModelContext sets the timestep size to 1 if it isn't specified" begin
         @test ModelContext(observation, state, previous_action, parameters).timestep_size ===
@@ -105,9 +105,8 @@ using Random: Xoshiro, default_rng
     @testset "ModelOutput only takes named output distributions" begin
         @test ModelOutput((; choice=0.7)).output_distribution === (; choice=0.7)
         @test ModelOutput((;)).output_distribution === (;)
-        @test ModelOutput((; choice=NoAction())).output_distribution ===
-            (; choice=NoAction())
-        @test_throws MethodError ModelOutput(NoAction())
+        @test ModelOutput((; choice=NoValue())).output_distribution === (; choice=NoValue())
+        @test_throws MethodError ModelOutput(NoValue())
         @test_throws MethodError ModelOutput(0.7)
         @test_throws MethodError ModelOutput((0.7, 0.5))
     end
@@ -120,9 +119,8 @@ using Random: Xoshiro, default_rng
     @testset "ModelOutput for an environment model only takes named observation distributions" begin
         @test ModelOutput((; reward=Deterministic(1.0))).output_distribution ===
             (; reward=Deterministic(1.0))
-        @test ModelOutput((; reward=NoObservation())).output_distribution ===
-            (; reward=NoObservation())
-        @test_throws MethodError ModelOutput(NoObservation())
+        @test ModelOutput((; reward=NoValue())).output_distribution === (; reward=NoValue())
+        @test_throws MethodError ModelOutput(NoValue())
         @test_throws MethodError ModelOutput(Deterministic(1.0))
     end
 
@@ -181,8 +179,8 @@ using Random: Xoshiro, default_rng
     end
 
     @testset "Cognitive models and environment models share a supertype" begin
-        @test AbstractCognitiveModel <: CognitiveModeling.AbstractModel
-        @test AbstractEnvironmentModel <: CognitiveModeling.AbstractModel
+        @test AbstractCognitiveModel <: CognitiveModeling.AbstractTimestepModel
+        @test AbstractEnvironmentModel <: CognitiveModeling.AbstractTimestepModel
     end
 
     @testset "ModelAttributes keeps the names of each kind in a tuple" begin

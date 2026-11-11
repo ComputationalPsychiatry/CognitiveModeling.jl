@@ -232,7 +232,9 @@ an environment model, doesn't list, since a history starts from those names, and
 [`InstantiatedModel`](@ref), [`simulate`](@ref) and [`SessionInfo`](@ref), before anything
 is saved.
 """
-function check_savehistory_selection_names(save_history::SaveHistory, model::AbstractModel)
+function check_savehistory_selection_names(
+    save_history::SaveHistory, model::AbstractTimestepModel
+)
     attributes = check_type_attribute_names(attribute_names(model), model)
     check_selection_names(save_history.states, attributes.states, "states", model)
     check_selection_names(save_history.inputs, attributes.inputs, "inputs", model)

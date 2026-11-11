@@ -7,7 +7,9 @@ struct PredictsNextOutcome <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::PredictsNextOutcome, parameters)
     return (; expected_value=0.0)
 end
-function CognitiveModeling.apply_model(model::PredictsNextOutcome, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::PredictsNextOutcome, context::ModelContext
+)
     r = context.input.outcome
     V₋₁ = context.previous_state.expected_value
     Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)

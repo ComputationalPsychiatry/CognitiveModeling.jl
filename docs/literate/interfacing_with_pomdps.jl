@@ -49,7 +49,9 @@ end
 # timestep there is no previous action, which [`AbstractNoValue`](@ref) covers, and the
 # belief is left as it is.
 
-function CognitiveModeling.apply_model(model::BayesianObserver, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::BayesianObserver, context::ModelContext
+)
 
     ## Unpack the context ##
     belief = context.previous_state.belief

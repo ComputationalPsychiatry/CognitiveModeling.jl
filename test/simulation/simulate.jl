@@ -19,7 +19,7 @@ struct LearnsRewards <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::LearnsRewards, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::LearnsRewards, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = if context.input.reward isa AbstractNoValue
         V₋₁
@@ -37,7 +37,7 @@ end
 #Has no state
 struct OnlyChooses <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::OnlyChooses, parameters) = (;)
-function CognitiveModeling.apply_model(model::OnlyChooses, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::OnlyChooses, context::ModelContext)
     return ModelOutput((; choice=ChooseWithProbability(0.7)))
 end
 function CognitiveModeling.attribute_names(model::OnlyChooses)
@@ -47,7 +47,7 @@ end
 #Has no actions
 struct OnlyLearns <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::OnlyLearns, parameters) = (; expected_reward=0.5)
-function CognitiveModeling.apply_model(model::OnlyLearns, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::OnlyLearns, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     return ModelOutput(
         (;),
@@ -66,7 +66,7 @@ end
 #Has two named actions, and receives a reward which it does nothing with
 struct TwoChoices <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::TwoChoices, parameters) = (;)
-function CognitiveModeling.apply_model(model::TwoChoices, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::TwoChoices, context::ModelContext)
     return ModelOutput((;
         first_choice=ChooseWithProbability(0.0), second_choice=ChooseWithProbability(1.0)
     ))
@@ -82,7 +82,9 @@ struct LearnsWithNoise <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_model(model::LearnsWithNoise, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::LearnsWithNoise, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     return ModelOutput(
         (; choice=ChooseWithProbability(0.5)),
@@ -103,7 +105,7 @@ function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state)
     return model.prepare_state(state)
 end
 CognitiveModeling.initialize_state(model::LearnsInPlace, parameters) = (; values=[0.5, 0.5])
-function CognitiveModeling.apply_model(model::LearnsInPlace, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::LearnsInPlace, context::ModelContext)
     values = context.previous_state.values
     values[1] += context.parameters.learning_rate * (context.input.reward - values[1])
     return ModelOutput((; choice=ChooseWithProbability(0.5)), context.previous_state)
@@ -119,7 +121,9 @@ struct StartsWithInteger <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StartsWithInteger, parameters)
     return (; expected_reward=0)
 end
-function CognitiveModeling.apply_model(model::StartsWithInteger, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::StartsWithInteger, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = if context.input.reward isa AbstractNoValue
         V₋₁
@@ -141,7 +145,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::EnvironmentRecordsWhoStarts, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)), (; who_starts=context.who_starts))
@@ -157,7 +161,9 @@ struct RecordsWhoStarts <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters)
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.apply_model(model::RecordsWhoStarts, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::RecordsWhoStarts, context::ModelContext
+)
     return ModelOutput((; choice=Deterministic(true)), (; who_starts=context.who_starts))
 end
 function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
@@ -171,7 +177,9 @@ struct LearnsAndCounts <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsAndCounts, parameters)
     return (; expected_reward=0.5, n_timesteps=0)
 end
-function CognitiveModeling.apply_model(model::LearnsAndCounts, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::LearnsAndCounts, context::ModelContext
+)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = if context.input.reward isa AbstractNoValue
         V₋₁
@@ -195,10 +203,12 @@ end
 #Has an action that is never taken, and a NamedTuple of actions
 struct ChoosesInGroups <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ChoosesInGroups, parameters) = (;)
-function CognitiveModeling.apply_model(model::ChoosesInGroups, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::ChoosesInGroups, context::ModelContext
+)
     return ModelOutput((;
         choice=ChooseWithProbability(1.0),
-        skipped=NoAction(),
+        skipped=NoValue(),
         movement=(; left=ChooseWithProbability(0.0), right=ChooseWithProbability(1.0)),
     ))
 end
@@ -216,7 +226,7 @@ end
 function CognitiveModeling.initialize_state(model::HasDefaults, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.apply_model(model::HasDefaults, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::HasDefaults, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     return ModelOutput(
         (; choice=ChooseWithProbability(V₋₁)),
@@ -238,7 +248,7 @@ end
 #Throws the error for invalid parameters when the learning rate is above 1
 struct RejectsHighLearningRates <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RejectsHighLearningRates, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::RejectsHighLearningRates, context::ModelContext
 )
     context.parameters.learning_rate > 1 &&
@@ -254,14 +264,14 @@ end
 #Has no names, so it can't be simulated
 struct WithoutNames <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::WithoutNames, parameters) = (;)
-function CognitiveModeling.apply_model(model::WithoutNames, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::WithoutNames, context::ModelContext)
     return ModelOutput((; choice=ChooseWithProbability(0.5)))
 end
 
 #Takes the agent's choice, and gives rewards with a fixed probability, whatever it is
 struct RewardsWithProbability <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithProbability, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsWithProbability, context::ModelContext
 )
     return ModelOutput((; reward=ZeroOrOne(context.parameters.reward_probability)))
@@ -278,9 +288,9 @@ function CognitiveModeling.default_parameters(environment::RewardsWithDefaults)
     return (; reward_size=1.0, bias=0.0)
 end
 function CognitiveModeling.initialize_state(environment::RewardsWithDefaults, parameters)
-    return (; last_choice=NoAction())
+    return (; last_choice=NoValue())
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::RewardsWithDefaults, context::ModelContext
 )
     reward = if context.input.choice isa AbstractNoValue
@@ -304,7 +314,9 @@ end
 #Gives a reward and a cue, and takes no actions, so that a model needs maps of names to be used with it
 struct RewardsAndCues <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsAndCues, parameters) = (;)
-function CognitiveModeling.apply_model(environment::RewardsAndCues, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::RewardsAndCues, context::ModelContext
+)
     return ModelOutput((; reward=Deterministic(1.0), cue=Deterministic(2)))
 end
 function CognitiveModeling.attribute_names(environment::RewardsAndCues)
@@ -314,7 +326,9 @@ end
 #Gives only a cue, which a model which learns from rewards can't use
 struct OnlyCues <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::OnlyCues, parameters) = (;)
-function CognitiveModeling.apply_model(environment::OnlyCues, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::OnlyCues, context::ModelContext
+)
     return ModelOutput((; cue=Deterministic(2)))
 end
 function CognitiveModeling.attribute_names(environment::OnlyCues)
@@ -324,7 +338,7 @@ end
 #Has no names, so it can't be simulated
 struct EnvironmentWithoutNames <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::EnvironmentWithoutNames, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::EnvironmentWithoutNames, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)))
@@ -335,7 +349,9 @@ struct FixedRewards <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::FixedRewards, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_model(environment::FixedRewards, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::FixedRewards, context::ModelContext
+)
     n_timesteps = context.previous_state.n_timesteps + 1
     return ModelOutput(
         (; reward=Deterministic(context.parameters.rewards[n_timesteps])), (; n_timesteps)
@@ -350,7 +366,9 @@ end
 #Changes a Vector in its state in place, and copies its state when it's saved
 struct CountsInPlace <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::CountsInPlace, parameters) = (; counts=[0])
-function CognitiveModeling.apply_model(environment::CountsInPlace, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::CountsInPlace, context::ModelContext
+)
     context.previous_state.counts[1] += 1
     return ModelOutput((; reward=Deterministic(1.0)), context.previous_state)
 end
@@ -364,9 +382,10 @@ end
 #Rewards an action of true, and has nothing to say before the first action
 struct RewardsTrue <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsTrue, parameters) = (;)
-function CognitiveModeling.apply_model(environment::RewardsTrue, context::ModelContext)
-    context.input.choice isa AbstractNoValue &&
-        return ModelOutput((; reward=NoObservation()))
+function CognitiveModeling.apply_timestep_model(
+    environment::RewardsTrue, context::ModelContext
+)
+    context.input.choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))
     return ModelOutput((; reward=Deterministic(float(context.input.choice))))
 end
 function CognitiveModeling.attribute_names(environment::RewardsTrue)
@@ -378,10 +397,12 @@ struct SometimesSilent <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::SometimesSilent, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_model(environment::SometimesSilent, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::SometimesSilent, context::ModelContext
+)
     n_timesteps = context.previous_state.n_timesteps + 1
     observation_distribution = if iszero(mod(n_timesteps, 5))
-        (; reward=NoObservation())
+        (; reward=NoValue())
     else
         (; reward=Deterministic(1.0))
     end
@@ -399,7 +420,9 @@ struct SavesTimestepSize <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::SavesTimestepSize, parameters)
     return (; received_timestep_size=0)
 end
-function CognitiveModeling.apply_model(model::SavesTimestepSize, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::SavesTimestepSize, context::ModelContext
+)
     return ModelOutput(
         (; choice=ChooseWithProbability(0.5)),
         (; received_timestep_size=context.timestep_size),
@@ -417,7 +440,7 @@ end
 #Gives the timestep size it gets as its observation
 struct ObservesTimestepSize <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ObservesTimestepSize, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::ObservesTimestepSize, context::ModelContext
 )
     return ModelOutput((; timestep_size=Deterministic(context.timestep_size)))
@@ -431,7 +454,7 @@ end
 #Returns a tuple instead of a ModelOutput
 struct ReturnsTuple <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ReturnsTuple, parameters) = (;)
-function CognitiveModeling.apply_model(model::ReturnsTuple, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(model::ReturnsTuple, context::ModelContext)
     return (ChooseWithProbability(0.5), (;))
 end
 function CognitiveModeling.attribute_names(model::ReturnsTuple)
@@ -441,7 +464,7 @@ end
 #Returns the observation instead of a ModelOutput
 struct ReturnsObservation <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ReturnsObservation, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::ReturnsObservation, context::ModelContext
 )
     return (; reward=1.0)
@@ -468,14 +491,16 @@ end
 
 #Have a method for a timestep, but none for the initial state, so they must be given a state
 struct NeedsGivenState <: AbstractCognitiveModel end
-function CognitiveModeling.apply_model(model::NeedsGivenState, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::NeedsGivenState, context::ModelContext
+)
     return ModelOutput((; choice=ChooseWithProbability(0.5)), context.previous_state)
 end
 function CognitiveModeling.attribute_names(model::NeedsGivenState)
     return ModelAttributes(; parameters=(), states=:value, inputs=:reward, outputs=:choice)
 end
 struct EnvironmentNeedsGivenState <: AbstractEnvironmentModel end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::EnvironmentNeedsGivenState, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)), context.previous_state)
@@ -487,9 +512,11 @@ end
 #Rewards a lever of true with a payoff, and gives a cue: the same as RewardsTrue, under other names than the models use
 struct PaysForLever <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::PaysForLever, parameters) = (;)
-function CognitiveModeling.apply_model(environment::PaysForLever, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::PaysForLever, context::ModelContext
+)
     context.input.lever isa AbstractNoValue &&
-        return ModelOutput((; payoff=NoObservation(), cue=Deterministic(2)))
+        return ModelOutput((; payoff=NoValue(), cue=Deterministic(2)))
     return ModelOutput((;
         payoff=Deterministic(float(context.input.lever)), cue=Deterministic(2)
     ))
@@ -503,7 +530,7 @@ end
 #Gives payoffs with a fixed probability, whatever the lever is, so that its outputs always have the same types
 struct PaysWithProbability <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::PaysWithProbability, parameters) = (;)
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::PaysWithProbability, context::ModelContext
 )
     return ModelOutput((;
@@ -521,7 +548,7 @@ struct EndsAfterTimesteps <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::EndsAfterTimesteps, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::EndsAfterTimesteps, context::ModelContext
 )
     return ModelOutput(
@@ -545,7 +572,9 @@ struct StopsAfterTimesteps <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StopsAfterTimesteps, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_model(model::StopsAfterTimesteps, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::StopsAfterTimesteps, context::ModelContext
+)
     return ModelOutput(
         (; choice=ChooseWithProbability(0.5)),
         (; n_timesteps=context.previous_state.n_timesteps + 1),
@@ -563,10 +592,12 @@ end
 #Has an observation that is never made, and a NamedTuple of observations, and takes no actions
 struct ObservesInGroups <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ObservesInGroups, parameters) = (;)
-function CognitiveModeling.apply_model(environment::ObservesInGroups, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::ObservesInGroups, context::ModelContext
+)
     return ModelOutput((;
         reward=ZeroOrOne(1.0),
-        skipped=NoObservation(),
+        skipped=NoValue(),
         cues=(; left=ZeroOrOne(0.0), right=Deterministic(2)),
     ))
 end
@@ -581,7 +612,9 @@ struct RemembersReward <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RemembersReward, parameters)
     return (; previous_reward=BeforeFirstTimestep())
 end
-function CognitiveModeling.apply_model(environment::RemembersReward, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::RemembersReward, context::ModelContext
+)
     return ModelOutput(
         (; reward=ZeroOrOne(0.5)), (; previous_reward=context.previous_output.reward)
     )
@@ -597,7 +630,9 @@ struct GivesUnwrapped{T} <: AbstractEnvironmentModel
     reward::T
 end
 CognitiveModeling.initialize_state(environment::GivesUnwrapped, parameters) = (;)
-function CognitiveModeling.apply_model(environment::GivesUnwrapped, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    environment::GivesUnwrapped, context::ModelContext
+)
     return ModelOutput((; reward=environment.reward))
 end
 function CognitiveModeling.attribute_names(environment::GivesUnwrapped)
@@ -607,7 +642,9 @@ struct ChoosesUnwrapped{T} <: AbstractCognitiveModel
     choice::T
 end
 CognitiveModeling.initialize_state(model::ChoosesUnwrapped, parameters) = (;)
-function CognitiveModeling.apply_model(model::ChoosesUnwrapped, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(
+    model::ChoosesUnwrapped, context::ModelContext
+)
     return ModelOutput((; choice=model.choice))
 end
 function CognitiveModeling.attribute_names(model::ChoosesUnwrapped)
@@ -696,7 +733,7 @@ end
 #A model whose learning rate has a domain, for the check of the parameters when a simulation starts
 struct LearnsWithinDomain <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(::LearnsWithinDomain, parameters) = (; value=0.0)
-function CognitiveModeling.apply_model(::LearnsWithinDomain, context::ModelContext)
+function CognitiveModeling.apply_timestep_model(::LearnsWithinDomain, context::ModelContext)
     return ModelOutput(
         (; choice=Deterministic(true)), (; value=context.parameters.learning_rate)
     )
@@ -766,7 +803,7 @@ end
             who_starts=EnvironmentStarts(),
             environment_parameters=(;),
         )
-        @test observations[1] === (; reward=NoObservation())
+        @test observations[1] === (; reward=NoValue())
         @test [observation.reward for observation in observations[2:end]] == [float(action.choice) for action in actions[1:(end - 1)]]
     end
 
@@ -859,13 +896,13 @@ end
         (; observations, states) = simulate_for_test(
             LearnsRewards(), SometimesSilent(); environment_parameters=(;)
         )
-        @test count(observation -> observation.reward isa NoObservation, observations) == 10
+        @test count(observation -> observation.reward isa NoValue, observations) == 10
         @test expected_rewards(states)[4] == expected_rewards(states)[5]
         #A first observation that is missing
         (; observations) = simulate_for_test(
             LearnsRewards(), RewardsTrue(); environment_parameters=(;)
         )
-        @test observations[1] === (; reward=NoObservation())
+        @test observations[1] === (; reward=NoValue())
         @test observations[2].reward isa Float64
         #A state that changes from an integer to a Float64
         (; states) = simulate_for_test(
@@ -921,7 +958,7 @@ end
         @test all(action -> action === (; first_choice=false, second_choice=true), actions)
     end
 
-    @testset "NoAction and a NamedTuple inside the actions are sampled on their own" begin
+    @testset "NoValue and a NamedTuple inside the actions are sampled on their own" begin
         (; actions) = simulate_for_test(
             ChoosesInGroups(),
             RewardsAndCues();
@@ -933,11 +970,11 @@ end
         @test all(
             action ->
                 action ===
-                (; choice=true, skipped=NoAction(), movement=(; left=false, right=true)),
+                (; choice=true, skipped=NoValue(), movement=(; left=false, right=true)),
             actions,
         )
         @test simulate!(InstantiatedModel(ChoosesInGroups(), (;)), (;)) ===
-            (; choice=true, skipped=NoAction(), movement=(; left=false, right=true))
+            (; choice=true, skipped=NoValue(), movement=(; left=false, right=true))
     end
 
     @testset "Each observation is sampled from what the environment gives, and a Deterministic is its value" begin
@@ -980,7 +1017,7 @@ end
         ) == Set([0.0, 1.0])
     end
 
-    @testset "NoObservation and a NamedTuple inside the observations are sampled on their own" begin
+    @testset "NoValue and a NamedTuple inside the observations are sampled on their own" begin
         environment = InstantiatedModel(
             ObservesInGroups(), (;); save_history=SaveHistory(SaveEverything())
         )
@@ -991,7 +1028,7 @@ end
             n_steps=3,
             observation_map=NameMap(:reward),
         )
-        sampled = (; reward=1.0, skipped=NoObservation(), cues=(; left=0.0, right=2))
+        sampled = (; reward=1.0, skipped=NoValue(), cues=(; left=0.0, right=2))
         @test all(
             observation -> observation === sampled, environment.history.outputs[2:end]
         )
@@ -1336,8 +1373,8 @@ end
                 environment.observations[2:end],
                 environment.observation_distributions[2:end],
             )
-                expected_distribution = if observation.payoff === NoObservation()
-                    NoObservation()
+                expected_distribution = if observation.payoff === NoValue()
+                    NoValue()
                 else
                     Deterministic(observation.payoff)
                 end
@@ -1354,7 +1391,7 @@ end
             #When the environment starts, it receives the previous action, so its first payoff isn't there
             if who_starts === EnvironmentStarts()
                 @test environment.observation_distributions[2] ===
-                    (; payoff=NoObservation(), cue=Deterministic(2))
+                    (; payoff=NoValue(), cue=Deterministic(2))
             else
                 @test environment.observation_distributions[2] === (;
                     payoff=Deterministic(float(simulation.actions[2].choice)),
@@ -1395,7 +1432,7 @@ end
         )
     end
 
-    @testset "An entry that is NoObservation is saved like any other, and a model without actions saves empty NamedTuples" begin
+    @testset "An entry that is NoValue is saved like any other, and a model without actions saves empty NamedTuples" begin
         (; observations, actions) = simulate_for_test(
             LearnsRewards(),
             RewardsTrue();
@@ -1405,7 +1442,7 @@ end
                 inputs=:reward, outputs=:choice, save_initial_values=false
             ),
         )
-        @test observations[1] === (; reward=NoObservation())
+        @test observations[1] === (; reward=NoValue())
         @test observations[2] == (; reward=float(actions[1].choice))
         for cognitive_save_history in
             (SaveHistory(; outputs=(), save_initial_values=false), EVERY_TIMESTEP)
@@ -1435,7 +1472,7 @@ end
         (; observations) = simulate_for_test(
             LearnsRewards(), RewardsTrue(); n_steps=2, environment_parameters=(;)
         )
-        @test observations[1] === (; reward=NoObservation())
+        @test observations[1] === (; reward=NoValue())
         #For an environment model, the outputs are the observations it gives
         @test CognitiveModeling.output_before_first_timestep(RewardsWithProbability()) ===
             (; reward=BeforeFirstTimestep())
@@ -1475,11 +1512,8 @@ end
     end
 
     @testset "The markers for nothing there share a supertype, and the one for before the first timestep is its own" begin
-        @test NoAction() isa AbstractNoValue &&
-            NoObservation() isa AbstractNoValue &&
-            BeforeFirstTimestep() isa AbstractNoValue
-        @test !(BeforeFirstTimestep() isa NoAction) &&
-            !(BeforeFirstTimestep() isa NoObservation)
+        @test NoValue() isa AbstractNoValue && BeforeFirstTimestep() isa AbstractNoValue
+        @test !(BeforeFirstTimestep() isa NoValue)
         @test !(MissingValue() isa AbstractNoValue)
     end
 
@@ -1582,13 +1616,13 @@ end
     end
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "There is no apply_model method for a cognitive model of type OnlyInitializesState with a context of type " simulate_for_test(
+        @test_throws "There is no apply_timestep_model method for a cognitive model of type OnlyInitializesState with a context of type " simulate_for_test(
             OnlyInitializesState(), RewardsWithProbability(); cognitive_parameters=(;)
         )
-        @test_throws "Each model must define CognitiveModeling.apply_model(model::OnlyInitializesState, context::CognitiveModeling.ModelContext)." simulate_for_test(
+        @test_throws "Each model must define CognitiveModeling.apply_timestep_model(model::OnlyInitializesState, context::CognitiveModeling.ModelContext)." simulate_for_test(
             OnlyInitializesState(), RewardsWithProbability(); cognitive_parameters=(;)
         )
-        @test_throws "There is no apply_model method for an environment model of type EnvironmentOnlyInitializesState" simulate_for_test(
+        @test_throws "There is no apply_timestep_model method for an environment model of type EnvironmentOnlyInitializesState" simulate_for_test(
             LearnsRewards(), EnvironmentOnlyInitializesState(); environment_parameters=(;)
         )
     end
@@ -1619,13 +1653,13 @@ end
 
     @testset "A timestep method which returns the wrong type gives an informative error" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            @test_throws "The apply_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput, but it returned a value of type Tuple" simulate_for_test(
+            @test_throws "The apply_timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput, but it returned a value of type Tuple" simulate_for_test(
                 ReturnsTuple(),
                 RewardsWithProbability();
                 who_starts,
                 cognitive_parameters=(;),
             )
-            @test_throws "The apply_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput, but it returned a value of type @NamedTuple" simulate_for_test(
+            @test_throws "The apply_timestep_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput, but it returned a value of type @NamedTuple" simulate_for_test(
                 LearnsRewards(),
                 ReturnsObservation();
                 who_starts,
@@ -2019,7 +2053,7 @@ end
             HasDefaults(),
             (; learning_rate=0.3),
             (; expected_reward=0.2),
-            (; choice=NoAction()),
+            (; choice=NoValue()),
         ).parameters == (; learning_rate=0.3, initial_value=0.5)
         #A model without defaults keeps the parameters as they are
         @test InstantiatedModel(LearnsRewards(), LEARNING).parameters === LEARNING
@@ -2032,10 +2066,10 @@ end
             HasDefaults(), (; noise=0.1)
         )
         @test_throws "The state is named (:value,), but attribute_names lists the states of a cognitive model of type HasDefaults as (:expected_reward,)" InstantiatedModel(
-            HasDefaults(), (;), (; value=0.5), (; choice=NoAction())
+            HasDefaults(), (;), (; value=0.5), (; choice=NoValue())
         )
-        @test_throws "The previous output is NoAction(), but it must be a NamedTuple with the outputs that attribute_names lists for a cognitive model of type HasDefaults, (:choice,)." InstantiatedModel(
-            HasDefaults(), (;), (; expected_reward=0.5), NoAction()
+        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs that attribute_names lists for a cognitive model of type HasDefaults, (:choice,)." InstantiatedModel(
+            HasDefaults(), (;), (; expected_reward=0.5), NoValue()
         )
         @test_throws "must be a NamedTuple with the outputs that attribute_names lists" InstantiatedModel(
             HasDefaults(), (;), (; expected_reward=0.5), (; bet=true)
@@ -2044,7 +2078,7 @@ end
         @test InstantiatedModel(HasDefaults(), (; initial_value=0.5, learning_rate=0.1)).parameters.learning_rate ==
             0.1
         #A state that isn't a NamedTuple isn't checked
-        @test InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoAction())).state ==
+        @test InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoValue())).state ==
             [0.5]
         #A model without names can't be simulated or be instantiated
         @test_throws "There is no attribute_names method for a cognitive model of type WithoutNames. Each model must define CognitiveModeling.attribute_names(model::WithoutNames), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs." InstantiatedModel(
@@ -2063,10 +2097,10 @@ end
             EnvironmentNeedsGivenState(), (;)
         )
         @test InstantiatedModel(
-            NeedsGivenState(), (;), (; value=1.0), (; choice=NoAction())
+            NeedsGivenState(), (;), (; value=1.0), (; choice=NoValue())
         ).state == (; value=1.0)
         @test InstantiatedModel(
-            EnvironmentNeedsGivenState(), (;), (; value=2.0), (; reward=NoObservation())
+            EnvironmentNeedsGivenState(), (;), (; value=2.0), (; reward=NoValue())
         ).state == (; value=2.0)
     end
 
@@ -2083,18 +2117,17 @@ end
             RewardsWithDefaults(), (; noise=0.1)
         )
         @test_throws "The state is named (:value,), but attribute_names lists the states of an environment model of type RewardsWithDefaults as (:last_choice,)" InstantiatedModel(
-            RewardsWithDefaults(), (;), (; value=0.5), (; reward=NoObservation())
+            RewardsWithDefaults(), (;), (; value=0.5), (; reward=NoValue())
         )
-        @test_throws "The previous output is NoObservation(), but it must be a NamedTuple with the outputs that attribute_names lists for an environment model of type RewardsWithDefaults, (:reward,)." InstantiatedModel(
-            RewardsWithDefaults(), (;), (; last_choice=NoAction()), NoObservation()
+        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs that attribute_names lists for an environment model of type RewardsWithDefaults, (:reward,)." InstantiatedModel(
+            RewardsWithDefaults(), (;), (; last_choice=NoValue()), NoValue()
         )
         @test_throws "must be a NamedTuple with the outputs that attribute_names lists" InstantiatedModel(
-            RewardsWithDefaults(), (;), (; last_choice=NoAction()), (; cue=1)
+            RewardsWithDefaults(), (;), (; last_choice=NoValue()), (; cue=1)
         )
         #A state that isn't a NamedTuple isn't checked
-        @test InstantiatedModel(
-            RewardsWithDefaults(), (;), [0.5], (; reward=NoObservation())
-        ).state == [0.5]
+        @test InstantiatedModel(RewardsWithDefaults(), (;), [0.5], (; reward=NoValue())).state ==
+            [0.5]
         #An environment model without names can't be simulated or be instantiated
         @test_throws "There is no attribute_names method for an environment model of type EnvironmentWithoutNames. Each model must define CognitiveModeling.attribute_names(model::EnvironmentWithoutNames)" InstantiatedModel(
             EnvironmentWithoutNames(), (;)
@@ -2150,7 +2183,7 @@ end
             LearnsRewards(), RewardsWithProbability(); previous_observation=(; cue=1)
         )
         @test_throws "must be a NamedTuple with the outputs" run_with(
-            LearnsRewards(), RewardsWithProbability(); previous_observation=NoObservation()
+            LearnsRewards(), RewardsWithProbability(); previous_observation=NoValue()
         )
         #The order of the names doesn't matter, and a state that isn't a NamedTuple isn't checked
         @test run_with(
@@ -2176,14 +2209,14 @@ end
             LearnsAndCounts,
             typeof(LEARNING),
             typeof((; expected_reward=0.5, n_timesteps=0)),
-            typeof((; choice=NoAction())),
+            typeof((; choice=NoValue())),
         )
         @test folds(
             CognitiveModeling.check_match_attribute_names,
             RewardsAndCues,
             typeof((;)),
             typeof((;)),
-            typeof((; reward=NoObservation(), cue=NoObservation())),
+            typeof((; reward=NoValue(), cue=NoValue())),
         )
         @test folds(
             CognitiveModeling.check_input_names,
@@ -2318,7 +2351,7 @@ end
             environment_parameters=(;),
             action_map=NameMap(:second_choice => :choice),
         )
-        @test [observation.reward for observation in observations] == [NoObservation(), 1.0, 1.0]
+        @test [observation.reward for observation in observations] == [NoValue(), 1.0, 1.0]
         @test actions == fill((; first_choice=false, second_choice=true), 3)
         simulation = simulate_for_test(
             TwoChoices(),
@@ -2328,7 +2361,7 @@ end
             environment_parameters=(;),
             action_map=NameMap(:first_choice => :choice),
         )
-        @test [observation.reward for observation in simulation.observations] == [NoObservation(), 0.0, 0.0]
+        @test [observation.reward for observation in simulation.observations] == [NoValue(), 0.0, 0.0]
         @test simulation.environment.actions == fill((; choice=false), 3)
     end
 
@@ -2559,12 +2592,12 @@ end
     @testset "An error in a timestep method gives the same errors as in simulate" begin
         agent = InstantiatedModel(ReturnsTuple(), (;))
         environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
-        @test_throws "The apply_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
+        @test_throws "The apply_timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
         agent = InstantiatedModel(LearnsRewards(), LEARNING)
         environment = InstantiatedModel(ReturnsObservation(), (;))
-        @test_throws "The apply_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate!(
+        @test_throws "The apply_timestep_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
     end
@@ -2613,9 +2646,9 @@ end
         @test action_with_seed(3) != action_with_seed(4)
     end
 
-    @testset "An observation can be NoObservation" begin
+    @testset "An observation can be NoValue" begin
         agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        simulate!(agent, (; reward=NoObservation()))
+        simulate!(agent, (; reward=NoValue()))
         @test agent.state == (; expected_reward=0.5)
     end
 
@@ -2624,9 +2657,7 @@ end
         @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs that attribute_names lists for a cognitive model of type LearnsRewards, (:reward,)." simulate!(
             agent, 1.0
         )
-        @test_throws "must be a NamedTuple with the inputs" simulate!(
-            agent, NoObservation()
-        )
+        @test_throws "must be a NamedTuple with the inputs" simulate!(agent, NoValue())
         @test_throws "must be a NamedTuple with the inputs" simulate!(agent, (; cue=1.0))
         @test simulate!(agent, (; reward=1.0, cue=1.0)) isa NamedTuple
         @test agent.state == (; expected_reward=0.75)
@@ -2637,7 +2668,7 @@ end
             LearnsRewards(),
             (; reward=1.0, cue=1.0),
             (; expected_reward=0.5),
-            (; choice=NoAction()),
+            (; choice=NoValue()),
             LEARNING,
             1,
             Xoshiro(1),
@@ -2667,9 +2698,9 @@ end
     @testset "The model gets the size of the timestep" begin
         agent = InstantiatedModel(SavesTimestepSize(), (;))
         #The default is the integer 1
-        simulate!(agent, (; timestep_size=NoObservation()))
+        simulate!(agent, (; timestep_size=NoValue()))
         @test agent.state.received_timestep_size === 1
-        simulate!(agent, (; timestep_size=NoObservation()); timestep_size=0.5)
+        simulate!(agent, (; timestep_size=NoValue()); timestep_size=0.5)
         @test agent.state.received_timestep_size === 0.5
     end
 
@@ -2680,10 +2711,10 @@ end
     end
 
     @testset "An error in the timestep method gives the same errors as in simulate" begin
-        @test_throws "The apply_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
+        @test_throws "The apply_timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
             InstantiatedModel(ReturnsTuple(), (;)), (; reward=1.0)
         )
-        @test_throws "There is no apply_model method for a cognitive model of type OnlyInitializesState" simulate!(
+        @test_throws "There is no apply_timestep_model method for a cognitive model of type OnlyInitializesState" simulate!(
             InstantiatedModel(OnlyInitializesState(), (;)), (; reward=1.0)
         )
     end
@@ -2767,20 +2798,20 @@ end
         @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs that attribute_names lists for a cognitive model of type LearnsRewards, (:reward,)." simulate(
             LearnsRewards(), 1.0; parameters=LEARNING
         )
-        #An input can have more than the model lists, and an observation can be NoObservation
+        #An input can have more than the model lists, and an observation can be NoValue
         @test simulate(LearnsRewards(), (; reward=1.0, cue=2); parameters=LEARNING)[2] ==
             (; expected_reward=0.75)
-        @test simulate(LearnsRewards(), (; reward=NoObservation()); parameters=LEARNING)[2] ==
+        @test simulate(LearnsRewards(), (; reward=NoValue()); parameters=LEARNING)[2] ==
             (; expected_reward=0.5)
     end
 
     @testset "The model gets the size of the timestep, and the same seed gives the same action" begin
         @test simulate(
-            SavesTimestepSize(), (; timestep_size=NoObservation()); parameters=(;)
+            SavesTimestepSize(), (; timestep_size=NoValue()); parameters=(;)
         )[2] === (; received_timestep_size=1)
         @test simulate(
             SavesTimestepSize(),
-            (; timestep_size=NoObservation());
+            (; timestep_size=NoValue());
             parameters=(;),
             timestep_size=0.5,
         )[2] === (; received_timestep_size=0.5)
@@ -2873,12 +2904,12 @@ end
     @testset "Nothing is saved by default, and a SaveHistory selects what is" begin
         @test InstantiatedModel(LearnsRewards(), LEARNING).save_history === SaveHistory()
         @test InstantiatedModel(
-            LearnsRewards(), LEARNING, (; expected_reward=0.25), (; choice=NoAction())
+            LearnsRewards(), LEARNING, (; expected_reward=0.25), (; choice=NoValue())
         ).save_history === SaveHistory()
         @test InstantiatedModel(RewardsWithProbability(), REWARDS).save_history ===
             SaveHistory()
         @test InstantiatedModel(
-            RewardsWithProbability(), REWARDS, (;), (; reward=NoObservation())
+            RewardsWithProbability(), REWARDS, (;), (; reward=NoValue())
         ).save_history === SaveHistory()
         save_history = SaveHistory(; states=:n_timesteps)
         agent = InstantiatedModel(LearnsAndCounts(), LEARNING; save_history)
@@ -2887,7 +2918,7 @@ end
             LearnsAndCounts(),
             LEARNING,
             (; expected_reward=0.25, n_timesteps=0),
-            (; choice=NoAction());
+            (; choice=NoValue());
             save_history,
         ).save_history === save_history
         #The history starts with what is selected
@@ -2987,10 +3018,10 @@ end
             LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
         )
         first_action = simulate!(agent, (; reward=1.0))
-        second_action = simulate!(agent, (; reward=NoObservation()))
+        second_action = simulate!(agent, (; reward=NoValue()))
 
         @test agent.history.inputs ==
-            [(; reward=BeforeFirstTimestep()), (; reward=1.0), (; reward=NoObservation())]
+            [(; reward=BeforeFirstTimestep()), (; reward=1.0), (; reward=NoValue())]
         @test agent.history.outputs ==
             [(; choice=BeforeFirstTimestep()), first_action, second_action]
         @test agent.history.output_distributions == [
@@ -3110,8 +3141,8 @@ end
         #They are the sizes the environment gave the model as observations, its outputs
         @test [observation.timestep_size for observation in environment.history.outputs] == agent.history.timestep_sizes
         #A single input adds the size of its timestep, which is 1 by default
-        simulate!(agent, (; timestep_size=NoObservation()); timestep_size=1.5)
-        simulate!(agent, (; timestep_size=NoObservation()))
+        simulate!(agent, (; timestep_size=NoValue()); timestep_size=1.5)
+        simulate!(agent, (; timestep_size=NoValue()))
         @test agent.history.timestep_sizes ==
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4, 1.5, 1]
         #reset! starts from the marker again
@@ -3360,7 +3391,7 @@ end
             "\nState: [0.5]",
             repr(
                 "text/plain",
-                InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoAction())),
+                InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoValue())),
             ),
         )
     end

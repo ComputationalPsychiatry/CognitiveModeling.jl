@@ -27,7 +27,7 @@ using ReinforcementLearningTrajectories: DummySampler, InsertSampleRatioControll
 #
 # Both also need the environment to move first on each timestep, with
 # [`EnvironmentStarts`](@ref), so that there is an observation to act on. On the first
-# timestep of an episode there is no reward yet: the reward is then [`NoObservation`](@ref),
+# timestep of an episode there is no reward yet: the reward is then [`NoValue`](@ref),
 # and the models check for [`AbstractNoValue`](@ref), which covers that.
 
 # ## A whole agent
@@ -87,7 +87,7 @@ end
 # that fits what was observed, and returns the probabilities its policy gives each action.
 # The agent is changed in place, so the same object is passed on as the new state.
 
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::TemporalDifferenceAgent, context::ModelContext
 )
 
@@ -157,7 +157,7 @@ function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, pa
     return (; rl_learner, previous_observation=0)
 end
 
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::TemporalDifferenceLearner, context::ModelContext
 )
 

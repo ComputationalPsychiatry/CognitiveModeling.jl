@@ -112,12 +112,12 @@ Initial values: not saved"""
         @test CognitiveModeling.select_names(state, Val((:surprise, :expected_reward))) ===
             (; surprise=0.1, expected_reward=0.5)
         @test CognitiveModeling.select_names(
-            (; reward=NoObservation(), cue=1), Val((:reward,))
-        ) === (; reward=NoObservation())
-        @test CognitiveModeling.select_names(NoObservation(), Val(())) === (;)
+            (; reward=NoValue(), cue=1), Val((:reward,))
+        ) === (; reward=NoValue())
+        @test CognitiveModeling.select_names(NoValue(), Val(())) === (;)
         @test CognitiveModeling.select_names([0.5], Val(())) === (;)
         @test_throws "can only select names from a NamedTuple" CognitiveModeling.select_names(
-            NoObservation(), Val((:reward,))
+            NoValue(), Val((:reward,))
         )
         @test_throws FieldError CognitiveModeling.select_names(state, Val((:nope,)))
         @test_throws "can only select names from a NamedTuple" CognitiveModeling.select_names(

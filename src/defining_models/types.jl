@@ -1,20 +1,21 @@
 ## Supertypes of models ##
 
 """
-    AbstractModel
+    AbstractTimestepModel
 
-Supertype for cognitive models and environment models, which every function that a model
-implements or is used with takes. A model is a subtype of [`AbstractCognitiveModel`](@ref)
-or of [`AbstractEnvironmentModel`](@ref), and generally not of this type itself.
+Supertype for timestep models: cognitive models and environment models, which every
+function that a model implements or is used with takes. A model is a subtype of
+[`AbstractCognitiveModel`](@ref) or of [`AbstractEnvironmentModel`](@ref), and generally not
+of this type itself.
 
-The two kinds work the same way: on each timestep a model receives an input and gives an
-output, in a [`ModelContext`](@ref) and a [`ModelOutput`](@ref). In a simulation or a fitted
-session, the outputs of the cognitive model are its actions, which are the inputs of the
-environment model, and the outputs of the environment model are the observations, which are
-the inputs of the cognitive model. A cognitive model can therefore also serve as the
-environment of another.
+The two kinds work the same way, one timestep at a time: on each timestep a model receives
+an input and gives an output, in a [`ModelContext`](@ref) and a [`ModelOutput`](@ref). In a
+simulation or a fitted session, the outputs of the cognitive model are its actions, which
+are the inputs of the environment model, and the outputs of the environment model are the
+observations, which are the inputs of the cognitive model. A cognitive model can therefore
+also serve as the environment of another.
 """
-abstract type AbstractModel end
+abstract type AbstractTimestepModel end
 
 """
     AbstractCognitiveModel
@@ -28,9 +29,9 @@ there are, and `attribute_names` lists them. On one line, as inside a vector, a 
 its type and its kind.
 
 # Implementation
-Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
-[`attribute_names`](@ref) for it. A model can also add methods of
-[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+Create a subtype and add methods of [`apply_timestep_model`](@ref),
+[`initialize_state`](@ref) and [`attribute_names`](@ref) for it. A model can also add
+methods of [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
 
@@ -59,7 +60,7 @@ julia> print(ExampleModel())
 ExampleModel (cognitive model)
 ```
 """
-abstract type AbstractCognitiveModel <: AbstractModel end
+abstract type AbstractCognitiveModel <: AbstractTimestepModel end
 
 """
     AbstractEnvironmentModel
@@ -72,8 +73,8 @@ own kind.
 
 # Implementation
 Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
-[`apply_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
-optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`apply_timestep_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref),
+and optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
 
@@ -101,7 +102,7 @@ Inputs: choice
 Outputs: reward
 ```
 """
-abstract type AbstractEnvironmentModel <: AbstractModel end
+abstract type AbstractEnvironmentModel <: AbstractTimestepModel end
 
 ## Types for cases where there is no observation or action ##
 
@@ -109,29 +110,22 @@ abstract type AbstractEnvironmentModel <: AbstractModel end
     AbstractNoValue
 
 Supertype for what stands in for an observation or an action that isn't there:
-[`NoObservation`](@ref), [`NoAction`](@ref) and [`BeforeFirstTimestep`](@ref), and in the
-data of a fitted session [`UnimputedMissingValue`](@ref). A model which treats them all the
-same can check for it, as in `context.input.reward isa AbstractNoValue`.
+[`NoValue`](@ref) and [`BeforeFirstTimestep`](@ref), and in the data of a fitted session
+[`UnimputedMissingValue`](@ref). A model which treats them all the same can check for it, as
+in `context.input.reward isa AbstractNoValue`.
 """
 abstract type AbstractNoValue end
 
 """
-    NoObservation()
+    NoValue()
 
-Stand-in for an observation that isn't made on a timestep, as one entry of the observations
-`NamedTuple`, such as `(; reward = NoObservation())`. Before the first timestep, an
-observation is [`BeforeFirstTimestep`](@ref) instead.
-"""
-struct NoObservation <: AbstractNoValue end
-
-"""
-    NoAction()
-
-Stand-in for an action that isn't taken on a timestep, as one entry of the actions
-`NamedTuple`, such as `(; choice = NoAction())`. Before the first timestep, an action is
+Stand-in for an observation that isn't made, or an action that isn't taken, on a timestep,
+as one entry of the observations or the actions `NamedTuple`, such as
+`(; reward = NoValue())` or `(; choice = NoValue())`. Whether it is an observation or an
+action is given by where it is. Before the first timestep, an observation or an action is
 [`BeforeFirstTimestep`](@ref) instead.
 """
-struct NoAction <: AbstractNoValue end
+struct NoValue <: AbstractNoValue end
 
 """
     BeforeFirstTimestep()
@@ -141,9 +135,8 @@ yet, as one entry of a `NamedTuple`, such as `(; choice = BeforeFirstTimestep())
 
 A model receives it for every previous output on its first timestep, and for every input
 too when the other side hasn't moved yet: a cognitive model when the agent starts, and an
-environment model when the environment starts. [`NoObservation`](@ref) and
-[`NoAction`](@ref) are different: they say that nothing was observed or done on a timestep
-that did run.
+environment model when the environment starts. [`NoValue`](@ref) is different: it says that
+nothing was observed or done on a timestep that did run.
 
 Before the first timestep is timestep 0, which a simulation, a history and a fitted session
 start with when their [`SaveHistory`](@ref) saves the initial values, as it does by
@@ -238,8 +231,8 @@ struct UnknownWhoStarts end
     ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
                  rng=default_rng(), who_starts=UnknownWhoStarts())
 
-Everything a model needs to run a single timestep, which [`apply_model`](@ref) receives.
-The arguments can be given by name, which says what each one is, or in this order.
+Everything a model needs to run a single timestep, which [`apply_timestep_model`](@ref)
+receives. The arguments can be given by name, which says what each one is, or in this order.
 
 Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
 model the input is its observation and the output its action, and for an environment model
@@ -248,8 +241,8 @@ the input is the action of the cognitive model and the output the observation it
 # Arguments
 - `input`: what the model receives on this timestep, in a `NamedTuple` with the names the
   other side gave the entries, as in `context.input.reward`. An entry that isn't there on
-  this timestep is [`NoObservation`](@ref) or [`NoAction`](@ref). On the first timestep,
-  when the other side hasn't moved yet, every entry is [`BeforeFirstTimestep`](@ref).
+  this timestep is [`NoValue`](@ref). On the first timestep, when the other side hasn't
+  moved yet, every entry is [`BeforeFirstTimestep`](@ref).
 - `previous_state`: the state of the model after the previous timestep. On the first
   timestep, this is the output of [`initialize_state`](@ref).
 - `previous_output`: what the model gave on the previous timestep, in a `NamedTuple` with
@@ -338,7 +331,7 @@ end
 """
     ModelOutput(output_distribution, new_state=(;))
 
-The outputs of a model for a single timestep, which [`apply_model`](@ref) returns.
+The outputs of a model for a single timestep, which [`apply_timestep_model`](@ref) returns.
 
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
@@ -349,9 +342,8 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   `(; reward = Bernoulli(0.8))` for the observation an environment model gives. Each entry
   can be anything that works with `rand`, such as a distribution from Distributions.jl, or a
   [`Deterministic`](@ref) for an output that isn't random, and the sampled outputs keep the
-  names. An output that isn't given on this timestep is [`NoAction`](@ref) for a cognitive
-  model and [`NoObservation`](@ref) for an environment model, and a model without outputs
-  gives an empty `NamedTuple`, `(;)`.
+  names. An output that isn't given on this timestep is [`NoValue`](@ref), and a model
+  without outputs gives an empty `NamedTuple`, `(;)`.
 - `new_state=(;)`: the state of the model after this timestep, which is the
   `previous_state` of the next one. The outputs are sampled after it is made, so it can't
   depend on them: the model receives them as `context.previous_output` on the next
@@ -367,8 +359,8 @@ julia> ModelOutput((; choice = Bernoulli(0.7)), (; expected_reward = 0.5)).new_s
 julia> ModelOutput((; choice = Bernoulli(0.7))).new_state
 NamedTuple()
 
-julia> ModelOutput((; choice = NoAction(), bet = Bernoulli(0.2))).output_distribution.choice
-NoAction()
+julia> ModelOutput((; choice = NoValue(), bet = Bernoulli(0.2))).output_distribution.choice
+NoValue()
 ```
 """
 struct ModelOutput{Toutput,Tstate}
@@ -535,8 +527,9 @@ Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs
     InvalidParametersError(message)
     InvalidParametersError()
 
-An error for a model to throw from [`apply_model`](@ref) or [`initialize_state`](@ref) when
-its parameters aren't valid, as in `throw(InvalidParametersError())`.
+An error for a model to throw from [`apply_timestep_model`](@ref) or
+[`initialize_state`](@ref) when its parameters aren't valid, as in
+`throw(InvalidParametersError())`.
 
 The default message says that the parameters are not valid, possibly dependent on the
 observations, actions and states, and a model can give a more specific one. A simulation

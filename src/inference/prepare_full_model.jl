@@ -99,7 +99,9 @@ checked when [`parameter_names`](@ref) doesn't know the parameters. Used by
 [`prepare_full_model`](@ref).
 """
 function check_given_parameters(
-    parameters_model::AbstractSessionParametersModel, model::AbstractModel, model_runs::Bool
+    parameters_model::AbstractSessionParametersModel,
+    model::AbstractTimestepModel,
+    model_runs::Bool,
 )
     given_names = parameter_names(parameters_model)
     given_names === nothing && return nothing

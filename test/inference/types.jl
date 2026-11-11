@@ -40,9 +40,9 @@ end
 struct ParametersModelOfOwn <: AbstractSessionParametersModel end
 
 @testset "Types for data" begin
-    @testset "The marker for a missing value is its own type, apart from those for nothing happening" begin
+    @testset "The marker for a missing value is its own type, apart from the one for nothing happening" begin
         @test MissingValue() === MissingValue()
-        @test MissingValue() !== NoAction() && MissingValue() !== NoObservation()
+        @test MissingValue() !== NoValue()
         @test !(MissingValue() isa AbstractNoValue)
         @test isbitstype(MissingValue)
     end
@@ -281,7 +281,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; choice=[true, false, MissingValue()]),
         ).first_timestep_to_check_stopping == 3
         @test counter_session(
-            (; reward=[1.0, MissingValue(), NoObservation()]),
+            (; reward=[1.0, MissingValue(), NoValue()]),
             (; choice=[true, MissingValue(), MissingValue()]),
         ).first_timestep_to_check_stopping == 4
         #true checks from the first timestep, and false never
@@ -312,13 +312,13 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, missing, 1.0]),
             (; choice=[true, missing, true]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoObservation(),),
-            action_replacements=(missing => NoAction(),),
+            observation_replacements=(missing => NoValue(),),
+            action_replacements=(missing => NoValue(),),
         )
-        @test session_info.observations.reward == [1.0, NoObservation(), 1.0] &&
-            session_info.observations.reward isa Vector{Union{NoObservation,Float64}}
-        @test session_info.actions.choice == [true, NoAction(), true] &&
-            session_info.actions.choice isa Vector{Union{NoAction,Bool}}
+        @test session_info.observations.reward == [1.0, NoValue(), 1.0] &&
+            session_info.observations.reward isa Vector{Union{NoValue,Float64}}
+        @test session_info.actions.choice == [true, NoValue(), true] &&
+            session_info.actions.choice isa Vector{Union{NoValue,Bool}}
         #The markers can also be in the data already, and the original columns aren't changed
         rewards = (; reward=[1.0, missing, 1.0])
         SessionInfo(
@@ -326,7 +326,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             rewards,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoObservation(),),
+            observation_replacements=(missing => NoValue(),),
         )
         @test rewards.reward[2] === missing
         #A single pair can be given on its own, several values can each become a marker, and anything that isn't pairs is an error
@@ -335,20 +335,17 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, missing, -1.0]),
             (; choice=[1, -1, missing]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(
-                missing => UnimputedMissingValue(), -1 => NoObservation()
-            ),
-            action_replacements=-1 => NoAction(),
+            observation_replacements=(missing => UnimputedMissingValue(), -1 => NoValue()),
+            action_replacements=-1 => NoValue(),
         )
-        @test session_info.observations.reward ==
-            [1.0, UnimputedMissingValue(), NoObservation()]
-        @test isequal(session_info.actions.choice, [1, NoAction(), missing])
-        @test_throws "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoAction()), but they are NoObservation()." SessionInfo(
+        @test session_info.observations.reward == [1.0, UnimputedMissingValue(), NoValue()]
+        @test isequal(session_info.actions.choice, [1, NoValue(), missing])
+        @test_throws "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoValue()), but they are NoValue()." SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            action_replacements=NoObservation(),
+            action_replacements=NoValue(),
         )
     end
 
@@ -800,7 +797,7 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=EnvironmentStarts(),
             observation_replacements=(missing => UnimputedMissingValue(),),
-            action_replacements=(missing => MissingValue(), -1 => NoAction()),
+            action_replacements=(missing => MissingValue(), -1 => NoValue()),
         )
         #A missing observation that isn't imputed needs no environment, and every session has the marker in its type
         @test sessions_info.sessions[1].observations.reward ==
@@ -810,7 +807,7 @@ const COUNTER_TABLE = (;
         #A replaced value in any column that an attribute is built from makes the whole value its marker
         @test sessions_info.sessions[1].actions.choice ==
             [(; choice=1, rt=0.5), (; choice=0, rt=0.7)]
-        @test sessions_info.sessions[2].actions.choice == [NoAction(), MissingValue()]
+        @test sessions_info.sessions[2].actions.choice == [NoValue(), MissingValue()]
         @test isconcretetype(eltype(sessions_info.sessions))
         #A value which is equal to a pair's without having its type is replaced too, and every session then has the marker in its type
         with_code = MultipleSessionsInfo(
@@ -820,11 +817,10 @@ const COUNTER_TABLE = (;
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
-            observation_replacements=-1 => NoObservation(),
+            observation_replacements=-1 => NoValue(),
         )
-        @test with_code.sessions[2].observations.reward == [NoObservation()] &&
-            with_code.sessions[1].observations.reward isa
-              Vector{Union{NoObservation,Float64}}
+        @test with_code.sessions[2].observations.reward == [NoValue()] &&
+            with_code.sessions[1].observations.reward isa Vector{Union{NoValue,Float64}}
         #Without replacements, missing stays in the data as a value
         kept = MultipleSessionsInfo(
             SessionCounter(),

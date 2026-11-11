@@ -30,7 +30,7 @@ include("inference/postprocessing.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
-export AbstractNoValue, NoObservation, NoAction, BeforeFirstTimestep
+export AbstractNoValue, NoValue, BeforeFirstTimestep
 export MissingValue, UnimputedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
 export CommonRLEnvironment
@@ -53,11 +53,11 @@ export turing_behavioral_session,
     turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 export session_trajectories_chain, session_parameters_chain, predict_session_trajectories
 
-#What users call with the package's name, as in CognitiveModeling.apply_model
-public apply_model, initialize_state, attribute_names
+#What users call with the package's name, as in CognitiveModeling.apply_timestep_model
+public apply_timestep_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, discrete_parameter_names
-public turing_apply_model,
+public turing_apply_timestep_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_name, session_column_values
 public parameter_names, prepare_parameters_model, prepare_full_model

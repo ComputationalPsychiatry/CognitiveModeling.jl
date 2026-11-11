@@ -1,6 +1,9 @@
 using CognitiveModeling
 using CognitiveModeling:
-    apply_model, initialize_state, turing_apply_model, turing_initialize_state
+    apply_timestep_model,
+    initialize_state,
+    turing_apply_timestep_model,
+    turing_initialize_state
 using Test
 using JET: JET
 using Random: Xoshiro

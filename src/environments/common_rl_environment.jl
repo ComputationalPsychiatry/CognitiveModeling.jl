@@ -26,8 +26,8 @@ Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `
 gives, the reward that `act!` returned, and whether the episode has ended. They are given as
 they are, each in a [`Deterministic`](@ref), so nothing more is sampled. Before the first
 action, when the action is [`BeforeFirstTimestep`](@ref), the environment is at its initial
-observation, so the reward is [`NoObservation`](@ref) and nothing is done with the action.
-The same goes for a timestep where the model takes no action, [`NoAction`](@ref): the
+observation, so the reward is [`NoValue`](@ref) and nothing is done with the action.
+The same goes for a timestep where the model takes no action, [`NoValue`](@ref): the
 environment stays where it is. Its [`attribute_names`](@ref) are these three observations,
 the one action, no parameters and no states, since `rl_env` isn't a `NamedTuple`. Use
 [`EnvironmentStarts`](@ref), so that the model observes before it acts.
@@ -57,7 +57,7 @@ CommonRLInterface.terminated(rl_env::Bandit) = rl_env.pulls == 2
 #A model which always pulls the first arm
 struct PullsFirstArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
-CognitiveModeling.apply_model(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
+CognitiveModeling.apply_timestep_model(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), inputs = (:observation, :reward, :terminated), outputs = :arm)
 
 #The simulation stops when the episode ends, before it has run all of n_steps
@@ -77,7 +77,7 @@ foreach(println, simulation.observations)
 # output
 
 (observation = BeforeFirstTimestep(), reward = BeforeFirstTimestep(), terminated = BeforeFirstTimestep())
-(observation = 0, reward = NoObservation(), terminated = false)
+(observation = 0, reward = NoValue(), terminated = false)
 (observation = 1, reward = 1.0, terminated = false)
 (observation = 2, reward = 1.0, terminated = true)
 ```

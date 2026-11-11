@@ -12,7 +12,7 @@ end
 function describe_model(environment::AbstractEnvironmentModel)
     return "an environment model of type $(typeof(environment))"
 end
-describe_model(model::AbstractModel) = "a model of type $(typeof(model))"
+describe_model(model::AbstractTimestepModel) = "a model of type $(typeof(model))"
 
 ## Checking a model's own methods ##
 """
@@ -24,11 +24,11 @@ the cognitive model or the environment model whose method returned it. Used wher
 names of a model are read: by the checks of simulations, instantiated models, save histories
 and fitted sessions, and by the display of a model.
 """
-function check_type_attribute_names(attributes::ModelAttributes, ::AbstractModel)
+function check_type_attribute_names(attributes::ModelAttributes, ::AbstractTimestepModel)
     return attributes
 end
 
-function check_type_attribute_names(attributes, model::AbstractModel)
+function check_type_attribute_names(attributes, model::AbstractTimestepModel)
     return error(
         "The attribute_names method of $(describe_model(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).",
     )
@@ -37,18 +37,18 @@ end
 """
     check_model_output(output, model)
 
-Return `output` if it is the `ModelOutput` that an `apply_model` method of `model` must
-return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
+Return `output` if it is the `ModelOutput` that an `apply_timestep_model` method of `model`
+must return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
 [`simulate!`](@ref) and fitted sessions.
 """
-function check_model_output(output::ModelOutput, ::AbstractModel)
+function check_model_output(output::ModelOutput, ::AbstractTimestepModel)
     return output
 end
 
 #Untyped, so that there is always a method, whatever the model is inferred as
 function check_model_output(output, model)
     return error(
-        "The apply_model method of $(describe_model(model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
+        "The apply_timestep_model method of $(describe_model(model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
     )
 end
 
@@ -59,9 +59,9 @@ Return whether `model`, a cognitive model or an environment model, has its own m
 [`attribute_names`](@ref), instead of the fallback which throws. Used by the display of a
 model, which shows one without a method of its own as `not specified`.
 """
-function has_attribute_names(model::AbstractModel)
+function has_attribute_names(model::AbstractTimestepModel)
     method_signature = which(attribute_names, (typeof(model),)).sig
-    return method_signature != Tuple{typeof(attribute_names),AbstractModel}
+    return method_signature != Tuple{typeof(attribute_names),AbstractTimestepModel}
 end
 
 ## Comparing names ##
@@ -104,7 +104,7 @@ a cognitive model or an environment model. Used by [`InstantiatedModel`](@ref),
 [`simulate`](@ref) and fitted sessions, before anything runs.
 """
 function check_match_attribute_names(
-    model::AbstractModel, parameters, state, previous_output
+    model::AbstractTimestepModel, parameters, state, previous_output
 )
     attributes = check_type_attribute_names(attribute_names(model), model)
     if !same_names(keys(parameters), attributes.parameters)
@@ -142,7 +142,7 @@ simulation, isn't a `NamedTuple` with every input that [`attribute_names`](@ref)
 `model`. It can have more than those. Used by [`simulate`](@ref) and [`simulate!`](@ref) on
 a single input.
 """
-function check_input_names(model::AbstractModel, input)
+function check_input_names(model::AbstractTimestepModel, input)
     attributes = check_type_attribute_names(attribute_names(model), model)
     if !(input isa NamedTuple && has_every_name(attributes.inputs, keys(input)))
         throw(
@@ -167,7 +167,7 @@ a parameter that the model doesn't list, or have a field other than `lower`, `up
 `discrete`. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and fitted sessions,
 before anything runs.
 """
-function check_parameter_domains(model::AbstractModel, parameters::NamedTuple)
+function check_parameter_domains(model::AbstractTimestepModel, parameters::NamedTuple)
     domains = parameter_domains(model)
     check_domains_fit_model(model, domains)
     check_each_parameter_domain(model, parameters, domains)
@@ -182,8 +182,8 @@ names a parameter that [`attribute_names`](@ref) doesn't list for it, or has a d
 isn't a `NamedTuple` with only `lower`, `upper` and `discrete`. Used by
 [`check_parameter_domains`](@ref).
 """
-check_domains_fit_model(::AbstractModel, ::NamedTuple{()}) = nothing
-function check_domains_fit_model(model::AbstractModel, domains::NamedTuple)
+check_domains_fit_model(::AbstractTimestepModel, ::NamedTuple{()}) = nothing
+function check_domains_fit_model(model::AbstractTimestepModel, domains::NamedTuple)
     listed_names = check_type_attribute_names(attribute_names(model), model).parameters
     if !has_every_name(keys(domains), listed_names)
         throw(
@@ -215,9 +215,13 @@ with [`check_value_in_domain`](@ref). The names are read from the types, so that
 are checked without any search for them when the model runs. Used by
 [`check_parameter_domains`](@ref).
 """
-check_each_parameter_domain(::AbstractModel, ::NamedTuple, ::NamedTuple{()}) = nothing
 function check_each_parameter_domain(
-    model::AbstractModel, parameters::NamedTuple, domains::NamedTuple{names}
+    ::AbstractTimestepModel, ::NamedTuple, ::NamedTuple{()}
+)
+    return nothing
+end
+function check_each_parameter_domain(
+    model::AbstractTimestepModel, parameters::NamedTuple, domains::NamedTuple{names}
 ) where {names}
     name = first(names)::Symbol
     if haskey(parameters, name)
@@ -235,7 +239,7 @@ Every element of an array of real numbers is checked, and a value that is neithe
 alone. Used by [`check_each_parameter_domain`](@ref).
 """
 function check_value_in_domain(
-    model::AbstractModel, name::Symbol, value::Real, domain::NamedTuple
+    model::AbstractTimestepModel, name::Symbol, value::Real, domain::NamedTuple
 )
     lower = get(domain, :lower, -Inf)
     upper = get(domain, :upper, Inf)
@@ -257,13 +261,16 @@ function check_value_in_domain(
 end
 
 function check_value_in_domain(
-    model::AbstractModel, name::Symbol, values::AbstractArray{<:Real}, domain::NamedTuple
+    model::AbstractTimestepModel,
+    name::Symbol,
+    values::AbstractArray{<:Real},
+    domain::NamedTuple,
 )
     foreach(value -> check_value_in_domain(model, name, value, domain), values)
     return nothing
 end
 
-check_value_in_domain(::AbstractModel, ::Symbol, value, ::NamedTuple) = nothing
+check_value_in_domain(::AbstractTimestepModel, ::Symbol, value, ::NamedTuple) = nothing
 
 """
     discrete_parameter_names(model)
@@ -273,7 +280,7 @@ Return the names of the parameters of `model` that are discrete in
 choosing how each parameter is sampled, since a discrete parameter needs another kind of
 sampler than a continuous one.
 """
-function discrete_parameter_names(model::AbstractModel)
+function discrete_parameter_names(model::AbstractTimestepModel)
     domains = parameter_domains(model)
     return Tuple(
         name for name in keys(domains) if get(getproperty(domains, name), :discrete, false)
@@ -295,13 +302,13 @@ Used wherever a model starts: by [`InstantiatedModel`](@ref), [`reset!`](@ref),
 [`simulate`](@ref) and fitted sessions, for the previous output and for the output
 distributions saved as timestep 0.
 """
-function output_before_first_timestep(model::AbstractModel)
+function output_before_first_timestep(model::AbstractTimestepModel)
     return output_before_first_timestep(
         check_type_attribute_names(attribute_names(model), model)
     )
 end
 
-function input_before_first_timestep(model::AbstractModel)
+function input_before_first_timestep(model::AbstractTimestepModel)
     return input_before_first_timestep(
         check_type_attribute_names(attribute_names(model), model)
     )
@@ -397,7 +404,7 @@ function Base.show(io::IO, ::MIME"text/plain", attributes::ModelAttributes)
 end
 
 #Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, and the names of its attributes
-function Base.show(io::IO, ::MIME"text/plain", model::AbstractModel)
+function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
 
     #Print the kind and the type of the model
     print(io, "-- ", uppercasefirst(model_kind(model)), " --")
@@ -422,7 +429,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractModel)
 end
 
 #Shows the type and the kind of a model on one line, as inside a vector
-function Base.show(io::IO, model::AbstractModel)
+function Base.show(io::IO, model::AbstractTimestepModel)
     print(io, nameof(typeof(model)), " (", model_kind(model), ")")
     return nothing
 end
@@ -436,4 +443,4 @@ model and of an [`InstantiatedModel`](@ref).
 """
 model_kind(::AbstractCognitiveModel) = "cognitive model"
 model_kind(::AbstractEnvironmentModel) = "environment model"
-model_kind(::AbstractModel) = "model"
+model_kind(::AbstractTimestepModel) = "model"

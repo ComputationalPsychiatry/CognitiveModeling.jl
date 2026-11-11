@@ -5,7 +5,7 @@ function CognitiveModeling.initialize_state(environment::CommonRLEnvironment, pa
 end
 
 #Gives the observation the environment is at when there is no action to take, and acts otherwise
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     environment::CommonRLEnvironment{Trl_env,action_name}, context::ModelContext
 ) where {Trl_env,action_name}
     rl_env = context.previous_state
@@ -53,7 +53,7 @@ end
 function observation_without_action(rl_env)
     return (;
         observation=Deterministic(observe(rl_env)),
-        reward=NoObservation(),
+        reward=NoValue(),
         terminated=Deterministic(false),
     )
 end

@@ -17,7 +17,7 @@ function CognitiveModeling.initialize_state(model::PredictingRescorlaWagner, par
     return (; expected_value=parameters.initial_value)
 end
 
-function CognitiveModeling.apply_model(
+function CognitiveModeling.apply_timestep_model(
     model::PredictingRescorlaWagner, context::ModelContext
 )
 
