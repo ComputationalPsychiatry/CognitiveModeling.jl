@@ -31,7 +31,14 @@ CognitiveModeling.attribute_names
 ```@docs
 CognitiveModeling.prepare_state_for_saving
 CognitiveModeling.default_parameters
+CognitiveModeling.parameter_domains
 CognitiveModeling.stopping_criterion
+```
+
+## Reading a model's parameters
+
+```@docs
+CognitiveModeling.discrete_parameter_names
 ```
 
 ## Environments from other packages

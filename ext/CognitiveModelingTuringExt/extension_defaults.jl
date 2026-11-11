@@ -24,22 +24,22 @@ Turing.@model function CognitiveModeling.turing_downstream_model(
     return nothing
 end
 
-#Informative error for a parameters model without a method of its own
+#Informative error for a session parameter model without a method of its own
 function CognitiveModeling.turing_session_parameters_model(
     parameters_model::AbstractSessionParametersModel, sessions_info::MultipleSessionsInfo
 )
     return error(
-        "There is no turing_session_parameters_model method for a parameters model of type $(typeof(parameters_model)). Each parameters model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::$(typeof(parameters_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
+        "There is no turing_session_parameters_model method for a session parameter model of type $(typeof(parameters_model)). Each session parameter model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::$(typeof(parameters_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
     )
 end
 
-#Informative error for something that isn't a parameters model, such as the priors on their own
+#Informative error for something that isn't a session parameter model, such as the priors on their own
 function CognitiveModeling.turing_session_parameters_model(
     parameters_model, sessions_info::MultipleSessionsInfo
 )
     return throw(
         ArgumentError(
-            "A parameters model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type $(typeof(parameters_model)).",
+            "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type $(typeof(parameters_model)).",
         ),
     )
 end

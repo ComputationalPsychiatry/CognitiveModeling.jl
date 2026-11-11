@@ -3,7 +3,7 @@
 """
     turing_behavioral_session(session_info::SessionInfo, cognitive_parameters)
     turing_behavioral_session(session_info::SessionInfo, cognitive_parameters,
-                               environment_parameters=(;))
+                              environment_parameters=(;))
 
 Create a Turing.jl model of one session: the cognitive model in `session_info` goes through
 the timesteps of its data with `cognitive_parameters`, and the recorded actions are scored
@@ -26,6 +26,33 @@ each of several sessions, and [`turing_full_model`](@ref) samples their paramete
   environment takes none.
 
 # What it does
+In outline, the model of a session without an environment looks like this. It is not the
+actual code, which also checks the names and the parameters, and saves what is selected:
+
+```julia
+#The state where the session starts, which a model can sample
+state ~ to_submodel(turing_initialize_state(cognitive_model, cognitive_parameters))
+
+for t in 1:n_timesteps
+
+    #The cognitive model gives a distribution for each action, under the prefix timestep[t]
+    output ~ to_submodel(turing_apply_model(cognitive_model, context))
+
+    #An action that is missing in the data is a latent variable with that distribution
+    choice.imputed ~ output.output_distribution.choice
+end
+
+#The recorded actions are scored once, against the distributions of their timesteps
+recorded_actions ~ product_distribution(action_distributions)
+
+#What the save histories select of every timestep
+return saved_values
+```
+
+A session which includes its environment runs the environment model in the same way on each
+timestep, before the cognitive model when the environment starts and after it when the agent
+starts, and scores the recorded observations like the actions.
+
 The states where the session starts come from [`turing_initialize_state`](@ref) of each
 model with the parameters, so that a starting state which is a parameter is fitted like any
 other, and a model can sample its start. Both models are treated the same way on each
@@ -46,9 +73,10 @@ environment's parameters. A `Deterministic` is scored as a point mass, with a lo
 0 for its value and `-Inf` for any other, and only a number or a `Bool` can be, so a
 recorded value the model gives as another kind of `Deterministic` is an error. A recorded
 value where the model gave nothing, [`NoAction`](@ref) or [`NoObservation`](@ref), is an
-error too. When nothing in the data is missing and the environment's history isn't saved,
-the environment doesn't run, and the session is the same as one without an environment, with
-the same variables. The [`stopping_criterion`](@ref) of the models is checked as the
+error too. When the session doesn't include its environment, as the `include_environment` of
+`session_info` decides, which by default is when nothing in the data is missing and the
+environment's history isn't saved, the session is the same as one without an environment,
+with the same variables. The [`stopping_criterion`](@ref) of the models is checked as the
 `check_stopping_criterion` of `session_info` says: by default only after the last timestep
 with data, so that a fit runs every timestep and a session from
 [`prepare_for_prediction`](@ref) can end early.
@@ -68,8 +96,8 @@ the parameters. Element `t + 1` is then timestep `t`, and a [`SaveHistory`](@ref
 are those the models received, with the imputed values. `timestep_sizes` has the size of
 each timestep, after `BeforeFirstTimestep()` for timestep 0 when it is there, when anything
 is selected, and is empty otherwise. Any latent variable in a session, imputed or from a
-model which samples within a timestep, makes evaluating the model much slower in the current
-version of DynamicPPL.jl.
+model which samples within a timestep, greatly increases the amount of estimated variables,
+which will generally make fitting the model much slower.
 
 # Examples
 ```julia
@@ -134,8 +162,8 @@ function turing_behavioral_session end
 
 """
     turing_multiple_behavioral_sessions(sessions_info::MultipleSessionsInfo,
-                                         cognitive_parameters, environment_parameters=(;);
-                                         parallelization=NoParallelization())
+                                        cognitive_parameters, environment_parameters=(;);
+                                        parallelization=NoParallelization())
 
 Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for every session
 in `sessions_info`, each with its own cognitive parameters, as a submodel with the prefix
@@ -151,18 +179,13 @@ marked. See `parallelization` in [`turing_full_model`](@ref). This needs Turing.
 loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
-for every session in the order of `sessions_info`, which is what a parameters model returns,
-see [`turing_session_parameters_model`](@ref), and `environment_parameters` is in the same
-form. It returns a vector with what each session returns, in the same order. The model is a
-building block for a Turing.jl model which samples the parameters of the sessions in some
-way of its own, as a submodel without a prefix:
+for every session in the order of `sessions_info`, which is what a session parameter model
+returns, see [`turing_session_parameters_model`](@ref), and `environment_parameters` is in
+the same form. It returns a vector with what each session returns, in the same order. The
+model is a building block for a Turing.jl model which samples the parameters of the sessions
+in some way of its own, as a submodel without a prefix:
 `to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
-[`turing_full_model`](@ref) does this with parameters models.
-
-The session identifiers aren't in the names of the variables because each identifier would
-give its sessions a prefix of its own type, and DynamicPPL compiles the code of a session
-once for each: with 40 sessions, the first evaluation took 1.5 s instead of 0.2, and every
-one after it 44 ns per timestep instead of 9.
+[`turing_full_model`](@ref) does this with session parameter models.
 """
 function turing_multiple_behavioral_sessions end
 
@@ -180,60 +203,66 @@ Create the Turing.jl model which fits a cognitive model to several sessions, in 
 measurement on a state. This needs Turing.jl to be loaded.
 
 # Arguments
-- `cognitive_parameters_model`: a description of how the cognitive parameters of the
-  sessions are given or sampled, a subtype of [`AbstractSessionParametersModel`](@ref) such
-  as [`IndependentSessionParameters`](@ref) with a prior for each parameter, which
-  [`turing_session_parameters_model`](@ref) has a method for.
+- `cognitive_parameters_model`: the session parameter model of the cognitive model, which
+  gives or estimates its parameters for every session: a subtype of
+  [`AbstractSessionParametersModel`](@ref), such as [`IndependentSessionParameters`](@ref)
+  with a prior for each parameter.
 - `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
   [`MultipleSessionsInfo`](@ref).
-- `environment_parameters_model=NoParameters()`: the same for the parameters of the
+- `environment_parameters_model=NoParameters()`: the session parameter model of the
   environment model of the sessions, when they have one. By default the environment's
   parameters take its default values, and [`FixedSessionParameters`](@ref) gives others.
-  When they are sampled, every session runs its environment, also those with nothing
-  missing, so that the observations in the data inform them. Sessions without an environment
-  take no parameters.
-- `downstream_model=NoDownstreamModel()`: a description of what runs after the sessions,
-  which [`turing_downstream_model`](@ref) has a method for. The default samples nothing.
+  When they are estimated, every session includes its environment, also those with nothing
+  missing, so that the observations in the data inform them, which is an error for a session
+  prepared with `include_environment = false`. Sessions without an environment take no
+  parameters.
+- `downstream_model=NoDownstreamModel()`: a final submodel which is run after the sessions,
+  such as for correlations with other kinds of data: a subtype of
+  [`AbstractDownstreamModel`](@ref). The default samples nothing.
 - `catch_invalid_parameters::Bool=false`: whether the sessions run inside
   [`turing_catch_invalid_parameters`](@ref), so that an [`InvalidParametersError`](@ref)
-  rejects the sample instead of stopping the sampler. The parameters models run outside it,
-  so that a rejected first draw keeps its parameters and the sampler can start, and the
-  model returns `nothing` for a rejected sample, without running the downstream model. A
-  downstream model with variables of its own then lacks them in a rejected draw, so a
-  sampler can't start from one: give it valid `initial_params` in that case.
+  rejects the sample instead of stopping the sampler. The session parameter models run
+  outside it, so that a rejected first draw keeps its parameters and the sampler can start,
+  and the model returns `nothing` for a rejected sample, without running the downstream
+  model. A downstream model with variables of its own then lacks them in a rejected draw, so
+  a sampler can't start from one: give it valid `initial_params` in that case.
 - `parallelization=NoParallelization()`: whether the sessions run over the threads Julia was
   started with, with `ParallelSessions()`. **The model must then be marked with
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
   threaded model has a wrong log density with no error, so the sessions throw an error
-  instead. The gradient is right with ForwardDiff and ReverseDiff, and Mooncake and Enzyme
-  throw. With 4 threads and 20 sessions of 200 timesteps, the log density took 26 µs
-  instead of 39, and a ForwardDiff gradient 244 µs instead of 471.
-- `include_submodel_prefixes::Bool=false`: whether the variables of the two parameters
-  models and of the downstream model are named under `cognitive_parameters_model`,
+  instead.
+- `include_submodel_prefixes::Bool=false`: whether the variables of the two session
+  parameter models and of the downstream model are named under `cognitive_parameters_model`,
   `environment_parameters_model` and `downstream_model`. Without the prefixes, the names are
   shorter, but a variable of the same name in two of them is one variable, which `sample`
   refuses with an error, and which a log density gives one value with both priors counted.
   A warning says so when the model is made, when the cognitive model and the environment
-  model have a parameter of the same name and both parameters models sample.
+  model have a parameter of the same name and both session parameter models sample.
 
-The variables of a parameters model are named as it names them, or under the parameters
-model's name with `include_submodel_prefixes = true`. With `IndependentSessionParameters`,
-each parameter is a vector with a value for each session, such as `learning_rate.session`,
-so the learning rate of the third session is `learning_rate.session[3]`, and with
-`IdenticalSessionParameters` it is one value, such as `learning_rate.shared`. The variables
-of the sessions are under `session[i]`, and those of the downstream model as it names them,
-or under `downstream_model` with the prefixes. The model returns
+The variables of a session parameter model are named as it names them, or under the
+session parameter model's name with `include_submodel_prefixes = true`. With
+`IndependentSessionParameters`, each parameter is a vector with a value for each session,
+such as `learning_rate.session`, so the learning rate of the third session is
+`learning_rate.session[3]`. With `GroupedHierarchicalSessionParameters`, each parameter of
+a group-level distribution is a vector with a value for each group, named after its prior,
+such as `learning_rate.mean.group` and `learning_rate.sd.group`, and the values of the
+sessions before the transformation are `learning_rate.standardized`, or
+`learning_rate.session` for a parameter that is centered. The variables of the sessions are
+under `session[i]`, and those of the downstream model as it names them, or under
+`downstream_model` with the prefixes.
+
+The model returns
 `(; cognitive_parameters, environment_parameters, saved_behavioral_values, downstream_values)`:
-the cognitive parameters and the environment parameters of every session as the parameters
-models gave them, what each session saved, as a vector of what
+the cognitive parameters and the environment parameters of every session as the session
+parameter models gave them, what each session saved, as a vector of what
 [`turing_behavioral_session`](@ref) returns, and what the downstream model returned.
 `returned(model, chain)` gives them for each sample, so a fitted state is read from the
 chain without simulating again.
 
-Saving states costs about 5 % of a gradient. Without a downstream model that needs them, a
-fit is fastest with sessions that save nothing, and the saved values are then read from the
-chain afterwards with [`session_values_chain`](@ref), or with `returned` on the model of a
-copy of the sessions that saves them,
+Saving states adds a cost to gradient calculations. Without a downstream model that needs
+them, a fit is fastest with sessions that save nothing, and the saved values are then read
+from the chain afterwards with [`session_values_chain`](@ref), or with `returned` on the
+model of a copy of the sessions that saves them,
 `MultipleSessionsInfo(sessions_info; cognitive_save_history = SaveHistory(; states = :expected_reward))`,
 since the two models have the same variables. A warning says so when the sessions save
 anything and there is no downstream model.
@@ -276,7 +305,10 @@ results[1].cognitive_parameters.learning_rate
 results[1].saved_behavioral_values[2].states
 
 #The same fit without saving, and the states read from the chain afterwards
-unsaved = turing_full_model(cognitive_parameters_model, MultipleSessionsInfo(sessions_info; cognitive_save_history = SaveHistory()))
+sessions_without_saving = MultipleSessionsInfo(
+    sessions_info; cognitive_save_history = SaveHistory(),
+)
+unsaved = turing_full_model(cognitive_parameters_model, sessions_without_saving)
 chain = sample(unsaved, NUTS(), 1000)
 results = returned(model, chain)
 ```
@@ -309,12 +341,9 @@ end
 
 and [`turing_full_model`](@ref) does this with `catch_invalid_parameters = true`. The
 variables sampled inside the `try` block are lost when it catches an error, so around a
-whole model a sampler can't start when its first draw is rejected. Anything that uses what
-it returns after a rejection, which is `nothing`, can't be differentiated with Enzyme, so
-return or stop at once when it is `nothing`. Mooncake can't differentiate a model with a
-`try` block at all, and a compiled ReverseDiff tape doesn't see the error, so the rejected
-parameters get a finite log density with no warning. It works with ForwardDiff and with
-Enzyme. Nothing in the package catches the error unless this is used, so a sampler stops
-with it otherwise.
+whole model a sampler can't start when its first draw is rejected. Nothing in the package
+catches the error unless this is used, so a sampler stops with it otherwise. Not every
+automatic differentiation backend can differentiate a model with it, as the page on
+automatic differentiation says.
 """
 function turing_catch_invalid_parameters end

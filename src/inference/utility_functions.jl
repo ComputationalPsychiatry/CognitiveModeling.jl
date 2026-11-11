@@ -154,7 +154,7 @@ replace_missing(x, replacement) = x
 
 Return `(; name = value)`. A `NamedTuple` which holds a value that can have two types is
 built with `merge` of these, as [`row`](@ref) does. Used by [`row`](@ref), by
-[`saved_session_outputs`](@ref) and by the timesteps of fitted sessions.
+[`saved_session_values`](@ref) and by the timesteps of fitted sessions.
 """
 entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
 
@@ -600,6 +600,62 @@ function has_missing_entries(columns::NamedTuple)
 end
 
 """
+    decide_whether_environment_is_included(include_environment, environment, observations,
+                                           actions, environment_save_history,
+                                           check_stopping_criterion)
+
+Return whether a session includes its environment, as the `include_environment` of
+[`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
+`false`, and with `nothing` only when an observation or an action is missing, the
+environment's history is saved, or its stopping criterion is checked on every timestep. A
+session without an environment never includes one. With `false`, it is an error when an
+observation is missing, the environment's history is saved, or its stopping criterion is
+checked on every timestep, since those need the environment. Used by
+[`prepare_session`](@ref).
+"""
+function decide_whether_environment_is_included(
+    include_environment::Union{Nothing,Bool},
+    environment,
+    observations,
+    actions,
+    environment_save_history::SaveHistory,
+    check_stopping_criterion,
+)
+    #A session without an environment has none to include
+    if environment isa NoEnvironment
+        include_environment === true && throw(
+            ArgumentError(
+                "include_environment = true needs an environment model, but the session has none.",
+            ),
+        )
+        return false
+    end
+    include_environment === true && return true
+
+    #What can't be done without the environment
+    needs_environment = if has_missing_entries(observations)
+        "the data has missing observations, which only the environment can fill in"
+    elseif !saves_nothing(environment_save_history)
+        "environment_save_history saves its history"
+    elseif check_stopping_criterion === true
+        "check_stopping_criterion = true checks its stopping criterion on every timestep"
+    else
+        nothing
+    end
+    if include_environment === false
+        needs_environment === nothing || throw(
+            ArgumentError(
+                "include_environment = false leaves the environment out of the session, but $needs_environment.",
+            ),
+        )
+        return false
+    end
+
+    #By default it is included when it is needed, or when an action is missing, which the observations it scores inform
+    return needs_environment !== nothing || has_missing_entries(actions)
+end
+
+"""
     without_environment(session_info)
 
 Return the session with `NoEnvironment()` as its environment and everything else the same,
@@ -612,6 +668,7 @@ function without_environment(session_info::SessionInfo)
         NoEnvironment(),
         nothing,
         nothing,
+        session_info.include_environment,
         false,
         session_info.observations,
         session_info.actions,
@@ -633,34 +690,52 @@ function without_environment(session_info::SessionInfo)
 end
 
 """
-    samples_parameters(parameters_model)
-
-Return whether a parameters model samples the parameters it gives, which is decided by its
-type: `false` for [`NoParameters`](@ref), [`FixedSessionParameters`](@ref) and
-[`FixedParametersBySession`](@ref), and `true` for every other kind, also those of one's
-own. Used by [`sessions_for_environment_parameters`](@ref), and by the full models of the
-inference backends, to warn when the two models' parameters can have the same variables.
-"""
-samples_parameters(parameters_model) = true
-samples_parameters(::NoParameters) = false
-samples_parameters(::FixedSessionParameters) = false
-samples_parameters(::FixedParametersBySession) = false
-
-"""
     sessions_for_environment_parameters(environment_parameters_model, sessions_info)
 
 Return the sessions as a full model runs them with `environment_parameters_model`: as they
-are when it samples nothing, and otherwise with every session that has an environment
-running it, so that the observations in the data inform the parameters. Used by the full
-models of the inference backends.
+are when it estimates nothing, and otherwise with every session that has an environment
+including it, so that the observations in the data inform the parameters. Used by
+[`prepare_full_model`](@ref).
 """
 function sessions_for_environment_parameters(
     environment_parameters_model, sessions_info::MultipleSessionsInfo
 )
-    samples_parameters(environment_parameters_model) || return sessions_info
+    estimates_parameters(environment_parameters_model) || return sessions_info
     return MultipleSessionsInfo(
-        map(running_environment, sessions_info.sessions), sessions_info.session_ids
+        map(including_environment, sessions_info.sessions),
+        sessions_info.session_ids;
+        table=sessions_info.table,
+        session_rows=sessions_info.session_rows,
     )
+end
+
+"""
+    session_column_values(sessions_info, column)
+
+Return the values of `column` in the table that the sessions in `sessions_info` were split
+from, as one vector for each session, of its rows in the table. It is an error when the
+sessions were given already prepared, without a table, and when the table has no such
+column. Useful for a session parameter model that reads a column, such as one to group the
+sessions by, or the covariate of a regression. Used by [`group_sessions`](@ref).
+"""
+function session_column_values(sessions_info::MultipleSessionsInfo, column::Symbol)
+    table = sessions_info.table
+    if table === nothing
+        throw(
+            ArgumentError(
+                "The sessions were given already prepared, without the table they came from, so they have no column $column. Split them from a table with MultipleSessionsInfo, or give it the table and the rows of each session as table and session_rows.",
+            ),
+        )
+    end
+    if !haskey(table, column)
+        throw(
+            ArgumentError(
+                "The table that the sessions were split from has no column $column. Its columns are $(keys(table)).",
+            ),
+        )
+    end
+    values = getproperty(table, column)
+    return [values[rows] for rows in sessions_info.session_rows]
 end
 
 """
@@ -748,76 +823,26 @@ function check_unique_session_names(session_ids::AbstractVector)
 end
 
 """
-    parameters_by_session(values_by_session, session_ids)
+    including_environment(session_info)
 
-Return the values of each session in `values_by_session`, as
-[`FixedParametersBySession`](@ref) holds them, as one vector for each parameter with a value
-for every session, in the order of `session_ids`, with the values of each session found by
-[`values_of_session`](@ref). A session with other parameters than the first is an error.
-Used by the models of `FixedParametersBySession` in the inference backends.
+Return the session including its environment when it has one, and everything else the
+same. A session that was prepared with `include_environment = false` is an error. Used by
+[`sessions_for_environment_parameters`](@ref).
 """
-function parameters_by_session(values_by_session, session_ids)
-    values_of_each = map(
-        session_id -> values_of_session(values_by_session, session_id), session_ids
-    )
-    names = keys(first(values_of_each))
-    for (session_id, values) in zip(session_ids, values_of_each)
-        if keys(values) != names
-            throw(
-                ArgumentError(
-                    "FixedParametersBySession gives the session $(repr(session_id)) the parameters $(keys(values)), and the first session the parameters $names. Every session must have values for the same parameters.",
-                ),
-            )
-        end
-    end
-    return NamedTuple{names}(
-        map(name -> [getproperty(values, name) for values in values_of_each], names)
-    )
-end
-
-"""
-    values_of_session(values_by_session, session_id)
-
-Return the values of the session with the identifier `session_id` in `values_by_session`:
-the entry named by the session's name, as [`session_name`](@ref) gives it, in a
-`NamedTuple`, and the value stored under the identifier itself in a dictionary. A session
-without values is an error. Used by [`parameters_by_session`](@ref).
-"""
-function values_of_session(values_by_session::NamedTuple, session_id)
-    name = session_name(session_id)
-    if !haskey(values_by_session, name)
+function including_environment(session_info::SessionInfo)
+    if has_environment(session_info) && session_info.include_environment === false
         throw(
             ArgumentError(
-                "FixedParametersBySession has no values for the session $name. It has values for $(keys(values_by_session)).",
+                "The environment's parameters are estimated, which every session must include its environment for, but a session was prepared with include_environment = false.",
             ),
         )
     end
-    return getproperty(values_by_session, name)
-end
-
-function values_of_session(values_by_session::AbstractDict, session_id)
-    if !haskey(values_by_session, session_id)
-        throw(
-            ArgumentError(
-                "FixedParametersBySession has no values for the session $(repr(session_id)). It has values for the sessions $(collect(keys(values_by_session))).",
-            ),
-        )
-    end
-    return values_by_session[session_id]
-end
-
-"""
-    running_environment(session_info)
-
-Return the session with its environment running when it has one, and everything else the
-same. Used by [`sessions_for_environment_parameters`](@ref).
-"""
-function running_environment(session_info::SessionInfo)
     return SessionInfo(
         session_info.cognitive_model,
         session_info.environment,
         session_info.observation_map,
         session_info.action_map,
+        session_info.include_environment,
         has_environment(session_info),
         session_info.observations,
         session_info.actions,
@@ -894,9 +919,9 @@ end
 
 Return the index `i` of the session with the identifier `session_id` in a
 [`MultipleSessionsInfo`](@ref), which is how the models of several sessions number it: its
-parameters are element `i` of each vector a parameters model gives, and its saved values
-are element `i` of what the sessions return. The identifier is the value in the session
-column, or a `NamedTuple` of the values when there are several, as in
+parameters are element `i` of each vector a session parameter model gives, and its saved
+values are element `i` of what the sessions return. The identifier is the value in the
+session column, or a `NamedTuple` of the values when there are several, as in
 `sessions_info.session_ids`. Used by users reading the results of a fit, not by the
 models.
 """
@@ -913,9 +938,9 @@ end
 """
     n_sessions(sessions_info)
 
-Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a parameters model
-gives the parameters of. Used by the parameters models of the inference backends, such as
-those of [`IndependentSessionParameters`](@ref).
+Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a session parameter
+model gives the parameters of. Used by the session parameter models of the inference
+backends, such as those of [`IndependentSessionParameters`](@ref).
 """
 n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
@@ -1013,44 +1038,101 @@ end
 ## Saving what a fitted session returns ##
 
 """
-    saved_session_outputs(session_info, outputs)
+    saved_session_values(session_info, timestep_values)
 
-Return what a session saves of the outputs of one timestep, or of where it starts, as the
-save histories of `session_info` select it, in a `NamedTuple` with the cognitive model's
-`state`, `observation`, `action` and `action_distribution`, and with an environment its
-`environment_state`, `environment_observation`, `environment_action` and
-`environment_observation_distribution`. The observation and the action can have one of two
-types, so they go in through [`entry`](@ref). Used by fitted sessions, on every timestep.
+Return what a session saves of the values of one timestep, or of where it starts, as the
+save histories of `session_info` select it, arranged as the session returns it: the
+cognitive model's `states`, `observations`, `actions` and `action_distributions`, and with
+an environment its `states`, `observations`, `actions` and `observation_distributions` under
+`environment`, as [`map_saved`](@ref) arranges them. `timestep_values` has the cognitive
+model's `state`, `observation`, `action` and `action_distribution`, and under `environment`
+the environment's `state`, `observation`, `action` and `observation_distribution`, each in
+its own names. Used by fitted sessions, on every timestep.
 """
-function saved_session_outputs(session_info::SessionInfo{<:Any,NoEnvironment}, outputs)
-    return saved_cognitive_outputs(
-        session_info.cognitive_model, outputs, session_info.cognitive_save_history
+function saved_session_values(
+    session_info::SessionInfo{<:Any,NoEnvironment}, timestep_values
+)
+    return saved_cognitive_values(
+        session_info.cognitive_model, timestep_values, session_info.cognitive_save_history
     )
 end
 
-function saved_session_outputs(session_info::SessionInfo{<:Any,<:AbstractModel}, outputs)
-    environment = session_info.environment
-    save_history = session_info.environment_save_history
+function saved_session_values(
+    session_info::SessionInfo{<:Any,<:AbstractModel}, timestep_values
+)
     return merge(
-        saved_cognitive_outputs(
-            session_info.cognitive_model, outputs, session_info.cognitive_save_history
+        saved_cognitive_values(
+            session_info.cognitive_model,
+            timestep_values,
+            session_info.cognitive_save_history,
         ),
+        entry(
+            Val(:environment),
+            saved_environment_values(
+                session_info.environment,
+                timestep_values.environment,
+                session_info.environment_save_history,
+            ),
+        ),
+    )
+end
+
+"""
+    saved_cognitive_values(cognitive_model, timestep_values, save_history)
+    saved_environment_values(environment, environment_timestep_values, save_history)
+
+Return what `save_history` selects of one model's part of the values of a timestep: the
+`states`, `observations`, `actions` and `action_distributions` of the cognitive model, or
+the `states`, `observations`, `actions` and `observation_distributions` of the environment,
+from the values of the environment alone. The observation and the action can have one of
+two types, so they go in through [`entry`](@ref). Used by [`saved_session_values`](@ref).
+"""
+function saved_cognitive_values(cognitive_model, timestep_values, save_history)
+    return merge(
         (;
-            environment_state=save_state(
-                environment, outputs.environment_state, state_selection(save_history)
+            states=save_state(
+                cognitive_model, timestep_values.state, state_selection(save_history)
             ),
         ),
         entry(
-            Val(:environment_observation),
-            select_names(outputs.environment_observation, output_selection(save_history)),
+            Val(:observations),
+            select_names(timestep_values.observation, input_selection(save_history)),
         ),
         entry(
-            Val(:environment_action),
-            select_names(outputs.environment_action, input_selection(save_history)),
+            Val(:actions),
+            select_names(timestep_values.action, output_selection(save_history)),
         ),
         (;
-            environment_observation_distribution=select_names(
-                outputs.observation_distribution,
+            action_distributions=select_names(
+                timestep_values.action_distribution,
+                output_distribution_selection(save_history),
+            ),
+        ),
+    )
+end
+
+function saved_environment_values(environment, environment_timestep_values, save_history)
+    return merge(
+        (;
+            states=save_state(
+                environment,
+                environment_timestep_values.state,
+                state_selection(save_history),
+            ),
+        ),
+        entry(
+            Val(:observations),
+            select_names(
+                environment_timestep_values.observation, output_selection(save_history)
+            ),
+        ),
+        entry(
+            Val(:actions),
+            select_names(environment_timestep_values.action, input_selection(save_history)),
+        ),
+        (;
+            observation_distributions=select_names(
+                environment_timestep_values.observation_distribution,
                 output_distribution_selection(save_history),
             ),
         ),
@@ -1058,151 +1140,63 @@ function saved_session_outputs(session_info::SessionInfo{<:Any,<:AbstractModel},
 end
 
 """
-    saved_cognitive_outputs(cognitive_model, outputs, save_history)
+    initial_session_values(save_initial_values::Val, session_info, previous)
 
-Return what `save_history` selects of the cognitive model's part of the outputs of one
-timestep: `state`, `observation`, `action` and `action_distribution`. Used by
-[`saved_session_outputs`](@ref).
+Return what a session saves from before the first timestep, as timestep 0, when
+`save_initial_values` is `Val(true)`, and `nothing` otherwise. `previous` has the values
+that the first timestep starts from, arranged as those of a timestep. The distributions of
+timestep 0 are [`BeforeFirstTimestep`](@ref) for every output of each model, since none was
+given yet. Used by fitted sessions, before their first timestep runs.
 """
-function saved_cognitive_outputs(cognitive_model, outputs, save_history)
-    return merge(
-        (;
-            state=save_state(
-                cognitive_model, outputs.cognitive_state, state_selection(save_history)
-            ),
-        ),
-        entry(
-            Val(:observation),
-            select_names(outputs.observation, input_selection(save_history)),
-        ),
-        entry(Val(:action), select_names(outputs.action, output_selection(save_history))),
-        (;
-            action_distribution=select_names(
-                outputs.action_distribution, output_distribution_selection(save_history)
-            ),
+function initial_session_values(
+    ::Val{true}, session_info::SessionInfo{<:Any,NoEnvironment}, previous
+)
+    cognitive_model = session_info.cognitive_model
+
+    #No action distribution was given before the first timestep
+    return saved_session_values(
+        session_info,
+        merge(
+            previous, (; action_distribution=output_before_first_timestep(cognitive_model))
         ),
     )
 end
 
-"""
-    initial_session_outputs(save_initial_values::Val, session_info, previous)
+function initial_session_values(
+    ::Val{true}, session_info::SessionInfo{<:Any,<:AbstractModel}, previous
+)
+    cognitive_model = session_info.cognitive_model
 
-Return what a session saves from before the first timestep, as timestep 0, when
-`save_initial_values` is `Val(true)`, and `nothing` otherwise. The distributions of
-timestep 0 are [`BeforeFirstTimestep`](@ref) for every output of each model, since none was
-given yet. Used by fitted sessions, before their first timestep runs.
-"""
-function initial_session_outputs(::Val{true}, session_info::SessionInfo, previous)
-    return saved_session_outputs(
+    #No observation distribution was given before the first timestep
+    environment_timestep_values = merge(
+        previous.environment,
+        (;
+            observation_distribution=output_before_first_timestep(session_info.environment),
+        ),
+    )
+
+    #Nor an action distribution
+    return saved_session_values(
         session_info,
         merge(
             previous,
             (;
-                action_distribution=output_before_first_timestep(
-                    session_info.cognitive_model
-                ),
-                observation_distribution=environment_output_before_first_timestep(
-                    session_info
-                ),
+                action_distribution=output_before_first_timestep(cognitive_model),
+                environment=environment_timestep_values,
             ),
         ),
     )
 end
-initial_session_outputs(::Val{false}, session_info::SessionInfo, previous) = nothing
-
-"""
-    environment_output_before_first_timestep(session_info)
-
-Return the output of the environment of a session from before the first timestep, every
-observation it lists as [`BeforeFirstTimestep`](@ref), or an empty `NamedTuple` without an
-environment. Used by [`initial_session_outputs`](@ref).
-"""
-environment_output_before_first_timestep(::SessionInfo{<:Any,NoEnvironment}) = (;)
-function environment_output_before_first_timestep(
-    session_info::SessionInfo{<:Any,<:AbstractModel}
-)
-    return output_before_first_timestep(session_info.environment)
-end
-
-"""
-    initialize_session_storage(initial_saved, saved, n_timesteps)
-
-Return the vectors for what a session saves over `n_timesteps` timesteps, one for each entry
-of `saved`, what the first timestep saved, and typed by it, as [`initialize_storage`](@ref)
-makes them. They start with `initial_saved`, what timestep 0 saved, when it isn't `nothing`.
-Used by fitted sessions, after their first timestep.
-"""
-function initialize_session_storage(::Nothing, saved::NamedTuple, n_timesteps)
-    return map(value -> initialize_storage(value, n_timesteps), saved)
-end
-
-function initialize_session_storage(
-    initial_saved::NamedTuple, saved::NamedTuple, n_timesteps
-)
-    return map(
-        (initial_value, value) -> initialize_storage(initial_value, value, n_timesteps),
-        initial_saved,
-        saved,
-    )
-end
-
-"""
-    store_session_outputs!(storage, saved, i)
-
-Store `saved`, what one timestep saved, as element `i` of each vector in `storage`, and
-return the storage, which [`store_value!`](@ref) widens when a value has a new type. Used
-by fitted sessions, on every timestep after the first.
-"""
-function store_session_outputs!(storage::NamedTuple, saved::NamedTuple, i)
-    return map((vector, value) -> store_value!(vector, value, i), storage, saved)
-end
-
-"""
-    session_saved_values(storage, timestep_sizes, session_info)
-
-Return what a fitted session saved as it returns it, from the vectors in `storage`: the
-cognitive model's under `states`, `observations`, `actions` and `action_distributions`, the
-environment's under `environment` when the session has one, and `timestep_sizes`. Used by
-fitted sessions, at their end.
-"""
-function session_saved_values(
-    storage, timestep_sizes, session_info::SessionInfo{<:Any,NoEnvironment}
-)
-    return (;
-        states=storage.state,
-        observations=storage.observation,
-        actions=storage.action,
-        action_distributions=storage.action_distribution,
-        timestep_sizes,
-    )
-end
-
-function session_saved_values(
-    storage, timestep_sizes, session_info::SessionInfo{<:Any,<:AbstractModel}
-)
-    return (;
-        states=storage.state,
-        observations=storage.observation,
-        actions=storage.action,
-        action_distributions=storage.action_distribution,
-        environment=(;
-            states=storage.environment_state,
-            observations=storage.environment_observation,
-            actions=storage.environment_action,
-            observation_distributions=storage.environment_observation_distribution,
-        ),
-        timestep_sizes,
-    )
-end
+initial_session_values(::Val{false}, session_info::SessionInfo, previous) = nothing
 
 """
     with_empty_environment_entry(saved_values)
 
 Return `saved_values`, what a session without an environment saved, with an `environment`
 entry whose vectors hold an empty `NamedTuple` for each saved timestep, for a session which
-has an environment but didn't run it, so that every session with an environment returns the
-same entries, in the same order as [`session_saved_values`](@ref) gives them, since the
-model's return otherwise has two types. Used by fitted sessions.
+has an environment but didn't include it, so that every session with an environment returns
+the same entries, in the same order, since the model's return otherwise has two types. Used
+by fitted sessions.
 """
 function with_empty_environment_entry(saved_values::NamedTuple)
     empty_vector = fill((;), length(saved_values.states))
@@ -1222,17 +1216,13 @@ function with_empty_environment_entry(saved_values::NamedTuple)
 end
 
 """
-    saved_values_until(storage, n_saved)
     timestep_sizes_until(timestep_sizes, n_saved)
 
-Return the vectors in `storage`, what a session saved, each cut to its first `n_saved`
-elements, and the vector of timestep sizes cut the same way, for a session that ended before
-its data did when a [`stopping_criterion`](@ref) was met. An empty vector of sizes, for a
-session that saves nothing, is kept. Used by fitted sessions.
+Return the vector of the sizes of the timesteps that a session returns, cut to its first
+`n_saved` elements, for a session that ended before its data did when a
+[`stopping_criterion`](@ref) was met. An empty vector of sizes, for a session that saves
+nothing, is kept. Used by fitted sessions.
 """
-function saved_values_until(storage::NamedTuple, n_saved)
-    return map(vector -> resize!(vector, n_saved), storage)
-end
 function timestep_sizes_until(timestep_sizes::AbstractVector, n_saved)
     return isempty(timestep_sizes) ? timestep_sizes : timestep_sizes[1:n_saved]
 end

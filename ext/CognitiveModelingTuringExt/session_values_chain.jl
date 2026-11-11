@@ -159,9 +159,18 @@ function with_session_info(
     args = model.args
     if model.f === CognitiveModeling.turing_behavioral_session
         new_args = merge(args, (; session_info=change(args.session_info)))
-    elseif model.f === CognitiveModeling.turing_multiple_behavioral_sessions ||
-        model.f === turing_run_full_model
+    elseif model.f === CognitiveModeling.turing_multiple_behavioral_sessions
         new_args = merge(args, (; sessions_info=change(args.sessions_info)))
+    elseif model.f === turing_run_full_model
+        #The sessions of a full model run their environment when its parameters are sampled, as when the model was made
+        new_args = merge(
+            args,
+            (;
+                sessions_info=sessions_for_environment_parameters(
+                    model.defaults.environment_parameters_model, change(args.sessions_info)
+                ),
+            ),
+        )
     elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
         new_args = merge(
             args, (; model=with_session_info(args.model, change, function_name))

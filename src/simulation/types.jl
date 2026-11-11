@@ -220,8 +220,9 @@ function InstantiatedModel(
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check that the parameters, the state and the previous output have the names the model lists
+    #Check that the parameters, the state and the previous output have the names the model lists, and that each parameter is within its domain
     check_match_attribute_names(model, parameters, state, previous_output)
+    check_parameter_domains(model, parameters)
 
     #Check that the inputs and outputs selected for the history are among those the model lists
     check_savehistory_selection_names(save_history, model)

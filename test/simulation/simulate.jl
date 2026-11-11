@@ -693,6 +693,35 @@ function cognitive_values(simulation)
     )
 end
 
+#A model whose learning rate has a domain, for the check of the parameters when a simulation starts
+struct LearnsWithinDomain <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(::LearnsWithinDomain, parameters) = (; value=0.0)
+function CognitiveModeling.apply_model(::LearnsWithinDomain, context::ModelContext)
+    return ModelOutput(
+        (; choice=Deterministic(true)), (; value=context.parameters.learning_rate)
+    )
+end
+function CognitiveModeling.attribute_names(::LearnsWithinDomain)
+    return ModelAttributes(;
+        parameters=:learning_rate, states=:value, inputs=:reward, outputs=:choice
+    )
+end
+function CognitiveModeling.parameter_domains(::LearnsWithinDomain)
+    return (; learning_rate=(; lower=0, upper=1),)
+end
+
+@testset "A parameter outside its domain is an error before anything runs" begin
+    @test simulate(
+        LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=0.5)
+    )[2] == (; value=0.5)
+    @test_throws InvalidParametersError(
+        "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
+    ) simulate(LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=1.5))
+    @test_throws InvalidParametersError InstantiatedModel(
+        LearnsWithinDomain(), (; learning_rate=-0.1)
+    )
+end
+
 @testset "simulate" begin
     expected_rewards(cognitive_states) =
         [state.expected_reward for state in cognitive_states]

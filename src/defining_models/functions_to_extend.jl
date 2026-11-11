@@ -192,6 +192,46 @@ function default_parameters(model::AbstractModel)
 end
 
 """
+    parameter_domains(model::AbstractModel)
+
+Return the values that the parameters of `model`, a cognitive model or an environment
+model, can take: a `NamedTuple` from the name of a parameter to its domain, which is a
+`NamedTuple` with any of `lower`, the smallest value it can have, `upper`, the largest, and
+`discrete`, whether it must be a whole number. What a domain leaves out is unbounded and
+continuous, and so is a parameter without a domain.
+
+The parameters of a simulation and of a fitted session are checked against their domains
+before anything runs, and a value outside its domain throws an
+[`InvalidParametersError`](@ref). An inference backend can also warn before a fit when a
+prior gives values outside a domain, and
+[`CognitiveModeling.discrete_parameter_names`](@ref) gives the discrete parameters, which
+are sampled in another way than the continuous ones.
+
+# Implementation
+A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
+that every parameter can take any value. A domain is best kept to the values the model
+can't run without, since a value outside it can't be fitted at all.
+
+# Examples
+```jldoctest
+julia> struct CountsOptions <: AbstractCognitiveModel end
+
+julia> function CognitiveModeling.parameter_domains(model::CountsOptions)
+           return (;
+               learning_rate = (; lower = 0, upper = 1),
+               n_options = (; lower = 1, discrete = true),
+           )
+       end;
+
+julia> CognitiveModeling.discrete_parameter_names(CountsOptions())
+(:n_options,)
+```
+"""
+function parameter_domains(model::AbstractModel)
+    return (;)
+end
+
+"""
     stopping_criterion(model::AbstractModel, state, parameters)
 
 Return whether `model`, a cognitive model or an environment model, with `state` as its state

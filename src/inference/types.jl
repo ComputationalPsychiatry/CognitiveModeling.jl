@@ -61,14 +61,21 @@ table.
   are `MissingValue()`, and against whose distributions the observations in the data are
   scored. Its outputs must be the inputs of `cognitive_model` and the other way round,
   directly or through `observation_map` and `action_map`. Without it, the data can't have
-  missing observations. It runs in a session where an observation or an action is missing,
-  where `environment_save_history` saves anything, or where `check_stopping_criterion` is
-  `true`: the scored observations then inform what is missing, such as which arm of a
-  bandit a missing choice was, from the reward that followed. It also runs in every session
-  of an inference backend's full model that samples the environment's parameters, so that
-  the observations inform them. Otherwise the session runs without it, since the scores of
-  its observations would be the same for every value of the parameters, and has none of the
-  environment's variables. The environment is kept in the session all the same.
+  missing observations. Whether the session includes it is decided by
+  `include_environment`, and it is kept in the session either way.
+- `include_environment::Union{Nothing, Bool}=nothing`: whether the session includes
+  `environment`, so that it runs on every timestep. By default, with `nothing`, it is
+  included where an observation or an action is missing, where `environment_save_history`
+  saves anything, or where `check_stopping_criterion` is `true`: the scored observations
+  then inform what is missing, such as which arm of a bandit a missing choice was, from the
+  reward that followed. It is also included in every session of an inference backend's
+  full model that estimates the environment's parameters, so that the observations inform
+  them. Otherwise it is left out, since the scores of its observations would be the same for
+  every value of the parameters, and the session has none of its variables. With `true` it
+  is always included, such as for a model of one's own which estimates its parameters. With
+  `false` it never is: a missing observation, a selection in `environment_save_history`
+  and `check_stopping_criterion = true` are then errors, and a missing action is imputed
+  without the observations informing it.
 - `observation_map::Union{Nothing, NameMap}=nothing` and
   `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
   cognitive model receives, and which of its actions the environment receives, and under
@@ -117,7 +124,8 @@ table.
 
 Each argument is kept in a field of the same name, with the two replacements made in the
 data, except `impute_missing_actions`, whose work is done here. The other fields are
-`runs_environment`, whether the environment runs, `environment_observations`, the data of
+`includes_environment`, whether the session includes the environment, as
+`include_environment` decides it, `environment_observations`, the data of
 the environment's outputs in its own names, `previous_environment_observation`, the
 observation the environment starts from in its own names, `recorded_actions` and
 `recorded_observations`, the recorded values of each name which are scored, the observations
@@ -183,7 +191,8 @@ struct SessionInfo{
     environment::Tenvironment
     observation_map::Tobservation_map
     action_map::Taction_map
-    runs_environment::Bool
+    include_environment::Union{Nothing,Bool}
+    includes_environment::Bool
     observations::Tobservations
     actions::Tactions
     environment_observations::Tenvironment_observations
@@ -221,6 +230,7 @@ function SessionInfo(
         environment=session_info.environment,
         observation_map=session_info.observation_map,
         action_map=session_info.action_map,
+        include_environment=session_info.include_environment,
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history,
         environment_save_history,
@@ -253,6 +263,7 @@ function prepare_session(
     environment::Union{NoEnvironment,AbstractModel}=NoEnvironment(),
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
+    include_environment::Union{Nothing,Bool}=nothing,
     timestep_sizes=1,
     impute_missing_actions::Bool=true,
     cognitive_save_history::SaveHistory=SaveHistory(),
@@ -296,14 +307,15 @@ function prepare_session(
         actions = without_missing_actions(actions)
     end
 
-    #The environment runs only when something is missing, an observation it fills in or an action that the observations it scores inform, when its history is saved, or when its stopping criterion is checked on every timestep
-    runs_environment =
-        environment isa AbstractModel && (
-            has_missing_entries(observations) ||
-            has_missing_entries(actions) ||
-            !saves_nothing(environment_save_history) ||
-            check_stopping_criterion === true
-        )
+    #Whether the session includes its environment: as it is told, and otherwise only when something is missing, an observation it fills in or an action that the observations it scores inform, when its history is saved, or when its stopping criterion is checked on every timestep
+    includes_environment = decide_whether_environment_is_included(
+        include_environment,
+        environment,
+        observations,
+        actions,
+        environment_save_history,
+        check_stopping_criterion,
+    )
 
     #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, and it starts from the previous observation in the same way
     environment_observations = environment_view(
@@ -328,7 +340,8 @@ function prepare_session(
         environment,
         observation_map,
         action_map,
-        runs_environment,
+        include_environment,
+        includes_environment,
         observations,
         actions,
         environment_observations,
@@ -351,7 +364,7 @@ end
 """
     MultipleSessionsInfo(cognitive_model, table; observation_columns, action_columns,
                          session_columns, <keyword arguments>)
-    MultipleSessionsInfo(sessions, session_ids)
+    MultipleSessionsInfo(sessions, session_ids; table=nothing, session_rows=nothing)
 
 Multiple behavioral sessions in a generative model that are fitted together, as a vector of
 [`SessionInfo`](@ref) with an identifier for each, which an inference backend's models of
@@ -365,10 +378,13 @@ A `missing` in a column becomes [`MissingValue`](@ref), or the marker for nothin
 as the keyword arguments `missing_observations` and `missing_actions` of `SessionInfo` say.
 Every session must come out with the same type, which they do when they share the models and
 the settings, since the timesteps of different sessions are then compiled once. As for
-[`SessionInfo`](@ref), an environment runs in a session where an observation or an action
-is missing, where `environment_save_history` saves anything or where
-`check_stopping_criterion` is `true`, and in every session of an inference backend's full
-model that samples the environment's parameters.
+[`SessionInfo`](@ref), a session includes its environment where an observation or an
+action is missing, where `environment_save_history` saves anything or where
+`check_stopping_criterion` is `true`, and in an inference backend's full model that
+estimates the environment's parameters, unless `include_environment` says otherwise. The
+table is kept in the field `table`, without being copied, with the rows of each session in
+`session_rows`, so that a session parameter model can read the columns it needs, such as
+those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions by.
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -405,8 +421,9 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   of a column with the size of each timestep.
 - The other keyword arguments of [`SessionInfo`](@ref), which every session gets.
 
-The second form takes sessions that are already prepared. Each argument is kept in a field
-of the same name.
+The second form takes sessions that are already prepared. They have no table, unless it is
+given as `table`, with the rows of each session in it as `session_rows`, a vector of
+vectors of row numbers. Each argument is kept in a field of the same name.
 
 In the REPL, the sessions show a summary on one line each: how many there are, and the
 models and the names in the data of the first.
@@ -454,16 +471,35 @@ struct MultipleSessionsInfo{
 }
     sessions::Tsessions
     session_ids::Tsession_ids
+    table::Union{Nothing,NamedTuple}
+    session_rows::Union{Nothing,Vector{Vector{Int}}}
 
-    #Only takes sessions of one type, with an identifier for each
+    #Only takes sessions of one type, with an identifier for each, and the rows of each in the table when there is one
     function MultipleSessionsInfo(
-        sessions::AbstractVector{<:SessionInfo}, session_ids::AbstractVector
+        sessions::AbstractVector{<:SessionInfo},
+        session_ids::AbstractVector;
+        table::Union{Nothing,NamedTuple}=nothing,
+        session_rows::Union{Nothing,AbstractVector{<:AbstractVector{Int}}}=nothing,
     )
         isempty(sessions) && throw(ArgumentError("There must be at least one session."))
         if length(sessions) != length(session_ids)
             throw(
                 DimensionMismatch(
                     "There are $(length(sessions)) sessions and $(length(session_ids)) session identifiers, but there must be one identifier for each session.",
+                ),
+            )
+        end
+        if (table === nothing) != (session_rows === nothing)
+            throw(
+                ArgumentError(
+                    "A table must come with the rows of each session in it, as session_rows, and the rows with the table.",
+                ),
+            )
+        end
+        if session_rows !== nothing && length(session_rows) != length(sessions)
+            throw(
+                DimensionMismatch(
+                    "There are $(length(sessions)) sessions and rows for $(length(session_rows)), but there must be rows for each session.",
                 ),
             )
         end
@@ -475,7 +511,10 @@ struct MultipleSessionsInfo{
                 ),
             )
         end
-        return new{typeof(sessions),typeof(session_ids)}(sessions, session_ids)
+        session_rows = session_rows === nothing ? nothing : map(Vector{Int}, session_rows)
+        return new{typeof(sessions),typeof(session_ids)}(
+            sessions, session_ids, table, session_rows
+        )
     end
 end
 
@@ -522,14 +561,19 @@ function MultipleSessionsInfo(
     end
     session_ids = map(first, sessions_rows)
 
-    return MultipleSessionsInfo(sessions, session_ids)
+    #The table is kept with the rows of each session, so that a session parameter model can read the columns it needs
+    return MultipleSessionsInfo(
+        sessions, session_ids; table, session_rows=map(last, sessions_rows)
+    )
 end
 
 #The same sessions with other save histories
 function MultipleSessionsInfo(sessions_info::MultipleSessionsInfo; keywords...)
     return MultipleSessionsInfo(
         map(session -> SessionInfo(session; keywords...), sessions_info.sessions),
-        sessions_info.session_ids,
+        sessions_info.session_ids;
+        table=sessions_info.table,
+        session_rows=sessions_info.session_rows,
     )
 end
 
@@ -539,7 +583,8 @@ end
 
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
 [`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
-observation too when the session has an environment model, so that an inference backend's
+observation too when the session has an environment model that it can include, so that an
+inference backend's
 model of the copy simulates them instead of fitting to them. This can be used for
 predictive checks: evaluating the model of the copy with the samples of a fit to the
 sessions, or sampling it from its prior, simulates each session again, with the same number
@@ -570,11 +615,12 @@ function prepare_for_prediction(
 
     #Every action is missing, and every observation too when there is an environment to give them
     actions = map(column -> fill(MissingValue(), length(column)), session_info.actions)
-    observations = if has_environment(session_info)
-        map(column -> fill(MissingValue(), length(column)), session_info.observations)
-    else
-        session_info.observations
-    end
+    observations =
+        if has_environment(session_info) && session_info.include_environment !== false
+            map(column -> fill(MissingValue(), length(column)), session_info.observations)
+        else
+            session_info.observations
+        end
 
     #The copy is prepared again with the settings of the session, so that what is scored and whether the environment runs follow from the new data
     return prepare_session(
@@ -585,6 +631,7 @@ function prepare_for_prediction(
         environment=session_info.environment,
         observation_map=session_info.observation_map,
         action_map=session_info.action_map,
+        include_environment=session_info.include_environment,
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history=session_info.cognitive_save_history,
         environment_save_history=session_info.environment_save_history,
@@ -599,97 +646,20 @@ function prepare_for_prediction(sessions_info::MultipleSessionsInfo; keywords...
         map(
             session -> prepare_for_prediction(session; keywords...), sessions_info.sessions
         ),
-        sessions_info.session_ids,
+        sessions_info.session_ids;
+        table=sessions_info.table,
+        session_rows=sessions_info.session_rows,
     )
 end
 
-## Types for the parts of a full model ##
-
-"""
-    AbstractSessionParametersModel
-
-Supertype for the descriptions of how the parameters of every session are given or sampled
-in a full model, the model that an inference backend fits to several sessions, for the
-cognitive model and for the environment model alike. The package comes with
-[`NoParameters`](@ref), [`FixedSessionParameters`](@ref),
-[`FixedParametersBySession`](@ref), [`IdenticalSessionParameters`](@ref) and
-[`IndependentSessionParameters`](@ref).
-
-# Implementation
-Create a subtype, and for each inference backend it is used with, add a method of that
-backend's function for parameters models, as the backend's documentation describes.
-"""
-abstract type AbstractSessionParametersModel end
-
-"""
-    NoParameters()
-
-The parameters model of a full model which gives no parameters, so that each parameter
-takes the value the model gives it in [`default_parameters`](@ref). It is the default for
-the parameters of the environment.
-"""
-struct NoParameters <: AbstractSessionParametersModel end
-
-"""
-    FixedSessionParameters(parameters)
-
-The parameters model of a full model which gives every session the same values, such as
-`(; scale = 2.0)`, with nothing sampled. The values are kept in the field `parameters`.
-"""
-struct FixedSessionParameters{Tparameters<:NamedTuple} <: AbstractSessionParametersModel
-    parameters::Tparameters
-end
-
-"""
-    FixedParametersBySession(parameters_by_session)
-
-The parameters model of a full model which gives each session values of its own, with
-nothing sampled. `parameters_by_session` holds the values of each session, either in a
-`NamedTuple` with an entry for each session, named by the session's name as
-[`CognitiveModeling.session_name`](@ref) gives it, such as
-`(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`, or in a dictionary from each session's
-identifier to its values, such as `Dict("S1" => (; scale = 2.0), "S2" => (; scale = 3.0))`.
-An identifier from several session columns is the `NamedTuple` of their values, so its
-entry is named like `id_S1__block_2`, and its key is like `(; id = "S1", block = 2)`. Every
-session must have values for the same parameters. The values are kept in the field
-`parameters_by_session`.
-"""
-struct FixedParametersBySession{Tparameters_by_session<:Union{NamedTuple,AbstractDict}} <:
-       AbstractSessionParametersModel
-    parameters_by_session::Tparameters_by_session
-end
-
-"""
-    IdenticalSessionParameters(priors)
-
-The parameters model of a full model which samples each parameter once, from its prior,
-and gives every session that value. `priors` is a `NamedTuple` with the name of each
-parameter that is fitted and the distribution it is sampled from, such as
-`(; learning_rate = Beta(2, 2))`. The priors are kept in the field `priors`.
-"""
-struct IdenticalSessionParameters{Tpriors<:NamedTuple} <: AbstractSessionParametersModel
-    priors::Tpriors
-end
-
-"""
-    IndependentSessionParameters(priors)
-
-The parameters model of a full model which samples each parameter for every session from
-the same prior, with nothing shared between the sessions. `priors` is a `NamedTuple` with
-the name of each parameter that is fitted and the distribution it is sampled from, such as
-`(; learning_rate = Beta(2, 2), inverse_temperature = LogNormal(0, 1))`. The priors are kept
-in the field `priors`.
-"""
-struct IndependentSessionParameters{Tpriors<:NamedTuple} <: AbstractSessionParametersModel
-    priors::Tpriors
-end
+## Types for what runs after the sessions in a full model ##
 
 """
     AbstractDownstreamModel
 
-Supertype for the descriptions of what runs after the sessions in a full model, with what
-they saved, such as a regression of a measurement on a state. [`NoDownstreamModel`](@ref) is
-the default.
+Supertype for downstream models: the final submodel of a full model, which is run after
+the sessions with what they saved, such as for correlations with other kinds of data, or a
+regression of a measurement on a state. [`NoDownstreamModel`](@ref) is the default.
 
 # Implementation
 Create a subtype, and for each inference backend it is used with, add a method of that

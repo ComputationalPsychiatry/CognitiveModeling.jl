@@ -14,6 +14,15 @@ include("saving_histories/storage.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
 include("inference/types.jl")
+include("inference/session_parameter_models/supertype.jl")
+include("inference/session_parameter_models/no_parameters.jl")
+include("inference/session_parameter_models/fixed_session_parameters.jl")
+include("inference/session_parameter_models/fixed_parameters_by_session.jl")
+include("inference/session_parameter_models/identical_session_parameters.jl")
+include("inference/session_parameter_models/independent_session_parameters.jl")
+include("inference/session_parameter_models/grouped_hierarchical_session_parameters.jl")
+include("inference/session_parameter_models/composite_session_parameters.jl")
+include("inference/prepare_full_model.jl")
 include("inference/functions_to_extend.jl")
 include("inference/utility_functions.jl")
 include("inference/turing_models.jl")
@@ -34,7 +43,9 @@ export AbstractSessionParametersModel,
     FixedSessionParameters,
     FixedParametersBySession,
     IdenticalSessionParameters,
-    IndependentSessionParameters
+    IndependentSessionParameters,
+    GroupedHierarchicalSessionParameters,
+    CompositeSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export NoParallelization, ParallelSessions
 export turing_behavioral_session,
@@ -44,8 +55,10 @@ export session_values_chain, session_parameters_chain, predict_session_values
 #What users call with the package's name, as in CognitiveModeling.apply_model
 public apply_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
+public parameter_domains, discrete_parameter_names
 public turing_apply_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
-public ModelHistory, n_sessions, session_index, session_name
+public ModelHistory, n_sessions, session_index, session_name, session_column_values
+public parameter_names, prepare_parameters_model, prepare_full_model
 
 end

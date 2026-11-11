@@ -82,12 +82,12 @@ needs FlexiChains.jl to be loaded, which Turing.jl loads.
 
 `results` is a matrix with what [`turing_full_model`](@ref) returns for each sample, as
 `returned(model, chain)` gives it, with the `MultipleSessionsInfo` of the model. The
-parameters are those the parameters models gave each session, so a parameters model other
-than [`IndependentSessionParameters`](@ref) gives parameters that aren't in the chain
-itself, such as one value for every session from [`IdenticalSessionParameters`](@ref), and
-values from [`FixedSessionParameters`](@ref) that were never sampled. The second form, in
-the Turing extension, takes a model made by `turing_full_model` and a chain sampled from it,
-and numbers the samples as the chain does. The result merges with the chain of
+parameters are those the session parameter models gave each session, so a session parameter
+model other than [`IndependentSessionParameters`](@ref) gives parameters that aren't in the
+chain itself, such as one value for every session from [`IdenticalSessionParameters`](@ref),
+and values from [`FixedSessionParameters`](@ref) that were never sampled. The second form,
+in the Turing extension, takes a model made by `turing_full_model` and a chain sampled from
+it, and numbers the samples as the chain does. The result merges with the chain of
 [`session_values_chain`](@ref), which has the same samples, with `merge`.
 
 # Examples

@@ -6,6 +6,8 @@ using CognitiveModeling:
     apply_model,
     initialize_state,
     attribute_names,
+    describe_model,
+    NoEnvironment,
     session_values_chain,
     session_parameters_chain
 using CognitiveModeling:
@@ -15,7 +17,12 @@ using CognitiveModeling:
     turing_downstream_model,
     turing_catch_invalid_parameters
 using CognitiveModeling:
-    merge_default_parameters, check_match_attribute_names, check_model_output, map_names
+    merge_default_parameters,
+    check_match_attribute_names,
+    check_parameter_domains,
+    parameter_domains,
+    check_model_output,
+    map_names
 using CognitiveModeling:
     check_environment_parameters,
     recorded_action_names,
@@ -25,19 +32,23 @@ using CognitiveModeling:
     has_environment,
     without_environment,
     sessions_for_environment_parameters,
-    samples_parameters,
+    estimates_parameters,
     sessions_save_anything,
-    parameters_by_session
+    parameters_by_session,
+    prepare_full_model,
+    prepare_parameters_model,
+    parameter_names,
+    merge_parameters_of_parts
 using CognitiveModeling:
     initialize_distributions, store_distributions, row, entry, has_missing_value
 using CognitiveModeling:
-    saved_session_outputs,
-    initial_session_outputs,
-    initialize_session_storage,
-    store_session_outputs!,
-    session_saved_values,
+    saved_session_values,
+    initial_session_values,
+    map_saved,
+    initialize_all_storage,
+    store_all_values!,
+    saved_values,
     with_empty_environment_entry,
-    saved_values_until,
     timestep_sizes_until
 using CognitiveModeling:
     stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data
@@ -50,7 +61,18 @@ using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
 include("turing_behavioral_session.jl")
-include("session_parameters_models.jl")
+
+#The Turing.jl models of the session parameter models, which give or sample the parameters of every session, each
+#in a file named as the file of its type in the package. The same kinds serve the parameters of the cognitive model and
+#those of the environment model, and each returns one vector for each parameter, with a value for every session
+include("session_parameter_models/no_parameters.jl")
+include("session_parameter_models/fixed_session_parameters.jl")
+include("session_parameter_models/fixed_parameters_by_session.jl")
+include("session_parameter_models/identical_session_parameters.jl")
+include("session_parameter_models/independent_session_parameters.jl")
+include("session_parameter_models/grouped_hierarchical_session_parameters.jl")
+include("session_parameter_models/composite_session_parameters.jl")
+
 include("session_values_chain.jl")
 
 end

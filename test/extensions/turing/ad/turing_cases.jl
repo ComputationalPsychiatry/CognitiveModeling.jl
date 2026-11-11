@@ -250,6 +250,47 @@ const TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS = turing_full_model(
     environment_parameters_model=IdenticalSessionParameters((; scale=Turing.Flat())),
 )
 
+# The same sessions with a column that puts the first and the third in one group, for parameters from the distributions of groups
+const TURING_GROUPED_SESSIONS = MultipleSessionsInfo(
+    TuringRescorlaWagner(),
+    merge(TURING_TABLE, (; group=repeat(["a", "b", "a"]; inner=10)));
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:id,
+    who_starts=EnvironmentStarts(),
+)
+turing_to_unit_interval(x) = 1 / (1 + exp(-x))
+const TURING_GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
+
+# Both parameters from the distributions of groups, as standardized values: the learning rate with two groups, the inverse temperature with one
+const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
+    GroupedHierarchicalSessionParameters((;
+        learning_rate=(;
+            priors=TURING_GROUP_PRIORS,
+            transformation=turing_to_unit_interval,
+            group_by=:group,
+        ),
+        inverse_temperature=(; priors=TURING_GROUP_PRIORS, transformation=exp),
+    )),
+    TURING_GROUPED_SESSIONS,
+)
+
+# A composite: the learning rate from the distributions of two groups directly, and the inverse temperature independent for each session
+const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
+    CompositeSessionParameters(
+        GroupedHierarchicalSessionParameters((;
+            learning_rate=(;
+                priors=TURING_GROUP_PRIORS,
+                transformation=turing_to_unit_interval,
+                group_by=:group,
+                centered=true,
+            ),
+        )),
+        IndependentSessionParameters((; inverse_temperature=Turing.Flat())),
+    ),
+    TURING_GROUPED_SESSIONS,
+)
+
 #The session of each case, prepared once
 function rescorla_wagner_session(who_starts)
     return SessionInfo(TuringRescorlaWagner(), TURING_REWARDS, TURING_CHOICES; who_starts)
@@ -378,6 +419,18 @@ const TURING_CASES = [
         name="turing full model with an environment parameter shared by the sessions",
         f=log_density_of(TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS),
         x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.9],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with parameters from the distributions of groups",
+        f=log_density_of(TURING_FULL_MODEL_WITH_GROUPS),
+        x=[0.2, -0.4, 0.8, 1.2, 0.3, -0.2, 0.1, 0.5, 0.6, 0.4, -0.3, 0.2],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with a composite of centered group parameters and independent ones",
+        f=log_density_of(TURING_FULL_MODEL_WITH_COMPOSITE),
+        x=[0.2, -0.4, 0.8, 1.2, 0.3, -0.5, 0.1, 1.0, 2.0, 3.0],
         reactant=false,
     ),
 ]

@@ -46,6 +46,8 @@ const KNOWN_FAILURES = [
             "turing session with noise in each timestep",
             "turing full model with three sessions and independent priors",
             "turing full model with an environment parameter shared by the sessions",
+            "turing full model with parameters from the distributions of groups",
+            "turing full model with a composite of centered group parameters and independent ones",
         ],
     ),
     (;

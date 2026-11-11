@@ -370,25 +370,36 @@ end
 Apply `f` to each kind of saved value in `saved`, and return the results arranged in the
 same way: the cognitive model's `states`, `observations`, `actions` and
 `action_distributions`, and under `environment` the environment's `states`, `observations`,
-`actions` and `observation_distributions`, as [`simulate`](@ref) returns them. With several,
-`f` takes the values of the same kind from each. Used to create, fill and shorten the
-vectors of a simulation's storage.
+`actions` and `observation_distributions`, as [`simulate`](@ref) returns them. What a fitted
+session without an environment saves has no `environment`, and is arranged without one.
+With several, `f` takes the values of the same kind from each. Used to create, fill and
+shorten the vectors of the storage of a simulation and of a fitted session.
 """
 @inline function map_saved(f::F, saved::Vararg{NamedTuple,N}) where {F,N}
-    environments = map(each -> each.environment, saved)
+
+    #Whether there is an environment is read from the names, which are in the types
+    if haskey(first(saved), :environment)
+        environments = map(each -> each.environment, saved)
+        return (;
+            states=f(map(each -> each.states, saved)...),
+            observations=f(map(each -> each.observations, saved)...),
+            actions=f(map(each -> each.actions, saved)...),
+            action_distributions=f(map(each -> each.action_distributions, saved)...),
+            environment=(;
+                states=f(map(each -> each.states, environments)...),
+                observations=f(map(each -> each.observations, environments)...),
+                actions=f(map(each -> each.actions, environments)...),
+                observation_distributions=f(
+                    map(each -> each.observation_distributions, environments)...
+                ),
+            ),
+        )
+    end
     return (;
         states=f(map(each -> each.states, saved)...),
         observations=f(map(each -> each.observations, saved)...),
         actions=f(map(each -> each.actions, saved)...),
         action_distributions=f(map(each -> each.action_distributions, saved)...),
-        environment=(;
-            states=f(map(each -> each.states, environments)...),
-            observations=f(map(each -> each.observations, environments)...),
-            actions=f(map(each -> each.actions, environments)...),
-            observation_distributions=f(
-                map(each -> each.observation_distributions, environments)...
-            ),
-        ),
     )
 end
 
@@ -398,7 +409,8 @@ end
 Create the vectors for saving `n_steps` timesteps, arranged as [`map_saved`](@ref) arranges
 them, and typed by `saved`, what the first timestep saved. When `initial_values` isn't
 `nothing`, each vector starts with what it has for timestep 0, from
-[`collect_initial_values`](@ref). Used by [`simulate_all_timesteps`](@ref).
+[`collect_initial_values`](@ref). Used by [`simulate_all_timesteps`](@ref) and by fitted
+sessions.
 """
 function initialize_all_storage(::Nothing, saved, n_steps)
     return map_saved(value -> initialize_storage(value, n_steps), saved)
@@ -417,7 +429,8 @@ end
 
 Store `saved`, what timestep `t` saved, as element `t` of each vector in `storage`, with
 [`store_value!`](@ref), and return the vectors arranged in the same way, in which a vector
-is wider when a value didn't fit it. Used by [`simulate_remaining_timesteps`](@ref).
+is wider when a value didn't fit it. Used by [`simulate_remaining_timesteps`](@ref) and by
+fitted sessions.
 """
 function store_all_values!(storage, saved, t)
     return map_saved((vector, value) -> store_value!(vector, value, t), storage, saved)
@@ -429,7 +442,7 @@ end
 Return the saved values of a simulation as [`simulate`](@ref) returns them: the vectors in
 `storage`, with the cognitive model's under `states`, `observations`, `actions` and
 `action_distributions` and the environment's under `environment`, and then `timestep_sizes`
-as given. Used by [`simulate`](@ref) and [`simulate!`](@ref).
+as given. Used by [`simulate`](@ref), [`simulate!`](@ref) and fitted sessions.
 """
 function saved_values(storage, timestep_sizes)
     return merge(storage, (; timestep_sizes))
@@ -438,10 +451,10 @@ end
 ## Simulating timesteps ##
 #Always inlined, because a call here makes the loop several times slower
 """
-    simulate_timestep(::EnvironmentStarts, cognitive_model, environment, cognitive_parameters,
-                      environment_parameters, cognitive_save_history,
-                      environment_save_history, observation_map, action_map, rng,
-                      timestep_size, previous)
+    simulate_timestep(::EnvironmentStarts, cognitive_model, environment,
+                      cognitive_parameters, environment_parameters,
+                      cognitive_save_history, environment_save_history, observation_map,
+                      action_map, rng, timestep_size, previous)
 
 Simulate a timestep where the environment moves first, starting from `previous`, the values
 of the timestep before, and return its values, from [`collect_timestep_values`](@ref). Used
@@ -1037,6 +1050,10 @@ function simulate(
         previous_observation,
     )
     check_names_fit(cognitive_model, environment, observation_map, action_map)
+
+    #Check that each parameter is within its domain
+    check_parameter_domains(cognitive_model, cognitive_parameters)
+    check_parameter_domains(environment, environment_parameters)
     check_savehistory_selection_names(cognitive_save_history, cognitive_model)
     check_savehistory_selection_names(environment_save_history, environment)
 
@@ -1399,8 +1416,9 @@ function simulate(
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check the names of the parameters, the state and the previous output against attribute_names
+    #Check the names of the parameters, the state and the previous output against attribute_names, and that each parameter is within its domain
     check_match_attribute_names(model, parameters, previous_state, previous_output)
+    check_parameter_domains(model, parameters)
 
     #Simulate the timestep, where nothing is selected for saving, since everything is returned
     timestep_values = simulate_timestep(

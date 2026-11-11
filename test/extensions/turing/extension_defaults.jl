@@ -66,7 +66,7 @@ end
 #A model without methods of its own
 struct ModelWithoutMethods <: AbstractCognitiveModel end
 
-#A parameters model and a downstream model without methods of their own
+#A session parameter model and a downstream model without methods of their own
 struct ParametersModelWithoutMethod <: AbstractSessionParametersModel end
 struct DownstreamModelWithoutMethod <: AbstractDownstreamModel end
 
@@ -103,10 +103,10 @@ end
         session_columns=:id,
         who_starts=EnvironmentStarts(),
     )
-    @test_throws "There is no turing_session_parameters_model method for a parameters model of type ParametersModelWithoutMethod. Each parameters model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::ParametersModelWithoutMethod, sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter." CognitiveModeling.turing_session_parameters_model(
+    @test_throws "There is no turing_session_parameters_model method for a session parameter model of type ParametersModelWithoutMethod. Each session parameter model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::ParametersModelWithoutMethod, sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter." CognitiveModeling.turing_session_parameters_model(
         ParametersModelWithoutMethod(), sessions_info
     )
-    @test_throws "A parameters model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type @NamedTuple{learning_rate::Beta{Float64}}." CognitiveModeling.turing_session_parameters_model(
+    @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type @NamedTuple{learning_rate::Beta{Float64}}." CognitiveModeling.turing_session_parameters_model(
         (; learning_rate=Beta(2, 2)), sessions_info
     )
     @test_throws "There is no turing_downstream_model method for a downstream model of type DownstreamModelWithoutMethod." CognitiveModeling.turing_downstream_model(

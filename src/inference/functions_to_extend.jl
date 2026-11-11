@@ -1,4 +1,4 @@
-## Functions that a model or an environment model can implement ##
+## Functions that a cognitive model or an environment model can implement ##
 
 """
     turing_apply_model(model::AbstractModel, context::ModelContext)
@@ -86,38 +86,85 @@ end
 """
 function turing_initialize_state end
 
-## Functions that the parts of a full model implement ##
+## Functions that a session parameter model implements ##
 
 """
     turing_session_parameters_model(parameters_model, sessions_info::MultipleSessionsInfo)
 
-Create the Turing.jl model which gives the parameters of every session in `sessions_info`,
-from a description of how they are given or sampled, for the cognitive model or the
+Create the Turing.jl model of `parameters_model`, a session parameter model, which gives or
+samples the parameters of every session in `sessions_info`, for the cognitive model or the
 environment model of a [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
 
 The model must return a `NamedTuple` with one entry for each parameter, named as the model
 names it, and a vector in each with one value for every session, in the order of the
-sessions. Each subtype of [`AbstractSessionParametersModel`](@ref) that comes with the
-package has a method.
+sessions. Each subtype of [`AbstractSessionParametersModel`](@ref) that comes with
+CognitiveModeling.jl has a method.
 
 # Implementation
-A parameters model of another kind, such as a hierarchical model or a regression, is a
-subtype of `AbstractSessionParametersModel` with a method of this function, which can read
-[`n_sessions`](@ref) and the identifiers of the sessions from `sessions_info`, and anything
-else from its own fields, such as the covariates of a regression. The full model treats it
-as one that samples, so that with it the environment of every session runs, and the
+A session parameter model of another kind, such as a regression, is a subtype of
+`AbstractSessionParametersModel` with a method of this function. It can read
+[`n_sessions`](@ref) and the identifiers of the sessions from `sessions_info`, the columns
+of the table that the sessions were split from, when there is one, with
+[`CognitiveModeling.session_column_values`](@ref), such as the covariates of a regression,
+and anything else from its own fields. What it reads from the table is best read once, in a
+method of [`CognitiveModeling.prepare_parameters_model`](@ref). The full model treats it as
+one that samples, so that with it the environment of every session runs, and the
 observations in the data inform the environment's parameters.
 """
 function turing_session_parameters_model end
 
 """
+    parameter_names(parameters_model)
+
+Return the names of the parameters that `parameters_model` gives every session, as a tuple
+of `Symbol`s, or `nothing` when they aren't known before it runs.
+[`prepare_full_model`](@ref) checks them against the parameters of the cognitive model and
+of the environment model, and [`CompositeSessionParameters`](@ref) checks that no two of its
+parts give the same one.
+
+# Implementation
+A session parameter model of one's own can add a method of this function. The default
+returns `nothing`, so that nothing is checked before a fit.
+
+# Examples
+```jldoctest
+julia> CognitiveModeling.parameter_names(FixedSessionParameters((; scale = 2.0, offset = 0.0)))
+(:scale, :offset)
+```
+"""
+parameter_names(parameters_model::AbstractSessionParametersModel) = nothing
+
+"""
+    prepare_parameters_model(parameters_model, sessions_info)
+
+Return `parameters_model` prepared for the sessions in `sessions_info`, with what doesn't
+change between the evaluations of an inference backend's model worked out once, before the
+model is made. A [`FixedParametersBySession`](@ref) has the values of every session looked
+up, a [`GroupedHierarchicalSessionParameters`](@ref) has the group of every session found,
+and a [`CompositeSessionParameters`](@ref) has each of its parts prepared. Used by
+[`prepare_full_model`](@ref).
+
+# Implementation
+A session parameter model of one's own can add a method of this function, which returns a
+session parameter model that the inference backends have methods for. The default returns
+`parameters_model` as it is.
+"""
+function prepare_parameters_model(
+    parameters_model::AbstractSessionParametersModel, sessions_info::MultipleSessionsInfo
+)
+    return parameters_model
+end
+
+## Functions that a downstream model implements ##
+
+"""
     turing_downstream_model(downstream_model, saved_behavioral_values, cognitive_parameters,
                             sessions_info::MultipleSessionsInfo)
 
-Create the Turing.jl model which runs after the sessions in a [`turing_full_model`](@ref),
-from a description of it, with what the sessions saved, the cognitive parameters of every
-session as the parameters model returned them, and the sessions' `sessions_info`. This needs
-Turing.jl to be loaded.
+Create the Turing.jl model of `downstream_model`, the final submodel of a
+[`turing_full_model`](@ref), which is run after the sessions, with what the sessions saved,
+the cognitive parameters of every session as the session parameter model returned them, and
+the sessions' `sessions_info`. This needs Turing.jl to be loaded.
 
 The model can return anything, which the full model returns as its `downstream_values`.
 [`NoDownstreamModel`](@ref) is the default, with a method which samples nothing and returns
