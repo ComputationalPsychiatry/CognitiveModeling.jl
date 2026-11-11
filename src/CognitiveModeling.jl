@@ -17,7 +17,7 @@ include("inference/types.jl")
 include("inference/functions_to_extend.jl")
 include("inference/utility_functions.jl")
 include("inference/turing_models.jl")
-include("inference/chains.jl")
+include("inference/postprocessing.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel

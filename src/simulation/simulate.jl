@@ -3,10 +3,10 @@
     sample_output(rng, output_distribution)
 
 Sample an output from what a model returned, using `rand`. Each output in a `NamedTuple` is
-sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an entry
-that is [`NoAction`](@ref) or [`NoObservation`](@ref) is kept. A number, a string or a symbol
-is a value and not something to sample from, and throws an `ArgumentError` which names
-[`Deterministic`](@ref). Used on each timestep of a simulation, by
+sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an
+entry that is [`NoAction`](@ref) or [`NoObservation`](@ref) is kept. A number, a string or a
+symbol is a value and not something to sample from, and throws an `ArgumentError` which
+names [`Deterministic`](@ref). Used on each timestep of a simulation, by
 [`simulate_timestep`](@ref).
 """
 function sample_output(rng, output_distribution)
@@ -40,8 +40,8 @@ end
 
 Return `parameters` with the values from [`default_parameters`](@ref) of `model`, a
 cognitive model or an environment model, for the parameters it doesn't have, if `model`
-provides defaults for them. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and the
-Turing.jl session.
+provides defaults for them. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and
+fitted sessions.
 """
 function merge_default_parameters(model::AbstractModel, parameters)
     return merge(default_parameters(model), parameters)
@@ -193,13 +193,13 @@ function check_actions_fit(
     return nothing
 end
 
-## Simulating timesteps ##
+## The values of a timestep ##
 """
     get_timestep_size(timestep_sizes, t)
 
 Return the size of timestep `t`. A vector has one size for each timestep, and anything else
-is the size of all of them. Used on each timestep, by the simulation loop and the Turing.jl
-session.
+is the size of all of them. Used on each timestep, by the simulation loop and by fitted
+sessions.
 """
 function get_timestep_size(timestep_sizes::AbstractVector, t)
     return timestep_sizes[t]
@@ -215,9 +215,9 @@ end
                             observation, action, environment_action, cognitive_model,
                             environment, cognitive_save_history, environment_save_history)
 
-Collect the values of a timestep in a `NamedTuple`: the state and the action of the cognitive
-model, and under `environment` the state and the observation of the environment, which the
-next timestep starts from, and under `saved` what `cognitive_save_history` and
+Collect the values of a timestep in a `NamedTuple`: the state and the action of the
+cognitive model, and under `environment` the state and the observation of the environment,
+which the next timestep starts from, and under `saved` what `cognitive_save_history` and
 `environment_save_history` select, as [`map_saved`](@ref) arranges them.
 
 Each side has the values in its own names: `observation` is the observation as the cognitive
@@ -336,7 +336,7 @@ function collect_initial_values(
             previous_values.action, output_selection(cognitive_save_history)
         ),
         action_distributions=select_names(
-            initial_output(cognitive_model),
+            output_before_first_timestep(cognitive_model),
             output_distribution_selection(cognitive_save_history),
         ),
         environment=(;
@@ -354,24 +354,25 @@ function collect_initial_values(
                 input_selection(environment_save_history),
             ),
             observation_distributions=select_names(
-                initial_output(environment),
+                output_before_first_timestep(environment),
                 output_distribution_selection(environment_save_history),
             ),
         ),
     )
 end
 
+## Storing what is saved ##
 #The function and the number of NamedTuples are type parameters, since Julia doesn't specialize on varargs which are only passed on, and boxes them otherwise
 #Always inlined, since Enzyme can't prove the types of the vectors it creates otherwise, and throws an EnzymeNoTypeError
 """
     map_saved(f, saved...)
 
-Apply `f` to each kind of saved value in `saved`, and return the results arranged in the same
-way: the cognitive model's `states`, `observations`, `actions` and `action_distributions`,
-and under `environment` the environment's `states`, `observations`, `actions` and
-`observation_distributions`, as [`simulate`](@ref) returns them. With several, `f` takes the
-values of the same kind from each. Used to create, fill and shorten the vectors of a
-simulation's storage.
+Apply `f` to each kind of saved value in `saved`, and return the results arranged in the
+same way: the cognitive model's `states`, `observations`, `actions` and
+`action_distributions`, and under `environment` the environment's `states`, `observations`,
+`actions` and `observation_distributions`, as [`simulate`](@ref) returns them. With several,
+`f` takes the values of the same kind from each. Used to create, fill and shorten the
+vectors of a simulation's storage.
 """
 @inline function map_saved(f::F, saved::Vararg{NamedTuple,N}) where {F,N}
     environments = map(each -> each.environment, saved)
@@ -434,6 +435,7 @@ function saved_values(storage, timestep_sizes)
     return merge(storage, (; timestep_sizes))
 end
 
+## Simulating timesteps ##
 #Always inlined, because a call here makes the loop several times slower
 """
     simulate_timestep(::EnvironmentStarts, cognitive_model, environment, cognitive_parameters,
@@ -621,33 +623,14 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
 end
 
 """
-    simulation_stopping_criterion_met(cognitive_model, environment, cognitive_parameters,
-                                      environment_parameters, timestep_values)
-
-Return whether [`stopping_criterion`](@ref) of either model is met, with the states in
-`timestep_values`, the values of the timestep before. Used by the simulation loop before
-each timestep, when the criteria are checked.
-"""
-function simulation_stopping_criterion_met(
-    cognitive_model,
-    environment,
-    cognitive_parameters,
-    environment_parameters,
-    timestep_values,
-)
-    return stopping_criterion(
-        environment, timestep_values.environment.state, environment_parameters
-    ) || stopping_criterion(cognitive_model, timestep_values.state, cognitive_parameters)
-end
-
-"""
     check_stopping_criterion_not_met(model, state, parameters)
 
 Throw an informative error if [`stopping_criterion`](@ref) of `model` is already met with
 `state`, before the first timestep, since no timestep can then run. Used for each model by
-[`check_simulation_stopping_criterion_not_met`](@ref), and by the Turing.jl session.
+[`simulate_all_timesteps`](@ref), and by fitted sessions, where there is nothing to check
+for an environment a session doesn't have.
 """
-function check_stopping_criterion_not_met(model, state, parameters)
+function check_stopping_criterion_not_met(model::AbstractModel, state, parameters)
     if stopping_criterion(model, state, parameters)
         throw(
             ArgumentError(
@@ -655,32 +638,6 @@ function check_stopping_criterion_not_met(model, state, parameters)
             ),
         )
     end
-    return nothing
-end
-
-"""
-    check_simulation_stopping_criterion_not_met(cognitive_model, environment,
-                                                previous_values, cognitive_parameters,
-                                                environment_parameters)
-
-Throw an informative error if [`stopping_criterion`](@ref) of either model is already met
-with the states in `previous_values`, before the first timestep of a simulation, with
-[`check_stopping_criterion_not_met`](@ref). Used by [`simulate_all_timesteps`](@ref) when
-the criteria are checked.
-"""
-function check_simulation_stopping_criterion_not_met(
-    cognitive_model,
-    environment,
-    previous_values,
-    cognitive_parameters,
-    environment_parameters,
-)
-    check_stopping_criterion_not_met(
-        environment, previous_values.environment.state, environment_parameters
-    )
-    check_stopping_criterion_not_met(
-        cognitive_model, previous_values.state, cognitive_parameters
-    )
     return nothing
 end
 
@@ -721,12 +678,12 @@ function simulate_remaining_timesteps(
     for t in 2:n_steps
 
         #Stop if the stopping criterion of either model is met, and keep only the timesteps that were simulated
-        if check_stopping_criterion && simulation_stopping_criterion_met(
-            cognitive_model,
-            environment,
-            cognitive_parameters,
-            environment_parameters,
-            timestep_values,
+        if check_stopping_criterion && (
+            stopping_criterion(
+                environment, timestep_values.environment.state, environment_parameters
+            ) || stopping_criterion(
+                cognitive_model, timestep_values.state, cognitive_parameters
+            )
         )
             map_saved(vector -> resize!(vector, t - 1 + offset), storage)
             return storage, timestep_values
@@ -812,12 +769,11 @@ function simulate_all_timesteps(
 
     #No timestep can be simulated when the stopping criterion of either model is met already
     if check_stopping_criterion
-        check_simulation_stopping_criterion_not_met(
-            cognitive_model,
-            environment,
-            previous_values,
-            cognitive_parameters,
-            environment_parameters,
+        check_stopping_criterion_not_met(
+            environment, previous_values.environment.state, environment_parameters
+        )
+        check_stopping_criterion_not_met(
+            cognitive_model, previous_values.state, cognitive_parameters
         )
     end
 
@@ -874,6 +830,7 @@ function simulate_all_timesteps(
     )
 end
 
+## Simulating a cognitive model with an environment ##
 """
     simulate(cognitive_model, environment; <keyword arguments>)
 
@@ -886,13 +843,13 @@ one element for timestep 0, before the first timestep, and one for each timestep
 Each element is what happened on that timestep, and the states are those after it. The
 observations are those the cognitive model received, and the actions those it gave, and
 under `environment` the observations are those the environment gave and the actions those it
-received, which differ from the cognitive model's when a [`NameMap`](@ref) selects or renames
-them. The action distributions are what the cognitive model gave its actions to be sampled
-from, and the observation distributions what the environment gave its observations to be
-sampled from. The element for timestep 0 has the previous observation and action, which are
-[`BeforeFirstTimestep`](@ref) unless others are given, `BeforeFirstTimestep()` for every
-distribution, and the states before the first timestep. Since Julia counts from 1, element
-`t + 1` is timestep `t`.
+received, which differ from the cognitive model's when a [`NameMap`](@ref) selects or
+renames them. The action distributions are what the cognitive model gave its actions to be
+sampled from, and the observation distributions what the environment gave its observations
+to be sampled from. The element for timestep 0 has the previous observation and action,
+which are [`BeforeFirstTimestep`](@ref) unless others are given, `BeforeFirstTimestep()` for
+every distribution, and the states before the first timestep. Since Julia counts from 1,
+element `t + 1` is timestep `t`.
 
 `cognitive_save_history` and `environment_save_history` select what is kept of each element
 of each model, which is nothing by default: give `SaveHistory(SaveEverything())` to keep
@@ -957,15 +914,15 @@ the timesteps that ran.
 - `previous_cognitive_state=initialize_state(cognitive_model, ...)`: the state of
   `cognitive_model` before the first timestep, by default its initial state from the full
   parameters. A state that `cognitive_model` changes in place will be changed.
-- `previous_action=initial_output(cognitive_model)`: the action before the first timestep.
-  By default every action is [`BeforeFirstTimestep`](@ref), with the names from
-  [`attribute_names`](@ref).
+- `previous_action=output_before_first_timestep(cognitive_model)`: the action before the
+  first timestep. By default every action is [`BeforeFirstTimestep`](@ref), with the names
+  from [`attribute_names`](@ref).
 - `previous_environment_state=initialize_state(environment, ...)`: the state of
   `environment` before the first timestep, by default its initial state from the full
   parameters.
-- `previous_observation=initial_output(environment)`: the observation before the first
-  timestep. By default every observation is `BeforeFirstTimestep()`, with the names from
-  `attribute_names` of `environment`.
+- `previous_observation=output_before_first_timestep(environment)`: the observation before
+  the first timestep. By default every observation is `BeforeFirstTimestep()`, with the
+  names from `attribute_names` of `environment`.
 
 See also [`simulate!`](@ref), which continues from where the last simulation left off.
 
@@ -1058,11 +1015,11 @@ function simulate(
     previous_cognitive_state=initialize_state(
         cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
     ),
-    previous_action=initial_output(cognitive_model),
+    previous_action=output_before_first_timestep(cognitive_model),
     previous_environment_state=initialize_state(
         environment, merge_default_parameters(environment, environment_parameters)
     ),
-    previous_observation=initial_output(environment),
+    previous_observation=output_before_first_timestep(environment),
 )
 
     #Fill in the default parameters
@@ -1291,6 +1248,7 @@ function simulate!(
     return saved_values(storage, timestep_sizes_simulated)
 end
 
+## Simulating a model on a single input ##
 #Its own function, so that it is compiled for the types in an instantiated model's untyped fields, which makes simulate! on a single input several times faster
 """
     simulate_timestep(model, input, previous_state, previous_output, parameters,
@@ -1383,8 +1341,8 @@ parameters, the state and the previous output are checked as in a full simulatio
 - `previous_state=initialize_state(model, ...)`: the state of `model` before this timestep,
   by default its initial state from the full parameters. A state that `model` changes in
   place will be changed.
-- `previous_output=initial_output(model)`: the output before this timestep. By default every
-  output is [`BeforeFirstTimestep`](@ref).
+- `previous_output=output_before_first_timestep(model)`: the output before this timestep.
+  By default every output is [`BeforeFirstTimestep`](@ref).
 
 # Examples
 ```jldoctest
@@ -1435,7 +1393,7 @@ function simulate(
     timestep_size=1,
     rng::AbstractRNG=default_rng(),
     previous_state=initialize_state(model, merge_default_parameters(model, parameters)),
-    previous_output=initial_output(model),
+    previous_output=output_before_first_timestep(model),
 )
 
     #Fill in the default parameters

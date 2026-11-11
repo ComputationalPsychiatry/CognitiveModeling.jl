@@ -1,3 +1,5 @@
+## Passing names between models ##
+
 """
     NameMap(names...)
 
@@ -69,6 +71,8 @@ function Base.show(io::IO, ::NameMap{Tgiven,Treceived}) where {Tgiven,Treceived}
     return nothing
 end
 
+## Instantiated models ##
+
 """
     ModelHistory(states, inputs, outputs, output_distributions, timestep_sizes)
 
@@ -125,10 +129,10 @@ must be those that [`attribute_names`](@ref) lists, or an error is thrown.
 
 `agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a
-[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history` stay
-empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs can
-only be selected by name among those the model lists, since the history starts from those
-names.
+[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
+stay empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs
+can only be selected by name among those the model lists, since the history starts from
+those names.
 `agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved.
 
 In the REPL, an instantiated model shows the kind and the type of its model, how many
@@ -199,7 +203,7 @@ function InstantiatedModel(
         model,
         parameters,
         initialize_state(model, parameters),
-        initial_output(model);
+        output_before_first_timestep(model);
         save_history,
     )
 end
@@ -251,10 +255,12 @@ function starting_history(
     end
     return ModelHistory(
         Any[save_state(model, state, state_selection(save_history))],
-        Any[select_names(initial_input(model), input_selection(save_history))],
+        Any[select_names(
+            input_before_first_timestep(model), input_selection(save_history)
+        )],
         Any[select_names(previous_output, output_selection(save_history))],
         Any[select_names(
-            initial_output(model), output_distribution_selection(save_history)
+            output_before_first_timestep(model), output_distribution_selection(save_history)
         )],
         Any[BeforeFirstTimestep()],
     )
@@ -313,7 +319,9 @@ function reset!(instantiated_model::InstantiatedModel)
     instantiated_model.state = initialize_state(
         instantiated_model.model, instantiated_model.parameters
     )
-    instantiated_model.previous_output = initial_output(instantiated_model.model)
+    instantiated_model.previous_output = output_before_first_timestep(
+        instantiated_model.model
+    )
     instantiated_model.history = starting_history(
         instantiated_model.model,
         instantiated_model.state,
@@ -323,6 +331,8 @@ function reset!(instantiated_model::InstantiatedModel)
     instantiated_model.n_timesteps = 0
     return instantiated_model
 end
+
+## Displaying instantiated models ##
 
 #Shows the kind and the type of the model in the REPL and notebooks, how many timesteps it has simulated, its parameters and its state, and whether its stopping criterion is met
 function Base.show(io::IO, ::MIME"text/plain", instantiated_model::InstantiatedModel)

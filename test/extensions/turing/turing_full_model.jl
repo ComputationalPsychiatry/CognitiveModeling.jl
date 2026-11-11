@@ -648,12 +648,28 @@ end
             @varname(cognitive_parameters_model.learning_rate.shared),
             @varname(environment_parameters_model.learning_rate.shared),
         ])
-        #No warning when the environment's parameters are fixed
+        #No warning when the environment's parameters are fixed, nor when the cognitive parameters are
         @test_logs turing_full_model(
             shared,
             sessions_info;
             environment_parameters_model=FixedSessionParameters((; learning_rate=0.5)),
         )
+        @test_logs turing_full_model(
+            FixedSessionParameters((; learning_rate=0.5, inverse_temperature=1.0)),
+            sessions_info;
+            environment_parameters_model=shared,
+        )
+        #No warning when the two models' parameters have different names, nor without an environment
+        @test_logs turing_full_model(
+            shared,
+            sessions_for_test(;
+                environment=RewardsAroundMean(), impute_missing_actions=false
+            );
+            environment_parameters_model=IdenticalSessionParameters((;
+                mean_reward=Normal()
+            )),
+        )
+        @test_logs turing_full_model(shared, sessions_for_test())
     end
 
     @testset "It can be sampled, and returned gives the parameters and the states of every session for each sample" begin

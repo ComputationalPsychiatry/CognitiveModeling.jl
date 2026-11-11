@@ -144,12 +144,12 @@ end
     with_session_info(model, change, function_name)
 
 Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
-`turing_multiple_behavioural_sessions` or `turing_behavioural_session`, or one of them inside
-`turing_catch_invalid_parameters`, whose session info is what `change` makes of its own: a
-`SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its other
-arguments, its keyword arguments and whether it is marked thread-safe stay as they are. Any
-other model is an error, which names `function_name`, the function that was called. Used by
-`session_values_chain` and `predict_session_values`.
+`turing_multiple_behavioural_sessions` or `turing_behavioural_session`, or one of them
+inside `turing_catch_invalid_parameters`, whose session info is what `change` makes of its
+own: a `SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its
+other arguments, its keyword arguments and whether it is marked thread-safe stay as they
+are. Any other model is an error, which names `function_name`, the function that was called.
+Used by `session_values_chain` and `predict_session_values`.
 """
 function with_session_info(
     model::DynamicPPL.Model{F,argnames,defaultnames,missings,Targs,Tdefaults,Ctx,Threaded},

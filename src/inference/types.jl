@@ -1,4 +1,4 @@
-#Type for data where a value wasn't recorded
+## Type for data where a value wasn't recorded ##
 
 """
     MissingValue()
@@ -17,7 +17,7 @@ an error. A [`SessionInfo`](@ref) replaces `missing` in the data by it.
 """
 struct MissingValue end
 
-#Types for how a session is set up, which are the same whatever it is fitted with
+## Types for how a session is set up, which are the same whatever it is fitted with ##
 
 """
     NoEnvironment()
@@ -30,11 +30,11 @@ struct NoEnvironment end
 """
     SessionInfo(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
-Everything about one session that is fixed while a cognitive model is fitted to it: the
-data, the models and the settings, checked and prepared once. A Turing.jl model of the
-session, [`turing_behavioural_session`](@ref), takes it together with the parameters, which
-are what changes between evaluations. [`MultipleSessionsInfo`](@ref) makes one for each
-session in a table.
+Everything about one behavioural session that is fixed within a generative model to be
+fitted: the data, the models and the settings, checked and prepared once. An inference
+backend's model of the session takes it together with the parameters, which are what
+changes between evaluations. [`MultipleSessionsInfo`](@ref) makes one for each session in a
+table.
 
 # Arguments
 - `cognitive_model::AbstractModel`: the cognitive model, usually an
@@ -42,10 +42,10 @@ session in a table.
 - `observations`: the observations in the data, as a `NamedTuple` with one vector for each
   name and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data
   must have every observation the model lists in [`attribute_names`](@ref), and can have
-  more. When the model lists one observation, a single vector, `[1.0, 0.0, 1.0]`, is the data
-  of that observation, whatever its name. An observation that wasn't recorded is
-  [`MissingValue`](@ref), which `environment` fills in, and one that wasn't made is
-  [`NoObservation`](@ref).
+  more. When the model has only one observation in its attributes, a single vector,
+  `[1.0, 0.0, 1.0]`, is the data of that observation, whatever its name. An observation that
+  wasn't recorded is [`MissingValue`](@ref), which `environment` fills in if it imputed, and
+  one that wasn't made is [`NoObservation`](@ref).
 - `actions`: the actions in the data, in the same forms, with exactly the actions the model
   lists. An action that was taken but not recorded is `MissingValue()`, and is imputed
   unless `impute_missing_actions` is `false`. An action that wasn't taken is
@@ -59,16 +59,23 @@ session in a table.
 - `environment::Union{NoEnvironment, AbstractModel}=NoEnvironment()`: an environment
   model, usually an [`AbstractEnvironmentModel`](@ref), which fills in the observations that
   are `MissingValue()`, and against whose distributions the observations in the data are
-  scored. Its outputs must be the inputs of `cognitive_model` and the other way round, since
-  a session takes no maps of names. Without it, the data can't have missing observations. It
-  runs in a session where an observation or an action is missing, where
-  `environment_save_history` saves anything, or where `check_stopping_criterion` is `true`:
-  the scored observations then inform what is missing, such as which arm of a bandit a
-  missing choice was, from the reward that followed.
-  A session with nothing missing runs without it, since the scores of its observations would
-  then be the same for every value of the parameters, unless the environment's parameters
-  are sampled, see [`turing_full_model`](@ref). The session then has none of the
-  environment's variables either. The environment is kept in the session all the same.
+  scored. Its outputs must be the inputs of `cognitive_model` and the other way round,
+  directly or through `observation_map` and `action_map`. Without it, the data can't have
+  missing observations. It runs in a session where an observation or an action is missing,
+  where `environment_save_history` saves anything, or where `check_stopping_criterion` is
+  `true`: the scored observations then inform what is missing, such as which arm of a
+  bandit a missing choice was, from the reward that followed. It also runs in every session
+  of an inference backend's full model that samples the environment's parameters, so that
+  the observations inform them. Otherwise the session runs without it, since the scores of
+  its observations would be the same for every value of the parameters, and has none of the
+  environment's variables. The environment is kept in the session all the same.
+- `observation_map::Union{Nothing, NameMap}=nothing` and
+  `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
+  cognitive model receives, and which of its actions the environment receives, and under
+  which names, as [`NameMap`](@ref)s, as for `simulate`. The data is in the cognitive
+  model's names, and is scored against the environment's distributions as the map passes
+  them on. An output of the environment that the map doesn't pass on isn't in the data, so
+  it is imputed on every timestep. Each model's history is in its own names.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
 - `impute_missing_actions::Bool=true`: whether an action that is `MissingValue()` is
   imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
@@ -78,7 +85,7 @@ session in a table.
   output distributions of `cognitive_model` a fitted session returns, by name, and whether
   timestep 0 is, as a [`SaveHistory`](@ref) in the model's own names. Nothing is selected by
   default. What is returned names them by their role, as `states`, `observations`,
-  `actions` and `action_distributions`, see [`turing_behavioural_session`](@ref).
+  `actions` and `action_distributions`, as [`simulate`](@ref) does.
 - `environment_save_history::SaveHistory=SaveHistory()`: the same for `environment`, whose
   inputs are the actions and whose outputs are the observations, returned under
   `environment`. Selecting anything makes the environment run in the session, also when
@@ -86,42 +93,50 @@ session in a table.
   fixed environment parameters they are the same for every value of the cognitive
   parameters, so the posterior is unchanged. Whether timestep 0 is saved follows
   `cognitive_save_history`.
-- `check_stopping_criterion::Union{Nothing, Bool}=nothing`: when [`stopping_criterion`](@ref)
-  of the two models is checked before a timestep, so that the session ends there, with what
-  it saved up to it. By default it is checked only on the timesteps after the last one with
-  data, where a value is neither `MissingValue()` nor a marker for nothing happening, so
-  that a fit never checks it and a session made by [`predictive_sessions`](@ref), whose data
-  is all missing, ends as a simulation does. With `true` it is checked before every
-  timestep, which makes the environment run, and a model whose criterion is met while the
-  data continues is an error, since the recorded values after that timestep couldn't be
-  scored: this checks that the models agree with the length of the data. With `false` it is
-  never checked.
+- `check_stopping_criterion::Union{Nothing, Bool}=nothing`: when
+  [`stopping_criterion`](@ref) of the two models is checked before a timestep, so that the
+  session ends there, with what it saved up to it. By default it is checked only on the
+  timesteps after the last one with data, where a value is neither `MissingValue()` nor a
+  marker for nothing happening, so that a fit never checks it and a session prepared by
+  [`predictive_sessions`](@ref), whose data is all missing, ends as a simulation does.
+  With `true` it is checked before every timestep, which makes the environment run, and a
+  model whose criterion is met while the data continues is an error, since the recorded
+  values after that timestep couldn't be scored: this checks that the models agree with the
+  length of the data. With `false` it is never checked.
 - `missing_observations::Union{MissingValue, NoObservation}=MissingValue()` and
   `missing_actions::Union{MissingValue, NoAction}=MissingValue()`: what a `missing` in the
   data becomes, since a table marks every gap the same way: a value that wasn't recorded, or
   nothing happening on that timestep. The two markers can also be put in the data directly.
 - `previous_observation` and `previous_action`: what the first timestep receives as the
-  observation and the action before it, with [`BeforeFirstTimestep`](@ref) for each name by
-  default, as in `simulate`. The states where the session starts are not given here, since
-  they come from [`initialize_state`](@ref) with the parameters that are fitted.
+  observation and the action before it, in the cognitive model's names, with
+  [`BeforeFirstTimestep`](@ref) for each name by default, as in `simulate`. The environment
+  starts from the same observation in its own names, with `BeforeFirstTimestep()` for an
+  output that `observation_map` doesn't pass on. The states where the session starts are
+  not given here, since they come from [`initialize_state`](@ref) with the parameters that
+  are fitted.
 
 Each argument is kept in a field of the same name, with the two replacements made in the
-data, except `impute_missing_actions`, whose work is done here. There are five fields more:
-`runs_environment`, whether the environment runs, `recorded_actions` and
-`recorded_observations`, the recorded values of each name which are scored,
-`n_timesteps`, `saved_timestep_sizes`, the sizes a fitted session returns with what it
-saves, and `first_timestep_to_check_stopping`, the first timestep before which the stopping
-criterion is checked, as `check_stopping_criterion` decides it.
+data, except `impute_missing_actions`, whose work is done here. The other fields are
+`runs_environment`, whether the environment runs, `environment_observations`, the data of
+the environment's outputs in its own names, `previous_environment_observation`, the
+observation the environment starts from in its own names, `recorded_actions` and
+`recorded_observations`, the recorded values of each name which are scored, the observations
+in the environment's names, `n_timesteps`, `saved_timestep_sizes`, the sizes a fitted
+session returns with what it saves, and `first_timestep_to_check_stopping`, the first
+timestep before which the stopping criterion is checked, as `check_stopping_criterion`
+decides it.
 
     SessionInfo(session_info; cognitive_save_history, environment_save_history)
 
-The same session with other save histories, for reading the states of a fitted session from
-a chain: a session is fitted fastest when it saves nothing, and a chain from that model gives
-the states through `returned` with the model of a copy that saves them, since the two have
-the same variables. See [`turing_full_model`](@ref).
+Update a session to have other save histories, which returns a new `SessionInfo`. This is
+for after a fit: a session is fitted fastest when it saves nothing, and its states, or
+anything else it can save, are read afterwards from the updated session, by evaluating its
+model with each sample of the fit. The two models have the same variables, so every sample
+fits both. The documentation of each inference backend describes how.
 
 In the REPL, a session shows a summary on one line each: its models, its number of
-timesteps, the names in its data and who starts.
+timesteps, the names of the observations and the actions in its data, which are the
+cognitive model's names, and who starts.
 
 # Examples
 ```jldoctest
@@ -159,12 +174,19 @@ struct SessionInfo{
     Tenvironment_save_history,
     Tprevious_observation,
     Tprevious_action,
+    Tobservation_map,
+    Taction_map,
+    Tenvironment_observations,
+    Tprevious_environment_observation,
 }
     cognitive_model::Tcognitive_model
     environment::Tenvironment
+    observation_map::Tobservation_map
+    action_map::Taction_map
     runs_environment::Bool
     observations::Tobservations
     actions::Tactions
+    environment_observations::Tenvironment_observations
     recorded_actions::Trecorded_actions
     recorded_observations::Trecorded_observations
     n_timesteps::Int
@@ -177,6 +199,7 @@ struct SessionInfo{
     first_timestep_to_check_stopping::Int
     previous_observation::Tprevious_observation
     previous_action::Tprevious_action
+    previous_environment_observation::Tprevious_environment_observation
 end
 
 #Prepares the session
@@ -196,6 +219,8 @@ function SessionInfo(
         session_info.actions;
         who_starts=session_info.who_starts,
         environment=session_info.environment,
+        observation_map=session_info.observation_map,
+        action_map=session_info.action_map,
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history,
         environment_save_history,
@@ -207,6 +232,10 @@ end
 
 #A session without an environment has no environment history whose names could be checked
 check_savehistory_selection_names(::SaveHistory, ::NoEnvironment) = nothing
+
+#A session without an environment has no environment whose stopping criterion could be met
+stopping_criterion(::NoEnvironment, state, parameters) = false
+check_stopping_criterion_not_met(::NoEnvironment, state, parameters) = nothing
 
 """
     prepare_session(cognitive_model, observations, actions; who_starts, <keyword arguments>)
@@ -222,6 +251,8 @@ function prepare_session(
     actions;
     who_starts::Union{AgentStarts,EnvironmentStarts},
     environment::Union{NoEnvironment,AbstractModel}=NoEnvironment(),
+    observation_map::Union{Nothing,NameMap}=nothing,
+    action_map::Union{Nothing,NameMap}=nothing,
     timestep_sizes=1,
     impute_missing_actions::Bool=true,
     cognitive_save_history::SaveHistory=SaveHistory(),
@@ -229,15 +260,11 @@ function prepare_session(
     check_stopping_criterion::Union{Nothing,Bool}=nothing,
     missing_observations::Union{MissingValue,NoObservation}=MissingValue(),
     missing_actions::Union{MissingValue,NoAction}=MissingValue(),
-    previous_observation=if environment isa NoEnvironment
-        initial_input(cognitive_model)
-    else
-        initial_output(environment)
-    end,
-    previous_action=initial_output(cognitive_model),
+    previous_observation=input_before_first_timestep(cognitive_model),
+    previous_action=output_before_first_timestep(cognitive_model),
 )
 
-    #A single vector is the data of the model's only observation or action
+    #A single vector is the data of the observation or the action, when the model has only one in its attributes
     observations = named_data(observations, cognitive_model, :observations)
     actions = named_data(actions, cognitive_model, :actions)
 
@@ -247,7 +274,9 @@ function prepare_session(
 
     #Check the data against the names the cognitive model lists, and that the environment fits
     n_timesteps = check_data(cognitive_model, observations, actions)
-    check_environment_fits(cognitive_model, environment, observations)
+    check_environment_fits(
+        cognitive_model, environment, observations, observation_map, action_map
+    )
 
     #Check that the save histories select names that the models list
     check_savehistory_selection_names(cognitive_save_history, cognitive_model)
@@ -276,9 +305,17 @@ function prepare_session(
             check_stopping_criterion === true
         )
 
-    #The recorded actions and observations are scored at the end, and the sizes of the timesteps are returned with what is saved
+    #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, and it starts from the previous observation in the same way
+    environment_observations = environment_view(
+        observations, environment, observation_map, fill(MissingValue(), n_timesteps)
+    )
+    previous_environment_observation = environment_view(
+        previous_observation, environment, observation_map, BeforeFirstTimestep()
+    )
+
+    #The recorded actions and observations are scored at the end, the observations in the environment's names, and the sizes of the timesteps are returned with what is saved
     recorded_actions = recorded_values(actions)
-    recorded_observations = recorded_values(observations)
+    recorded_observations = recorded_values(environment_observations)
     saved_sizes = saved_timestep_sizes(timestep_sizes, n_timesteps, cognitive_save_history)
 
     #The stopping criterion is checked from the timestep after the last one with data, unless it is always or never checked
@@ -289,9 +326,12 @@ function prepare_session(
     return SessionInfo(
         cognitive_model,
         environment,
+        observation_map,
+        action_map,
         runs_environment,
         observations,
         actions,
+        environment_observations,
         recorded_actions,
         recorded_observations,
         n_timesteps,
@@ -304,6 +344,7 @@ function prepare_session(
         first_timestep_to_check,
         previous_observation,
         previous_action,
+        previous_environment_observation,
     )
 end
 
@@ -312,18 +353,20 @@ end
                          session_columns, <keyword arguments>)
     MultipleSessionsInfo(sessions, session_ids)
 
-The sessions that a cognitive model is fitted to together, as a vector of
-[`SessionInfo`](@ref) with an identifier for each, which
-[`turing_multiple_behavioural_sessions`](@ref) and [`turing_full_model`](@ref) take.
+Multiple behavioural sessions in a generative model that are fitted together, as a vector of
+[`SessionInfo`](@ref) with an identifier for each, which an inference backend's models of
+several sessions take.
 
 The first form splits a table into sessions. `table` is a `NamedTuple` with one vector for
 each column, which is what `Tables.columntable` gives for a `DataFrame` or any other table.
 A `missing` in a column becomes [`MissingValue`](@ref), or the marker for nothing happening,
 as the keyword arguments `missing_observations` and `missing_actions` of `SessionInfo` say.
 Every session must come out with the same type, which they do when they share the models and
-the settings, since the timesteps of different sessions are then compiled once. An
-environment runs only in the sessions where an observation or an action is missing, as for
-[`SessionInfo`](@ref).
+the settings, since the timesteps of different sessions are then compiled once. As for
+[`SessionInfo`](@ref), an environment runs in a session where an observation or an action
+is missing, where `environment_save_history` saves anything or where
+`check_stopping_criterion` is `true`, and in every session of an inference backend's full
+model that samples the environment's parameters.
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -337,22 +380,22 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   1.0, 1.0], choice = [true, false, true, true])`.
 
 # Keyword arguments
-- `observation_columns`: the columns with the observations. When the model lists one
-  observation, a single name, such as `:outcome`, is its column, whatever the observation is
-  called. Several observations are given as the names the model lists in
+- `observation_columns`: the columns with the observations. When the model has only one
+  observation in its attributes, a single name, such as `:outcome`, is its column, whatever
+  the observation is called. Several observations are given as the names the model lists in
   [`attribute_names`](@ref) when the columns are named the same, such as `(:reward, :cue)`,
   or as a `NamedTuple` from the model's name to the column's, such as `(; reward = :outcome,
   cue = :stimulus)`, so that one model fits tables with other names. A single name that the
   model lists as one of its actions is an error, since the two keyword arguments may then be
-  swapped. An attribute whose
-  value is made of several columns is specified by how to build it from them: a `NamedTuple`
-  of column names for a `NamedTuple` in each row, `(; ssm_action = (; choice = :choicecol,
-  rt = :rtcol))`, a `Tuple` of column names for a `Tuple`, `(; ssm_action = (:choicecol,
-  :rtcol))`, or a `Tuple` of column names and a function of their values, `(; ssm_action =
-  (:choicecol, :rtcol) => (choice, rt) -> [choice, rt])`. A `missing` in any of the columns
-  makes the value `missing`.
+  swapped. An observation or action whose value is composed from several columns is
+  specified by how to build it from the columns: a `NamedTuple` of column names for a
+  `NamedTuple` in each row, `(; ssm_action = (; choice = :choicecol, rt = :rtcol))`, a
+  `Tuple` of column names for a `Tuple`, `(; ssm_action = (:choicecol, :rtcol))`, or a
+  `Tuple` of column names and a function of their values,
+  `(; ssm_action = (:choicecol, :rtcol) => (choice, rt) -> [choice, rt])`. A `missing` in
+  any of the columns makes the value `missing`.
 - `action_columns`: the columns with the actions, in the same forms.
-- `session_columns`: the column or columns which identify a session, such as `:id` or
+- `session_columns`: the column or columns which separate sessions, such as `:id` or
   `(:id, :block)`. A session is every row with one combination of their values, in the
   order of the first row of each. The identifier of a session is its value in a single
   column, or a `NamedTuple` of its values in several.
@@ -517,6 +560,8 @@ function predictive_sessions(session_info::SessionInfo)
         actions;
         who_starts=session_info.who_starts,
         environment=session_info.environment,
+        observation_map=session_info.observation_map,
+        action_map=session_info.action_map,
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history=session_info.cognitive_save_history,
         environment_save_history=session_info.environment_save_history,
@@ -532,37 +577,38 @@ function predictive_sessions(sessions_info::MultipleSessionsInfo)
     )
 end
 
-#Types for the parts of a full model
+## Types for the parts of a full model ##
 
 """
     AbstractSessionParametersModel
 
 Supertype for the descriptions of how the parameters of every session are given or sampled
-in a [`turing_full_model`](@ref), for the cognitive model and for the environment model
-alike. The package comes with [`NoParameters`](@ref), [`FixedSessionParameters`](@ref),
+in a full model, the model that an inference backend fits to several sessions, for the
+cognitive model and for the environment model alike. The package comes with
+[`NoParameters`](@ref), [`FixedSessionParameters`](@ref),
 [`FixedParametersBySession`](@ref), [`IdenticalSessionParameters`](@ref) and
 [`IndependentSessionParameters`](@ref).
 
 # Implementation
-Create a subtype and add a method of [`turing_session_parameters_model`](@ref) for it.
+Create a subtype, and for each inference backend it is used with, add a method of that
+backend's function for parameters models, as the backend's documentation describes.
 """
 abstract type AbstractSessionParametersModel end
 
 """
     NoParameters()
 
-The parameters model of a [`turing_full_model`](@ref) which gives no parameters, so that
-each parameter takes the value the model gives it in [`default_parameters`](@ref). It is the
-default for the parameters of the environment.
+The parameters model of a full model which gives no parameters, so that each parameter
+takes the value the model gives it in [`default_parameters`](@ref). It is the default for
+the parameters of the environment.
 """
 struct NoParameters <: AbstractSessionParametersModel end
 
 """
     FixedSessionParameters(parameters)
 
-The parameters model of a [`turing_full_model`](@ref) which gives every session the same
-values, such as `(; scale = 2.0)`, with nothing sampled. The values are kept in the field
-`parameters`.
+The parameters model of a full model which gives every session the same values, such as
+`(; scale = 2.0)`, with nothing sampled. The values are kept in the field `parameters`.
 """
 struct FixedSessionParameters{Tparameters<:NamedTuple} <: AbstractSessionParametersModel
     parameters::Tparameters
@@ -586,11 +632,10 @@ end
 """
     IdenticalSessionParameters(priors)
 
-The parameters model of a [`turing_full_model`](@ref) which samples each parameter once, from
-its prior, and gives every session that value. `priors` is a `NamedTuple` with the name of
-each parameter that is fitted and the distribution it is sampled from, such as
-`(; learning_rate = Beta(2, 2))`. In the Turing.jl model, each parameter is named after
-itself, such as `learning_rate.shared`. The priors are kept in the field `priors`.
+The parameters model of a full model which samples each parameter once, from its prior,
+and gives every session that value. `priors` is a `NamedTuple` with the name of each
+parameter that is fitted and the distribution it is sampled from, such as
+`(; learning_rate = Beta(2, 2))`. The priors are kept in the field `priors`.
 """
 struct IdenticalSessionParameters{Tpriors<:NamedTuple} <: AbstractSessionParametersModel
     priors::Tpriors
@@ -599,13 +644,11 @@ end
 """
     IndependentSessionParameters(priors)
 
-The parameters model of a [`turing_full_model`](@ref) which samples each parameter for every
-session from the same prior, with nothing shared between the sessions. `priors` is a
-`NamedTuple` with the name of each parameter that is fitted and the distribution it is
-sampled from, such as `(; learning_rate = Beta(2, 2), inverse_temperature = LogNormal(0,
-1))`. In the Turing.jl model, each parameter is a vector with one entry for each session,
-named after the parameter, such as `learning_rate.session`, so the learning rate of the
-third session is `learning_rate.session[3]`. The priors are kept in the field `priors`.
+The parameters model of a full model which samples each parameter for every session from
+the same prior, with nothing shared between the sessions. `priors` is a `NamedTuple` with
+the name of each parameter that is fitted and the distribution it is sampled from, such as
+`(; learning_rate = Beta(2, 2), inverse_temperature = LogNormal(0, 1))`. The priors are kept
+in the field `priors`.
 """
 struct IndependentSessionParameters{Tpriors<:NamedTuple} <: AbstractSessionParametersModel
     priors::Tpriors
@@ -614,45 +657,40 @@ end
 """
     AbstractDownstreamModel
 
-Supertype for the descriptions of what runs after the sessions in a
-[`turing_full_model`](@ref), with what they saved, such as a regression of a measurement on
-a state. [`NoDownstreamModel`](@ref) is the default.
+Supertype for the descriptions of what runs after the sessions in a full model, with what
+they saved, such as a regression of a measurement on a state. [`NoDownstreamModel`](@ref) is
+the default.
 
 # Implementation
-Create a subtype and add a method of [`turing_downstream_model`](@ref) for it.
+Create a subtype, and for each inference backend it is used with, add a method of that
+backend's function for downstream models, as the backend's documentation describes.
 """
 abstract type AbstractDownstreamModel end
 
 """
     NoDownstreamModel()
 
-The `downstream_model` of a [`turing_full_model`](@ref) that has no third part: nothing is
-sampled after the sessions, and the `downstream_values` the model returns are `nothing`.
-This is the default.
+The `downstream_model` of a full model that has no third part, so that nothing runs after
+the sessions. This is the default.
 """
 struct NoDownstreamModel <: AbstractDownstreamModel end
 
-#Types for how the Turing.jl models run
+## Types for how the models of several sessions run ##
 
 """
     NoParallelisation()
 
-The default `parallelisation` of [`turing_multiple_behavioural_sessions`](@ref) and
-[`turing_full_model`](@ref): the sessions run one after the other. See
-[`ParallelSessions`](@ref) for the other choice.
+The default `parallelisation` of an inference backend's models of several sessions: the
+sessions run one after the other. See [`ParallelSessions`](@ref) for the other choice.
 """
 struct NoParallelisation end
 
 """
     ParallelSessions()
 
-Given as `parallelisation` to [`turing_multiple_behavioural_sessions`](@ref) or
-[`turing_full_model`](@ref), it spreads the sessions over the threads Julia was started with,
-as `Threads.@threads` does. The model that is evaluated, which is the outermost one, must
-then be marked with DynamicPPL's `setthreadsafe(model, true)`, and the sessions throw an
-error if it isn't, since the log density is silently wrong otherwise. The gradient of a
-threaded model is right with ForwardDiff and ReverseDiff, and Mooncake and Enzyme throw.
-With 4 threads and 20 sessions of 200 timesteps, the log density took 26 µs instead of 39,
-and a ForwardDiff gradient 244 µs instead of 471.
+Given as `parallelisation` to an inference backend's model of several sessions, it spreads
+the sessions over the threads Julia was started with, as `Threads.@threads` does. What the
+model then needs, which automatic differentiation packages work with it and how much faster
+it is are described in the documentation of each inference backend.
 """
 struct ParallelSessions end

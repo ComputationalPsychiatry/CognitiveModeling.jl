@@ -28,11 +28,11 @@ function CognitiveModeling.attribute_names(::GivesNoReward)
     return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=())
 end
 
-#An environment with a parameter of the same name as the counter's
-struct GivesRewardWithProbability <: AbstractEnvironmentModel end
-function CognitiveModeling.attribute_names(::GivesRewardWithProbability)
+#An environment which names the choice and the reward otherwise, and gives a cue which the counter doesn't observe
+struct GivesPayoffAndCue <: AbstractEnvironmentModel end
+function CognitiveModeling.attribute_names(::GivesPayoffAndCue)
     return ModelAttributes(;
-        parameters=:probability, states=(), inputs=:choice, outputs=:reward
+        parameters=:scale, states=(), inputs=:pull, outputs=(:payoff, :cue)
     )
 end
 
@@ -104,6 +104,63 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=AgentStarts(),
             environment=GivesReward(),
             environment_save_history=SaveHistory(; outputs=:cue),
+        )
+    end
+
+    @testset "With maps of names, the environment's data and start are in its own names" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, MissingValue(), 0.0]),
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            environment=GivesPayoffAndCue(),
+            observation_map=NameMap(:payoff => :reward),
+            action_map=NameMap(:choice => :pull),
+        )
+        @test session_info.observation_map === NameMap(:payoff => :reward)
+        @test session_info.action_map === NameMap(:choice => :pull)
+        #The data stays in the cognitive model's names
+        @test keys(session_info.observations) == (:reward,)
+        #The environment's data has its own names, and the cue, which isn't passed on, is imputed on every timestep
+        @test isequal(
+            session_info.environment_observations.payoff, [1.0, MissingValue(), 0.0]
+        )
+        @test session_info.environment_observations.cue == fill(MissingValue(), 3)
+        @test session_info.previous_environment_observation ===
+            (; payoff=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
+        #The recorded observations are scored in the environment's names
+        @test keys(session_info.recorded_observations) == (:payoff,)
+        @test session_info.recorded_observations.payoff == [1.0, 0.0]
+        #A copy prepared again keeps the maps
+        @test SessionInfo(
+            session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+        ).observation_map === NameMap(:payoff => :reward)
+        @test predictive_sessions(session_info).action_map === NameMap(:choice => :pull)
+    end
+
+    @testset "Maps of names must fit the models, and need an environment" begin
+        @test_throws "The observation_map gives the observations (:feedback,), but a cognitive model of type SessionCounter lists (:reward,) as its inputs." SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            environment=GivesPayoffAndCue(),
+            observation_map=NameMap(:payoff => :feedback),
+            action_map=NameMap(:choice => :pull),
+        )
+        @test_throws "A cognitive model of type SessionCounter lists the observations (:reward,) as its inputs, but an environment model of type GivesPayoffAndCue gives (:payoff, :cue)." SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            environment=GivesPayoffAndCue(),
+        )
+        @test_throws "A session without an environment takes no observation_map or action_map" SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            observation_map=NameMap(:reward),
         )
     end
 
@@ -382,7 +439,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         )
         #A model with several observations needs them by name
-        @test_throws "The observations are a single vector, which can only be the data of a model's only one, but a cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue)." SessionInfo(
+        @test_throws "The observations are a single vector, which can only be their data when the model has only one of them in its attributes, but a cognitive model of type ObservesRewardAndCue has the observations (:reward, :cue)." SessionInfo(
             ObservesRewardAndCue(),
             [1.0, 0.0, 1.0],
             COUNTER_CHOICES;
@@ -934,48 +991,6 @@ end
             CognitiveModeling.sessions_for_environment_parameters(
                 IdenticalSessionParameters((; scale=1)), without
             ).sessions,
-        )
-    end
-
-    @testset "A warning says when both parameters models sample, without prefixes, for models with a parameter of the same name" begin
-        function counter_sessions(; keywords...)
-            return MultipleSessionsInfo(
-                SessionCounter(),
-                COUNTER_TABLE;
-                observation_columns=:outcome,
-                action_columns=:choice,
-                session_columns=:id,
-                who_starts=EnvironmentStarts(),
-                keywords...,
-            )
-        end
-        sessions_info = counter_sessions(; environment=GivesRewardWithProbability())
-        sampled = IndependentSessionParameters((; probability=1))
-        fixed = FixedSessionParameters((; probability=0.5))
-        @test_logs (
-            :warn,
-            "The cognitive model and the environment model both have the parameters (:probability,), and both parameters models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart.",
-        ) CognitiveModeling.warn_if_parameter_names_overlap(
-            sampled, IdenticalSessionParameters((; probability=1)), sessions_info, false
-        )
-        #No warning with the prefixes, when either samples nothing, when the names differ, or without an environment
-        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
-            sampled, sampled, sessions_info, true
-        )
-        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
-            sampled, fixed, sessions_info, false
-        )
-        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
-            fixed, sampled, sessions_info, false
-        )
-        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
-            sampled,
-            IndependentSessionParameters((; scale=1)),
-            counter_sessions(; environment=GivesReward()),
-            false,
-        )
-        @test_logs CognitiveModeling.warn_if_parameter_names_overlap(
-            sampled, sampled, counter_sessions(), false
         )
     end
 end

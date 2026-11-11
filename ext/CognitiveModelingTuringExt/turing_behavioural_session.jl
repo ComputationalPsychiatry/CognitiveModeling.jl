@@ -33,6 +33,54 @@ function CognitiveModeling.turing_full_model(
 end
 
 """
+    warn_if_parameter_names_overlap(cognitive_parameters_model, environment_parameters_model,
+                                    sessions_info, include_submodel_prefixes)
+
+Warn when the cognitive model and the environment model of the sessions list a parameter of
+the same name, both parameters models sample, and the variables have no prefixes, since
+their variables can then have the same names, and a name that both use is one variable,
+which `sample` rejects. Whether both sample is decided by their types. Used by
+`turing_full_model` when it creates the model, outside the model's body, which is
+differentiated.
+"""
+function warn_if_parameter_names_overlap(
+    cognitive_parameters_model,
+    environment_parameters_model,
+    sessions_info::MultipleSessionsInfo,
+    include_submodel_prefixes::Bool,
+)
+    include_submodel_prefixes && return nothing
+    samples_parameters(cognitive_parameters_model) || return nothing
+    samples_parameters(environment_parameters_model) || return nothing
+    session_info = first(sessions_info.sessions)
+    has_environment(session_info) || return nothing
+    cognitive_names = attribute_names(session_info.cognitive_model).parameters
+    environment_names = attribute_names(session_info.environment).parameters
+    shared_names = Tuple(name for name in cognitive_names if name in environment_names)
+    if !isempty(shared_names)
+        @warn "The cognitive model and the environment model both have the parameters $shared_names, and both parameters models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart."
+    end
+    return nothing
+end
+
+"""
+    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
+
+Warn when a session in `sessions_info` saves anything and `downstream_model` is
+`NoDownstreamModel`, since saving costs about 5 % of each gradient and nothing in the
+model uses the saved values: they are read after the fit with `session_values_chain`, from
+sessions that save nothing. Used by `turing_full_model` when it creates the model.
+"""
+function warn_if_saving_without_downstream_model(
+    sessions_info::MultipleSessionsInfo, downstream_model
+)
+    downstream_model isa NoDownstreamModel || return nothing
+    sessions_save_anything(sessions_info) || return nothing
+    @warn "The sessions save values, which costs about 5 % of each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_values_chain(model, chain; cognitive_save_history, environment_save_history) then gives the saved values of every sample afterwards."
+    return nothing
+end
+
+"""
     turing_run_full_model(cognitive_parameters_model, sessions_info;
                           environment_parameters_model, downstream_model,
                           catch_invalid_parameters, parallelisation,
@@ -310,6 +358,7 @@ Turing.@model function CognitiveModeling.turing_behavioural_session(
         observation=session_info.previous_observation,
         action=session_info.previous_action,
         cognitive_state=initial_cognitive_state,
+        environment_state=nothing,
     )
     saved_values ~ to_submodel(
         turing_run_timesteps(session_info, cognitive_parameters, (;), previous), false
@@ -356,7 +405,7 @@ Turing.@model function CognitiveModeling.turing_behavioural_session(
         environment,
         environment_parameters,
         initial_environment_state,
-        session_info.previous_observation,
+        session_info.previous_environment_observation,
     )
 
     #Run the timesteps from where the session starts
@@ -365,6 +414,8 @@ Turing.@model function CognitiveModeling.turing_behavioural_session(
         action=session_info.previous_action,
         cognitive_state=initial_cognitive_state,
         environment_state=initial_environment_state,
+        environment_observation=session_info.previous_environment_observation,
+        environment_action=map_names(session_info.previous_action, session_info.action_map),
     )
     saved_values ~ to_submodel(
         turing_run_timesteps(
@@ -385,6 +436,8 @@ function CognitiveModeling.turing_behavioural_session(
     return turing_behavioural_session(session_info, cognitive_parameters)
 end
 
+### REJECTING INVALID PARAMETERS ###
+
 #Turing model which runs any Turing model inside a try block, and gives the parameters a log density of -Inf if a cognitive model throws an InvalidParametersError
 Turing.@model function CognitiveModeling.turing_catch_invalid_parameters(model)
     result = nothing
@@ -396,6 +449,8 @@ Turing.@model function CognitiveModeling.turing_catch_invalid_parameters(model)
     end
     return result
 end
+
+### THE TIMESTEPS OF A SESSION ###
 
 """
     turing_run_timesteps(session_info, cognitive_parameters, environment_parameters, previous)
@@ -418,10 +473,13 @@ Turing.@model function turing_run_timesteps(
     n_timesteps = session_info.n_timesteps
     first_timestep_to_check = session_info.first_timestep_to_check_stopping
 
-    #A model which has ended already can't run the first timestep, when the criterion is checked from the start
+    #No timestep can run when the stopping criterion of either model is met already, when the criterion is checked from the start
     if first_timestep_to_check == 1
-        check_session_not_ended(
-            session_info, previous, cognitive_parameters, environment_parameters
+        check_stopping_criterion_not_met(
+            session_info.environment, previous.environment_state, environment_parameters
+        )
+        check_stopping_criterion_not_met(
+            session_info.cognitive_model, previous.cognitive_state, cognitive_parameters
         )
     end
 
@@ -455,9 +513,13 @@ Turing.@model function turing_run_timesteps(
     n_timesteps_that_ran = n_timesteps
     for t in 2:n_timesteps
 
-        #Stop when a model has ended, on the timesteps where the criterion is checked, and keep only the timesteps that ran
-        if t >= first_timestep_to_check && session_has_ended(
-            session_info, outputs, cognitive_parameters, environment_parameters
+        #Stop when the stopping criterion of either model is met, on the timesteps where it is checked, and keep only the timesteps that ran
+        if t >= first_timestep_to_check && (
+            stopping_criterion(
+                session_info.environment, outputs.environment_state, environment_parameters
+            ) || stopping_criterion(
+                session_info.cognitive_model, outputs.cognitive_state, cognitive_parameters
+            )
         )
             check_no_data_after(session_info, t - 1)
             n_timesteps_that_ran = t - 1
@@ -504,6 +566,8 @@ Turing.@model function turing_run_timesteps(
         session_info,
     )
 end
+
+### SCORING THE RECORDED VALUES ###
 
 """
     scorable_distributions(distributions)
@@ -617,71 +681,6 @@ function scorable_distribution_of_each(distributions::NamedTuple)
 end
 
 """
-    session_has_ended(session_info, outputs, cognitive_parameters, environment_parameters)
-
-Return whether the [`stopping_criterion`](@ref) of the cognitive model, or of the environment
-when the session has one, is met with the states in `outputs`, the outputs of the timestep
-before. Used by [`turing_run_timesteps`](@ref) on the timesteps where it is checked.
-"""
-function session_has_ended(
-    session_info::SessionInfo{<:Any,NoEnvironment},
-    outputs,
-    cognitive_parameters,
-    environment_parameters,
-)
-    return stopping_criterion(
-        session_info.cognitive_model, outputs.cognitive_state, cognitive_parameters
-    )
-end
-function session_has_ended(
-    session_info::SessionInfo{<:Any,<:AbstractModel},
-    outputs,
-    cognitive_parameters,
-    environment_parameters,
-)
-    return stopping_criterion(
-        session_info.environment, outputs.environment_state, environment_parameters
-    ) || stopping_criterion(
-        session_info.cognitive_model, outputs.cognitive_state, cognitive_parameters
-    )
-end
-
-"""
-    check_session_not_ended(session_info, previous, cognitive_parameters,
-                            environment_parameters)
-
-Throw an informative error if the [`stopping_criterion`](@ref) of a model of the session is
-already met before its first timestep, as
-[`check_simulation_stopping_criterion_not_met`](@ref) does for a simulation. Used by
-[`turing_run_timesteps`](@ref) when the criterion is checked from the first timestep.
-"""
-function check_session_not_ended(
-    session_info::SessionInfo{<:Any,NoEnvironment},
-    previous,
-    cognitive_parameters,
-    environment_parameters,
-)
-    check_stopping_criterion_not_met(
-        session_info.cognitive_model, previous.cognitive_state, cognitive_parameters
-    )
-    return nothing
-end
-function check_session_not_ended(
-    session_info::SessionInfo{<:Any,<:AbstractModel},
-    previous,
-    cognitive_parameters,
-    environment_parameters,
-)
-    check_stopping_criterion_not_met(
-        session_info.environment, previous.environment_state, environment_parameters
-    )
-    check_stopping_criterion_not_met(
-        session_info.cognitive_model, previous.cognitive_state, cognitive_parameters
-    )
-    return nothing
-end
-
-"""
     check_no_data_after(session_info, t)
 
 Throw an informative error if the data of a session has a value on a timestep after `t`, the
@@ -716,8 +715,8 @@ timestep before, and returns what the next one starts from, together with what t
 saves and scores: the observation, the action, the action distribution, the cognitive state,
 which actions are recorded on the timestep, and with an environment its state, the
 distribution of the observation and which observations are recorded. Each model runs as
-[`turing_model_timestep`](@ref), the environment's under the prefix `environment`. Without an
-environment, the observation comes from the data: the model acts on this timestep's
+[`turing_model_timestep`](@ref), the environment's under the prefix `environment`. Without
+an environment, the observation comes from the data: the model acts on this timestep's
 observation when the environment starts, and on the previous one when the agent starts. With
 an environment, the environment gives the observation in response to the action, before the
 model acts when the environment starts, and after when the agent starts. Used by
@@ -763,6 +762,7 @@ Turing.@model function turing_behavioural_timestep(
         (;
             action_distribution=cognitive.output_distribution,
             cognitive_state=cognitive.new_state,
+            environment_state=nothing,
             recorded_actions_on_timestep=cognitive.recorded_on_timestep,
         ),
     )
@@ -778,29 +778,30 @@ Turing.@model function turing_behavioural_timestep(
     timestep_size = get_timestep_size(session_info.timestep_sizes, t)
     who_starts = session_info.who_starts
 
-    #When the environment starts, it gives this timestep's observation, in response to the previous action
+    #When the environment starts, it gives this timestep's observation, in its own names, in response to the previous action as the action map passes it on
     if who_starts isa EnvironmentStarts
         environment ~ to_submodel(
             prefix(
                 turing_model_timestep(
                     session_info.environment,
                     ModelContext(
-                        previous.action,
+                        map_names(previous.action, session_info.action_map),
                         previous.environment_state,
-                        previous.observation,
+                        previous.environment_observation,
                         environment_parameters,
                         timestep_size,
                         default_rng(),
                         who_starts,
                     ),
-                    session_info.observations,
+                    session_info.environment_observations,
                     t,
                 ),
                 @varname(environment),
             ),
             false,
         )
-        observation = environment.output
+        environment_observation = environment.output
+        observation = map_names(environment_observation, session_info.observation_map)
     else
         observation = previous.observation
     end
@@ -824,36 +825,40 @@ Turing.@model function turing_behavioural_timestep(
         false,
     )
     action = cognitive.output
+    environment_action = map_names(action, session_info.action_map)
 
-    #When the agent starts, the environment responds to the action with the next observation
+    #When the agent starts, the environment responds to the action, as the action map passes it on, with the next observation in its own names
     if who_starts isa AgentStarts
         environment ~ to_submodel(
             prefix(
                 turing_model_timestep(
                     session_info.environment,
                     ModelContext(
-                        action,
+                        environment_action,
                         previous.environment_state,
-                        previous.observation,
+                        previous.environment_observation,
                         environment_parameters,
                         timestep_size,
                         default_rng(),
                         who_starts,
                     ),
-                    session_info.observations,
+                    session_info.environment_observations,
                     t,
                 ),
                 @varname(environment),
             ),
             false,
         )
-        observation = environment.output
+        environment_observation = environment.output
+        observation = map_names(environment_observation, session_info.observation_map)
     end
 
-    #The observation and the action can have one of two types, so they go in through entry
+    #The observations and the actions can have one of two types, so they go in through entry
     return merge(
         entry(Val(:observation), observation),
         entry(Val(:action), action),
+        entry(Val(:environment_observation), environment_observation),
+        entry(Val(:environment_action), environment_action),
         (;
             action_distribution=cognitive.output_distribution,
             cognitive_state=cognitive.new_state,

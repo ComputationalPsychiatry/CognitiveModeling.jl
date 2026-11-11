@@ -5,6 +5,7 @@ using CognitiveModeling:
     AbstractModel,
     apply_model,
     initialize_state,
+    attribute_names,
     session_values_chain,
     session_parameters_chain
 using CognitiveModeling:
@@ -14,7 +15,7 @@ using CognitiveModeling:
     turing_downstream_model,
     turing_catch_invalid_parameters
 using CognitiveModeling:
-    merge_default_parameters, check_match_attribute_names, check_model_output
+    merge_default_parameters, check_match_attribute_names, check_model_output, map_names
 using CognitiveModeling:
     check_environment_parameters,
     recorded_action_names,
@@ -24,8 +25,8 @@ using CognitiveModeling:
     has_environment,
     without_environment,
     sessions_for_environment_parameters,
-    warn_if_parameter_names_overlap,
-    warn_if_saving_without_downstream_model,
+    samples_parameters,
+    sessions_save_anything,
     parameters_by_session
 using CognitiveModeling:
     initialize_distributions, store_distributions, row, entry, has_missing_value

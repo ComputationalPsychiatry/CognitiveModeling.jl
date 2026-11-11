@@ -166,7 +166,7 @@ end
                 ModelContext(
                     (; arm=no_action),
                     rl_env,
-                    CognitiveModeling.initial_output(environment),
+                    CognitiveModeling.output_before_first_timestep(environment),
                     (;),
                 ),
             )
@@ -185,7 +185,10 @@ end
         output = CognitiveModeling.apply_model(
             environment,
             ModelContext(
-                (; arm=1), rl_env, CognitiveModeling.initial_output(environment), (;)
+                (; arm=1),
+                rl_env,
+                CognitiveModeling.output_before_first_timestep(environment),
+                (;),
             ),
         )
         @test output.output_distribution === (;

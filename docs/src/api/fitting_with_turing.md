@@ -15,12 +15,12 @@ Private = false
 Pages = ["inference/turing_models.jl"]
 ```
 
-## Chains
+## Postprocessing
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["inference/chains.jl"]
+Pages = ["inference/postprocessing.jl"]
 ```
 
 ## Functions that a model can implement for Turing.jl
@@ -37,11 +37,11 @@ CognitiveModeling.turing_initialize_state
 ## Fitting several sessions
 
 These are what the parts of [`turing_full_model`](@ref) are written with, beside the types
-on the page [Fitting](fitting.md). They are public, but not exported.
+and functions on the page [Fitting](fitting.md). They are public, but not exported. In a
+Turing.jl model of several sessions, session `i` of
+[`CognitiveModeling.session_index`](@ref) has its variables under `session[i]`.
 
 ```@docs
 CognitiveModeling.turing_session_parameters_model
 CognitiveModeling.turing_downstream_model
-CognitiveModeling.n_sessions
-CognitiveModeling.session_index
 ```

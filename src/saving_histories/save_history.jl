@@ -192,8 +192,7 @@ end
 
 Return whether `save_history` saves the values from before the first timestep, as
 timestep 0. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref),
-[`saved_timestep_sizes`](@ref) and the Turing.jl session, to decide whether timestep 0 is
-saved.
+[`saved_timestep_sizes`](@ref) and fitted sessions, to decide whether timestep 0 is saved.
 """
 function saves_initial_values(
     ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}

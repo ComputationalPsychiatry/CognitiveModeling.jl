@@ -97,15 +97,15 @@ environment model of a [`turing_full_model`](@ref). This needs Turing.jl to be l
 
 The model must return a `NamedTuple` with one entry for each parameter, named as the model
 names it, and a vector in each with one value for every session, in the order of the
-sessions. Each subtype of [`AbstractSessionParametersModel`](@ref) that comes with the package
-has a method.
+sessions. Each subtype of [`AbstractSessionParametersModel`](@ref) that comes with the
+package has a method.
 
 # Implementation
 A parameters model of another kind, such as a hierarchical model or a regression, is a
 subtype of `AbstractSessionParametersModel` with a method of this function, which can read
 [`n_sessions`](@ref) and the identifiers of the sessions from `sessions_info`, and anything
-else from its own fields, such as the covariates of a regression. The full model treats it as
-one that samples, so that with it the environment of every session runs, and the
+else from its own fields, such as the covariates of a regression. The full model treats it
+as one that samples, so that with it the environment of every session runs, and the
 observations in the data inform the environment's parameters.
 """
 function turing_session_parameters_model end

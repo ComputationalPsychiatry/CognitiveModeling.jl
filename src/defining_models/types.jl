@@ -1,3 +1,5 @@
+## Supertypes of models ##
+
 """
     AbstractModel
 
@@ -101,7 +103,7 @@ Outputs: reward
 """
 abstract type AbstractEnvironmentModel <: AbstractModel end
 
-#Types for cases where there is no observation or action
+## Types for cases where there is no observation or action ##
 
 """
     AbstractNoValue
@@ -150,7 +152,7 @@ size.
 """
 struct BeforeFirstTimestep <: AbstractNoValue end
 
-#Type for an action or an observation that isn't random
+## Type for an action or an observation that isn't random ##
 
 """
     Deterministic(value)
@@ -185,7 +187,7 @@ function Base.rand(::AbstractRNG, deterministic::Deterministic)
     return deterministic.value
 end
 
-#Types for who moves first on a timestep
+## Types for who moves first on a timestep ##
 
 """
     AgentStarts()
@@ -227,6 +229,8 @@ a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the othe
 two, which a simulation or a fitted session passes on from its own `who_starts`.
 """
 struct UnknownWhoStarts end
+
+## What a timestep receives and returns ##
 
 """
     ModelContext(; input, previous_state, previous_output, parameters, timestep_size=1,
@@ -379,6 +383,8 @@ struct ModelOutput{Toutput,Tstate}
     end
 end
 
+## The names of a model's attributes ##
+
 """
     ModelAttributes(; parameters, states, inputs, outputs)
 
@@ -522,6 +528,8 @@ function Base.getproperty(
 end
 
 Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs)
+
+## Errors ##
 
 """
     InvalidParametersError(message)

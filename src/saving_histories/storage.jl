@@ -5,7 +5,7 @@
 Create the vector for saving one kind of value over `n_steps` timesteps, using the value of
 the first timestep to set its type. With `initial_value`, what is saved from before the
 first timestep, the vector starts with it, as timestep 0, and its type holds both. Used by
-simulations and by the Turing.jl session.
+simulations and by fitted sessions.
 """
 function initialize_storage(first_value, n_steps)
 
@@ -33,7 +33,7 @@ Save `value` as element `t` of `storage`, and return the vector.
 
 If the value doesn't fit the type of `storage`, the values so far are moved to a wider
 vector which can hold both types, and that vector is returned instead. Used by simulations
-and by the Turing.jl session.
+and by fitted sessions.
 """
 function store_value!(storage::Vector{T}, value, t) where {T}
 
@@ -57,7 +57,7 @@ end
 Add `value` at the end of `storage`, and return the vector. As for [`store_value!`](@ref), a
 value that doesn't fit the type of `storage` moves the values so far to a wider vector,
 which is returned instead. Starting from `Vector{Union{}}()` lets the first value set the
-type. Used by the Turing.jl session.
+type. Used by fitted sessions.
 """
 function push_value!(storage::Vector{T}, value) where {T}
 

@@ -299,6 +299,18 @@ function CognitiveModeling.attribute_names(environment::NoisyRewards)
     return ModelAttributes(; parameters=(), states=(), inputs=:choice, outputs=:reward)
 end
 
+#Gives the reward of NoisyRewards under another name, with a cue which isn't random, and takes the choice under another name, for maps of names
+struct NoisyPayoffs <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::NoisyPayoffs, parameters) = (;)
+function CognitiveModeling.apply_model(environment::NoisyPayoffs, context::ModelContext)
+    return ModelOutput((; payoff=Normal(0.5, 1.0), cue=Deterministic(1.0)))
+end
+function CognitiveModeling.attribute_names(environment::NoisyPayoffs)
+    return ModelAttributes(;
+        parameters=(), states=(), inputs=:pull, outputs=(:payoff, :cue)
+    )
+end
+
 #Samples a drift of its state within each timestep in Turing, and gives the state as a reward which isn't random
 struct DriftingRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::DriftingRewards, parameters) = (; level=0.5)
@@ -892,6 +904,63 @@ end
         )
         @test returned(model, (;)).observations[2:end] ==
             [(; reward=NoObservation()), (; reward=1.0), (; reward=0.0)]
+    end
+
+    @testset "With maps of names, a session is the same, with the environment's variables and history in its own names" begin
+        choices = (; choice=[true, false, true])
+        rewards = (; reward=[MissingValue(), 1.0, MissingValue()])
+        saves_everything = (;
+            cognitive_save_history=SaveHistory(SaveEverything()),
+            environment_save_history=SaveHistory(SaveEverything()),
+        )
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            without_maps = session_for_test(
+                SessionRescorlaWagner(),
+                SESSION_PARAMETERS,
+                rewards,
+                choices;
+                who_starts,
+                environment=NoisyRewards(),
+                saves_everything...,
+            )
+            with_maps = session_for_test(
+                SessionRescorlaWagner(),
+                SESSION_PARAMETERS,
+                rewards,
+                choices;
+                who_starts,
+                environment=NoisyPayoffs(),
+                observation_map=NameMap(:payoff => :reward),
+                action_map=NameMap(:choice => :pull),
+                saves_everything...,
+            )
+            #The missing rewards are latents named after the environment's output, and the cue, which isn't random, adds none
+            @test Set(keys(@test_logs match_mode = :any rand(Xoshiro(1), with_maps))) ==
+                Set([
+                @varname(timestep[1].environment.payoff.imputed),
+                @varname(timestep[3].environment.payoff.imputed),
+            ])
+            #The log density is the same as without maps
+            mapped_values = Dict(
+                @varname(timestep[1].environment.payoff.imputed) => 0.7,
+                @varname(timestep[3].environment.payoff.imputed) => -0.4,
+            )
+            unmapped_values = Dict(
+                @varname(timestep[1].environment.reward.imputed) => 0.7,
+                @varname(timestep[3].environment.reward.imputed) => -0.4,
+            )
+            @test logjoint(with_maps, mapped_values) ≈
+                logjoint(without_maps, unmapped_values)
+            #Each model's history is in its own names
+            saved = @test_logs match_mode = :any returned(with_maps, mapped_values)
+            @test saved.observations[2:end] ==
+                [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
+            @test saved.environment.observations[2:end] == [
+                (; payoff=0.7, cue=1.0), (; payoff=1.0, cue=1.0), (; payoff=-0.4, cue=1.0)
+            ]
+            @test saved.environment.actions[2:end] ==
+                [(; pull=true), (; pull=false), (; pull=true)]
+        end
     end
 
     @testset "A missing observation is a latent when the environment gives a distribution for it" begin

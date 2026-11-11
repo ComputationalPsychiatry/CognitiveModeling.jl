@@ -39,7 +39,7 @@ end
 
 Return `output` if it is the `ModelOutput` that an `apply_model` method of `model` must
 return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
-[`simulate!`](@ref) and the Turing.jl session.
+[`simulate!`](@ref) and fitted sessions.
 """
 function check_model_output(output::ModelOutput, ::AbstractModel)
     return output
@@ -101,7 +101,7 @@ end
 Throw an informative error if the names of the parameters, of the previous output, or of a
 state that is a `NamedTuple`, aren't those that [`attribute_names`](@ref) lists for `model`,
 a cognitive model or an environment model. Used by [`InstantiatedModel`](@ref),
-[`simulate`](@ref) and the Turing.jl session, before anything runs.
+[`simulate`](@ref) and fitted sessions, before anything runs.
 """
 function check_match_attribute_names(
     model::AbstractModel, parameters, state, previous_output
@@ -156,42 +156,38 @@ end
 
 ## Outputs and inputs before the first timestep ##
 """
-    initial_output(model)
-    initial_input(model)
+    output_before_first_timestep(model)
+    input_before_first_timestep(model)
+    output_before_first_timestep(attributes)
+    input_before_first_timestep(attributes)
 
 Return the output and the input from before the first timestep: a `NamedTuple` with the
 output or the input names that [`attribute_names`](@ref) lists for `model`, a cognitive
-model or an environment model, each [`BeforeFirstTimestep`](@ref). Used wherever a model
-starts: by [`InstantiatedModel`](@ref), [`reset!`](@ref), [`simulate`](@ref) and fitted
-sessions, for the previous output and for the output distributions saved as timestep 0.
+model or an environment model, or that `attributes`, a [`ModelAttributes`](@ref), has, each
+[`BeforeFirstTimestep`](@ref). A model's names are checked to be a `ModelAttributes` first.
+Used wherever a model starts: by [`InstantiatedModel`](@ref), [`reset!`](@ref),
+[`simulate`](@ref) and fitted sessions, for the previous output and for the output
+distributions saved as timestep 0.
 """
-function initial_output(model::AbstractModel)
-    return outputs_before_first_timestep(
+function output_before_first_timestep(model::AbstractModel)
+    return output_before_first_timestep(
         check_type_attribute_names(attribute_names(model), model)
     )
 end
 
-function initial_input(model::AbstractModel)
-    return inputs_before_first_timestep(
+function input_before_first_timestep(model::AbstractModel)
+    return input_before_first_timestep(
         check_type_attribute_names(attribute_names(model), model)
     )
 end
 
-"""
-    outputs_before_first_timestep(attributes)
-    inputs_before_first_timestep(attributes)
-
-Return a `NamedTuple` with the output or the input names in `attributes`, a
-[`ModelAttributes`](@ref), each [`BeforeFirstTimestep`](@ref). Used by
-[`initial_output`](@ref) and `initial_input`.
-"""
-function outputs_before_first_timestep(
+function output_before_first_timestep(
     ::ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs}
 ) where {Tparameters,Tstates,Tinputs,Toutputs}
     return NamedTuple{Toutputs}(map(_ -> BeforeFirstTimestep(), Toutputs))
 end
 
-function inputs_before_first_timestep(
+function input_before_first_timestep(
     ::ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs}
 ) where {Tparameters,Tstates,Tinputs,Toutputs}
     return NamedTuple{Tinputs}(map(_ -> BeforeFirstTimestep(), Tinputs))

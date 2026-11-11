@@ -98,6 +98,8 @@ function CognitiveModeling.session_parameters_chain(
     return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
 end
 
+### ADDING THE ENTRIES OF EACH SESSION ###
+
 """
     add_parameter_entries!(entries, results, prefix, parameters_of, i)
 
@@ -232,6 +234,8 @@ function saved_names(saved_values::AbstractVector)
     return isempty(saved_values) ? () : keys(first(saved_values))
 end
 
+### BUILDING THE CHAIN ###
+
 """
     empty_entries()
 
@@ -279,6 +283,8 @@ function chain_of_entries(
     )
     return chain[[Parameter(name) for name in entries.names]]
 end
+
+### CHECKS ###
 
 """
     check_results(results)

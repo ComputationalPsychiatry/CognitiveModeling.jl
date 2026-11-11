@@ -368,10 +368,13 @@ end
                 states=:level, outputs=:reward, output_distributions=SaveEverything()
             ),
         )
+        #The environment's observation and action are in its own names, which are the same here
         environment_outputs = merge(
             outputs,
             (;
                 environment_state=(; level=0.3),
+                environment_observation=outputs.observation,
+                environment_action=outputs.action,
                 observation_distribution=(; reward=NormalByHand(0.0, 1.0)),
             ),
         )
@@ -391,7 +394,14 @@ end
         initial_both = CognitiveModeling.initial_session_outputs(
             Val(true),
             with_environment,
-            merge(previous, (; environment_state=(; level=0.0))),
+            merge(
+                previous,
+                (;
+                    environment_state=(; level=0.0),
+                    environment_observation=previous.observation,
+                    environment_action=previous.action,
+                ),
+            ),
         )
         @test initial_both.environment_observation_distribution ===
               (; reward=BeforeFirstTimestep()) &&

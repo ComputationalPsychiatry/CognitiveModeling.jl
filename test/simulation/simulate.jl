@@ -1394,11 +1394,11 @@ end
 
     @testset "The output before the first timestep has every output as BeforeFirstTimestep" begin
         #For a cognitive model, the outputs are its actions
-        @test CognitiveModeling.initial_output(LearnsRewards()) ===
+        @test CognitiveModeling.output_before_first_timestep(LearnsRewards()) ===
             (; choice=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_output(OnlyLearns()) === (;)
+        @test CognitiveModeling.output_before_first_timestep(OnlyLearns()) === (;)
         #The names are in the type, so it is inferred
-        @test @inferred(CognitiveModeling.initial_output(TwoChoices())) ===
+        @test @inferred(CognitiveModeling.output_before_first_timestep(TwoChoices())) ===
             (; first_choice=BeforeFirstTimestep(), second_choice=BeforeFirstTimestep())
         @test InstantiatedModel(TwoChoices(), (;)).previous_output ===
             (; first_choice=BeforeFirstTimestep(), second_choice=BeforeFirstTimestep())
@@ -1408,24 +1408,26 @@ end
         )
         @test observations[1] === (; reward=NoObservation())
         #For an environment model, the outputs are the observations it gives
-        @test CognitiveModeling.initial_output(RewardsWithProbability()) ===
+        @test CognitiveModeling.output_before_first_timestep(RewardsWithProbability()) ===
             (; reward=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_output(ObservesTimestepSize()) ===
+        @test CognitiveModeling.output_before_first_timestep(ObservesTimestepSize()) ===
             (; timestep_size=BeforeFirstTimestep())
-        @test @inferred(CognitiveModeling.initial_output(RewardsAndCues())) ===
-            (; reward=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
+        @test @inferred(
+            CognitiveModeling.output_before_first_timestep(RewardsAndCues())
+        ) === (; reward=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
         @test InstantiatedModel(RewardsAndCues(), (;)).previous_output ===
             (; reward=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
     end
 
     @testset "The input before the first timestep has every input as BeforeFirstTimestep" begin
         #For a cognitive model, the inputs are its observations
-        @test CognitiveModeling.initial_input(LearnsRewards()) ===
+        @test CognitiveModeling.input_before_first_timestep(LearnsRewards()) ===
             (; reward=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_input(OnlyChooses()) === (;)
+        @test CognitiveModeling.input_before_first_timestep(OnlyChooses()) === (;)
         #The names are in the type, so it is inferred
-        @test @inferred(CognitiveModeling.initial_input(SavesTimestepSize())) ===
-            (; timestep_size=BeforeFirstTimestep())
+        @test @inferred(
+            CognitiveModeling.input_before_first_timestep(SavesTimestepSize())
+        ) === (; timestep_size=BeforeFirstTimestep())
         #The model receives it on the first timestep when it starts, so it learns nothing there
         (; states) = simulate_for_test(
             LearnsRewards(),
@@ -1436,11 +1438,11 @@ end
         )
         @test expected_rewards(states) == [0.5, 0.75]
         #For an environment model, the inputs are the actions it receives, which it can have none of
-        @test CognitiveModeling.initial_input(RewardsTrue()) ===
+        @test CognitiveModeling.input_before_first_timestep(RewardsTrue()) ===
             (; choice=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_input(PaysForLever()) ===
+        @test CognitiveModeling.input_before_first_timestep(PaysForLever()) ===
             (; lever=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_input(RewardsAndCues()) === (;)
+        @test CognitiveModeling.input_before_first_timestep(RewardsAndCues()) === (;)
     end
 
     @testset "The markers for nothing there share a supertype, and the one for before the first timestep is its own" begin
