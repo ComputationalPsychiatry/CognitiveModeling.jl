@@ -40,8 +40,7 @@ value itself if it is a [`Deterministic`](@ref). The sampler must handle the typ
 variable: a continuous value can be sampled with NUTS, a discrete one needs a sampler for
 discrete variables. The recorded actions are scored at the end as observed values, in one
 `product_distribution` over every action and timestep, against the distributions the
-cognitive model gave for them, which is several times faster than scoring each timestep on
-its own. The recorded observations are scored the same way against the distributions the
+cognitive model gave for them. The recorded observations are scored the same way against the distributions the
 environment gave, so that they inform the missing values and the environment's parameters.
 A `Deterministic` is scored as a point mass, with a log density of 0 for its value and
 `-Inf` for any other, and only a number or a `Bool` can be, so a recorded value the model

@@ -11,11 +11,11 @@ observations it gives.
 Every model must add a method of this function, which throws an error otherwise. A
 simulation samples the outputs itself, from the `output_distribution` of the
 [`ModelOutput`](@ref) that the method returns, so an output that isn't random is wrapped in
-a [`Deterministic`](@ref). Anything else that is random, such as a change of the state,
-should be sampled from `context.rng`, so that a simulation can be reproduced. If states are
-mutated in place, a [`prepare_state_for_saving`](@ref) method must be added. For use within
-PPLs, there may be special constraints: see the documentation for the specific PPL for
-details.
+a [`Deterministic`](@ref). In simulations, anything else that is random, such as a change of
+the state, should be sampled from `context.rng`. If states are mutated in place, a
+[`prepare_state_for_saving`](@ref) method must be added. For use within PPLs, this function
+can also have special implementations, and there may be special constraints: see the
+documentation for the specific PPL for details.
 
 # Examples
 ```jldoctest
@@ -48,7 +48,7 @@ function CognitiveModeling.apply_model(model::RescorlaWagner, context::ModelCont
 end
 
 parameters = (; learning_rate = 0.1, inverse_temperature = 2.0)
-context = ModelContext((; reward = 1.0), (; expected_reward = 0.5), (; choice = NoAction()), parameters)
+context = ModelContext(; input = (; reward = 1.0), previous_state = (; expected_reward = 0.5), previous_output = (; choice = NoAction()), parameters)
 
 CognitiveModeling.apply_model(RescorlaWagner(), context).new_state
 
@@ -71,7 +71,9 @@ Create the initial state that `model` has before its first timestep, which can d
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
-without a state returns an empty `NamedTuple`, `(;)`.
+without a state returns an empty `NamedTuple`, `(;)`. For use within PPLs, this function
+can also have special implementations: see the documentation for the specific PPL for
+details.
 
 # Examples
 ```jldoctest
@@ -151,7 +153,10 @@ isn't affected.
 # Implementation
 A model can add a method of this function. The default returns `state` as it is, so nothing
 is copied. One which changes an object in its state in place must add a method which copies
-it, or all the saved states show the final values, with no error.
+it, or all the saved states show the final values, with no error. The method must return the
+state with the names that [`attribute_names`](@ref) lists for it, since a
+[`SaveHistory`](@ref) selects states by those names. Nothing checks this while the model
+runs.
 
 # Examples
 ```jldoctest
@@ -189,8 +194,8 @@ end
 """
     stopping_criterion(model::AbstractModel, state, parameters)
 
-Return whether `model`, a cognitive model or an environment model, has ended, with `state`
-as its state after a timestep and its `parameters`, so that a simulation stops there instead
+Return whether `model`, a cognitive model or an environment model, with `state` as its state
+after a timestep and its `parameters`, has signaled for a simulation to stop there instead
 of running all of `n_steps`.
 
 [`simulate`](@ref) and [`simulate!`](@ref) check it for both models before each timestep,
@@ -198,14 +203,16 @@ with the states that the timestep before left, unless they are given
 `check_stopping_criterion = false`. When it returns `true` for either, no further timestep
 runs, and what is returned and added to the histories has the timesteps that ran. When the
 environment starts, the cognitive model has then made its last observation and acted on it,
-and the environment doesn't receive that action. A model whose criterion is already met
+and the environment doesn't receive that action. When the cognitive model starts, the
+environment has then responded to the last action with an observation, and the cognitive
+model doesn't receive that observation. A model whose criterion is already met
 before the first timestep can't be simulated, and throws an error: a new simulation starts
 from the initial state, and [`reset!`](@ref) puts an [`InstantiatedModel`](@ref) back there.
 A fitted session checks it as [`SessionInfo`](@ref) describes.
 
 # Implementation
 A model can add a method of this function. The default returns `false`, so a simulation runs
-all of its timesteps, and the check then costs nothing.
+all of its timesteps.
 
 # Examples
 ```jldoctest

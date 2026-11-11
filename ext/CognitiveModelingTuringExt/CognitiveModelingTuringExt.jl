@@ -38,9 +38,10 @@ using CognitiveModeling:
     with_empty_environment_entry,
     saved_values_until,
     timestep_sizes_until
-using CognitiveModeling: stopping_criterion, check_not_ended, last_timestep_with_data
 using CognitiveModeling:
-    select_names, saves_initial_values, get_timestep_size, initialize_storage, store_output!
+    stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data
+using CognitiveModeling:
+    select_names, saves_initial_values, get_timestep_size, initialize_storage, store_value!
 using Random: AbstractRNG, default_rng
 using Turing
 using Turing: DynamicPPL

@@ -22,9 +22,8 @@ and the outputs its actions, and for an environment model the inputs are the act
 receives and the outputs the observations it gives. The output distributions are what the
 model gave its outputs to be sampled from, named like the outputs. A kind that isn't given
 saves nothing, so `SaveHistory()` saves nothing, which is the default everywhere, and
-`SaveHistory(SaveEverything())` saves everything. The selections are kept in the type, so
-that selecting costs nothing in a simulation, and are read as properties, such as
-`save_history.states`.
+`SaveHistory(SaveEverything())` saves everything. The selections are read as properties,
+such as `save_history.states`.
 
 `save_initial_values` is whether what is saved starts with timestep 0, before the first
 timestep: the initial states, and the previous input and output, which are
@@ -100,7 +99,7 @@ end
 
 Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it: a `Tuple` of
 `Symbol`s, made from a single `Symbol` or a `Vector` of them too, or
-[`SaveEverything`](@ref) as it is.
+[`SaveEverything`](@ref) as it is. Used by the constructor of [`SaveHistory`](@ref).
 """
 as_selection(names::Tuple{Vararg{Symbol}}) = names
 as_selection(name::Symbol) = (name,)
@@ -164,8 +163,8 @@ end
     output_selection(save_history)
     output_distribution_selection(save_history)
 
-Return the selection of one kind in a [`SaveHistory`](@ref) as a `Val`, so that the names are
-known at compile time wherever something is selected with it.
+Return the selection of one kind in a [`SaveHistory`](@ref) as a `Val`. Used wherever
+something is saved, by simulations, instantiated models and fitted sessions.
 """
 function state_selection(
     ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
@@ -192,7 +191,9 @@ end
     saves_initial_values(save_history)
 
 Return whether `save_history` saves the values from before the first timestep, as
-timestep 0. It is read from the type, so that it is known at compile time.
+timestep 0. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref),
+[`saved_timestep_sizes`](@ref) and the Turing.jl session, to decide whether timestep 0 is
+saved.
 """
 function saves_initial_values(
     ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
@@ -205,7 +206,8 @@ end
 
 Return what a [`SaveHistory`](@ref) selects of `x`: `x` itself for [`SaveEverything`](@ref),
 an empty `NamedTuple` for no names, and the named entries of a `NamedTuple` for a tuple of
-names.
+names. Used wherever something is saved, by simulations, instantiated models and fitted
+sessions.
 """
 select_names(x, ::Val{SaveEverything()}) = x
 select_names(x, ::Val{()}) = (;)
@@ -224,34 +226,38 @@ end
 """
     check_savehistory_selection_names(save_history, model)
 
-Throw an informative error if `save_history` selects an input, an output or an output
-distribution by name that [`attribute_names`](@ref) of `model`, a cognitive model or an
-environment model, doesn't list, since a history starts from those names. The states aren't
-checked, because [`prepare_state_for_saving`](@ref) can save anything.
+Throw an informative error if `save_history` selects a state, an input, an output or an
+output distribution by name that [`attribute_names`](@ref) of `model`, a cognitive model or
+an environment model, doesn't list, since a history starts from those names, and
+[`prepare_state_for_saving`](@ref) returns a state with them. Used by
+[`InstantiatedModel`](@ref), [`simulate`](@ref) and [`SessionInfo`](@ref), before anything
+is saved.
 """
 function check_savehistory_selection_names(save_history::SaveHistory, model::AbstractModel)
     attributes = check_type_attribute_names(attribute_names(model), model)
-    check_selected_names(save_history.inputs, attributes.inputs, "inputs", model)
-    check_selected_names(save_history.outputs, attributes.outputs, "outputs", model)
-    check_selected_names(
+    check_selection_names(save_history.states, attributes.states, "states", model)
+    check_selection_names(save_history.inputs, attributes.inputs, "inputs", model)
+    check_selection_names(save_history.outputs, attributes.outputs, "outputs", model)
+    check_selection_names(
         save_history.output_distributions, attributes.outputs, "output distributions", model
     )
     return nothing
 end
 
 """
-    check_selected_names(selection, names, kind, model)
+    check_selection_names(selection, names, kind, model)
 
 Throw an informative error if `selection` has a name that isn't among `names`, those that
-`model` lists for `kind`, which is `"inputs"`, `"outputs"` or `"output distributions"`, the
-last being named like the outputs. [`SaveEverything`](@ref) can always be selected.
+`model` lists for `kind`, which is `"states"`, `"inputs"`, `"outputs"` or
+`"output distributions"`, the last being named like the outputs. [`SaveEverything`](@ref)
+can always be selected. Used by [`check_savehistory_selection_names`](@ref) for each kind.
 """
-check_selected_names(::SaveEverything, names, kind, model) = nothing
-function check_selected_names(selection::Tuple, names, kind, model)
+check_selection_names(::SaveEverything, names, kind, model) = nothing
+function check_selection_names(selection::Tuple, names, kind, model)
     if !has_every_name(selection, names)
         throw(
             ArgumentError(
-                "The SaveHistory selects the $kind $selection, but attribute_names lists the $(kind == "output distributions" ? "outputs" : kind) of $(describe_model(model)) as $names. A history can only select inputs, outputs and output distributions that the model lists.",
+                "The SaveHistory selects the $kind $selection, but attribute_names lists the $(kind == "output distributions" ? "outputs" : kind) of $(describe_model(model)) as $names. A history can only select names that the model lists.",
             ),
         )
     end
@@ -263,7 +269,8 @@ end
 
 Return what is saved of `state`: what `selection` selects of the output of
 [`prepare_state_for_saving`](@ref). When nothing is selected, the state isn't prepared at
-all, so that no copy is made of a state which isn't saved.
+all, so that no copy is made of a state which isn't saved. Used wherever a state is saved,
+by simulations, instantiated models and fitted sessions.
 """
 function save_state(model, state, selection::Val)
     return select_names(prepare_state_for_saving(model, state), selection)
@@ -273,8 +280,9 @@ save_state(model, state, ::Val{()}) = (;)
 """
     saves_nothing(save_history)
 
-Return whether `save_history` selects nothing of any kind, which is known at compile time.
-Whether it saves the initial values doesn't matter, since there is nothing to save of them.
+Return whether `save_history` selects nothing of any kind. Whether it saves the initial
+values doesn't matter, since there is nothing to save of them. Used by [`simulate!`](@ref),
+[`InstantiatedModel`](@ref) and fitted sessions, which save nothing at all then.
 """
 function saves_nothing(
     ::SaveHistory{(),(),(),(),Tsave_initial_values}
@@ -284,11 +292,58 @@ end
 saves_nothing(::SaveHistory) = false
 
 """
+    each_timestep_size(timestep_sizes, n_steps)
+
+Return the size of each of `n_steps` timesteps as a vector, for a history. A vector of sizes
+is returned as it is, and anything else is repeated for every timestep. Used by
+[`simulate!`](@ref), for the sizes it adds to the histories, and by
+[`saved_timestep_sizes`](@ref).
+"""
+function each_timestep_size(timestep_sizes::AbstractVector, n_steps)
+    return timestep_sizes
+end
+
+function each_timestep_size(timestep_size, n_steps)
+    return fill(timestep_size, n_steps)
+end
+
+"""
+    returned_timestep_sizes(timestep_sizes, n_timesteps, save_initial_values::Val)
+
+Return the sizes of the `n_timesteps` timesteps that ran, as a simulation returns them. A
+vector of sizes is cut to those timesteps, since a model can stop a simulation early, and
+starts with [`BeforeFirstTimestep`](@ref) for timestep 0 when `save_initial_values` is
+`Val(true)`, so that it has an element for each element of what is saved. Anything else is
+returned as it is, since it is the size of every timestep. Used by [`simulate`](@ref),
+[`simulate!`](@ref) and [`saved_timestep_sizes`](@ref).
+"""
+function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::Val{false})
+    return timestep_sizes[1:n_timesteps]
+end
+
+function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::Val{true})
+
+    #Create the vector with room for timestep 0, and put the marker and the sizes in it
+    sizes = Vector{Union{BeforeFirstTimestep,eltype(timestep_sizes)}}(
+        undef, n_timesteps + 1
+    )
+    sizes[1] = BeforeFirstTimestep()
+    copyto!(sizes, 2, timestep_sizes, 1, n_timesteps)
+
+    return sizes
+end
+
+function returned_timestep_sizes(timestep_size, n_timesteps, save_initial_values)
+    return timestep_size
+end
+
+"""
     saved_timestep_sizes(timestep_sizes, n_steps, save_history)
 
 Return the sizes of `n_steps` timesteps as they are returned with a history: one size for
 each timestep when `save_history` saves anything, after [`BeforeFirstTimestep`](@ref) for
-timestep 0 when it saves the initial values, and an empty vector when it saves nothing.
+timestep 0 when it saves the initial values, and an empty vector when it saves nothing. Used
+by [`SessionInfo`](@ref), for the sizes a fitted session returns.
 """
 function saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory)
     return returned_timestep_sizes(

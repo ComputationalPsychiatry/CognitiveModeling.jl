@@ -5,8 +5,7 @@ Which outputs of one side of a simulation the other side receives, and under whi
 
 Each argument is `:given => :received`, for an output which the receiver lists under
 another name, or a single `Symbol`, for one which keeps its name. Outputs that aren't in the
-map aren't passed on, and each name can only be there once. The names are kept in the type,
-so that a map costs nothing in a simulation.
+map aren't passed on, and each name can only be there once.
 
 [`simulate`](@ref) and [`simulate!`](@ref) take one as `observation_map`, from the
 observations the environment model gives to those the cognitive model lists, and one as
@@ -47,7 +46,8 @@ end
 
 Return the name an output is given under and the name it is received under, from one
 argument of a [`NameMap`](@ref): the two sides of a `:given => :received` pair, or a single
-`Symbol`, which is received under the name it is given with.
+`Symbol`, which is received under the name it is given with. Used by the constructor of
+[`NameMap`](@ref).
 """
 given_name(name::Symbol) = name
 given_name(names::Pair{Symbol,Symbol}) = first(names)
@@ -81,6 +81,9 @@ the observations it gave. The model's [`SaveHistory`](@ref) selects what is kept
 kind, and when it selects nothing at all, the vectors stay empty. Each vector starts with
 timestep 0, where the model started, when the `SaveHistory` saves the initial values, which
 it does by default, so that element `t + 1` is timestep `t`.
+
+The vectors hold values of any type, since what is saved can change type from one timestep
+to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a value.
 
 # Arguments
 - `states::Vector{Any}`: the states of the model, starting at timestep 0 with its initial
@@ -117,18 +120,62 @@ Each argument is kept in a field of the same name, such as `agent.state`. Parame
 aren't given take the values in [`default_parameters`](@ref), if the model provides defaults
 for them. The state defaults to the output of [`initialize_state`](@ref) with the full
 parameters, and the previous output to every output being [`BeforeFirstTimestep`](@ref). The
-model must have a method of [`attribute_names`](@ref), and the names of the parameters, of
-the previous output, and of the state when it is a `NamedTuple`, must be those it lists, or
-an error is thrown.
+names of the parameters, of the previous output, and of the state when it is a `NamedTuple`,
+must be those that [`attribute_names`](@ref) lists, or an error is thrown.
 
 `agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a
 [`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history` stay
-empty, and `SaveHistory(SaveEverything())` saves everything. Inputs and outputs can only be
-selected by name among those the model lists, since the history starts from those names.
+empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs can
+only be selected by name among those the model lists, since the history starts from those
+names.
+`agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved.
+
+In the REPL, an instantiated model shows the kind and the type of its model, how many
+timesteps it has simulated, and the values of its parameters and of its state, with only how
+many there are when there are more than five. Large arrays are shortened. When the model's
+[`stopping_criterion`](@ref) is met, it says so, since it must then be [`reset!`](@ref)
+before it can be simulated again. On one line, as inside a vector, it shows the type and the
+kind of its model and how many timesteps it has simulated.
+
+An instantiated model is a convenience, and isn't type stable, by design: its state and its
+previous output can change type, as an output does from `BeforeFirstTimestep()` to a `Bool`,
+and so can what its history saves, so they are kept untyped. Each call of `simulate!` on it
+is therefore dynamically dispatched, and the compiler doesn't know what it returns, whatever
+is saved. Where that matters, use [`simulate`](@ref) on the models themselves, one
+timestep at a time or for a whole simulation.
 
 The same type serves as the agent and as the environment of a simulation, since both are
 models. See also [`simulate!`](@ref) and [`reset!`](@ref).
+
+# Examples
+```jldoctest
+julia> struct LearnsRewards <: AbstractCognitiveModel end
+
+julia> CognitiveModeling.initialize_state(::LearnsRewards, parameters) = (; expected_reward = 0.5);
+
+julia> function CognitiveModeling.apply_model(::LearnsRewards, context::ModelContext)
+           V = context.previous_state.expected_reward
+           V = V + context.parameters.learning_rate * (context.input.reward - V)
+           return ModelOutput((; choice = Deterministic(V > 0.5)), (; expected_reward = V))
+       end;
+
+julia> CognitiveModeling.attribute_names(::LearnsRewards) = ModelAttributes(; parameters = :learning_rate, states = :expected_reward, inputs = :reward, outputs = :choice);
+
+julia> agent = InstantiatedModel(LearnsRewards(), (; learning_rate = 0.5));
+
+julia> simulate!(agent, (; reward = 1.0));
+
+julia> agent
+-- Instantiated cognitive model --
+Type: LearnsRewards
+Timesteps simulated: 1
+Parameters: learning_rate = 0.5
+State: expected_reward = 0.75
+
+julia> print(agent)
+LearnsRewards (instantiated cognitive model, 1 timestep simulated)
+```
 """
 mutable struct InstantiatedModel{
     Tmodel<:AbstractModel,Tparameters,Tsave_history<:SaveHistory
@@ -140,6 +187,7 @@ mutable struct InstantiatedModel{
     previous_output::Any
     history::ModelHistory
     save_history::Tsave_history
+    n_timesteps::Int
 end
 
 #Starts the model from its initial state, with nothing given yet
@@ -178,7 +226,7 @@ function InstantiatedModel(
     history = starting_history(model, state, previous_output, save_history)
 
     return InstantiatedModel(
-        model, parameters, state, previous_output, history, save_history
+        model, parameters, state, previous_output, history, save_history, 0
     )
 end
 
@@ -217,11 +265,11 @@ end
 
 Put `instantiated_model` back to where a new one starts, and return it.
 
-The state becomes the output of [`initialize_state`](@ref) with the parameters it has, and
-the previous output has every output as [`BeforeFirstTimestep`](@ref) again. The history is a
-new one which starts from there, as timestep 0 when the [`SaveHistory`](@ref) saves the
-initial values, so a history that was read before the reset, as in
-`history = agent.history`, is kept as it was. The model, the parameters and the
+The state becomes the output of [`initialize_state`](@ref) with the parameters it has, the
+previous output has every output as [`BeforeFirstTimestep`](@ref) again, and `n_timesteps`
+is 0. The history is a new one which starts from there, as timestep 0 when the
+[`SaveHistory`](@ref) saves the initial values, so a history that was read before the reset,
+as in `history = agent.history`, is kept as it was. The model, the parameters and the
 `SaveHistory` stay the same.
 
 An instantiated model that was created with a state or a previous output of its own doesn't
@@ -272,5 +320,42 @@ function reset!(instantiated_model::InstantiatedModel)
         instantiated_model.previous_output,
         instantiated_model.save_history,
     )
+    instantiated_model.n_timesteps = 0
     return instantiated_model
+end
+
+#Shows the kind and the type of the model in the REPL and notebooks, how many timesteps it has simulated, its parameters and its state, and whether its stopping criterion is met
+function Base.show(io::IO, ::MIME"text/plain", instantiated_model::InstantiatedModel)
+    model = instantiated_model.model
+
+    #Print the kind and the type of the model, and how many timesteps it has simulated
+    print(io, "-- Instantiated ", model_kind(model), " --\nType: ", nameof(typeof(model)))
+    print(io, "\nTimesteps simulated: ", instantiated_model.n_timesteps)
+
+    #Print the values of the parameters and of the state
+    print_current_values(io, "Parameters", instantiated_model.parameters, ".parameters")
+    print_current_values(io, "State", instantiated_model.state, ".state")
+
+    #Say that the model's stopping criterion is met, if it is
+    if stopping_criterion(model, instantiated_model.state, instantiated_model.parameters)
+        print(io, "\nStopping criterion met: reset! to simulate it again")
+    end
+
+    return nothing
+end
+
+#Shows the type and the kind of the model on one line, as inside a vector, and how many timesteps it has simulated
+function Base.show(io::IO, instantiated_model::InstantiatedModel)
+    model = instantiated_model.model
+    n_timesteps = instantiated_model.n_timesteps
+    print(
+        io,
+        nameof(typeof(model)),
+        " (instantiated ",
+        model_kind(model),
+        ", ",
+        n_timesteps,
+        n_timesteps == 1 ? " timestep simulated)" : " timesteps simulated)",
+    )
+    return nothing
 end

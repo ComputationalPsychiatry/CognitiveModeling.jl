@@ -600,8 +600,8 @@ end
         )
         @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
         @test history.states[1] == (; expected_reward=0.65) && length(history.states) == 5
-        #An input the model doesn't list can't be selected from the observations
-        @test_throws FieldError returned(
+        #An input the model doesn't list can't be selected, which the session checks when it is prepared
+        @test_throws "The SaveHistory selects the inputs (:cue,), but attribute_names lists the inputs of a cognitive model of type TwoContinuousActions as (:reward,)." returned(
             session_for_test(
                 TwoContinuousActions(),
                 (; learning_rate=0.3),

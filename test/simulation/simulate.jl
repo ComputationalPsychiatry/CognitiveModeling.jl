@@ -1249,7 +1249,7 @@ end
             environment_parameters=rewards,
             cognitive_save_history=SaveHistory(; outputs=:choice),
         ).action_distributions == fill((;), 4)
-        @test_throws "The SaveHistory selects the output distributions (:bet,), but attribute_names lists the outputs of a cognitive model of type LearnsRewards as (:choice,). A history can only select inputs, outputs and output distributions that the model lists." InstantiatedModel(
+        @test_throws "The SaveHistory selects the output distributions (:bet,), but attribute_names lists the outputs of a cognitive model of type LearnsRewards as (:choice,). A history can only select names that the model lists." InstantiatedModel(
             LearnsRewards(), LEARNING; save_history=SaveHistory(; output_distributions=:bet)
         )
         #A state changed in place is saved before the first timestep changes it
@@ -1462,10 +1462,15 @@ end
     end
 
     @testset "Selecting a name that isn't there, or from something that isn't a NamedTuple, gives an error" begin
-        @test_throws FieldError simulate_for_test(
+        @test_throws "The SaveHistory selects the states (:surprise,), but attribute_names lists the states of a cognitive model of type LearnsAndCounts as (:expected_reward, :n_timesteps)." simulate_for_test(
             LearnsAndCounts(),
             RewardsWithProbability();
             cognitive_save_history=SaveHistory(; states=:surprise),
+        )
+        @test_throws "The SaveHistory selects the inputs (:cue,), but attribute_names lists the inputs of a cognitive model of type LearnsAndCounts as (:reward,)." simulate_for_test(
+            LearnsAndCounts(),
+            RewardsWithProbability();
+            cognitive_save_history=SaveHistory(; inputs=:cue),
         )
         @test_throws "can only select names from a NamedTuple" simulate_for_test(
             LearnsInPlace(state -> state.values),
@@ -1528,12 +1533,11 @@ end
         @test [state.counts[1] for state in environment_states] == 1:length(environment_states)
     end
 
-    @testset "A method can save something else than the state" begin
+    @testset "What prepare_state_for_saving returns is what is saved" begin
         (; states) = simulate_for_test(
-            LearnsInPlace(state -> (; first_value=state.values[1])),
-            RewardsWithProbability(),
+            LearnsInPlace(state -> (; values=copy(state.values))), RewardsWithProbability()
         )
-        @test eltype(states) === @NamedTuple{first_value::Float64}
+        @test eltype(states) === @NamedTuple{values::Vector{Float64}}
         @test length(unique(states)) > 1
     end
 
@@ -1762,7 +1766,7 @@ end
         @test expected_rewards(simulation.states) == [0.75, 0.875] &&
             length(simulation.actions) == 2
         #An environment that has ended already can't be simulated
-        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel which has ended starts again after reset!." simulate_for_test(
+        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_for_test(
             LearnsRewards(),
             EndsAfterTimesteps();
             environment_parameters=(; last_timestep=0),
@@ -1801,7 +1805,7 @@ end
             @test all(vector -> length(vector) == 20, saved_vectors(environment_ends))
             @test environment_ends.environment.states[end] == (; n_timesteps=20)
             #A model whose criterion is met already can't run a timestep, unless the check is off
-            @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel which has ended starts again after reset!." run_until_end(
+            @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." run_until_end(
                 cognitive_parameters=(; last_timestep=0)
             )
             @test length(
@@ -1950,7 +1954,7 @@ end
 
     @testset "simulate! continues from the state itself, whatever is saved" begin
         agent = InstantiatedModel(
-            LearnsInPlace(state -> (; first_value=state.values[1])),
+            LearnsInPlace(state -> (; values=copy(state.values))),
             LEARNING;
             save_history=SaveHistory(SaveEverything()),
         )
@@ -1962,7 +1966,7 @@ end
             n_steps=3,
             rng=Xoshiro(1),
         ).states
-        @test agent.state.values[1] == first_states[end].first_value
+        @test agent.state.values[1] == first_states[end].values[1]
         second_states = simulate!(
             agent,
             environment;
@@ -1970,7 +1974,7 @@ end
             n_steps=3,
             rng=Xoshiro(1),
         ).states
-        @test agent.state.values[1] == second_states[end].first_value
+        @test agent.state.values[1] == second_states[end].values[1]
     end
 
     @testset "An agent fills in the default parameters, and starts from them" begin
@@ -2471,7 +2475,7 @@ end
         @test environment.history.timestep_sizes == agent.history.timestep_sizes
         @test length(environment.history.states) == 5
         #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel which has ended starts again after reset!." simulate!(
+        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
         @test length(agent.history.states) == 5
@@ -2512,7 +2516,7 @@ end
         @test agent.state == (; n_timesteps=4)
         @test length(agent.history.states) == length(environment.history.states) == 5
         #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel which has ended starts again after reset!." simulate!(
+        @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
         reset!(agent)
@@ -2598,7 +2602,7 @@ end
         #A model without inputs takes an empty NamedTuple
         @test simulate!(InstantiatedModel(OnlyChooses(), (;)), (;)) isa NamedTuple
         #The check costs nothing when the types are known
-        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.timestep(
+        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_timestep(
             LearnsRewards(),
             (; reward=1.0, cue=1.0),
             (; expected_reward=0.5),
@@ -2880,8 +2884,8 @@ end
         @test environment.state == (; n_timesteps=2)
     end
 
-    @testset "A history can only select inputs, outputs and output distributions that the model lists" begin
-        @test_throws "The SaveHistory selects the inputs (:reward,), but attribute_names lists the inputs of a cognitive model of type OnlyChooses as (). A history can only select inputs, outputs and output distributions that the model lists." InstantiatedModel(
+    @testset "A history can only select names that the model lists" begin
+        @test_throws "The SaveHistory selects the inputs (:reward,), but attribute_names lists the inputs of a cognitive model of type OnlyChooses as (). A history can only select names that the model lists." InstantiatedModel(
             OnlyChooses(), (;); save_history=SaveHistory(; inputs=:reward)
         )
         @test_throws "The SaveHistory selects the outputs (:bet,), but attribute_names lists the outputs of a cognitive model of type LearnsRewards as (:choice,)." InstantiatedModel(
@@ -2899,12 +2903,12 @@ end
             (; rewards=[1.0]);
             save_history=SaveHistory(; output_distributions=:cue),
         )
-        #The states aren't checked, since prepare_state_for_saving can save anything
-        @test InstantiatedModel(
-            LearnsInPlace(state -> (; first_value=state.values[1])),
+        #The states are checked too, since prepare_state_for_saving returns a state with the names the model lists
+        @test_throws "The SaveHistory selects the states (:first_value,), but attribute_names lists the states of a cognitive model of type LearnsInPlace" InstantiatedModel(
+            LearnsInPlace(deepcopy),
             LEARNING;
             save_history=SaveHistory(; states=:first_value),
-        ).history.states == [(; first_value=0.5)]
+        )
         #Everything can always be selected, and an input with more than the model lists is saved in full
         agent = InstantiatedModel(
             OnlyChooses(), (;); save_history=SaveHistory(SaveEverything())
@@ -3267,5 +3271,102 @@ end
             n_steps=3,
         )
         @test observations == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]
+    end
+end
+
+#Has more parameters than a display lists, and a large array in its state
+struct HasManyParameters <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::HasManyParameters, parameters)
+    return (; values=collect(1.0:100.0))
+end
+function CognitiveModeling.attribute_names(model::HasManyParameters)
+    return ModelAttributes(;
+        parameters=(:a, :b, :c, :d, :e, :f), states=:values, inputs=(), outputs=()
+    )
+end
+
+@testset "An instantiated model counts its timesteps and shows them" begin
+    @testset "Both forms of simulate! add to n_timesteps, whatever is saved, and reset! sets it to 0" begin
+        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        environment = InstantiatedModel(
+            RewardsTrue(), (;); save_history=SaveHistory(SaveEverything())
+        )
+        @test agent.n_timesteps == environment.n_timesteps == 0
+        simulate!(agent, (; reward=1.0))
+        @test agent.n_timesteps == 1
+        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
+        @test agent.n_timesteps == 4
+        @test environment.n_timesteps == 3
+        @test reset!(agent).n_timesteps == 0
+        @test environment.n_timesteps == 3
+    end
+
+    @testset "Only the timesteps that ran are counted when a stopping criterion ends them" begin
+        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        environment = InstantiatedModel(EndsAfterTimesteps(), (; last_timestep=4))
+        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
+        @test agent.n_timesteps == environment.n_timesteps == 4
+    end
+
+    @testset "The REPL shows its model's kind and type, the timesteps, and the values of the parameters and the state" begin
+        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        simulate!(agent, (; reward=1.0))
+        @test repr("text/plain", agent) == """
+        -- Instantiated cognitive model --
+        Type: LearnsRewards
+        Timesteps simulated: 1
+        Parameters: learning_rate = 0.5
+        State: expected_reward = 0.75"""
+        #An environment without parameters or a state
+        @test repr("text/plain", InstantiatedModel(RewardsTrue(), (;))) == """
+        -- Instantiated environment model --
+        Type: RewardsTrue
+        Timesteps simulated: 0
+        Parameters: none
+        State: none"""
+        #A state that isn't a NamedTuple is shown as it is
+        @test occursin(
+            "\nState: [0.5]",
+            repr(
+                "text/plain",
+                InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoAction())),
+            ),
+        )
+    end
+
+    @testset "The REPL shows only how many values there are when there are more than five, and shortens large arrays" begin
+        agent = InstantiatedModel(HasManyParameters(), (; a=1, b=2, c=3, d=4, e=5, f=6))
+        shown = repr("text/plain", agent; context=:limit => true)
+        @test occursin("\nParameters: 6 (see .parameters)\n", shown)
+        @test occursin("State: values = [1.0, 2.0, 3.0", shown) && occursin("…", shown)
+        #Without a limit, as when printing to a file, everything is listed
+        unlimited = repr("text/plain", agent)
+        @test occursin("Parameters: a = 1, b = 2, c = 3, d = 4, e = 5, f = 6", unlimited)
+        @test occursin("100.0]", unlimited) && !occursin("…", unlimited)
+    end
+
+    @testset "The REPL says so when the stopping criterion is met" begin
+        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        environment = InstantiatedModel(EndsAfterTimesteps(), (; last_timestep=2))
+        @test !occursin("Stopping criterion", repr("text/plain", environment))
+        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
+        @test endswith(
+            repr("text/plain", environment),
+            "\nStopping criterion met: reset! to simulate it again",
+        )
+        @test !occursin("Stopping criterion", repr("text/plain", reset!(environment)))
+    end
+
+    @testset "On one line it shows its model's type and kind, and how many timesteps it has run" begin
+        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        @test repr(agent) ==
+            "LearnsRewards (instantiated cognitive model, 0 timesteps simulated)"
+        simulate!(agent, (; reward=1.0))
+        @test repr(agent) ==
+            "LearnsRewards (instantiated cognitive model, 1 timestep simulated)"
+        @test occursin(
+            "RewardsTrue (instantiated environment model, 0 timesteps simulated)",
+            repr("text/plain", [InstantiatedModel(RewardsTrue(), (;))]),
+        )
     end
 end

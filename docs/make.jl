@@ -44,8 +44,21 @@ makedocs(;
         ],
         "Planned tutorials and interfaces" => "planned.md",
         "Automatic differentiation and Reactant" => "ad_and_reactant.md",
-        "API" => "api.md",
-        "Internals" => "internals.md",
+        "API" => [
+            "Overview" => "api/index.md",
+            "api/defining_models.md",
+            "api/simulation.md",
+            "api/saving_histories.md",
+            "api/fitting.md",
+            "api/fitting_with_turing.md",
+        ],
+        "Internals" => [
+            "Overview" => "internals/index.md",
+            "Defining models" => "internals/defining_models.md",
+            "Simulation" => "internals/simulation.md",
+            "Saving histories" => "internals/saving_histories.md",
+            "Fitting" => "internals/fitting.md",
+        ],
     ],
 )
 

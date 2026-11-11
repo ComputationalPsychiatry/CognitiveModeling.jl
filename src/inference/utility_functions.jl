@@ -18,11 +18,11 @@ one vector per name, as a `NamedTuple` of vectors in the order of the timesteps.
 scores these against the distributions the model gave on the same timesteps: the actions
 against the cognitive model's, and the observations against the environment's. Each vector
 has the element type of its column without [`MissingValue`](@ref) and the markers for
-nothing happening, so that a session without recorded values for a name gets an empty
-vector of the same type as other sessions, which scores nothing. A name whose column can
-only hold those markers is left out, which is decided by its type, so that it is the same for
-every session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its
-fields `recorded_actions` and `recorded_observations`.
+nothing happening, so that a session without recorded values for a name gets an empty vector
+of the same type as other sessions, which scores nothing. A name whose column can only hold
+those markers is left out, which is decided by its type, so that it is the same for every
+session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its fields
+`recorded_actions` and `recorded_observations`.
 """
 function recorded_values(columns::NamedTuple{names}) where {names}
     recorded = map(
@@ -148,15 +148,13 @@ end
 
 replace_missing(x, replacement) = x
 
+#A call of its own, so that a value which can have two types gives one of two NamedTuples with a concrete field each: (; a = x) written out is inferred as a NamedTuple whose field type is the Union, which nothing is compiled for, while a call with a Union-typed argument is split by type
 """
     entry(::Val{name}, value)
 
-Return `(; name = value)`, built in a call of its own, so that a value which can have two
-types gives one of two `NamedTuple`s with a concrete field each, as `(; a = x)` written out
-doesn't: Julia infers that as a `NamedTuple` whose field type is the `Union`, which nothing
-is compiled for, while a call with a `Union`-typed argument is split by type. A `NamedTuple`
-which holds such a value is built with `merge` of these, as [`row`](@ref) does. Used by
-[`row`](@ref), by [`saved_session_outputs`](@ref) and by the Turing.jl models of a timestep.
+Return `(; name = value)`. A `NamedTuple` which holds a value that can have two types is
+built with `merge` of these, as [`row`](@ref) does. Used by [`row`](@ref), by
+[`saved_session_outputs`](@ref) and by the Turing.jl models of a timestep.
 """
 entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
 
@@ -166,9 +164,9 @@ entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
 Return the `NamedTuple` of the values at timestep `t` of `columns`, a `NamedTuple` of
 vectors with one entry for each timestep, built with [`entry`](@ref) so that a column which
 holds two types, such as an action that is [`MissingValue`](@ref) on some timesteps, gives
-one of two `NamedTuple`s with concrete fields rather than one without a definite type. It is
-unrolled over the names, which it takes from the type. Used by the Turing.jl models of a
-timestep and of several sessions, which reads the parameters of one session with it.
+one of two `NamedTuple`s with concrete fields rather than one without a definite type. Used
+by the Turing.jl models of a timestep and of several sessions, which reads the parameters of
+one session with it.
 """
 row(columns::NamedTuple{()}, t) = (;)
 function row(columns::NamedTuple{names}, t) where {names}
@@ -179,8 +177,8 @@ end
     has_missing_value(data)
 
 Return whether any entry of `data`, the `NamedTuple` of the actions or the observations of
-one timestep, is [`MissingValue`](@ref). It is decided at compile time when no entry can be.
-Used by the Turing.jl models of a timestep, to skip imputing when nothing is missing.
+one timestep, is [`MissingValue`](@ref). Used by the Turing.jl models of a timestep, to skip
+imputing when nothing is missing.
 """
 has_missing_value(data::NamedTuple) = any(value -> value isa MissingValue, Tuple(data))
 
@@ -330,10 +328,10 @@ end
 
 Return the data of `kind`, `:observations` or `:actions`, as a `NamedTuple` of vectors: a
 single vector as the data of the model's only attribute of that kind, which is an error when
-the model lists another number of them, and anything else as it is, for
-[`check_data`](@ref) to check. A vector of `NamedTuple`s with the model's names is the data
-written as one row for each timestep, which is returned as it is, for `check_data` to report.
-Used by [`SessionInfo`](@ref).
+the model lists another number of them, and anything else as it is, for [`check_data`](@ref)
+to check. A vector of `NamedTuple`s with the model's names is the data written as one row
+for each timestep, which is returned as it is, for `check_data` to report. Used by
+[`SessionInfo`](@ref).
 """
 named_data(data, cognitive_model, kind::Symbol) = data
 function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
@@ -390,8 +388,8 @@ end
 Return the column of an attribute at the rows `rows` of `table`, as [`columns_used`](@ref)
 describes the specification: the column itself, or one built row by row from several, where
 a row with a `missing` in any of them gives `missing`. The column is narrowed as a whole
-first, see [`narrow_column`](@ref), so that every session gets the same element type. Used by
-[`select_rows`](@ref).
+first, see [`narrow_column`](@ref), so that every session gets the same element type. Used
+by [`select_rows`](@ref).
 """
 function build_column(table::NamedTuple, specification::Symbol, rows)
     return narrow_column(getproperty(table, specification))[rows]
@@ -570,8 +568,8 @@ end
 
 Return whether a parameters model samples the parameters it gives, which is decided by its
 type: `false` for [`NoParameters`](@ref), [`FixedSessionParameters`](@ref) and
-[`FixedParametersBySession`](@ref), and `true` for every other kind, also those of one's own.
-Used by [`sessions_for_environment_parameters`](@ref) and
+[`FixedParametersBySession`](@ref), and `true` for every other kind, also those of one's
+own. Used by [`sessions_for_environment_parameters`](@ref) and
 [`warn_if_parameter_names_overlap`](@ref).
 """
 samples_parameters(parameters_model) = true
@@ -777,9 +775,9 @@ end
 
 Return the names of the actions, or of the observations, that have recorded values in the
 data of a session, which are scored against the distributions the cognitive model, or the
-environment model, gave for them, in a `Val`, so that the timesteps are compiled knowing
-them. A session without an environment scores no observations, so it has no such names. Used
-by the Turing.jl model of a session, to select the distributions it scores.
+environment model, gave for them, in a `Val`. A session without an environment scores no
+observations, so it has no such names. Used by the Turing.jl model of a session, to select
+the distributions it scores.
 """
 recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorded_actions))
 recorded_observation_names(::SessionInfo{<:Any,NoEnvironment}) = Val(())
@@ -867,7 +865,7 @@ Return an empty vector for the distributions of each output that is recorded in 
 typed by the distribution the model gave on the first timestep, so that the vectors keep one
 type through the session when every timestep gives the same type. An output the model
 doesn't give on the first timestep gets a `Vector{Union{}}()`, which the first distribution
-kept sets the type of, as for [`push_output!`](@ref). Used by the Turing.jl model of a
+kept sets the type of, as for [`push_value!`](@ref). Used by the Turing.jl model of a
 session, after its first timestep.
 """
 function initialize_distributions(recorded_distributions::NamedTuple)
@@ -884,7 +882,7 @@ end
 Add the distributions of the outputs that are recorded on one timestep, where
 `recorded_on_timestep` says which, to the vectors in `distributions`, one for each output
 that is recorded in the session, and return them. A distribution of another type than its
-vector widens the vector, as for [`push_output!`](@ref). Used by the Turing.jl model of a
+vector widens the vector, as for [`push_value!`](@ref). Used by the Turing.jl model of a
 session, on every timestep.
 """
 function store_distributions(
@@ -895,7 +893,7 @@ function store_distributions(
     return NamedTuple{names}(
         map(
             name -> if getproperty(recorded_on_timestep, name)
-                push_output!(
+                push_value!(
                     getproperty(distributions, name),
                     getproperty(recorded_distributions, name),
                 )
@@ -1042,11 +1040,11 @@ end
     store_session_outputs!(storage, saved, i)
 
 Store `saved`, what one timestep saved, as element `i` of each vector in `storage`, and
-return the storage, which [`store_output!`](@ref) widens when a value has a new type. Used
+return the storage, which [`store_value!`](@ref) widens when a value has a new type. Used
 by the Turing.jl model of a session, on every timestep after the first.
 """
 function store_session_outputs!(storage::NamedTuple, saved::NamedTuple, i)
-    return map((vector, value) -> store_output!(vector, value, i), storage, saved)
+    return map((vector, value) -> store_value!(vector, value, i), storage, saved)
 end
 
 """
@@ -1142,14 +1140,7 @@ function print_data_names(io::IO, kind, names)
     return nothing
 end
 
-"""
-    show(io::IO, ::MIME"text/plain", session_info::SessionInfo)
-    show(io::IO, ::MIME"text/plain", sessions_info::MultipleSessionsInfo)
-
-Print a summary of a session, or of several, on one line each: the models, the timesteps or
-the sessions, the names in the data, and who starts. This is what the REPL and notebooks
-show, since the full type and the data would fill the screen.
-"""
+#Shows a summary of a session in the REPL and notebooks, since the full type and the data would fill the screen
 function Base.show(io::IO, ::MIME"text/plain", session_info::SessionInfo)
     print(io, "SessionInfo\nCognitive model: ")
     print_model_name(io, session_info.cognitive_model)
@@ -1166,6 +1157,7 @@ function Base.show(io::IO, ::MIME"text/plain", session_info::SessionInfo)
     return nothing
 end
 
+#Shows a summary of several sessions, with the models and the names of the first
 function Base.show(io::IO, ::MIME"text/plain", sessions_info::MultipleSessionsInfo)
     first_session = first(sessions_info.sessions)
     print(

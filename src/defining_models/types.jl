@@ -3,7 +3,7 @@
 
 Supertype for cognitive models and environment models, which every function that a model
 implements or is used with takes. A model is a subtype of [`AbstractCognitiveModel`](@ref)
-or of [`AbstractEnvironmentModel`](@ref), and not of this type itself.
+or of [`AbstractEnvironmentModel`](@ref), and generally not of this type itself.
 
 The two kinds work the same way: on each timestep a model receives an input and gives an
 output, in a [`ModelContext`](@ref) and a [`ModelOutput`](@ref). In a simulation or a fitted
@@ -19,12 +19,43 @@ abstract type AbstractModel end
 
 Supertype for cognitive models, whose inputs are observations and whose outputs are actions.
 
+In the REPL, a cognitive model shows its type, the values of its fields if it has any, and
+the names of its attributes, or `not specified` if it has no method of
+[`attribute_names`](@ref). A kind of attribute with more than five names shows only how many
+there are, and `attribute_names` lists them. On one line, as inside a vector, a model shows
+its type and its kind.
+
 # Implementation
 Create a subtype and add methods of [`apply_model`](@ref), [`initialize_state`](@ref) and
 [`attribute_names`](@ref) for it. A model can also add methods of
-[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref),
-[`stopping_criterion`](@ref), [`turing_apply_model`](@ref) and
-[`turing_initialize_state`](@ref).
+[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
+documentation for that PPL describes.
+
+# Examples
+```jldoctest
+julia> struct ExampleModel <: AbstractCognitiveModel end
+
+julia> function CognitiveModeling.attribute_names(model::ExampleModel)
+           return ModelAttributes(;
+               parameters = (:learning_rate, :noise),
+               states = :expected_reward,
+               inputs = :reward,
+               outputs = (),
+           )
+       end;
+
+julia> ExampleModel()
+-- Cognitive model --
+Type: ExampleModel
+Parameters: learning_rate, noise
+States: expected_reward
+Inputs: reward
+Outputs: none
+
+julia> print(ExampleModel())
+ExampleModel (cognitive model)
+```
 """
 abstract type AbstractCognitiveModel <: AbstractModel end
 
@@ -34,14 +65,39 @@ abstract type AbstractCognitiveModel <: AbstractModel end
 Supertype for environment models, whose inputs are the actions of a cognitive model and
 whose outputs are its observations.
 
+An environment model shows in the REPL and on one line as a cognitive model does, with its
+own kind.
+
 # Implementation
 Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
 [`apply_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
-optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref),
-[`stopping_criterion`](@ref), [`turing_apply_model`](@ref) and
-[`turing_initialize_state`](@ref).
+optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
+documentation for that PPL describes.
 
 See also [`simulate`](@ref), which has an example.
+
+# Examples
+```jldoctest
+julia> struct ExampleEnvironment <: AbstractEnvironmentModel end
+
+julia> function CognitiveModeling.attribute_names(environment::ExampleEnvironment)
+           return ModelAttributes(;
+               parameters = :reward_probability,
+               states = (),
+               inputs = :choice,
+               outputs = :reward,
+           )
+       end;
+
+julia> ExampleEnvironment()
+-- Environment model --
+Type: ExampleEnvironment
+Parameters: reward_probability
+States: none
+Inputs: choice
+Outputs: reward
+```
 """
 abstract type AbstractEnvironmentModel <: AbstractModel end
 
@@ -107,8 +163,7 @@ A simulation samples every action and every observation with `rand`, and samplin
 
 A simulation throws an error for a number, a string or a symbol that isn't wrapped, since
 none of them is something to sample from. A vector, a tuple or a range that isn't wrapped is
-sampled from as it is, which is rarely what is meant: `rand` picks one of its elements, with
-no error.
+sampled from as it is: `rand` picks one of its elements, with no error.
 
 # Examples
 ```jldoctest
@@ -174,10 +229,13 @@ two, which a simulation or a fitted session passes on from its own `who_starts`.
 struct UnknownWhoStarts end
 
 """
+    ModelContext(; input, previous_state, previous_output, parameters, timestep_size=1,
+                 rng=default_rng(), who_starts=UnknownWhoStarts())
     ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
                  rng=default_rng(), who_starts=UnknownWhoStarts())
 
 Everything a model needs to run a single timestep, which [`apply_model`](@ref) receives.
+The arguments can be given by name, which says what each one is, or in this order.
 
 Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
 model the input is its observation and the output its action, and for an environment model
@@ -194,7 +252,8 @@ the input is the action of the cognitive model and the output the observation it
   the names the model gave the entries, as in `context.previous_output.choice`. On the first
   timestep, each of them is [`BeforeFirstTimestep`](@ref).
 - `parameters`: the parameters of the model, in a `NamedTuple`.
-- `timestep_size=1`: how much time this timestep covers.
+- `timestep_size=1`: how much time this timestep covers; the difference between the end of
+  the previous and the end of the current timestep.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model
   is random, so that a simulation can be reproduced.
 - `who_starts=UnknownWhoStarts()`: who moves first on the timestep, [`AgentStarts`](@ref) or
@@ -202,25 +261,25 @@ the input is the action of the cognitive model and the output the observation it
   [`UnknownWhoStarts`](@ref) when neither is known. A model which can update before it acts
   or act before it updates can choose by it: for a cognitive model, with
   `EnvironmentStarts()` the input is this timestep's observation, and with `AgentStarts()`
-  the previous timestep's. It is kept in the type, so that choosing costs nothing.
+  the previous timestep's.
 
 # Examples
 ```jldoctest
 julia> input = (; reward = 1.0);
 
-julia> state = (; expected_reward = 0.5);
-
-julia> parameters = (; learning_rate = 0.1);
+julia> previous_state = (; expected_reward = 0.5);
 
 julia> previous_output = (; choice = BeforeFirstTimestep());
 
-julia> ModelContext(input, state, previous_output, parameters).timestep_size
+julia> parameters = (; learning_rate = 0.1);
+
+julia> ModelContext(; input, previous_state, previous_output, parameters).timestep_size
 1
 
-julia> ModelContext(input, state, previous_output, parameters, 0.5).timestep_size
+julia> ModelContext(; input, previous_state, previous_output, parameters, timestep_size = 0.5).timestep_size
 0.5
 
-julia> ModelContext(input, state, previous_output, parameters).who_starts
+julia> ModelContext(input, previous_state, previous_output, parameters).who_starts
 UnknownWhoStarts()
 ```
 """
@@ -234,7 +293,7 @@ struct ModelContext{Tinput,Tstate,Toutput,Tparameters,Ttimestep_size,Trng,Twho_s
     who_starts::Twho_starts
 end
 
-#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified. An integer keeps Float32 models in Float32
+#Sets the timestep size to 1, the generator to the default one and who starts to unknown if they aren't specified
 function ModelContext(
     input,
     previous_state,
@@ -253,6 +312,21 @@ function ModelContext(
         typeof(rng),
         typeof(who_starts),
     }(
+        input, previous_state, previous_output, parameters, timestep_size, rng, who_starts
+    )
+end
+
+#Takes the arguments by name, with the same defaults as the positional form
+function ModelContext(;
+    input,
+    previous_state,
+    previous_output,
+    parameters,
+    timestep_size=1,
+    rng::AbstractRNG=default_rng(),
+    who_starts=UnknownWhoStarts(),
+)
+    return ModelContext(
         input, previous_state, previous_output, parameters, timestep_size, rng, who_starts
     )
 end
@@ -314,12 +388,12 @@ For a cognitive model the inputs are its observations and the outputs its action
 an environment model the inputs are the actions it receives and the outputs the observations
 it gives.
 
-Each argument is a `Tuple` of `Symbol`s, which is kept in the type, so that the names are
-known at compile time, and read as a property of the same name, such as
+Each argument is a `Tuple` of `Symbol`s, read as a property of the same name, such as
 `attributes.parameters`. A single `Symbol` is put in a tuple, and a `Vector` of them is made
-into one. All four must be given, and `()` means that the model has none of that kind. A name
-can only be used once across the four kinds, so that it says which attribute of the model is
-meant wherever the attributes are named together, and an `ArgumentError` is thrown otherwise.
+into one. All four must be given, and `()` means that the model has none of that kind.
+A name can only be used once across the four kinds, so that it says which attribute of the
+model is meant wherever the attributes are named together, and an `ArgumentError` is thrown
+otherwise.
 
 # Examples
 ```jldoctest
@@ -362,6 +436,7 @@ end
 
 Return `names` as a `Tuple` of `Symbol`s, which is how a [`ModelAttributes`](@ref) keeps
 them: a tuple as it is, a single `Symbol` in a tuple, and a `Vector` of them as a tuple.
+Used by the constructors of [`ModelAttributes`](@ref) and [`MultipleSessionsInfo`](@ref).
 """
 as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
 as_tuple_of_names(name::Symbol) = (name,)
@@ -372,9 +447,8 @@ as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
 
 Throw an `ArgumentError` if a name in `attributes`, a [`ModelAttributes`](@ref), is used for
 more than one attribute, within a kind or across the kinds, and return nothing otherwise.
-Whether the names are unique is decided from the type, by [`unique_names`](@ref), so that
-the check costs nothing when they are, and the message is only made when they aren't. Used
-by the constructor of `ModelAttributes`.
+Whether the names are unique is decided by [`unique_names`](@ref), and the message is only
+made when they aren't. Used by the constructor of `ModelAttributes`.
 """
 function check_unique_attribute_names(attributes::ModelAttributes)
     all_names = (
@@ -391,8 +465,7 @@ end
     unique_names(names)
 
 Return whether no name in the tuple `names` appears twice. It is unrolled over the names
-with [`has_name`](@ref), so that the compiler decides it from the names alone when it knows
-them, which `allunique` doesn't guarantee.
+with [`has_name`](@ref). Used by [`check_unique_attribute_names`](@ref).
 """
 unique_names(::Tuple{}) = true
 function unique_names(names::Tuple)
@@ -403,8 +476,7 @@ end
     throw_duplicate_attribute_name(attributes)
 
 Throw the `ArgumentError` of [`check_unique_attribute_names`](@ref), naming the first name
-of `attributes` that is used twice and the kinds it is used for. It is only called when
-there is one, so it doesn't need to be fast.
+of `attributes` that is used twice and the kinds it is used for. 
 """
 @noinline function throw_duplicate_attribute_name(attributes::ModelAttributes)
     kinds = (

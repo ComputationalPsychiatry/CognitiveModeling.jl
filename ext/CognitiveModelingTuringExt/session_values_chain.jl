@@ -198,8 +198,8 @@ end
     sample_numbering(chain)
 
 Return the numbers of the iterations and the chains of `chain` as keyword arguments, so that
-the chain of what the sessions saved is numbered the same way, or none for a chain that isn't
-a `FlexiChain`. Used by `session_values_chain`.
+the chain of what the sessions saved is numbered the same way, or none for a chain that
+isn't a `FlexiChain`. Used by `session_values_chain`.
 """
 function sample_numbering(chain::Turing.FlexiChains.FlexiChain)
     return (;

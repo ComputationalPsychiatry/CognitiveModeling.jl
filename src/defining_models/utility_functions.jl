@@ -1,8 +1,10 @@
+## Describing a model in messages ##
 """
     describe_model(model)
 
 Return how `model` is named in an error message: as a cognitive model or as an environment
-model, with its type.
+model, with its type. Used in the error messages of the checks on models, in simulations and
+in fitted sessions.
 """
 function describe_model(cognitive_model::AbstractCognitiveModel)
     return "a cognitive model of type $(typeof(cognitive_model))"
@@ -12,12 +14,15 @@ function describe_model(environment::AbstractEnvironmentModel)
 end
 describe_model(model::AbstractModel) = "a model of type $(typeof(model))"
 
+## Checking a model's own methods ##
 """
     check_type_attribute_names(attributes, model)
 
 Return `attributes` if it is the [`ModelAttributes`](@ref) that a method of
 [`attribute_names`](@ref) must return, and throw an informative error otherwise. `model` is
-the cognitive model or the environment model whose method returned it.
+the cognitive model or the environment model whose method returned it. Used wherever the
+names of a model are read: by the checks of simulations, instantiated models, save histories
+and fitted sessions, and by the display of a model.
 """
 function check_type_attribute_names(attributes::ModelAttributes, ::AbstractModel)
     return attributes
@@ -30,26 +35,43 @@ function check_type_attribute_names(attributes, model::AbstractModel)
 end
 
 """
+    check_model_output(output, model)
+
+Return `output` if it is the `ModelOutput` that an `apply_model` method of `model` must
+return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
+[`simulate!`](@ref) and the Turing.jl session.
+"""
+function check_model_output(output::ModelOutput, ::AbstractModel)
+    return output
+end
+
+#Untyped, so that there is always a method, whatever the model is inferred as
+function check_model_output(output, model)
+    return error(
+        "The apply_model method of $(describe_model(model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
+    )
+end
+
+"""
     has_attribute_names(model)
 
 Return whether `model`, a cognitive model or an environment model, has its own method of
-[`attribute_names`](@ref), instead of the fallback which throws.
+[`attribute_names`](@ref), instead of the fallback which throws. Used by the display of a
+model, which shows one without a method of its own as `not specified`.
 """
 function has_attribute_names(model::AbstractModel)
     method_signature = which(attribute_names, (typeof(model),)).sig
     return method_signature != Tuple{typeof(attribute_names),AbstractModel}
 end
 
+## Comparing names ##
 """
     has_name(name, names)
     has_every_name(names, other_names)
 
 Return whether `name` is among the tuple `names`, and whether every name in the tuple
-`names` is among `other_names`.
-
-Both are unrolled over the names, so that the compiler decides them from the names alone
-when it knows them, which it doesn't for `issubset` and `issetequal` with more than one
-name.
+`names` is among `other_names`. Used by [`unique_names`](@ref), and by the checks that a
+name map, a save history or the data has names that a model lists.
 """
 has_name(name::Symbol, names::Tuple{}) = false
 function has_name(name::Symbol, names::Tuple)
@@ -64,18 +86,22 @@ end
 """
     same_names(names, other_names)
 
-Return whether two tuples of names have the same names, in any order.
+Return whether two tuples of names have the same names, in any order. Used by the checks of
+names in simulations and fitted sessions, such as [`check_names_fit`](@ref) and
+[`check_match_attribute_names`](@ref).
 """
 function same_names(names, other_names)
     return has_every_name(names, other_names) && has_every_name(other_names, names)
 end
 
+## Checking values against a model's names ##
 """
     check_match_attribute_names(model, parameters, state, previous_output)
 
 Throw an informative error if the names of the parameters, of the previous output, or of a
 state that is a `NamedTuple`, aren't those that [`attribute_names`](@ref) lists for `model`,
-a cognitive model or an environment model.
+a cognitive model or an environment model. Used by [`InstantiatedModel`](@ref),
+[`simulate`](@ref) and the Turing.jl session, before anything runs.
 """
 function check_match_attribute_names(
     model::AbstractModel, parameters, state, previous_output
@@ -113,7 +139,8 @@ end
 
 Throw an informative error if `input`, given to a model without the other side of a
 simulation, isn't a `NamedTuple` with every input that [`attribute_names`](@ref) lists for
-`model`. It can have more than those.
+`model`. It can have more than those. Used by [`simulate`](@ref) and [`simulate!`](@ref) on
+a single input.
 """
 function check_input_names(model::AbstractModel, input)
     attributes = check_type_attribute_names(attribute_names(model), model)
@@ -127,13 +154,16 @@ function check_input_names(model::AbstractModel, input)
     return nothing
 end
 
+## Outputs and inputs before the first timestep ##
 """
     initial_output(model)
     initial_input(model)
 
 Return the output and the input from before the first timestep: a `NamedTuple` with the
 output or the input names that [`attribute_names`](@ref) lists for `model`, a cognitive
-model or an environment model, each [`BeforeFirstTimestep`](@ref).
+model or an environment model, each [`BeforeFirstTimestep`](@ref). Used wherever a model
+starts: by [`InstantiatedModel`](@ref), [`reset!`](@ref), [`simulate`](@ref) and fitted
+sessions, for the previous output and for the output distributions saved as timestep 0.
 """
 function initial_output(model::AbstractModel)
     return outputs_before_first_timestep(
@@ -152,8 +182,8 @@ end
     inputs_before_first_timestep(attributes)
 
 Return a `NamedTuple` with the output or the input names in `attributes`, a
-[`ModelAttributes`](@ref), each [`BeforeFirstTimestep`](@ref). The names are read from the
-type, so that the `NamedTuple` is known at compile time.
+[`ModelAttributes`](@ref), each [`BeforeFirstTimestep`](@ref). Used by
+[`initial_output`](@ref) and `initial_input`.
 """
 function outputs_before_first_timestep(
     ::ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs}
@@ -167,98 +197,19 @@ function inputs_before_first_timestep(
     return NamedTuple{Tinputs}(map(_ -> BeforeFirstTimestep(), Tinputs))
 end
 
+## Displaying models ##
 """
-    check_names_fit(cognitive_model, environment, observation_map=nothing,
-                    action_map=nothing)
-
-Throw an informative error if `cognitive_model` and `environment` can't be simulated
-together. Without a map, the outputs of each must be the inputs of the other in
-[`attribute_names`](@ref): the observations the environment gives are what the cognitive
-model lists as its inputs, and the actions the cognitive model gives are what the
-environment lists as its inputs. With a [`NameMap`](@ref) for the observations or the
-actions, the map must take names the giver lists, and give exactly the names the receiver
-lists.
-
-The names are in the types, so the check is decided at compile time and costs nothing.
-"""
-function check_names_fit(
-    cognitive_model::AbstractModel,
-    environment::AbstractModel,
-    observation_map=nothing,
-    action_map=nothing,
-)
-    cognitive_attributes = check_type_attribute_names(
-        attribute_names(cognitive_model), cognitive_model
-    )
-    environment_attributes = check_type_attribute_names(
-        attribute_names(environment), environment
-    )
-    check_observations_fit(
-        cognitive_model,
-        environment,
-        cognitive_attributes.inputs,
-        environment_attributes.outputs,
-        observation_map,
-    )
-    check_actions_fit(
-        cognitive_model,
-        environment,
-        cognitive_attributes.outputs,
-        environment_attributes.inputs,
-        action_map,
-    )
-    return nothing
-end
-
-"""
-    check_observations_fit(cognitive_model, environment, cognitive_model_names,
-                           environment_names, observation_map)
-    check_actions_fit(cognitive_model, environment, cognitive_model_names,
-                      environment_names, action_map)
-
-Throw an informative error if the observations `environment` gives, its outputs, don't fit
-those `cognitive_model` lists as its inputs, or the actions `cognitive_model` gives, its
-outputs, don't fit those `environment` lists as its inputs, as [`check_names_fit`](@ref)
-describes. The methods for a [`NameMap`](@ref) are with the simulation code, where that type
-is defined.
-"""
-function check_observations_fit(
-    cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing
-)
-    if !same_names(cognitive_model_names, environment_names)
-        throw(
-            ArgumentError(
-                "$(uppercasefirst(describe_model(cognitive_model))) lists the observations $cognitive_model_names as its inputs, but $(describe_model(environment)) gives $environment_names. Without a map, the two must list the same observations. A NameMap as observation_map can select and rename them.",
-            ),
-        )
-    end
-    return nothing
-end
-
-#Without a map, the actions the cognitive model gives must be those the environment lists as its inputs. The method above is for the observations
-function check_actions_fit(
-    cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing
-)
-    if !same_names(cognitive_model_names, environment_names)
-        throw(
-            ArgumentError(
-                "$(uppercasefirst(describe_model(cognitive_model))) gives the actions $cognitive_model_names, but $(describe_model(environment)) lists $environment_names as its inputs. Without a map, the two must list the same actions. A NameMap as action_map can select and rename them.",
-            ),
-        )
-    end
-    return nothing
-end
-
-"""
-    print_attribute_names(io, attributes)
+    print_attribute_names(io, attributes; shorten=false)
 
 Print a line for each kind of attribute in `attributes`, a [`ModelAttributes`](@ref), with
-`none` if it has no names of that kind.
+`none` if it has no names of that kind. With `shorten`, a kind with more names than
+[`shows_every_name`](@ref) allows shows only how many there are.
 
 The `show` methods of a `ModelAttributes`, of a cognitive model and of an environment model
-each print a header of their own, and then these lines.
+each print a header of their own, and then these lines. Only those of the models shorten
+them, since a `ModelAttributes` is where the full lists are read.
 """
-function print_attribute_names(io::IO, attributes::ModelAttributes)
+function print_attribute_names(io::IO, attributes::ModelAttributes; shorten::Bool=false)
     for (kind, names) in (
         ("Parameters", attributes.parameters),
         ("States", attributes.states),
@@ -266,7 +217,52 @@ function print_attribute_names(io::IO, attributes::ModelAttributes)
         ("Outputs", attributes.outputs),
     )
         print(io, "\n", kind, ": ")
-        isempty(names) ? print(io, "none") : join(io, names, ", ")
+        if isempty(names)
+            print(io, "none")
+        elseif shorten && !shows_every_name(io, names)
+            print(io, length(names), " (see attribute_names)")
+        else
+            join(io, names, ", ")
+        end
+    end
+    return nothing
+end
+
+"""
+    shows_every_name(io, names)
+
+Return whether a display on `io` lists every one of `names`: always when `io` isn't limited,
+as when printing to a file, and otherwise when there are at most five. Used by the `show`
+methods of a model and of an [`InstantiatedModel`](@ref), which give how many there are
+instead.
+"""
+shows_every_name(io::IO, names) = !get(io, :limit, false) || length(names) <= 5
+
+"""
+    print_current_values(io, label, current_values, field_name)
+
+Print a line with `label` and `current_values`, the fields of a model or the parameters or
+the state of an [`InstantiatedModel`](@ref): each name with its value when they are a
+`NamedTuple`, `none` when it is empty, and only how many there are, with where to read them,
+when [`shows_every_name`](@ref) doesn't allow listing them all. A state that isn't a
+`NamedTuple` is printed as it is. Values are printed compactly, and large arrays are
+shortened in the REPL. Used by the `show` methods of a model and of an `InstantiatedModel`.
+"""
+function print_current_values(io::IO, label, current_values, field_name)
+    print(io, "\n", label, ": ")
+    compact_io = IOContext(io, :compact => true)
+    if current_values isa NamedTuple && isempty(current_values)
+        print(io, "none")
+    elseif current_values isa NamedTuple && !shows_every_name(io, keys(current_values))
+        print(io, length(current_values), " (see ", field_name, ")")
+    elseif current_values isa NamedTuple
+        for (i, name) in enumerate(keys(current_values))
+            i > 1 && print(io, ", ")
+            print(io, name, " = ")
+            show(compact_io, current_values[name])
+        end
+    else
+        show(compact_io, current_values)
     end
     return nothing
 end
@@ -278,68 +274,24 @@ function Base.show(io::IO, ::MIME"text/plain", attributes::ModelAttributes)
     return nothing
 end
 
-"""
-    show(io::IO, ::MIME"text/plain", model::AbstractModel)
-
-Print a summary of `model`, a cognitive model or an environment model, and the names of its
-attributes.
-
-This is what the REPL and notebooks show. Everywhere else, such as in `print` or inside a
-vector, a model is printed on one line by Julia's default `show(io, model)`.
-
-The attributes show as `not specified` if `model` has no method of
-[`attribute_names`](@ref), and a kind of attribute shows as `none` if the model has no names
-of that kind.
-
-# Examples
-```jldoctest
-julia> struct ExampleModel <: AbstractCognitiveModel end
-
-julia> function CognitiveModeling.attribute_names(model::ExampleModel)
-           return ModelAttributes(;
-               parameters = (:learning_rate, :noise),
-               states = :expected_reward,
-               inputs = :reward,
-               outputs = (),
-           )
-       end;
-
-julia> ExampleModel()
--- Cognitive model --
-Type: ExampleModel
-Parameters: learning_rate, noise
-States: expected_reward
-Inputs: reward
-Outputs: none
-
-julia> struct ExampleEnvironment <: AbstractEnvironmentModel end
-
-julia> function CognitiveModeling.attribute_names(environment::ExampleEnvironment)
-           return ModelAttributes(;
-               parameters = :reward_probability,
-               states = (),
-               inputs = :choice,
-               outputs = :reward,
-           )
-       end;
-
-julia> ExampleEnvironment()
--- Environment model --
-Type: ExampleEnvironment
-Parameters: reward_probability
-States: none
-Inputs: choice
-Outputs: reward
-```
-"""
+#Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, and the names of its attributes
 function Base.show(io::IO, ::MIME"text/plain", model::AbstractModel)
 
     #Print the kind and the type of the model
-    print(io, model_header(model), "\nType: ", nameof(typeof(model)))
+    print(io, "-- ", uppercasefirst(model_kind(model)), " --")
+    print(io, "\nType: ", nameof(typeof(model)))
+
+    #Print the values of the model's fields, if it has any
+    if fieldcount(typeof(model)) > 0
+        field_names = fieldnames(typeof(model))
+        fields = NamedTuple{field_names}(map(name -> getfield(model, name), field_names))
+        print_current_values(io, "Fields", fields, "fieldnames")
+    end
 
     #Print that the model has no method of its own for its names, or the names
     if has_attribute_names(model)
-        print_attribute_names(io, check_type_attribute_names(attribute_names(model), model))
+        attributes = check_type_attribute_names(attribute_names(model), model)
+        print_attribute_names(io, attributes; shorten=true)
     else
         print(io, "\nAttributes: not specified")
     end
@@ -347,12 +299,19 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractModel)
     return nothing
 end
 
-"""
-    model_header(model)
+#Shows the type and the kind of a model on one line, as inside a vector
+function Base.show(io::IO, model::AbstractModel)
+    print(io, nameof(typeof(model)), " (", model_kind(model), ")")
+    return nothing
+end
 
-Return the first line that `show` prints for a model: which kind of model it is. Used by the
-`show` method of an [`AbstractModel`](@ref).
 """
-model_header(::AbstractCognitiveModel) = "-- Cognitive model --"
-model_header(::AbstractEnvironmentModel) = "-- Environment model --"
-model_header(::AbstractModel) = "-- Model --"
+    model_kind(model)
+
+Return which kind of model `model` is, as a display names it: `"cognitive model"`,
+`"environment model"`, or `"model"` for one of neither kind. Used by the `show` methods of a
+model and of an [`InstantiatedModel`](@ref).
+"""
+model_kind(::AbstractCognitiveModel) = "cognitive model"
+model_kind(::AbstractEnvironmentModel) = "environment model"
+model_kind(::AbstractModel) = "model"

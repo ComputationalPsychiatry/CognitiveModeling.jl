@@ -56,8 +56,7 @@ end
 
 Turing.jl model which samples one parameter at a time from `priors`, each once, with
 [`turing_sample_shared_parameter`](@ref) under the parameter's name, and returns them in a
-`NamedTuple`, each as a vector with that value for each of `n_sessions` sessions. The names
-are taken from the type of `priors`, so that the result is compiled knowing them. Used by
+`NamedTuple`, each as a vector with that value for each of `n_sessions` sessions. Used by
 [`IdenticalSessionParameters`](@ref).
 """
 Turing.@model function turing_sample_identical_parameters(
@@ -95,8 +94,7 @@ end
 
 Turing.jl model which samples one parameter at a time from `priors`, each for every session
 with [`turing_sample_parameter_across_sessions`](@ref) under the parameter's name, and
-returns them in a `NamedTuple`. The names are taken from the type of `priors`, so that the
-result is compiled knowing them. Used by [`IndependentSessionParameters`](@ref).
+returns them in a `NamedTuple`. Used by [`IndependentSessionParameters`](@ref).
 """
 Turing.@model function turing_sample_independent_parameters(
     priors::NamedTuple{names}, n_sessions

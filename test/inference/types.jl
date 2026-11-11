@@ -89,6 +89,24 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test CognitiveModeling.recorded_observation_names(session_info) === Val(())
     end
 
+    @testset "A save history can only select names that the models list" begin
+        @test_throws "The SaveHistory selects the states (:surprise,), but attribute_names lists the states of a cognitive model of type SessionCounter" SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, 0.0, 1.0]),
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            cognitive_save_history=SaveHistory(; states=:surprise),
+        )
+        @test_throws "The SaveHistory selects the outputs (:cue,), but attribute_names lists the outputs of an environment model of type GivesReward" SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, MissingValue(), 1.0]),
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            environment=GivesReward(),
+            environment_save_history=SaveHistory(; outputs=:cue),
+        )
+    end
+
     @testset "The settings are kept as given" begin
         session_info = SessionInfo(
             SessionCounter(),

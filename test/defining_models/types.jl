@@ -75,6 +75,33 @@ using Random: Xoshiro, default_rng
         ).who_starts === EnvironmentStarts()
     end
 
+    @testset "ModelContext takes its arguments by name too, with the same defaults" begin
+        rng = Xoshiro(1)
+        @test ModelContext(;
+            input=observation,
+            previous_state=state,
+            previous_output=previous_action,
+            parameters,
+            timestep_size=0.5,
+            rng,
+            who_starts=AgentStarts(),
+        ) === ModelContext(
+            observation, state, previous_action, parameters, 0.5, rng, AgentStarts()
+        )
+        by_name = ModelContext(;
+            input=observation,
+            previous_state=state,
+            previous_output=previous_action,
+            parameters,
+        )
+        @test by_name.timestep_size === 1
+        @test by_name.rng === default_rng()
+        @test by_name.who_starts === UnknownWhoStarts()
+        @test_throws UndefKeywordError ModelContext(;
+            input=observation, previous_state=state, parameters
+        )
+    end
+
     @testset "ModelOutput only takes named output distributions" begin
         @test ModelOutput((; choice=0.7)).output_distribution === (; choice=0.7)
         @test ModelOutput((;)).output_distribution === (;)
@@ -114,6 +141,15 @@ using Random: Xoshiro, default_rng
             ModelContext
         @test @inferred(
             ModelContext(previous_action, state, observation, parameters, 0.5)
+        ) isa ModelContext
+        @test @inferred(
+            ModelContext(;
+                input=observation,
+                previous_state=state,
+                previous_output=previous_action,
+                parameters,
+                timestep_size=0.5,
+            )
         ) isa ModelContext
         @test @inferred(ModelOutput((; choice=0.7))) isa ModelOutput
         @test @inferred(ModelOutput((; choice=0.7), state)) isa ModelOutput

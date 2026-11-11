@@ -42,7 +42,7 @@ Turing.jl model which [`turing_full_model`](@ref) creates, with the same argumen
 parameters models for the parameters of the cognitive model and of the environment model,
 the sessions with those parameters, and the optional downstream model. It is a function of
 its own so that `turing_full_model` can check the parameters models when the model is made,
-outside the model's body.
+outside the model's body. Used by [`turing_full_model`](@ref).
 """
 Turing.@model function turing_run_full_model(
     cognitive_parameters_model,
@@ -171,11 +171,11 @@ Turing.jl model which runs every session in `sessions_info` as a submodel with t
 `session[i]`, and returns a vector with what each returned. The first session runs outside
 the loop, so that the vector has its type. Sessions of one type can still save values of
 different types, such as an action that is `NoAction()` in one session only, and a session
-whose values have another type widens the vector, as [`store_output!`](@ref) does. With
+whose values have another type widens the vector, as [`store_value!`](@ref) does. With
 [`NoParallelisation`](@ref) the sessions run one after the other, and with
 [`ParallelSessions`](@ref) over the threads Julia was started with, which needs the model
 that is evaluated to be marked thread-safe, since the log density is silently wrong
-otherwise.
+otherwise. Used by [`turing_multiple_behavioural_sessions`](@ref).
 """
 Turing.@model function turing_run_sessions(
     ::NoParallelisation, sessions_info, cognitive_parameters, environment_parameters
@@ -204,7 +204,7 @@ Turing.@model function turing_run_sessions(
             false,
         )
         #A session whose saved values have another type widens the vector
-        saved_values = store_output!(saved_values, saved, i)
+        saved_values = store_value!(saved_values, saved, i)
     end
     return saved_values
 end
@@ -260,7 +260,7 @@ end
 
 Return `saved_values`, what each session saved, with the values in
 `saved_with_other_types` put in their places, widening the vector as
-[`store_output!`](@ref) does. A session whose saved values didn't fit the type of
+[`store_value!`](@ref) does. A session whose saved values didn't fit the type of
 `saved_values` has them in its place in `saved_with_other_types`, and is left unassigned in
 `saved_values`. When there are none, `saved_values` is returned as it is. Used by
 [`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the threads are done.
@@ -279,7 +279,7 @@ function include_other_types(saved_values::Vector, saved_with_other_types::Vecto
         else
             saved_values[i]
         end
-        widened = store_output!(widened, saved, i)
+        widened = store_value!(widened, saved, i)
     end
     return widened
 end
@@ -410,7 +410,7 @@ once at the end, as observed values. Before each timestep from
 what it saved up to it, which is an error when the data continues. It returns what the
 session saved, as [`turing_behavioural_session`](@ref) describes. Both methods of that model
 call this one, after setting up the parameters and the initial states with or without an
-environment.
+environment. Used by [`turing_behavioural_session`](@ref).
 """
 Turing.@model function turing_run_timesteps(
     session_info, cognitive_parameters, environment_parameters, previous
@@ -651,9 +651,9 @@ end
                             environment_parameters)
 
 Throw an informative error if the [`stopping_criterion`](@ref) of a model of the session is
-already met before its first timestep, as [`check_not_ended`](@ref) does for a simulation.
-Used by [`turing_run_timesteps`](@ref) when the criterion is checked from the first
-timestep.
+already met before its first timestep, as
+[`check_simulation_stopping_criterion_not_met`](@ref) does for a simulation. Used by
+[`turing_run_timesteps`](@ref) when the criterion is checked from the first timestep.
 """
 function check_session_not_ended(
     session_info::SessionInfo{<:Any,NoEnvironment},
@@ -661,7 +661,7 @@ function check_session_not_ended(
     cognitive_parameters,
     environment_parameters,
 )
-    check_not_ended(
+    check_stopping_criterion_not_met(
         session_info.cognitive_model, previous.cognitive_state, cognitive_parameters
     )
     return nothing
@@ -672,10 +672,10 @@ function check_session_not_ended(
     cognitive_parameters,
     environment_parameters,
 )
-    check_not_ended(
+    check_stopping_criterion_not_met(
         session_info.environment, previous.environment_state, environment_parameters
     )
-    check_not_ended(
+    check_stopping_criterion_not_met(
         session_info.cognitive_model, previous.cognitive_state, cognitive_parameters
     )
     return nothing
@@ -720,7 +720,8 @@ distribution of the observation and which observations are recorded. Each model 
 environment, the observation comes from the data: the model acts on this timestep's
 observation when the environment starts, and on the previous one when the agent starts. With
 an environment, the environment gives the observation in response to the action, before the
-model acts when the environment starts, and after when the agent starts.
+model acts when the environment starts, and after when the agent starts. Used by
+[`turing_run_timesteps`](@ref).
 """
 Turing.@model function turing_behavioural_timestep(
     session_info::SessionInfo{<:Any,NoEnvironment},
@@ -864,6 +865,7 @@ Turing.@model function turing_behavioural_timestep(
     )
 end
 
+#The row is taken here, since it can have one of two types when a column holds a MissingValue, which the compiler splits within a function but not across a model's arguments
 """
     turing_model_timestep(model, context, data_columns, t)
 
@@ -875,9 +877,7 @@ recorded, filled in from what the model gave where they are [`MissingValue`](@re
 happened. It returns the output, the model's new state, the distribution it gave for the
 output and which outputs are recorded on the timestep, as
 [`recorded_on_timestep`](@ref) gives it, so that the recorded values can be scored against
-the distributions at the end of the session. The row is taken here and not given, since it
-can have one of two types when a column holds a `MissingValue`, which the compiler splits
-within a function but not across a model's arguments. Used by
+the distributions at the end of the session. The row is taken here and not given. Used by
 [`turing_behavioural_timestep`](@ref).
 """
 Turing.@model function turing_model_timestep(model, context, data_columns, t)
@@ -909,9 +909,9 @@ Turing.jl model which fills in the outputs of one model on one timestep: each va
 [`MissingValue`](@ref) in `data` is imputed as a latent variable named after it, such as
 `choice.imputed`, with the distribution the model gives for it in `distributions`, and the
 rest are taken from the data. The data is returned as it is when nothing is missing on the
-timestep, which is decided at compile time when nothing can be. For an environment it runs
-under the prefix `environment`, so that an observation and an action with the same name get
-a latent variable each.
+timestep. For an environment it runs under the prefix `environment`, so that an observation
+and an action with the same name get a latent variable each. Used by
+[`turing_model_timestep`](@ref).
 """
 Turing.@model function turing_impute_missing_values(data, distributions)
     if has_missing_value(data)
@@ -925,9 +925,8 @@ end
 """
     turing_impute_each_value(data, distributions)
 
-Turing.jl model which goes through the names of `data` one at a time, with each name taken
-from the type, so that the result is compiled knowing the names whether a value is missing
-or not, and imputes each value with [`turing_impute_value`](@ref).
+Turing.jl model which goes through the names of `data` one at a time, and imputes each value
+with [`turing_impute_value`](@ref). Used by [`turing_impute_missing_values`](@ref).
 """
 Turing.@model function turing_impute_each_value(
     data::NamedTuple{names}, distributions
@@ -954,7 +953,7 @@ end
 Turing.jl model for one value of the data: a value that is there is taken as it is, and a
 [`MissingValue`](@ref) is a latent variable named `imputed` with `distribution`, the value
 of a [`Deterministic`](@ref), or the marker itself when the model gives [`NoAction`](@ref)
-or [`NoObservation`](@ref) on that timestep.
+or [`NoObservation`](@ref) on that timestep. Used by [`turing_impute_each_value`](@ref).
 """
 Turing.@model function turing_impute_value(data_value, distribution)
     return data_value

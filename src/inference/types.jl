@@ -120,6 +120,9 @@ a chain: a session is fitted fastest when it saves nothing, and a chain from tha
 the states through `returned` with the model of a copy that saves them, since the two have
 the same variables. See [`turing_full_model`](@ref).
 
+In the REPL, a session shows a summary on one line each: its models, its number of
+timesteps, the names in its data and who starts.
+
 # Examples
 ```jldoctest
 julia> struct Counter <: AbstractCognitiveModel end
@@ -202,6 +205,9 @@ function SessionInfo(
     )
 end
 
+#A session without an environment has no environment history whose names could be checked
+check_savehistory_selection_names(::SaveHistory, ::NoEnvironment) = nothing
+
 """
     prepare_session(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
@@ -242,6 +248,10 @@ function prepare_session(
     #Check the data against the names the cognitive model lists, and that the environment fits
     n_timesteps = check_data(cognitive_model, observations, actions)
     check_environment_fits(cognitive_model, environment, observations)
+
+    #Check that the save histories select names that the models list
+    check_savehistory_selection_names(cognitive_save_history, cognitive_model)
+    check_savehistory_selection_names(environment_save_history, environment)
 
     #A vector of timestep sizes must have one size for each timestep
     if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_timesteps
@@ -352,6 +362,9 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
 
 The second form takes sessions that are already prepared. Each argument is kept in a field
 of the same name.
+
+In the REPL, the sessions show a summary on one line each: how many there are, and the
+models and the names in the data of the first.
 
 # Examples
 ```jldoctest
