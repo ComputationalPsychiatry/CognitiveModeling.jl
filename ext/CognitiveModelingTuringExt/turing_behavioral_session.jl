@@ -10,6 +10,8 @@ function CognitiveModeling.turing_full_model(
     sessions_info::MultipleSessionsInfo;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
+    fixed_cognitive_parameters::NamedTuple=(;),
+    fixed_environment_parameters::NamedTuple=(;),
     catch_invalid_parameters::Bool=false,
     parallelization=NoParallelization(),
     include_submodel_prefixes::Bool=false,
@@ -22,12 +24,14 @@ function CognitiveModeling.turing_full_model(
     )
     warn_if_saving_without_downstream_model(sessions_info, downstream_model)
 
-    #Prepare the parts once, as every inference backend does: the session parameter models for the sessions, and the sessions with their environment running when its parameters are sampled
+    #Prepare the parts once, as every inference backend does: the session parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled
     prepared = prepare_full_model(
         cognitive_parameters_model,
         sessions_info;
         environment_parameters_model,
         downstream_model,
+        fixed_cognitive_parameters,
+        fixed_environment_parameters,
     )
 
     #Warn when a prior or a transformation can give a parameter a value outside its domain

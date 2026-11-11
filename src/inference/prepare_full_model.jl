@@ -3,7 +3,9 @@
 """
     prepare_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
                        environment_parameters_model=NoParameters(),
-                       downstream_model=NoDownstreamModel())
+                       downstream_model=NoDownstreamModel(),
+                       fixed_cognitive_parameters=(;),
+                       fixed_environment_parameters=(;))
 
 Prepare the parts of a full model once, before an inference backend makes its model of
 them, and return them in a `NamedTuple` with `cognitive_parameters_model`,
@@ -12,12 +14,16 @@ inference backend, whose full model calls it, so that what doesn't change betwee
 evaluations of the model is worked out once.
 
 It checks that the two session parameter models and the downstream model are of the right
-kind. It checks the parameters that each session parameter model gives, when
-[`CognitiveModeling.parameter_names`](@ref) knows them, against those of the cognitive model
-and of the environment model: a parameter that the model doesn't list is an error, and so is
-one that the model lists which is neither given nor has a default value, unless it is a
-parameter of an environment that no session runs. It prepares each session parameter model
-for the sessions with
+kind. The values in `fixed_cognitive_parameters` and `fixed_environment_parameters`, such as
+`(; initial_value = 0.3)`, are given to every session for the parameters they name: each
+session parameter model is combined with them in a [`CompositeSessionParameters`](@ref), so
+a parameter is either fixed or given by its session parameter model, and a fixed parameter
+must be one that the model lists. It checks the parameters that each session parameter model
+gives, when [`CognitiveModeling.parameter_names`](@ref) knows them, against those of the
+cognitive model and of the environment model: a parameter that the model doesn't list is an
+error, and so is one that the model lists which is neither given nor has a default value,
+unless it is a parameter of an environment that no session runs. It prepares each session
+parameter model for the sessions with
 [`CognitiveModeling.prepare_parameters_model`](@ref). When the environment's parameters are
 sampled, every session with an environment runs it, so that the observations in the data
 inform them.
@@ -27,12 +33,28 @@ function prepare_full_model(
     sessions_info::MultipleSessionsInfo;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
+    fixed_cognitive_parameters::NamedTuple=(;),
+    fixed_environment_parameters::NamedTuple=(;),
 )
 
     #Check that each part is of the right kind
     check_is_session_parameters_model(cognitive_parameters_model)
     check_is_session_parameters_model(environment_parameters_model)
     check_is_downstream_model(downstream_model)
+
+    #Combine each session parameter model with the values that are fixed, which every session then gets next to the parameters the model gives
+    cognitive_parameters_model = with_fixed_parameters(
+        cognitive_parameters_model,
+        fixed_cognitive_parameters,
+        first(sessions_info.sessions).cognitive_model,
+        "fixed_cognitive_parameters",
+    )
+    environment_parameters_model = with_fixed_parameters(
+        environment_parameters_model,
+        fixed_environment_parameters,
+        first(sessions_info.sessions).environment,
+        "fixed_environment_parameters",
+    )
 
     #When the environment's parameters are sampled, every session runs its environment, so that its observations inform them
     sessions_info = sessions_for_environment_parameters(
@@ -58,6 +80,85 @@ function prepare_full_model(
         ),
         downstream_model,
         sessions_info,
+    )
+end
+
+"""
+    with_fixed_parameters(parameters_model, fixed_parameters, model, keyword)
+
+Return `parameters_model`, a session parameter model, combined with the values in
+`fixed_parameters`, which every session gets for the parameters they name: a
+[`CompositeSessionParameters`](@ref) of its parts and a [`FixedSessionParameters`](@ref),
+or `parameters_model` itself when no values are fixed. It is an error when a fixed
+parameter isn't one that `model` lists, and when `parameters_model` gives it too, which is
+checked here when [`parameter_names`](@ref) knows its parameters, and when the full model
+runs otherwise. `keyword` is the name of the keyword argument, for the errors. Used by
+[`prepare_full_model`](@ref).
+"""
+function with_fixed_parameters(
+    parameters_model, fixed_parameters::NamedTuple, model, keyword::String
+)
+    isempty(fixed_parameters) && return parameters_model
+
+    #A fixed parameter must be one that the model lists
+    check_fixed_parameter_names(fixed_parameters, model, keyword)
+
+    #A parameter is either fixed or given by the session parameter model
+    given_names = parameter_names(parameters_model)
+    if given_names !== nothing
+        shared_names = Tuple(name for name in keys(fixed_parameters) if name in given_names)
+        if !isempty(shared_names)
+            throw(
+                ArgumentError(
+                    "$keyword fixes the parameters $shared_names, which the session parameter model, a $(nameof(typeof(parameters_model))), gives too. A parameter is either fixed or given by the session parameter model.",
+                ),
+            )
+        end
+    end
+
+    #Without parameters of its own, the fixed values are all there is. Otherwise they join the model, or the parts of a composite
+    parameters_model isa NoParameters && return FixedSessionParameters(fixed_parameters)
+    parts = if parameters_model isa CompositeSessionParameters
+        parameters_model.parts
+    else
+        (parameters_model,)
+    end
+    return CompositeSessionParameters(parts..., FixedSessionParameters(fixed_parameters))
+end
+
+"""
+    check_fixed_parameter_names(fixed_parameters, model, keyword)
+
+Throw an informative error if `fixed_parameters`, the values given with the keyword
+argument `keyword`, name a parameter that `model`, a cognitive model or an environment
+model, doesn't list in [`attribute_names`](@ref), or if they are given for sessions without
+an environment, where `model` is `NoEnvironment()`. Used by
+[`with_fixed_parameters`](@ref).
+"""
+function check_fixed_parameter_names(
+    fixed_parameters::NamedTuple, model::AbstractTimestepModel, keyword::String
+)
+    listed_names = check_type_attribute_names(attribute_names(model), model).parameters
+    unknown_names = Tuple(
+        name for name in keys(fixed_parameters) if !(name in listed_names)
+    )
+    if !isempty(unknown_names)
+        throw(
+            ArgumentError(
+                "$keyword fixes the parameters $unknown_names, which $(describe_model(model)) doesn't list. It lists the parameters $listed_names.",
+            ),
+        )
+    end
+    return nothing
+end
+
+function check_fixed_parameter_names(
+    fixed_parameters::NamedTuple, ::NoEnvironment, keyword::String
+)
+    return throw(
+        ArgumentError(
+            "$keyword fixes the parameters $(keys(fixed_parameters)), but the sessions have no environment model.",
+        ),
     )
 end
 

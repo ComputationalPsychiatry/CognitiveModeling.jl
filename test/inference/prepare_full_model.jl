@@ -109,4 +109,47 @@ end
             sampled, sessions_info; downstream_model=:none
         )
     end
+    @testset "Fixed values join the session parameter model in a composite, and are checked against the model" begin
+        sessions_info = sessions_to_prepare()
+        own = ParametersModelOfOwn()
+        fixed = FixedSessionParameters((; probability=0.3))
+        #Without parameters of its own, the fixed values are all there is
+        prepared = CognitiveModeling.prepare_full_model(
+            NoParameters(), sessions_info; fixed_cognitive_parameters=(; probability=0.3)
+        )
+        @test prepared.cognitive_parameters_model === fixed
+        #A model of one's own keeps its place next to the fixed values, and the parts of a composite stay side by side
+        prepared = CognitiveModeling.prepare_full_model(
+            own, sessions_info; fixed_cognitive_parameters=(; probability=0.3)
+        )
+        @test prepared.cognitive_parameters_model.parts === (own, fixed)
+        @test CognitiveModeling.with_fixed_parameters(
+            CompositeSessionParameters(own, own),
+            (; probability=0.3),
+            SessionCounter(),
+            "fixed_cognitive_parameters",
+        ).parts === (own, own, fixed)
+        #Nothing fixed leaves the model as it is
+        @test CognitiveModeling.with_fixed_parameters(
+            own, (;), SessionCounter(), "fixed_cognitive_parameters"
+        ) === own
+        #The environment's parameters are fixed in the same way, which doesn't make the sessions include it
+        with_environment = sessions_to_prepare(; environment=GivesReward())
+        prepared = CognitiveModeling.prepare_full_model(
+            sampled, with_environment; fixed_environment_parameters=(; scale=2.0)
+        )
+        @test prepared.environment_parameters_model ===
+            FixedSessionParameters((; scale=2.0))
+        @test !any(session -> session.includes_environment, prepared.sessions_info.sessions)
+        #A parameter is either fixed or given, a fixed one must be listed, and sessions without an environment take none for it
+        @test_throws "fixed_cognitive_parameters fixes the parameters (:probability,), which the session parameter model, a IndependentSessionParameters, gives too. A parameter is either fixed or given by the session parameter model." CognitiveModeling.prepare_full_model(
+            sampled, sessions_info; fixed_cognitive_parameters=(; probability=0.3)
+        )
+        @test_throws "fixed_cognitive_parameters fixes the parameters (:bias,), which a cognitive model of type SessionCounter doesn't list. It lists the parameters (:probability,)." CognitiveModeling.prepare_full_model(
+            own, sessions_info; fixed_cognitive_parameters=(; bias=1.0)
+        )
+        @test_throws "fixed_environment_parameters fixes the parameters (:scale,), but the sessions have no environment model." CognitiveModeling.prepare_full_model(
+            sampled, sessions_info; fixed_environment_parameters=(; scale=1.0)
+        )
+    end
 end

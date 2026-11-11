@@ -269,6 +269,46 @@ end
               sessions_by_hand(FULL_TABLE, learning_rates, inverse_temperatures)
     end
 
+    @testset "Fixed parameters are given to every session, next to those of the session parameter model" begin
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
+        learning_rate_priors = IndependentSessionParameters((; learning_rate=Beta(2, 2)))
+        model = turing_full_model(
+            learning_rate_priors,
+            sessions_info;
+            fixed_cognitive_parameters=(; inverse_temperature=3.0),
+        )
+        learning_rates = [0.2, 0.3, 0.4]
+        given = Dict(@varname(learning_rate.session) => learning_rates)
+        @test collect(keys(rand(Xoshiro(1), model))) == [@varname(learning_rate.session)]
+        @test logjoint(model, given) ≈
+            sum(logpdf.(Beta(2, 2), learning_rates)) +
+              sessions_by_hand(FULL_TABLE, learning_rates, fill(3.0, 3))
+        #The fixed values are returned with the parameters of every session
+        @test returned(model, given).cognitive_parameters.inverse_temperature ==
+            fill(3.0, 3)
+        #It is the composite of the session parameter model and the fixed values
+        by_hand = turing_full_model(
+            CompositeSessionParameters(
+                learning_rate_priors, FixedSessionParameters((; inverse_temperature=3.0))
+            ),
+            sessions_info,
+        )
+        @test logjoint(model, given) ≈ logjoint(by_hand, given)
+        #A session parameter model of one's own takes them too, and a parameter can't be both fixed and given
+        with_own_model = turing_full_model(
+            SharedLearningRate(),
+            sessions_for_test(StartsFromParameter(); impute_missing_actions=false);
+            fixed_cognitive_parameters=(; initial_value=0.3),
+        )
+        @test returned(with_own_model, rand(Xoshiro(2), with_own_model)).cognitive_parameters.initial_value ==
+            fill(0.3, 3)
+        @test_throws "fixed_cognitive_parameters fixes the parameters (:learning_rate,), which the session parameter model, a IndependentSessionParameters, gives too. A parameter is either fixed or given by the session parameter model." turing_full_model(
+            learning_rate_priors,
+            sessions_info;
+            fixed_cognitive_parameters=(; learning_rate=0.3),
+        )
+    end
+
     @testset "It returns the parameters of every session, what each session saved, and what the downstream model returned" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,

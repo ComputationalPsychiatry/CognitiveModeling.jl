@@ -194,8 +194,10 @@ function turing_multiple_behavioral_sessions end
 """
     turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
                       environment_parameters_model=NoParameters(),
-                      downstream_model=NoDownstreamModel(), catch_invalid_parameters=false,
-                      parallelization=NoParallelization(), include_submodel_prefixes=false)
+                      downstream_model=NoDownstreamModel(),
+                      fixed_cognitive_parameters=(;), fixed_environment_parameters=(;),
+                      catch_invalid_parameters=false, parallelization=NoParallelization(),
+                      include_submodel_prefixes=false)
 
 Create the Turing.jl model which fits a cognitive model to several sessions, in three parts:
 `cognitive_parameters_model` gives or samples the cognitive parameters of every session, and
@@ -221,6 +223,11 @@ of a measurement on a state. This needs Turing.jl to be loaded.
 - `downstream_model=NoDownstreamModel()`: a final submodel which is run after the sessions,
   such as for correlations with other kinds of data: a subtype of
   [`AbstractDownstreamModel`](@ref). The default samples nothing.
+- `fixed_cognitive_parameters::NamedTuple=(;)` and
+  `fixed_environment_parameters::NamedTuple=(;)`: values which every session gets for the
+  parameters they name, such as `(; initial_value = 0.3)`, while the session parameter
+  models give the others. A parameter is either fixed here or given by its session
+  parameter model, and a fixed parameter must be one that the model lists.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
   session rejects the sample instead of stopping the sampler, by running the sessions inside
   [`turing_catch_invalid_parameters`](@ref). If the first draw is rejected and the
