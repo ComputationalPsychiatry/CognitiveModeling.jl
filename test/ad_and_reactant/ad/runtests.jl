@@ -50,15 +50,6 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="ReverseDiff gives zero gradients, with no error, through deepcopy of a container of tracked numbers; fixed on its master branch on 2026-11-06, in pull request 329, and not yet released after v1.18.7",
-        backends=["ReverseDiff", "ReverseDiff, compiled tape"],
-        cases=[
-            "simulate with a state saved with deepcopy, environment starts",
-            "simulate with a state saved with deepcopy, agent starts",
-            "reading the history of an agent with a state saved with deepcopy",
-        ],
-    ),
-    (;
         bug="Enzyme reverse throws an EnzymeNoTypeError when numbers are copied into a vector whose element type is a Union: here when an observation is NoValue on some timesteps and the vector of saved observations is widened to hold it, and when a vector of timestep sizes is copied into the one simulate returns, which starts with BeforeFirstTimestep for timestep 0",
         backends=["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases=[

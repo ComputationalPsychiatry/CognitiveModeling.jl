@@ -35,11 +35,10 @@ These are bugs in the backends, which the package doesn't work around. Their tes
 marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
 `test/extensions/turing/ad`, so that the suites pass while the bug is there,
 and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, ReverseDiff
-1.18.7, Enzyme 0.13.218, Mooncake 0.5.67, Turing 0.49.0 and DynamicPPL 0.42.14.
+1.18.9, Enzyme 0.13.219, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
 
 | Backend | When | What happens | Status |
 |---|---|---|---|
-| ReverseDiff, with and without a compiled tape | `prepare_state_for_saving` using `deepcopy`, or `deepcopy` of any container which holds a tracked number | zero gradients, no error | reported as ReverseDiff.jl issue 327, and fixed on its master branch on 2026-11-06, not yet released after v1.18.7 |
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reported as Enzyme.jl issue 3912 |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reported as Enzyme.jl issue 3911 |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reported as Enzyme.jl issue 3911 |
@@ -67,6 +66,10 @@ These aren't failures of the package's own code, but a model can run into them.
   error, when it runs in a loop on values that differ between the timesteps. The `softmax`
   of LogExpFunctions.jl is right, and so is any softmax which keeps its exponentials in a
   variable and divides them by their sum. It is reported as Enzyme.jl issue 4030.
+- **ReverseDiff before 1.18.8 and `deepcopy`:** a `prepare_state_for_saving` method which
+  copies the state with `deepcopy` gives zero gradients, with no error, and so does
+  `deepcopy` of any container which holds a tracked number. It was reported as
+  ReverseDiff.jl issue 327, and is fixed from version 1.18.8 on.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.

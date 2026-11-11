@@ -239,8 +239,8 @@ function CognitiveModeling.attribute_names(model::LearnsInPlace)
     )
 end
 
-# The same model, which copies its state with deepcopy when it's saved. ReverseDiff v1.18.7 gives zero gradients through
-# deepcopy of a container of tracked numbers, which is fixed on its master branch: see KNOWN_FAILURES in ad/runtests.jl
+# The same model, which copies its state with deepcopy when it's saved. ReverseDiff gave zero gradients through deepcopy
+# of a container of tracked numbers before v1.18.8, which is why the environment of the AD suite asks for that version
 struct LearnsInPlaceWithDeepcopy <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters)
     return CognitiveModeling.initialize_state(LearnsInPlace(), parameters)
