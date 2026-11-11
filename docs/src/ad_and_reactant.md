@@ -39,13 +39,13 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, Revers
 
 | Backend | When | What happens | Status |
 |---|---|---|---|
-| ReverseDiff, with and without a compiled tape | `prepare_state_for_saving` using `deepcopy`, or `deepcopy` of any container which holds a tracked number | zero gradients, no error | fixed on ReverseDiff's master branch on 2026-11-06, not yet released after v1.18.7 |
-| Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reproduced without the package, to be reported |
-| Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reproduced without the package, to be reported |
-| Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reproduced without the package, to be reported |
-| Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reproduced without the package, to be reported; with a single timestep size, or `save_initial_values = false`, the sizes are right |
+| ReverseDiff, with and without a compiled tape | `prepare_state_for_saving` using `deepcopy`, or `deepcopy` of any container which holds a tracked number | zero gradients, no error | reported as ReverseDiff.jl issue 327, and fixed on its master branch on 2026-11-06, not yet released after v1.18.7 |
+| Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reported as Enzyme.jl issue 3912 |
+| Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reported as Enzyme.jl issue 3911 |
+| Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reported as Enzyme.jl issue 3911 |
+| Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoObservation` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reported as Enzyme.jl issue 4032; with a single timestep size, or `save_initial_values = false`, the sizes are right |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
-| Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session whose observations are `NoObservation` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | to be reported; an action that is `MissingValue` on some timesteps is fine |
+| Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session whose observations are `NoObservation` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine |
 
 A state which depends on the parameters from the start isn't affected, and neither is
 `simulate!` on single observations. A simulation where an observation isn't made on every
@@ -66,8 +66,7 @@ These aren't failures of the package's own code, but a model can run into them.
   `exp.(v .- maximum(v)) ./ sum(exp.(v .- maximum(v)))` gives wrong gradients, with no
   error, when it runs in a loop on values that differ between the timesteps. The `softmax`
   of LogExpFunctions.jl is right, and so is any softmax which keeps its exponentials in a
-  variable and divides them by their sum. It is reproduced without the package, and to be
-  reported.
+  variable and divides them by their sum. It is reported as Enzyme.jl issue 4030.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.
@@ -82,6 +81,12 @@ These aren't failures of the package's own code, but a model can run into them.
   is why [`turing_catch_invalid_parameters`](@ref) is only used when asked for, and
   a compiled ReverseDiff tape doesn't see the error it catches either, so the rejected
   parameters get a finite log density with no error.
+- **Catching invalid parameters:** [`turing_catch_invalid_parameters`](@ref), and a full
+  model with `catch_invalid_parameters = true`, work with ForwardDiff and with Enzyme.
+  Anything that uses what the model returns after a rejection, which is `nothing`, can't be
+  differentiated with Enzyme, so return or stop at once when it is `nothing`. Mooncake can't
+  differentiate a model with a `try` block at all, and a compiled ReverseDiff tape doesn't
+  see the error, so the rejected parameters get a finite log density with no warning.
 - **Types known when a session is compiled:** a session costs about 10 ns per timestep to
   evaluate, with or without latent variables, as long as every type is known when it is
   compiled. Earlier versions of the package built a `NamedTuple` from names only known at run

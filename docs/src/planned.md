@@ -21,6 +21,10 @@ This page lists what is planned and not written yet. The list will grow.
   Python package sbi too. A simulation of a cognitive model is what both need.
 - StanBlocks.jl, potentially, as another way to write the probabilistic model around a
   session.
+- GlobalSensitivity.jl, for Sobol sensitivity analyses of cognitive models: how much each
+  parameter, alone and together with the others, changes what a model does.
+- Cognitive models in continuous time, probably with DifferentialEquations.jl, whose states
+  change between the timesteps as well as on them.
 
 ## Fitting
 
@@ -30,9 +34,13 @@ This page lists what is planned and not written yet. The list will grow.
   that fills them in.
 - Session identifiers in the names of the variables of a fitted session, instead of
   `session[i]`, if a way is found that doesn't compile the session once per identifier.
+- A convenient way to fit a single session, with the full model or a variant of it.
+- Choosing a sampler for each parameter from whether it is discrete or continuous.
 
 ## Plots
 
+- A plot of the parameters of every fitted session, with the averages of their groups.
+- A plot of the trajectories of different fitted sessions over the timesteps.
 - Plots of a simulation, a history or a fitted session over time. The entry before the first
   timestep is timestep 0, at time 0, and its size is `BeforeFirstTimestep()`. The time of a
   later timestep is the sum of the sizes of the timesteps up to it.
