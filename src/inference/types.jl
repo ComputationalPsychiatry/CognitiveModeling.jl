@@ -1,21 +1,41 @@
-## Type for data where a value wasn't recorded ##
+## Types for data where a value wasn't recorded ##
 
 """
     MissingValue()
 
 Stand-in for an action or an observation that happened on a timestep but isn't in the data,
-as one entry of a column or a `NamedTuple`, such as `(; choice = MissingValue())`. Whether
-it is an action or an observation is given by where it is.
+and which fitting imputes, as one entry of a column or a `NamedTuple`, such as
+`(; choice = MissingValue())`. Whether it is an action or an observation is given by where
+it is.
 
 Fitting imputes a missing action by sampling it from the model's action distribution on that
-timestep, or passes it on as [`NoAction`](@ref) when it is told not to impute. It imputes a
-missing observation from what an environment model gives for the observation on that
-timestep: as a latent variable with that distribution, or as the value of a
-[`Deterministic`](@ref). [`NoAction`](@ref) and [`NoObservation`](@ref) are different: they
-say that nothing was done or observed on the timestep. Unlike `missing`, arithmetic on it is
-an error. A [`SessionInfo`](@ref) replaces `missing` in the data by it.
+timestep. It imputes a missing observation from what an environment model gives for the
+observation on that timestep: as a latent variable with that distribution, or as the value
+of a [`Deterministic`](@ref). A value that isn't in the data and isn't to be imputed is
+[`UnimputedMissingValue`](@ref) instead. [`NoAction`](@ref) and [`NoObservation`](@ref) are
+different: they say that nothing was done or observed on the timestep. Unlike `missing`,
+arithmetic on it is an error. By default, a [`SessionInfo`](@ref) replaces `missing` in the
+data by it.
 """
 struct MissingValue end
+
+"""
+    UnimputedMissingValue()
+
+Stand-in for an action or an observation that happened on a timestep but isn't in the data,
+and which fitting doesn't impute, as one entry of a column or a `NamedTuple`, such as
+`(; reward = UnimputedMissingValue())`.
+
+Nothing is sampled or scored for it, and the models receive it as it is: a cognitive model
+as its observation, or as its previous action on the next timestep, and an environment model
+as the action it responds to. A model which is fitted to such data must handle it, as it
+does the other subtypes of [`AbstractNoValue`](@ref). Useful for a session without an
+environment model whose data lacks some observations, and for missing actions which
+shouldn't become latent variables. A [`SessionInfo`](@ref) puts it in place of the values
+that its `observation_replacements` and `action_replacements` say, such as
+`(missing => UnimputedMissingValue(),)`.
+"""
+struct UnimputedMissingValue <: AbstractNoValue end
 
 ## Types for how a session is set up, which are the same whatever it is fitted with ##
 
@@ -23,7 +43,8 @@ struct MissingValue end
     NoEnvironment()
 
 The environment of a session that has none, which is the default of [`SessionInfo`](@ref).
-Every observation then comes from the data, and none can be [`MissingValue`](@ref).
+Every observation then comes from the data, and none can be [`MissingValue`](@ref), since
+nothing imputes it.
 """
 struct NoEnvironment end
 
@@ -44,12 +65,13 @@ table.
   must have every observation the model lists in [`attribute_names`](@ref), and can have
   more. When the model has only one observation in its attributes, a single vector,
   `[1.0, 0.0, 1.0]`, is the data of that observation, whatever its name. An observation that
-  wasn't recorded is [`MissingValue`](@ref), which `environment` fills in if it imputed, and
-  one that wasn't made is [`NoObservation`](@ref).
+  wasn't recorded is [`MissingValue`](@ref), which `environment` imputes, or
+  [`UnimputedMissingValue`](@ref), which the model receives as it is, and one that wasn't
+  made is [`NoObservation`](@ref).
 - `actions`: the actions in the data, in the same forms, with exactly the actions the model
-  lists. An action that was taken but not recorded is `MissingValue()`, and is imputed
-  unless `impute_missing_actions` is `false`. An action that wasn't taken is
-  [`NoAction`](@ref), and isn't scored.
+  lists. An action that was taken but not recorded is `MissingValue()`, which is imputed, or
+  `UnimputedMissingValue()`, which isn't, and an action that wasn't taken is
+  [`NoAction`](@ref). None of them is scored.
 
 # Keyword arguments
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
@@ -57,25 +79,26 @@ table.
   timestep before, `AgentStarts()`, as in [`simulate`](@ref). It has no default, because a
   wrong choice shifts the model by a timestep without any error.
 - `environment::Union{NoEnvironment, AbstractModel}=NoEnvironment()`: an environment
-  model, usually an [`AbstractEnvironmentModel`](@ref), which fills in the observations that
+  model, usually an [`AbstractEnvironmentModel`](@ref), which imputes the observations that
   are `MissingValue()`, and against whose distributions the observations in the data are
   scored. Its outputs must be the inputs of `cognitive_model` and the other way round,
   directly or through `observation_map` and `action_map`. Without it, the data can't have
-  missing observations. Whether the session includes it is decided by
+  observations that are `MissingValue()`. Whether the session includes it is decided by
   `include_environment`, and it is kept in the session either way.
 - `include_environment::Union{Nothing, Bool}=nothing`: whether the session includes
   `environment`, so that it runs on every timestep. By default, with `nothing`, it is
-  included where an observation or an action is missing, where `environment_save_history`
-  saves anything, or where `check_stopping_criterion` is `true`: the scored observations
-  then inform what is missing, such as which arm of a bandit a missing choice was, from the
-  reward that followed. It is also included in every session of an inference backend's
-  full model that estimates the environment's parameters, so that the observations inform
-  them. Otherwise it is left out, since the scores of its observations would be the same for
-  every value of the parameters, and the session has none of its variables. With `true` it
-  is always included, such as for a model of one's own which estimates its parameters. With
-  `false` it never is: a missing observation, a selection in `environment_save_history`
-  and `check_stopping_criterion = true` are then errors, and a missing action is imputed
-  without the observations informing it.
+  included where an observation or an action is `MissingValue()`, where
+  `environment_save_history` saves anything, or where `check_stopping_criterion` is `true`:
+  the scored observations then inform what is imputed, such as which arm of a bandit a
+  missing choice was, from the reward that followed. It is also included in every session of
+  an inference backend's full model that estimates the environment's parameters, so that the
+  observations inform them. Otherwise it is left out, since the scores of its observations
+  would be the same for every value of the parameters, and the session has none of its
+  variables. With `true` it is always included, such as for a model of one's own which
+  estimates its parameters. With `false` it never is: an observation that is
+  `MissingValue()`, a selection in `environment_save_history` and
+  `check_stopping_criterion = true` are then errors, and an action that is `MissingValue()`
+  is imputed without the observations informing it.
 - `observation_map::Union{Nothing, NameMap}=nothing` and
   `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
   cognitive model receives, and which of its actions the environment receives, and under
@@ -84,10 +107,6 @@ table.
   them on. An output of the environment that the map doesn't pass on isn't in the data, so
   it is imputed on every timestep. Each model's history is in its own names.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
-- `impute_missing_actions::Bool=true`: whether an action that is `MissingValue()` is
-  imputed, as a latent variable. When it is `false`, nothing is sampled for it, and it is
-  replaced by `NoAction()` here: `cognitive_model` receives `NoAction()` as that previous
-  action on the next timestep, and `environment` as the action it responds to.
 - `cognitive_save_history::SaveHistory=SaveHistory()`: which states, inputs, outputs and
   output distributions of `cognitive_model` a fitted session returns, by name, and whether
   timestep 0 is, as a [`SaveHistory`](@ref) in the model's own names. Nothing is selected by
@@ -100,20 +119,21 @@ table.
   fixed environment parameters they are the same for every value of the cognitive
   parameters, so the posterior is unchanged. Whether timestep 0 is saved follows
   `cognitive_save_history`.
-- `check_stopping_criterion::Union{Nothing, Bool}=nothing`: when
+- `check_stopping_criterion::Union{Nothing, Bool}=nothing`: when the
   [`stopping_criterion`](@ref) of the two models is checked before a timestep, so that the
-  session ends there, with what it saved up to it. By default it is checked only on the
-  timesteps after the last one with data, where a value is neither `MissingValue()` nor a
-  marker for nothing happening, so that a fit never checks it and a session prepared by
-  [`prepare_for_prediction`](@ref), whose data is all missing, ends as a simulation does.
-  With `true` it is checked before every timestep, which makes the environment run, and a
-  model whose criterion is met while the data continues is an error, since the recorded
-  values after that timestep couldn't be scored: this checks that the models agree with the
-  length of the data. With `false` it is never checked.
-- `missing_observations::Union{MissingValue, NoObservation}=MissingValue()` and
-  `missing_actions::Union{MissingValue, NoAction}=MissingValue()`: what a `missing` in the
-  data becomes, since a table marks every gap the same way: a value that wasn't recorded, or
-  nothing happening on that timestep. The two markers can also be put in the data directly.
+  session ends there, with what it saved up to it. With `nothing`, it is checked on the
+  timesteps after the last one with data. With `true`, it is checked before every timestep,
+  and a criterion that is met while the data continues is an error. With `false`, it is
+  never checked. The extended help says why.
+- `observation_replacements=(missing => MissingValue(),)` and
+  `action_replacements=(missing => MissingValue(),)`: which values in the data are replaced
+  by a marker, as pairs from the value to the marker, like those `replace` takes, such as
+  `(missing => MissingValue(), -1 => NoAction())`. The marker is [`MissingValue`](@ref) for
+  a value that is imputed, [`UnimputedMissingValue`](@ref) for one that isn't, and
+  [`NoObservation`](@ref) or [`NoAction`](@ref) for nothing happening on the timestep. A
+  value is compared to those of the pairs with `isequal`. A single pair can be given on its
+  own, and `()` keeps every value as it is, `missing` too. The markers can also be put in
+  the data directly.
 - `previous_observation` and `previous_action`: what the first timestep receives as the
   observation and the action before it, in the cognitive model's names, with
   [`BeforeFirstTimestep`](@ref) for each name by default, as in `simulate`. The environment
@@ -122,12 +142,11 @@ table.
   not given here, since they come from [`initialize_state`](@ref) with the parameters that
   are fitted.
 
-Each argument is kept in a field of the same name, with the two replacements made in the
-data, except `impute_missing_actions`, whose work is done here. The other fields are
-`includes_environment`, whether the session includes the environment, as
-`include_environment` decides it, `environment_observations`, the data of
-the environment's outputs in its own names, `previous_environment_observation`, the
-observation the environment starts from in its own names, `recorded_actions` and
+Each argument is kept in a field of the same name, except the two replacements, which are
+made in the data here. The other fields are `includes_environment`, whether the session
+includes the environment, as `include_environment` decides it, `environment_observations`,
+the data of the environment's outputs in its own names, `previous_environment_observation`,
+the observation the environment starts from in its own names, `recorded_actions` and
 `recorded_observations`, the recorded values of each name which are scored, the observations
 in the environment's names, `n_timesteps`, `saved_timestep_sizes`, the sizes a fitted
 session returns with what it saves, and `first_timestep_to_check_stopping`, the first
@@ -152,7 +171,7 @@ julia> struct Counter <: AbstractCognitiveModel end
 
 julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; parameters = :probability, states = :n_timesteps, inputs = :reward, outputs = :choice);
 
-julia> session_info = SessionInfo(Counter(), (; reward = [1.0, 0.0, missing]), (; choice = [true, missing, false]); who_starts = EnvironmentStarts(), missing_observations = NoObservation())
+julia> session_info = SessionInfo(Counter(), (; reward = [1.0, 0.0, missing]), (; choice = [true, missing, false]); who_starts = EnvironmentStarts(), observation_replacements = (missing => UnimputedMissingValue(),))
 SessionInfo
 Cognitive model: Counter
 Environment: none
@@ -162,11 +181,22 @@ Actions: choice
 Who starts: environment
 
 julia> session_info.observations.reward[3], session_info.actions.choice[2]
-(NoObservation(), MissingValue())
+(UnimputedMissingValue(), MissingValue())
 
 julia> session_info.recorded_actions
 (choice = Bool[1, 0],)
 ```
+
+# Extended help
+When the stopping criterion is checked follows from the data. The last timestep with data is
+the last one where an observation or an action isn't `MissingValue()`. With
+`check_stopping_criterion = nothing`, the criterion is only checked after it, so that a fit,
+where every timestep has data, never checks it, and a session prepared by
+[`prepare_for_prediction`](@ref), whose data is all `MissingValue()`, ends as a simulation
+does. With `true`, the session includes its environment, whose criterion is checked too. A
+criterion that is met while the data continues is then an error, since the recorded values
+after that timestep couldn't be scored, which checks that the models agree with the length
+of the data.
 """
 struct SessionInfo{
     Tcognitive_model,
@@ -216,7 +246,7 @@ function SessionInfo(cognitive_model::AbstractModel, observations, actions; keyw
     return prepare_session(cognitive_model, observations, actions; keywords...)
 end
 
-#The same session with other save histories, prepared again, since whether the environment runs can follow from them
+#The same session with other save histories, prepared again, since whether the environment runs can follow from them. Its data has its markers already, so nothing more is replaced in it
 function SessionInfo(
     session_info::SessionInfo;
     cognitive_save_history::SaveHistory=session_info.cognitive_save_history,
@@ -226,6 +256,8 @@ function SessionInfo(
         session_info.cognitive_model,
         session_info.observations,
         session_info.actions;
+        observation_replacements=(),
+        action_replacements=(),
         who_starts=session_info.who_starts,
         environment=session_info.environment,
         observation_map=session_info.observation_map,
@@ -251,8 +283,8 @@ check_stopping_criterion_not_met(::NoEnvironment, state, parameters) = nothing
     prepare_session(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
 Return the [`SessionInfo`](@ref) of one session, with the checks of the data and the names,
-the replacements of `missing` in the data, whether the environment runs, and what is scored
-and returned prepared, as its constructor describes. Used by `SessionInfo` and
+the replacements of values in the data by markers, whether the environment runs, and what is
+scored and returned prepared, as its constructor describes. Used by `SessionInfo` and
 [`MultipleSessionsInfo`](@ref).
 """
 function prepare_session(
@@ -265,12 +297,11 @@ function prepare_session(
     action_map::Union{Nothing,NameMap}=nothing,
     include_environment::Union{Nothing,Bool}=nothing,
     timestep_sizes=1,
-    impute_missing_actions::Bool=true,
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
     check_stopping_criterion::Union{Nothing,Bool}=nothing,
-    missing_observations::Union{MissingValue,NoObservation}=MissingValue(),
-    missing_actions::Union{MissingValue,NoAction}=MissingValue(),
+    observation_replacements=(missing => MissingValue(),),
+    action_replacements=(missing => MissingValue(),),
     previous_observation=input_before_first_timestep(cognitive_model),
     previous_action=output_before_first_timestep(cognitive_model),
 )
@@ -279,9 +310,11 @@ function prepare_session(
     observations = named_data(observations, cognitive_model, :observations)
     actions = named_data(actions, cognitive_model, :actions)
 
-    #Replace missing in the data by the marker for a value that wasn't recorded, or for nothing happening
-    observations = replace_missing(observations, missing_observations)
-    actions = replace_missing(actions, missing_actions)
+    #Replace the values in the data that the replacements name by their markers, which by default is missing by the marker for a value that is imputed
+    observations = replace_data_values(
+        observations, replacement_pairs(observation_replacements)
+    )
+    actions = replace_data_values(actions, replacement_pairs(action_replacements))
 
     #Check the data against the names the cognitive model lists, and that the environment fits
     n_timesteps = check_data(cognitive_model, observations, actions)
@@ -302,12 +335,7 @@ function prepare_session(
         )
     end
 
-    #Missing actions that aren't imputed are passed on as actions that weren't taken
-    if !impute_missing_actions
-        actions = without_missing_actions(actions)
-    end
-
-    #Whether the session includes its environment: as it is told, and otherwise only when something is missing, an observation it fills in or an action that the observations it scores inform, when its history is saved, or when its stopping criterion is checked on every timestep
+    #Whether the session includes its environment: as it is told, and otherwise only when something is to be imputed, an observation it fills in or an action that the observations it scores inform, when its history is saved, or when its stopping criterion is checked on every timestep
     includes_environment = decide_whether_environment_is_included(
         include_environment,
         environment,
@@ -373,15 +401,15 @@ several sessions take.
 The first form splits a table into sessions. `table` is a `NamedTuple` with one vector for
 each column, or any other table that Tables.jl can read, such as a `DataFrame` or a
 `CSV.File`, whose columns are read when Tables.jl is loaded, as it is with DataFrames.jl and
-CSV.jl.
-A `missing` in a column becomes [`MissingValue`](@ref), or the marker for nothing happening,
-as the keyword arguments `missing_observations` and `missing_actions` of `SessionInfo` say.
-Every session must come out with the same type, which they do when they share the models and
-the settings, since the timesteps of different sessions are then compiled once. As for
-[`SessionInfo`](@ref), a session includes its environment where an observation or an
-action is missing, where `environment_save_history` saves anything or where
-`check_stopping_criterion` is `true`, and in an inference backend's full model that
-estimates the environment's parameters, unless `include_environment` says otherwise. The
+CSV.jl. The values of a column that `observation_replacements` and `action_replacements`
+name are replaced by markers, as for [`SessionInfo`](@ref): by default a `missing` becomes
+[`MissingValue`](@ref). Every session must come out with the same type, which they do when
+they share the models and the settings, since the timesteps of different sessions are then
+compiled once. As for [`SessionInfo`](@ref), a session includes its environment where an
+observation or an action is `MissingValue()`, where `environment_save_history` saves
+anything or where `check_stopping_criterion` is `true`, and in an inference backend's full
+model that estimates the environment's parameters, unless `include_environment` says
+otherwise. The
 table is kept in the field `table`, without being copied, with the rows of each session in
 `session_rows`, so that a session parameter model can read the columns it needs, such as
 those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions by.
@@ -410,15 +438,21 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   `NamedTuple` in each row, `(; ssm_action = (; choice = :choicecol, rt = :rtcol))`, a
   `Tuple` of column names for a `Tuple`, `(; ssm_action = (:choicecol, :rtcol))`, or a
   `Tuple` of column names and a function of their values,
-  `(; ssm_action = (:choicecol, :rtcol) => (choice, rt) -> [choice, rt])`. A `missing` in
-  any of the columns makes the value `missing`.
-- `action_columns`: the columns with the actions, in the same forms.
+  `(; ssm_action = (:choicecol, :rtcol) => (choice, rt) -> [choice, rt])`. A value in any
+  of the columns which `observation_replacements` replaces by a marker makes the whole value
+  that marker.
+- `action_columns`: the columns with the actions, in the same forms, with
+  `action_replacements`.
 - `session_columns`: the column or columns which separate sessions, such as `:id` or
   `(:id, :block)`. A session is every row with one combination of their values, in the
   order of the first row of each. The identifier of a session is its value in a single
   column, or a `NamedTuple` of its values in several.
 - `timestep_sizes=1`: how much time each timestep covers, as one size for all, or the name
   of a column with the size of each timestep.
+- `observation_replacements=(missing => MissingValue(),)` and
+  `action_replacements=(missing => MissingValue(),)`: which values in the columns are
+  replaced by a marker, as for [`SessionInfo`](@ref). They are replaced in the whole table
+  before it is split, so that the columns of every session have the same element types.
 - The other keyword arguments of [`SessionInfo`](@ref), which every session gets.
 
 The second form takes sessions that are already prepared. They have no table, unless it is
@@ -526,6 +560,8 @@ function MultipleSessionsInfo(
     action_columns,
     session_columns,
     timestep_sizes=1,
+    observation_replacements=(missing => MissingValue(),),
+    action_replacements=(missing => MissingValue(),),
     keywords...,
 )
 
@@ -549,13 +585,23 @@ function MultipleSessionsInfo(
     #The rows of each session, and its identifier
     sessions_rows = rows_per_session(table, id_columns)
 
-    #Each session is prepared from its rows of the table
+    #The columns of the observations and of the actions are built once for the whole table, with the values that the replacements name replaced by their markers, so that every session gets the same element types
+    observation_columns_of_table = build_columns(
+        table, observation_column_map, replacement_pairs(observation_replacements)
+    )
+    action_columns_of_table = build_columns(
+        table, action_column_map, replacement_pairs(action_replacements)
+    )
+
+    #Each session is prepared from its rows of those columns, in which nothing more is replaced
     sessions = map(sessions_rows) do (_, rows)
         return prepare_session(
             cognitive_model,
-            select_rows(table, observation_column_map, rows),
-            select_rows(table, action_column_map, rows);
+            select_rows(observation_columns_of_table, rows),
+            select_rows(action_columns_of_table, rows);
             timestep_sizes=select_timestep_sizes(table, timestep_sizes, rows),
+            observation_replacements=(),
+            action_replacements=(),
             keywords...,
         )
     end
@@ -584,14 +630,13 @@ end
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
 [`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
 observation too when the session has an environment model that it can include, so that an
-inference backend's
-model of the copy simulates them instead of fitting to them. This can be used for
-predictive checks: evaluating the model of the copy with the samples of a fit to the
-sessions, or sampling it from its prior, simulates each session again, with the same number
-of timesteps at most, the same settings and the same environment. The observations of a
-session without an environment stay those in the data, as for an experiment whose
-observations are fixed in advance. Every missing action is imputed, whatever
-`impute_missing_actions` the session was prepared with. The copy checks the
+inference backend's model of the copy simulates them instead of fitting to them. This can be
+used for predictive checks: evaluating the model of the copy with the samples of a fit to
+the sessions, or sampling it from its prior, simulates each session again, with the same
+number of timesteps at most, the same settings and the same environment. The observations of
+a session without an environment stay those in the data, as for an experiment whose
+observations are fixed in advance. Every action is simulated, whatever it was in the data,
+also one that was [`UnimputedMissingValue`](@ref) or [`NoAction`](@ref). The copy checks the
 [`stopping_criterion`](@ref) of the models as `check_stopping_criterion` says, as for
 [`SessionInfo`](@ref), whatever the session was prepared with: by default after the last
 timestep with data, which in a session with an environment is before every timestep, so
@@ -622,11 +667,13 @@ function prepare_for_prediction(
             session_info.observations
         end
 
-    #The copy is prepared again with the settings of the session, so that what is scored and whether the environment runs follow from the new data
+    #The copy is prepared again with the settings of the session, so that what is scored and whether the environment runs follow from the new data, in which nothing more is replaced
     return prepare_session(
         session_info.cognitive_model,
         observations,
         actions;
+        observation_replacements=(),
+        action_replacements=(),
         who_starts=session_info.who_starts,
         environment=session_info.environment,
         observation_map=session_info.observation_map,
@@ -658,8 +705,9 @@ end
     AbstractDownstreamModel
 
 Supertype for downstream models: the final submodel of a full model, which is run after
-the sessions with what they saved, such as for correlations with other kinds of data, or a
-regression of a measurement on a state. [`NoDownstreamModel`](@ref) is the default.
+the sessions with the trajectories they saved, such as for correlations with other kinds of
+data, or a regression of a measurement on a state. [`NoDownstreamModel`](@ref) is the
+default.
 
 # Implementation
 Create a subtype, and for each inference backend it is used with, add a method of that

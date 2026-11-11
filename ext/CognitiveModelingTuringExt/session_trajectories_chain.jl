@@ -1,7 +1,7 @@
-### WHAT FITTED SESSIONS SAVED, READ FROM A CHAIN WITH A MODEL THAT SAVES IT ###
+### THE TRAJECTORIES OF FITTED SESSIONS, READ FROM A CHAIN WITH A MODEL THAT SAVES THEM ###
 
-#Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of what the sessions saved
-function CognitiveModeling.session_values_chain(
+#Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of the trajectories the sessions saved
+function CognitiveModeling.session_trajectories_chain(
     model::DynamicPPL.Model,
     chain;
     cognitive_save_history::SaveHistory=SaveHistory(),
@@ -10,15 +10,15 @@ function CognitiveModeling.session_values_chain(
     saving_model = with_session_info(
         model,
         info -> with_save_history(info, cognitive_save_history, environment_save_history),
-        "session_values_chain",
+        "session_trajectories_chain",
     )
     results = returned(saving_model, chain)
     numbering = sample_numbering(chain)
     session_info = info_of(saving_model)
     if session_info isa SessionInfo
-        return session_values_chain(results; numbering...)
+        return session_trajectories_chain(results; numbering...)
     else
-        return session_values_chain(results, session_info; numbering...)
+        return session_trajectories_chain(results, session_info; numbering...)
     end
 end
 
@@ -37,8 +37,8 @@ function CognitiveModeling.session_parameters_chain(model::DynamicPPL.Model, cha
     )
 end
 
-#Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them with predict for every sample of the chain, and makes a chain of what they saved
-function CognitiveModeling.predict_session_values(
+#Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them with predict for every sample of the chain, and makes a chain of the trajectories they saved
+function CognitiveModeling.predict_session_trajectories(
     rng::AbstractRNG,
     model::DynamicPPL.Model,
     chain;
@@ -50,7 +50,7 @@ function CognitiveModeling.predict_session_values(
         info -> prepare_for_prediction(
             with_save_history(info, cognitive_save_history, environment_save_history)
         ),
-        "predict_session_values",
+        "predict_session_trajectories",
     )
     #Everything within the timesteps is simulated again, with the parameters of each sample
     results = returned_with_simulation(
@@ -59,16 +59,16 @@ function CognitiveModeling.predict_session_values(
     numbering = sample_numbering(chain)
     session_info = info_of(predictive_model)
     if session_info isa SessionInfo
-        return session_values_chain(results; numbering...)
+        return session_trajectories_chain(results; numbering...)
     else
-        return session_values_chain(results, session_info; numbering...)
+        return session_trajectories_chain(results, session_info; numbering...)
     end
 end
 
-function CognitiveModeling.predict_session_values(
+function CognitiveModeling.predict_session_trajectories(
     model::DynamicPPL.Model, chain; keywords...
 )
-    return predict_session_values(default_rng(), model, chain; keywords...)
+    return predict_session_trajectories(default_rng(), model, chain; keywords...)
 end
 
 """
@@ -78,9 +78,9 @@ Return `chain` without the variables within the timesteps of a session, such as 
 actions and observations and what a model samples within a timestep, named like
 `session[2].timestep[3].choice.imputed`, or `timestep[3].choice.imputed` for a single
 session. The parameters, and any start that a model samples, are kept. Used by
-`predict_session_values`, so that everything within the timesteps is simulated again, as the
-data is in a predictive check, which also keeps FlexiChains.jl from rebuilding the variables
-of sessions of different lengths, which it can't do.
+`predict_session_trajectories`, so that everything within the timesteps is simulated again,
+as the data is in a predictive check, which also keeps FlexiChains.jl from rebuilding the
+variables of sessions of different lengths, which it can't do.
 """
 function without_timestep_variables(chain::Turing.FlexiChains.FlexiChain)
     kept = filter(!is_within_timestep, Turing.FlexiChains.parameters(chain))
@@ -101,9 +101,9 @@ is_within_timestep(name) = occursin(r"^(session\[[^\]]*\]\.)?timestep\[", string
 Return a matrix with what `model` returns for every sample of `chain`, iterations down and
 chains across, with the values of the sample for the variables in the chain, and every other
 variable drawn from its prior, as Turing.jl's `predict` draws them. Used by
-`predict_session_values`, which needs only what the sessions return, so that the simulated
-values are never read back from a chain, which FlexiChains.jl can't do for sessions of
-different lengths.
+`predict_session_trajectories`, which needs only what the sessions return, so that the
+simulated values are never read back from a chain, which FlexiChains.jl can't do for
+sessions of different lengths.
 """
 function returned_with_simulation(
     rng::AbstractRNG, model::DynamicPPL.Model, chain::Turing.FlexiChains.FlexiChain
@@ -126,8 +126,8 @@ end
     with_save_history(info, cognitive_save_history, environment_save_history)
 
 Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions save
-what the two save histories select. Used by `session_values_chain` and
-`predict_session_values`.
+what the two save histories select. Used by `session_trajectories_chain` and
+`predict_session_trajectories`.
 """
 function with_save_history(
     info::SessionInfo, cognitive_save_history, environment_save_history
@@ -149,7 +149,7 @@ inside `turing_catch_invalid_parameters`, whose session info is what `change` ma
 own: a `SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its
 other arguments, its keyword arguments and whether it is marked thread-safe stay as they
 are. Any other model is an error, which names `function_name`, the function that was called.
-Used by `session_values_chain` and `predict_session_values`.
+Used by `session_trajectories_chain` and `predict_session_trajectories`.
 """
 function with_session_info(
     model::DynamicPPL.Model{F,argnames,defaultnames,missings,Targs,Tdefaults,Ctx,Threaded},
@@ -178,7 +178,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_values_chain the results of returned(model, chain) instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_trajectories_chain the results of returned(model, chain) instead.",
             ),
         )
     end
@@ -191,7 +191,8 @@ end
     info_of(model)
 
 Return the session info a model made by `with_session_info` runs: the `SessionInfo` of a
-single session, or the `MultipleSessionsInfo` of several. Used by `session_values_chain`.
+single session, or the `MultipleSessionsInfo` of several. Used by
+`session_trajectories_chain`.
 """
 function info_of(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_behavioral_session
@@ -207,8 +208,8 @@ end
     sample_numbering(chain)
 
 Return the numbers of the iterations and the chains of `chain` as keyword arguments, so that
-the chain of what the sessions saved is numbered the same way, or none for a chain that
-isn't a `FlexiChain`. Used by `session_values_chain`.
+the chain of the trajectories is numbered the same way, or none for a chain that isn't a
+`FlexiChain`. Used by `session_trajectories_chain`.
 """
 function sample_numbering(chain::Turing.FlexiChains.FlexiChain)
     return (;

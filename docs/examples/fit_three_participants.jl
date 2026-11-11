@@ -121,10 +121,10 @@ chain = sample(model, NUTS(), 1000)
 
 ## The results ##
 
-#The model was fitted without saving the expected values, which is fastest. session_values_chain reruns it on every sample
+#The model was fitted without saving the expected values, which is fastest. session_trajectories_chain reruns it on every sample
 #with sessions that save them, and gives a chain with the expected values of each participant, named after them, as
 #P1.expected_value. session_parameters_chain gives the parameters of each participant the same way, as P1.learning_rate
-session_values = session_values_chain(
+session_trajectories = session_trajectories_chain(
     model, chain; cognitive_save_history=SaveHistory(; states=:expected_value)
 )
 session_parameters = session_parameters_chain(model, chain)
@@ -163,7 +163,7 @@ FM.forestplot(
 )
 
 #The expected values of the first participant over the trials. The first is from before the first trial
-FM.forestplot(session_values, @varname(P1.expected_value))
+FM.forestplot(session_trajectories, @varname(P1.expected_value))
 
 #The expected value of each participant over the trials, with the median and a 90 % interval over the samples, against their predictions and the outcomes
 figure = Figure(; size=(900, 330))
@@ -177,7 +177,7 @@ for (i, participant) in enumerate(participants)
 
     #The expected values with a row for each sample and a column for each trial, starting with trial 0, before the first
     expected_values = stack(
-        vec(session_values[@varname($participant.expected_value)]); dims=1
+        vec(session_trajectories[@varname($participant.expected_value)]); dims=1
     )
     timesteps = 0:5
     band!(

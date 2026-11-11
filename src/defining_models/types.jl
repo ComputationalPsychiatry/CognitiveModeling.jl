@@ -109,9 +109,9 @@ abstract type AbstractEnvironmentModel <: AbstractModel end
     AbstractNoValue
 
 Supertype for what stands in for an observation or an action that isn't there:
-[`NoObservation`](@ref), [`NoAction`](@ref) and [`BeforeFirstTimestep`](@ref). A model which
-treats them all the same can check for it, as in
-`context.input.reward isa AbstractNoValue`.
+[`NoObservation`](@ref), [`NoAction`](@ref) and [`BeforeFirstTimestep`](@ref), and in the
+data of a fitted session [`UnimputedMissingValue`](@ref). A model which treats them all the
+same can check for it, as in `context.input.reward isa AbstractNoValue`.
 """
 abstract type AbstractNoValue end
 

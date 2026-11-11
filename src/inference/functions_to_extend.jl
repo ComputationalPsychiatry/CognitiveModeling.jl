@@ -158,13 +158,13 @@ end
 ## Functions that a downstream model implements ##
 
 """
-    turing_downstream_model(downstream_model, saved_behavioral_values, cognitive_parameters,
-                            sessions_info::MultipleSessionsInfo)
+    turing_downstream_model(downstream_model, saved_behavioral_trajectories,
+                            cognitive_parameters, sessions_info::MultipleSessionsInfo)
 
 Create the Turing.jl model of `downstream_model`, the final submodel of a
-[`turing_full_model`](@ref), which is run after the sessions, with what the sessions saved,
-the cognitive parameters of every session as the session parameter model returned them, and
-the sessions' `sessions_info`. This needs Turing.jl to be loaded.
+[`turing_full_model`](@ref), which is run after the sessions, with the trajectories the
+sessions saved, the cognitive parameters of every session as the session parameter model
+returned them, and the sessions' `sessions_info`. This needs Turing.jl to be loaded.
 
 The model can return anything, which the full model returns as its `downstream_values`.
 [`NoDownstreamModel`](@ref) is the default, with a method which samples nothing and returns
@@ -173,8 +173,9 @@ The model can return anything, which the full model returns as its `downstream_v
 # Implementation
 A downstream model is a subtype of [`AbstractDownstreamModel`](@ref) with a method of this
 function, which can ignore any of the arguments. A regression of some measurement on a state
-of the cognitive model, for instance, reads the state from `saved_behavioral_values`, a
-vector with the saved values of each session as [`turing_behavioral_session`](@ref) returns
-them, so the `cognitive_save_history` of the sessions must select that state.
+of the cognitive model, for instance, reads the state from
+`saved_behavioral_trajectories`, a vector with the saved trajectories of each session as
+[`turing_behavioral_session`](@ref) returns them, so the `cognitive_save_history` of the
+sessions must select that state.
 """
 function turing_downstream_model end

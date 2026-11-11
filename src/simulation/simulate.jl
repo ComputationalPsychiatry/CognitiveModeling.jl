@@ -437,14 +437,15 @@ function store_all_values!(storage, saved, t)
 end
 
 """
-    saved_values(storage, timestep_sizes)
+    saved_trajectories(storage, timestep_sizes)
 
-Return the saved values of a simulation as [`simulate`](@ref) returns them: the vectors in
-`storage`, with the cognitive model's under `states`, `observations`, `actions` and
-`action_distributions` and the environment's under `environment`, and then `timestep_sizes`
-as given. Used by [`simulate`](@ref), [`simulate!`](@ref) and fitted sessions.
+Return the saved trajectories of a simulation as [`simulate`](@ref) returns them: the
+vectors in `storage`, with the cognitive model's under `states`, `observations`, `actions`
+and `action_distributions` and the environment's under `environment`, and then
+`timestep_sizes` as given. Used by [`simulate`](@ref), [`simulate!`](@ref) and fitted
+sessions.
 """
-function saved_values(storage, timestep_sizes)
+function saved_trajectories(storage, timestep_sizes)
     return merge(storage, (; timestep_sizes))
 end
 
@@ -818,7 +819,7 @@ function simulate_all_timesteps(
         previous_values,
     )
 
-    #Initialize storage for the saved values, which starts with timestep 0 when it is kept
+    #Initialize storage for the trajectories that are saved, which start with timestep 0 when it is kept
     storage = initialize_all_storage(initial_values, timestep_values.saved, n_steps)
     offset = initial_values === nothing ? 0 : 1
 
@@ -847,11 +848,12 @@ end
 """
     simulate(cognitive_model, environment; <keyword arguments>)
 
-Simulate `cognitive_model` interacting with `environment`, and return what was saved in a
-`NamedTuple`: `states`, `observations`, `actions` and `action_distributions` of the
-cognitive model, `environment` with the `states`, `observations`, `actions` and
-`observation_distributions` of the environment, and `timestep_sizes`. Each is a vector with
-one element for timestep 0, before the first timestep, and one for each timestep after it.
+Simulate `cognitive_model` interacting with `environment`, and return the trajectories that
+were saved, which are what changed over the timesteps, in a `NamedTuple`: `states`,
+`observations`, `actions` and `action_distributions` of the cognitive model, `environment`
+with the `states`, `observations`, `actions` and `observation_distributions` of the
+environment, and `timestep_sizes`. Each is a vector with one element for timestep 0, before
+the first timestep, and one for each timestep after it.
 
 Each element is what happened on that timestep, and the states are those after it. The
 observations are those the cognitive model received, and the actions those it gave, and
@@ -1092,20 +1094,20 @@ function simulate(
     )
 
     #Return what was saved
-    return saved_values(storage, timestep_sizes_simulated)
+    return saved_trajectories(storage, timestep_sizes_simulated)
 end
 
 """
     simulate!(agent::InstantiatedModel, environment::InstantiatedModel; <keyword arguments>)
 
 Simulate `agent` interacting with `environment` from where they are, update them both, and
-return the same `NamedTuple` as [`simulate`](@ref), without timestep 0: what
-`agent.save_history` selects of the states, observations, actions and action distributions
-on each timestep of this call, what `environment.save_history` selects of the environment's
-under `environment`, and the sizes of the timesteps. What the two select is also added to
-`agent.history` and `environment.history`, in each model's own names, together with the
-sizes of the timesteps, unless a selection is empty. A history has timestep 0 from where the
-model started, when its [`SaveHistory`](@ref) saves the initial values.
+return the trajectories of this call in the same `NamedTuple` as [`simulate`](@ref),
+without timestep 0: what `agent.save_history` selects of the states, observations, actions
+and action distributions on each timestep, what `environment.save_history` selects of the
+environment's under `environment`, and the sizes of the timesteps. What the two select is
+also added to `agent.history` and `environment.history`, in each model's own names, together
+with the sizes of the timesteps, unless a selection is empty. A history has timestep 0 from
+where the model started, when its [`SaveHistory`](@ref) saves the initial values.
 
 The two models must fit together, as for `simulate`, directly or through `observation_map`
 and `action_map`. The agent's history holds the observations as its model received them,
@@ -1262,7 +1264,7 @@ function simulate!(
     end
 
     #Return what was saved
-    return saved_values(storage, timestep_sizes_simulated)
+    return saved_trajectories(storage, timestep_sizes_simulated)
 end
 
 ## Simulating a model on a single input ##

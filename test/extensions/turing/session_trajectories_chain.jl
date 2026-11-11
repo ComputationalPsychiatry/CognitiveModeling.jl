@@ -10,21 +10,21 @@ function expected_rewards_by_hand(rewards, learning_rate)
     return expected_rewards
 end
 
-@testset "session_values_chain" begin
+@testset "session_trajectories_chain" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
-    sessions_info = sessions_for_test(; impute_missing_actions=false)
+    sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
     model = turing_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
-    @testset "The chain from a fitted full model has the saved values of each session, numbered as the fit, and the parameters are a chain of their own" begin
-        session_values = session_values_chain(
+    @testset "The chain from a fitted full model has the saved trajectories of each session, numbered as the fit, and the parameters are a chain of their own" begin
+        session_trajectories = session_trajectories_chain(
             model,
             chain;
             cognitive_save_history=SaveHistory(; outputs=:choice, states=:expected_reward),
         )
-        @test Turing.FlexiChains.iter_indices(session_values) ==
+        @test Turing.FlexiChains.iter_indices(session_trajectories) ==
             Turing.FlexiChains.iter_indices(chain)
-        @test Turing.FlexiChains.get_name.(keys(session_values)) == [
+        @test Turing.FlexiChains.get_name.(keys(session_trajectories)) == [
             @varname(S1.choice),
             @varname(S1.expected_reward),
             @varname(S2.choice),
@@ -48,16 +48,17 @@ end
         )
         #The saved states are those of each sample's parameters, from timestep 0
         rows = findall(==("S1"), FULL_TABLE.id)
-        @test session_values[@varname(S1.expected_reward)][5] ≈ expected_rewards_by_hand(
+        @test session_trajectories[@varname(S1.expected_reward)][5] ≈
+            expected_rewards_by_hand(
             FULL_TABLE.reward[rows], parameters[@varname(S1.learning_rate)][5]
         )
-        @test session_values[@varname(S1.choice)][5] ==
+        @test session_trajectories[@varname(S1.choice)][5] ==
             [BeforeFirstTimestep(), true, false, true]
-        #S3 saves NoAction() for its missing choice, so its saved values have another type than the other sessions'
-        @test session_values[@varname(S3.choice)][5] ==
-            [BeforeFirstTimestep(), true, true, NoAction(), true]
+        #S3 saves UnimputedMissingValue() for its missing choice, so its saved trajectories have another type than the other sessions'
+        @test session_trajectories[@varname(S3.choice)][5] ==
+            [BeforeFirstTimestep(), true, true, UnimputedMissingValue(), true]
         #The two chains merge into one
-        merged = merge(session_values, parameters)
+        merged = merge(session_trajectories, parameters)
         @test @varname(S1.choice) in Turing.FlexiChains.parameters(merged) &&
             @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
         #A model that isn't a full model gives no parameters
@@ -77,20 +78,20 @@ end
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[2.0, 2.0, 2.0]),
         )
         @test Turing.FlexiChains.get_name.(
-            keys(session_values_chain(sessions, chain; cognitive_save_history))
+            keys(session_trajectories_chain(sessions, chain; cognitive_save_history))
         ) == [
             @varname(S1.expected_reward),
             @varname(S2.expected_reward),
             @varname(S3.expected_reward),
         ]
-        session_values = session_values_chain(
+        session_trajectories = session_trajectories_chain(
             turing_catch_invalid_parameters(session_for_test()),
             chain;
             cognitive_save_history,
         )
-        @test Turing.FlexiChains.get_name.(keys(session_values)) ==
+        @test Turing.FlexiChains.get_name.(keys(session_trajectories)) ==
             [@varname(expected_reward)]
-        @test session_values[@varname(expected_reward)][1] ≈ expected_rewards_by_hand(
+        @test session_trajectories[@varname(expected_reward)][1] ≈ expected_rewards_by_hand(
             SESSION_REWARDS.reward, SESSION_PARAMETERS.learning_rate
         )
     end
@@ -108,12 +109,12 @@ end
             sessions_for_test(SessionRescorlaWagner(), table),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
-        session_values = @test_logs match_mode = :any session_values_chain(
+        session_trajectories = @test_logs match_mode = :any session_trajectories_chain(
             imputing, prior_chain; cognitive_save_history=SaveHistory(; outputs=:choice)
         )
-        @test length(session_values[@varname(S3.choice)][1]) == 5
-        #predict_session_values simulates the imputed choices again, like the others, from the parameters of each sample
-        simulated = @test_logs match_mode = :any predict_session_values(
+        @test length(session_trajectories[@varname(S3.choice)][1]) == 5
+        #predict_session_trajectories simulates the imputed choices again, like the others, from the parameters of each sample
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(7),
             imputing,
             prior_chain;
@@ -135,17 +136,17 @@ end
 
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
-        @test_throws "session_values_chain(model, chain; cognitive_save_history) takes a model made by turing_full_model" session_values_chain(
+        @test_throws "session_trajectories_chain(model, chain; cognitive_save_history) takes a model made by turing_full_model" session_trajectories_chain(
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
-        @test_throws "predict_session_values(model, chain; cognitive_save_history) takes a model made by turing_full_model" predict_session_values(
+        @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" predict_session_trajectories(
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
     end
 
-    @testset "predict_session_values simulates every action again with the parameters of each sample" begin
+    @testset "predict_session_trajectories simulates every action again with the parameters of each sample" begin
         cognitive_save_history = SaveHistory(; inputs=:reward, outputs=:choice)
-        simulated = @test_logs match_mode = :any predict_session_values(
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(2), model, chain; cognitive_save_history
         )
         @test Turing.FlexiChains.iter_indices(simulated) ==
@@ -168,7 +169,7 @@ end
             IndependentSessionParameters(FULL_PRIORS),
             sessions_for_test(; environment=RewardsPreviousChoice()),
         )
-        simulated = @test_logs match_mode = :any predict_session_values(
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(3),
             with_environment,
             chain;
@@ -186,7 +187,7 @@ end
         @test all(==([(0); 1:3]), vec(simulated[@varname(S1.environment.n_timesteps)]))
         #A chain from the prior gives a prior predictive check
         prior_chain = sample(Xoshiro(4), with_environment, Prior(), 10; progress=false)
-        prior_simulated = @test_logs match_mode = :any predict_session_values(
+        prior_simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(5), with_environment, prior_chain; cognitive_save_history=SaveHistory()
         )
         @test Turing.FlexiChains.iter_indices(prior_simulated) ==

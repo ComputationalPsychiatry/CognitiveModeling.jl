@@ -1,7 +1,7 @@
 # Fitting with Turing.jl
 
 The Turing.jl models of the sessions on the page [Fitting](fitting.md), what a model can add
-for them, and reading what they saved from a chain.
+for them, and reading the trajectories they saved from a chain.
 
 ```@index
 Pages = ["fitting_with_turing.md"]

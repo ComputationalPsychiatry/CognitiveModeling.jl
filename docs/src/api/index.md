@@ -10,7 +10,7 @@ What users work with, by topic:
 - [Fitting](fitting.md): the sessions to fit, how the parameters of several sessions are
   given, and what runs after them.
 - [Fitting with Turing.jl](fitting_with_turing.md): the Turing.jl models of the sessions, and
-  reading what they saved from a chain.
+  reading the trajectories they saved from a chain.
 
 The functions and types that are only used inside the package are under [Internals](@ref).
 

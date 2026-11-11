@@ -265,12 +265,10 @@ const TURING_GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
 # Both parameters from the distributions of groups, as standardized values: the learning rate with two groups, the inverse temperature with one
 const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
     GroupedHierarchicalSessionParameters((;
-        learning_rate=(;
-            priors=TURING_GROUP_PRIORS,
-            transformation=turing_to_unit_interval,
-            group_by=:group,
+        learning_rate=HierarchicalParameter(
+            TURING_GROUP_PRIORS; transformation=turing_to_unit_interval, group_by=:group
         ),
-        inverse_temperature=(; priors=TURING_GROUP_PRIORS, transformation=exp),
+        inverse_temperature=HierarchicalParameter(TURING_GROUP_PRIORS; transformation=exp),
     )),
     TURING_GROUPED_SESSIONS,
 )
@@ -279,8 +277,8 @@ const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
 const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
     CompositeSessionParameters(
         GroupedHierarchicalSessionParameters((;
-            learning_rate=(;
-                priors=TURING_GROUP_PRIORS,
+            learning_rate=HierarchicalParameter(
+                TURING_GROUP_PRIORS;
                 transformation=turing_to_unit_interval,
                 group_by=:group,
                 centered=true,

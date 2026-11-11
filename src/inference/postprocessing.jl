@@ -1,16 +1,19 @@
-## What fitted sessions saved, as a chain, made in the FlexiChains extension ##
+## The trajectories of fitted sessions, as a chain, made in the FlexiChains extension ##
 
 """
-    session_values_chain(results, sessions_info::MultipleSessionsInfo;
-                         iter_indices=1:size(results, 1), chain_indices=1:size(results, 2))
-    session_values_chain(results; iter_indices=1:size(results, 1),
-                         chain_indices=1:size(results, 2))
-    session_values_chain(model, chain; cognitive_save_history=SaveHistory(),
-                         environment_save_history=SaveHistory())
+    session_trajectories_chain(results, sessions_info::MultipleSessionsInfo;
+                               iter_indices=1:size(results, 1),
+                               chain_indices=1:size(results, 2))
+    session_trajectories_chain(results; iter_indices=1:size(results, 1),
+                               chain_indices=1:size(results, 2))
+    session_trajectories_chain(model, chain; cognitive_save_history=SaveHistory(),
+                               environment_save_history=SaveHistory())
 
-Return what fitted sessions saved, for every sample, as a `FlexiChain` from FlexiChains.jl
-with the same samples as the fit, so that it can be summarized and plotted like the chain
-itself. This needs FlexiChains.jl to be loaded, which Turing.jl loads. The names of the
+Return the trajectories that fitted sessions saved, for every sample, as a `FlexiChain` from
+FlexiChains.jl with the same samples as the fit, so that they can be summarized and plotted
+like the chain itself. The trajectories of a session are what changes over its timesteps:
+the states, the observations and the actions of its models, and the distributions they
+gave. This needs FlexiChains.jl to be loaded, which Turing.jl loads. The names of the
 entries are the `VarName`s that FlexiChains.jl uses, written as
 `@varname(P1.expected_value)` with FlexiChains.jl 0.6, which Turing.jl uses, and as
 `@vn(P1.expected_value)` with 0.7.
@@ -29,9 +32,9 @@ returns:
 In a model of one's own around these, that model must return what they return, for
 `returned` to give it.
 
-What each session saved, as its [`SaveHistory`](@ref)s selected, is one entry for each name,
-with the session's identifier first. The cognitive model's values are named after the
-attribute alone, since a model uses a name for one attribute only: a state as
+The trajectories each session saved, as its [`SaveHistory`](@ref)s selected, are one entry
+for each name, with the session's identifier first. The cognitive model's values are named
+after the attribute alone, since a model uses a name for one attribute only: a state as
 `P1.expected_value`, an observation as `P1.reward` and an action as `P1.choice`. An action
 distribution is named like its action, so it is under its kind, as
 `P1.action_distributions.choice`. The environment's values are under `environment`, in the
@@ -51,23 +54,23 @@ The third form, in the Turing extension, takes a model made by one of the three 
 or such a model inside [`turing_catch_invalid_parameters`](@ref), and a chain sampled from
 it. It makes a copy of the model whose sessions save what the two save histories select,
 gives it to `returned`, and makes the chain of the results, numbered as `chain` is. A fit is
-fastest when its sessions save nothing, and what they saved is then read afterwards in this
-way. Selecting anything in `environment_save_history` makes every session run its
+fastest when its sessions save nothing, and their trajectories are then read afterwards in
+this way. Selecting anything in `environment_save_history` makes every session run its
 environment, see [`SessionInfo`](@ref).
 
 # Examples
 ```julia
 chain = sample(model, NUTS(), 1000)
-session_values = session_values_chain(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
+session_trajectories = session_trajectories_chain(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
 
 #The expected values of participant P2 over the timesteps, for every sample
-session_values[@varname(P2.expected_value)]
+session_trajectories[@varname(P2.expected_value)]
 
 #The parameters of the sessions, in the same chain
-everything = merge(session_values, session_parameters_chain(model, chain))
+everything = merge(session_trajectories, session_parameters_chain(model, chain))
 ```
 """
-function session_values_chain end
+function session_trajectories_chain end
 
 """
     session_parameters_chain(results, sessions_info::MultipleSessionsInfo;
@@ -88,7 +91,7 @@ chain itself, such as one value for every session from [`IdenticalSessionParamet
 and values from [`FixedSessionParameters`](@ref) that were never sampled. The second form,
 in the Turing extension, takes a model made by `turing_full_model` and a chain sampled from
 it, and numbers the samples as the chain does. The result merges with the chain of
-[`session_values_chain`](@ref), which has the same samples, with `merge`.
+[`session_trajectories_chain`](@ref), which has the same samples, with `merge`.
 
 # Examples
 ```julia
@@ -102,34 +105,36 @@ parameters[@varname(P1.learning_rate)]
 function session_parameters_chain end
 
 """
-    predict_session_values([rng,] model, chain; cognitive_save_history=SaveHistory(),
-                           environment_save_history=SaveHistory())
+    predict_session_trajectories([rng,] model, chain;
+                                 cognitive_save_history=SaveHistory(),
+                                 environment_save_history=SaveHistory())
 
 Simulate the sessions of `model` again with the parameters of every sample in `chain`, and
-return what they saved as a `FlexiChain`, as [`session_values_chain`](@ref) makes it. This
-is for prior and posterior predictive checks, and needs Turing.jl to be loaded.
+return the trajectories they saved as a `FlexiChain`, as
+[`session_trajectories_chain`](@ref) makes it. This is for prior and posterior predictive
+checks, and needs Turing.jl to be loaded.
 
 `model` is made by [`turing_full_model`](@ref),
 [`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
 is such a model inside [`turing_catch_invalid_parameters`](@ref). Its sessions are prepared
 with [`prepare_for_prediction`](@ref), so that every action is simulated, and every
 observation too when the sessions have an environment, and they save what the two save
-histories select. The
-model of those sessions then runs once for each sample, with the sample's parameters, and
-any start that a model samples, and with every variable within the timesteps drawn again, as
-data is in a predictive check: an action imputed in the fit is simulated like the others.
-What the sessions return is kept. The sessions have at most the number of timesteps of their
-data, and fewer when a [`stopping_criterion`](@ref) of a model is met, since no timestep of
-a predictive session has data. For a prior predictive check, give a chain sampled from the
-prior, such as `sample(model, Prior(), 1000)`.
+histories select. The model of those sessions then runs once for each sample, with the
+sample's parameters, and any start that a model samples, and with every variable within the
+timesteps drawn again, as data is in a predictive check: an action imputed in the fit is
+simulated like the others. The trajectories the sessions return are kept. The sessions have
+at most the number of timesteps of their data, and fewer when a [`stopping_criterion`](@ref)
+of a model is met, since no timestep of a predictive session has data. For a prior
+predictive check, give a chain sampled from the prior, such as
+`sample(model, Prior(), 1000)`.
 
 # Examples
 ```julia
 chain = sample(model, NUTS(), 1000)
-simulated = predict_session_values(model, chain; cognitive_save_history = SaveHistory(; outputs = :choice))
+simulated = predict_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; outputs = :choice))
 
 #The simulated choices of participant P1, for every sample
 simulated[@varname(P1.choice)]
 ```
 """
-function predict_session_values end
+function predict_session_trajectories end

@@ -3,7 +3,7 @@
 # an optional third component which can do something with the outcomes of the behavioral sessions, such as a regression
 # predicting something (e.g. physiological data) from the cognitive states.
 
-#Creates the Turing model for fitting a cognitive model to several sessions, after warning when both session parameter models can sample variables of the same name, and when the sessions save values no downstream model uses, and after preparing its parts once
+#Creates the Turing model for fitting a cognitive model to several sessions, after warning when both session parameter models can sample variables of the same name, and when the sessions save trajectories no downstream model uses, and after preparing its parts once
 #The warnings and the preparation are done here, when the model is made, and not in the model, whose body is differentiated and runs on every evaluation: a warning holds a try block, which Mooncake can't differentiate
 function CognitiveModeling.turing_full_model(
     cognitive_parameters_model,
@@ -83,16 +83,16 @@ end
     warn_if_saving_without_downstream_model(sessions_info, downstream_model)
 
 Warn when a session in `sessions_info` saves anything and `downstream_model` is
-`NoDownstreamModel`, since saving costs about 5 % of each gradient and nothing in the
-model uses the saved values: they are read after the fit with `session_values_chain`, from
-sessions that save nothing. Used by `turing_full_model` when it creates the model.
+`NoDownstreamModel`, since saving adds a cost to each gradient and nothing in the model
+uses the saved trajectories: they are read after the fit with `session_trajectories_chain`,
+from sessions that save nothing. Used by `turing_full_model` when it creates the model.
 """
 function warn_if_saving_without_downstream_model(
     sessions_info::MultipleSessionsInfo, downstream_model
 )
     downstream_model isa NoDownstreamModel || return nothing
     sessions_save_anything(sessions_info) || return nothing
-    @warn "The sessions save values, which costs about 5 % of each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_values_chain(model, chain; cognitive_save_history, environment_save_history) then gives the saved values of every sample afterwards."
+    @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_trajectories_chain(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
     return nothing
 end
 
@@ -155,10 +155,11 @@ function sampled_ranges(
 end
 function sampled_ranges(parameters_model::GroupedHierarchicalSessionParameters)
     ranges = Pair{Symbol,NamedTuple}[]
-    for (name, settings) in pairs(parameters_model.parameters)
-        settings.distribution === nothing || continue
+    for (name, hierarchical_parameter) in pairs(parameters_model.parameters)
+        hierarchical_parameter.distribution === nothing || continue
+        transformation = hierarchical_parameter.transformation
         ends = try
-            (settings.transformation(-Inf), settings.transformation(Inf))
+            (transformation(-Inf), transformation(Inf))
         catch
             continue
         end
@@ -167,7 +168,7 @@ function sampled_ranges(parameters_model::GroupedHierarchicalSessionParameters)
             lower=min(ends...),
             upper=max(ends...),
             discrete=false,
-            source="the transformation $(settings.transformation) of its group-level normal distribution",
+            source="the transformation $transformation of its group-level normal distribution",
         )
         push!(ranges, name => range)
     end
@@ -236,20 +237,20 @@ Turing.@model function turing_run_full_model(
         )
     end
 
-    #Run all behavioral sessions, inside a try block when invalid parameters are caught. The parameters are sampled outside it, so that they are kept when a draw is rejected, which a sampler needs to start
+    #Run all behavioral sessions, inside a try block when invalid parameters are caught. The parameters are sampled outside it, so that they are kept when a draw is rejected, which a sampler needs to start: it needs every variable to exist after its first draw, also when that draw is rejected
     sessions = turing_multiple_behavioral_sessions(
         sessions_info, cognitive_parameters, environment_parameters; parallelization
     )
     if catch_invalid_parameters
-        saved_behavioral_values ~
+        saved_behavioral_trajectories ~
         to_submodel(turing_catch_invalid_parameters(sessions), false)
 
-        #A rejected draw leaves nothing for the downstream model, so it returns at once, which Enzyme can differentiate where a value of two types can't be
-        if saved_behavioral_values === nothing
+        #A rejected draw leaves nothing for the downstream model to run on, so the model returns nothing at once, which Enzyme can differentiate where a value of two types can't be. The variables of the downstream model then don't exist for that draw, so a sampler whose first draw is rejected can't start when the downstream model has variables of its own, and needs valid initial parameters
+        if saved_behavioral_trajectories === nothing
             return nothing
         end
     else
-        saved_behavioral_values ~ to_submodel(sessions, false)
+        saved_behavioral_trajectories ~ to_submodel(sessions, false)
     end
 
     #Do the optional downstream model, with its variables under downstream_model when the prefixes are included
@@ -258,7 +259,7 @@ Turing.@model function turing_run_full_model(
             prefix(
                 turing_downstream_model(
                     downstream_model,
-                    saved_behavioral_values,
+                    saved_behavioral_trajectories,
                     cognitive_parameters,
                     sessions_info,
                 ),
@@ -270,7 +271,7 @@ Turing.@model function turing_run_full_model(
         downstream_values ~ to_submodel(
             turing_downstream_model(
                 downstream_model,
-                saved_behavioral_values,
+                saved_behavioral_trajectories,
                 cognitive_parameters,
                 sessions_info,
             ),
@@ -281,7 +282,7 @@ Turing.@model function turing_run_full_model(
     return (;
         cognitive_parameters,
         environment_parameters,
-        saved_behavioral_values,
+        saved_behavioral_trajectories,
         downstream_values,
     )
 end
@@ -297,13 +298,13 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     parallelization=NoParallelization(),
 )
     check_environment_parameters(sessions_info, environment_parameters)
-    saved_values ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_sessions(
             parallelization, sessions_info, cognitive_parameters, environment_parameters
         ),
         false,
     )
-    return saved_values
+    return saved_trajectories
 end
 
 """
@@ -312,9 +313,10 @@ end
 
 Turing.jl model which runs every session in `sessions_info` as a submodel with the prefix
 `session[i]`, and returns a vector with what each returned. The first session runs outside
-the loop, so that the vector has its type. Sessions of one type can still save values of
-different types, such as an action that is `NoAction()` in one session only, and a session
-whose values have another type widens the vector, as [`store_value!`](@ref) does. With
+the loop, so that the vector has its type. Sessions of one type can still save trajectories
+of different types, such as an action that is `NoAction()` in one session only, and a
+session whose trajectories have another type widens the vector, as [`store_value!`](@ref)
+does. With
 [`NoParallelization`](@ref) the sessions run one after the other, and with
 [`ParallelSessions`](@ref) over the threads Julia was started with, which needs the model
 that is evaluated to be marked thread-safe, since the log density is silently wrong
@@ -333,7 +335,7 @@ Turing.@model function turing_run_sessions(
         ),
         false,
     )
-    saved_values = initialize_storage(first_saved, length(sessions))
+    saved_trajectories = initialize_storage(first_saved, length(sessions))
     for i in 2:length(sessions)
         saved ~ to_submodel(
             prefix(
@@ -346,10 +348,10 @@ Turing.@model function turing_run_sessions(
             ),
             false,
         )
-        #A session whose saved values have another type widens the vector
-        saved_values = store_value!(saved_values, saved, i)
+        #A session whose saved trajectories have another type widens the vector
+        saved_trajectories = store_value!(saved_trajectories, saved, i)
     end
-    return saved_values
+    return saved_trajectories
 end
 
 Turing.@model function turing_run_sessions(
@@ -372,8 +374,8 @@ Turing.@model function turing_run_sessions(
         ),
         false,
     )
-    saved_values = initialize_storage(first_saved, length(sessions))
-    #A vector can't be widened while other threads write to it, so saved values of another type are put aside until the threads are done
+    saved_trajectories = initialize_storage(first_saved, length(sessions))
+    #A vector can't be widened while other threads write to it, so saved trajectories of another type are put aside until the threads are done
     saved_with_other_types = Vector{Any}(undef, length(sessions))
     #Written as Base.Threads.@threads, which is the same macro, so that DynamicPPL doesn't warn about thread safety when the package loads. The check above takes the warning's place
     Base.Threads.@threads for i in 2:length(sessions)
@@ -388,39 +390,42 @@ Turing.@model function turing_run_sessions(
             ),
             false,
         )
-        if saved isa eltype(saved_values)
-            saved_values[i] = saved
+        if saved isa eltype(saved_trajectories)
+            saved_trajectories[i] = saved
         else
             saved_with_other_types[i] = saved
         end
     end
-    saved_values = include_other_types(saved_values, saved_with_other_types)
-    return saved_values
+    saved_trajectories = include_other_types(saved_trajectories, saved_with_other_types)
+    return saved_trajectories
 end
 
 """
-    include_other_types(saved_values, saved_with_other_types)
+    include_other_types(saved_trajectories, saved_with_other_types)
 
-Return `saved_values`, what each session saved, with the values in
+Return `saved_trajectories`, what each session saved, with the trajectories in
 `saved_with_other_types` put in their places, widening the vector as
-[`store_value!`](@ref) does. A session whose saved values didn't fit the type of
-`saved_values` has them in its place in `saved_with_other_types`, and is left unassigned in
-`saved_values`. When there are none, `saved_values` is returned as it is. Used by
-[`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the threads are done.
+[`store_value!`](@ref) does. A session whose saved trajectories didn't fit the type of
+`saved_trajectories` has them in its place in `saved_with_other_types`, and is left
+unassigned in `saved_trajectories`. When there are none, `saved_trajectories` is returned as
+it is. Used by [`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the
+threads are done.
 """
-function include_other_types(saved_values::Vector, saved_with_other_types::Vector{Any})
-    #In the common case, every session saved values of one type
+function include_other_types(
+    saved_trajectories::Vector, saved_with_other_types::Vector{Any}
+)
+    #In the common case, every session saved trajectories of one type
     if !any(i -> isassigned(saved_with_other_types, i), eachindex(saved_with_other_types))
-        return saved_values
+        return saved_trajectories
     end
 
-    #Otherwise, store each session's values again, in order, so that the vector widens as it goes
-    widened = initialize_storage(saved_values[1], length(saved_values))
-    for i in 2:length(saved_values)
+    #Otherwise, store each session's trajectories again, in order, so that the vector widens as it goes
+    widened = initialize_storage(saved_trajectories[1], length(saved_trajectories))
+    for i in 2:length(saved_trajectories)
         saved = if isassigned(saved_with_other_types, i)
             saved_with_other_types[i]
         else
-            saved_values[i]
+            saved_trajectories[i]
         end
         widened = store_value!(widened, saved, i)
     end
@@ -456,10 +461,10 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         action=session_info.previous_action,
         environment=(; state=nothing),
     )
-    saved_values ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_timesteps(session_info, cognitive_parameters, (;), previous), false
     )
-    return saved_values
+    return saved_trajectories
 end
 
 #The same with an environment, which fills in the observations that are missing in the data, and takes its parameters too
@@ -470,13 +475,13 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
 )
     #A session with nothing missing runs without its environment, whose scores of the observations wouldn't depend on any variable, so it has the variables of a session without one, and an empty record of the environment
     if !session_info.includes_environment
-        saved_values ~ to_submodel(
+        saved_trajectories ~ to_submodel(
             turing_behavioral_session(
                 without_environment(session_info), cognitive_parameters
             ),
             false,
         )
-        return with_empty_environment_entry(saved_values)
+        return with_empty_environment_entry(saved_trajectories)
     end
 
     cognitive_model = session_info.cognitive_model
@@ -519,13 +524,13 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
             action=map_names(session_info.previous_action, session_info.action_map),
         ),
     )
-    saved_values ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_timesteps(
             session_info, cognitive_parameters, environment_parameters, previous
         ),
         false,
     )
-    return saved_values
+    return saved_trajectories
 end
 
 #A session without an environment takes no environment parameters, so an empty NamedTuple passes, which lets several sessions be run alike, and anything else is an error
@@ -675,7 +680,7 @@ Turing.@model function turing_run_timesteps(
         )
     end
 
-    return saved_values(
+    return saved_trajectories(
         storage,
         timestep_sizes_until(
             session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
@@ -1012,13 +1017,13 @@ end
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
 environment model: `model` runs on `context` with [`turing_apply_model`](@ref), and its
 outputs are then taken from row `t` of `data_columns`, the data for them, where they are
-recorded, filled in from what the model gave where they are [`MissingValue`](@ref), as
-[`turing_impute_missing_values`](@ref) does, and kept as the model gave them where nothing
-happened. It returns the output, the model's new state, the distribution it gave for the
-output and which outputs are recorded on the timestep, as
-[`recorded_on_timestep`](@ref) gives it, so that the recorded values can be scored against
-the distributions at the end of the session. The row is taken here and not given. Used by
-[`turing_behavioral_timestep`](@ref).
+recorded, imputed from what the model gave where they are [`MissingValue`](@ref), as
+[`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
+otherwise, such as `UnimputedMissingValue()` or `NoAction()`. It returns the output, the
+model's new state, the distribution it gave for the output and which outputs are recorded on
+the timestep, as [`recorded_on_timestep`](@ref) gives it, so that the recorded values can be
+scored against the distributions at the end of the session. The row is taken here and not
+given. Used by [`turing_behavioral_timestep`](@ref).
 """
 Turing.@model function turing_model_timestep(model, context, data_columns, t)
     data_output = row(data_columns, t)
@@ -1090,10 +1095,11 @@ end
 """
     turing_impute_value(data_value, distribution)
 
-Turing.jl model for one value of the data: a value that is there is taken as it is, and a
-[`MissingValue`](@ref) is a latent variable named `imputed` with `distribution`, the value
-of a [`Deterministic`](@ref), or the marker itself when the model gives [`NoAction`](@ref)
-or [`NoObservation`](@ref) on that timestep. Used by [`turing_impute_each_value`](@ref).
+Turing.jl model for one value of the data: a value that is there is taken as it is, and so
+is any marker but [`MissingValue`](@ref), which is a latent variable named `imputed` with
+`distribution`, the value of a [`Deterministic`](@ref), or the marker itself when the model
+gives [`NoAction`](@ref) or [`NoObservation`](@ref) on that timestep. Used by
+[`turing_impute_each_value`](@ref).
 """
 Turing.@model function turing_impute_value(data_value, distribution)
     return data_value

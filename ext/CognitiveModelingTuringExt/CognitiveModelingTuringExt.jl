@@ -8,7 +8,7 @@ using CognitiveModeling:
     attribute_names,
     describe_model,
     NoEnvironment,
-    session_values_chain,
+    session_trajectories_chain,
     session_parameters_chain
 using CognitiveModeling:
     turing_apply_model,
@@ -47,7 +47,7 @@ using CognitiveModeling:
     map_saved,
     initialize_all_storage,
     store_all_values!,
-    saved_values,
+    saved_trajectories,
     with_empty_environment_entry,
     timestep_sizes_until
 using CognitiveModeling:
@@ -73,6 +73,6 @@ include("session_parameter_models/independent_session_parameters.jl")
 include("session_parameter_models/grouped_hierarchical_session_parameters.jl")
 include("session_parameter_models/composite_session_parameters.jl")
 
-include("session_values_chain.jl")
+include("session_trajectories_chain.jl")
 
 end

@@ -533,13 +533,13 @@ end
               logpdf(Normal(V₂, 1.0), 0.4)
     end
 
-    @testset "A missing in the data becomes MissingValue, or the marker for nothing happening, and a column keeps one type" begin
+    @testset "A missing in the data becomes MissingValue, or the marker that the replacements give, and a column keeps one type" begin
         session_info = SessionInfo(
             SessionRescorlaWagner(),
             (; reward=[1.0, missing, 0.0]),
             (; choice=[true, missing, false]);
             who_starts=EnvironmentStarts(),
-            missing_observations=NoObservation(),
+            observation_replacements=(missing => NoObservation(),),
         )
         @test session_info.observations.reward == [1.0, NoObservation(), 0.0] &&
             session_info.observations.reward isa Vector{Union{NoObservation,Float64}}
@@ -562,22 +562,30 @@ end
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
-            missing_actions=NoAction(),
+            action_replacements=(missing => NoAction(),),
         ).actions.choice isa Vector{Union{NoAction,Bool}}
-        #Without an environment, a missing observation can't be MissingValue
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to fill them in." SessionInfo(
+        #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." SessionInfo(
             SessionRescorlaWagner(),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
         )
-        @test SessionInfo(
+        #It can be passed on unimputed: the model receives the marker as its observation, which this one doesn't learn from, and nothing is sampled
+        unimputed = SessionInfo(
             SessionRescorlaWagner(),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
-            missing_observations=NoObservation(),
-        ).observations.reward[2] === NoObservation()
+            observation_replacements=(missing => UnimputedMissingValue(),),
+            cognitive_save_history=SaveHistory(SaveEverything()),
+        )
+        @test unimputed.observations.reward[2] === UnimputedMissingValue()
+        unimputed_model = turing_behavioral_session(unimputed, SESSION_PARAMETERS)
+        @test isempty(keys(rand(Xoshiro(1), unimputed_model)))
+        saved = returned(unimputed_model, (;))
+        @test saved.observations[3] == (; reward=UnimputedMissingValue())
+        @test saved.states[3] == saved.states[2]
     end
 
     @testset "cognitive_save_history selects what is returned, in the model's own names, and nothing by default" begin
@@ -754,7 +762,7 @@ end
             [@varname(timestep[2].choice.imputed)]
     end
 
-    @testset "Missing actions that aren't imputed are passed on as NoAction, with nothing sampled" begin
+    @testset "Missing actions that aren't imputed are passed on as UnimputedMissingValue, with nothing sampled" begin
         rewards = (; reward=[1.0, 0.0, 1.0, 1.0])
         actions = (;
             choice=[0.2, MissingValue(), 0.4, MissingValue()],
@@ -765,7 +773,7 @@ end
             (; learning_rate=0.3),
             rewards,
             actions;
-            impute_missing_actions=false,
+            action_replacements=(MissingValue() => UnimputedMissingValue(),),
             cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
         )
         @test isempty(keys(rand(Xoshiro(1), model)))
@@ -781,7 +789,7 @@ end
         end
         @test logjoint(model, (;)) ≈ expected
         @test logprior(model, (;)) == 0
-        #The same as data which has NoAction there
+        #The log density is that of data which has NoAction there, since neither is scored
         with_no_action = (;
             choice=[0.2, NoAction(), 0.4, NoAction()], bet=[1.0, 1.5, NoAction(), 0.8]
         )
@@ -791,19 +799,23 @@ end
             ),
             (;),
         )
-        #The returned actions have NoAction for them
+        #The returned actions have the marker for them
         @test returned(model, (;)).actions[2:end] == [
             (; choice=0.2, bet=1.0),
-            (; choice=NoAction(), bet=1.5),
-            (; choice=0.4, bet=NoAction()),
-            (; choice=NoAction(), bet=0.8),
+            (; choice=UnimputedMissingValue(), bet=1.5),
+            (; choice=0.4, bet=UnimputedMissingValue()),
+            (; choice=UnimputedMissingValue(), bet=0.8),
         ]
 
-        #The model receives NoAction as its previous action after a missing one, so here it chooses at random again
+        #The model receives the marker as its previous action after a missing one, so here it chooses at random again
         choices = (; choice=[true, MissingValue(), true])
         @test logjoint(
             session_for_test(
-                RepeatsPreviousChoice(), (;), (;), choices; impute_missing_actions=false
+                RepeatsPreviousChoice(),
+                (;),
+                (;),
+                choices;
+                action_replacements=(MissingValue() => UnimputedMissingValue(),),
             ),
             (;),
         ) ≈ 2 * log(0.5)
@@ -813,13 +825,13 @@ end
             session_for_test(RepeatsPreviousChoice(), (;), (;), choices), imputed
         )) ≈ log(0.5) + 2 * log(0.9)
 
-        #The environment receives NoAction too: RewardsPreviousChoice gives 0.5 for it, and the previous choice otherwise
+        #The environment receives the marker too: RewardsPreviousChoice gives 0.5 for it, and the previous choice otherwise
         model = session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 3)),
             choices;
-            impute_missing_actions=false,
+            action_replacements=(MissingValue() => UnimputedMissingValue(),),
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
@@ -890,7 +902,7 @@ end
         @test returned(model, (;)).observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to fill them in." session_for_test(
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." session_for_test(
             SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES
         )
         #An observation that the environment doesn't give stays NoObservation

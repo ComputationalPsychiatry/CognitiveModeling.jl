@@ -4,8 +4,8 @@ The sessions to fit, with their data, models and settings, how the parameters of
 sessions are given, and what runs after them, which are the same for every inference
 backend. A backend fits several sessions with a full model in three parts: a session parameter
 model gives or samples the parameters of every session, for the cognitive model and for the
-environment model, the sessions run with them, and a downstream model can use what the
-sessions saved. Each backend has a page of its own, with the models it makes and what a
+environment model, the sessions run with them, and a downstream model can use the
+trajectories the sessions saved. Each backend has a page of its own, with the models it makes and what a
 model can add for it: [Fitting with Turing.jl](fitting_with_turing.md).
 
 ```@index

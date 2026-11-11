@@ -47,6 +47,14 @@ struct ParametersModelOfOwn <: AbstractSessionParametersModel end
         @test isbitstype(MissingValue)
     end
 
+    @testset "The marker for a missing value that isn't imputed is passed on like those for nothing happening" begin
+        @test UnimputedMissingValue() === UnimputedMissingValue()
+        @test UnimputedMissingValue() isa AbstractNoValue
+        @test UnimputedMissingValue() !== MissingValue()
+        @test isbitstype(UnimputedMissingValue)
+        @test_throws MethodError UnimputedMissingValue() + 1
+    end
+
     @testset "It can stand in for one entry of the actions and observations" begin
         action = (; choice=MissingValue(), bet=1.0)
         @test action.choice isa MissingValue && action.bet == 1.0
@@ -286,7 +294,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test CognitiveModeling.last_timestep_with_data((;)) == 0
     end
 
-    @testset "A missing in the data becomes MissingValue by default, or the marker for nothing happening" begin
+    @testset "A missing in the data becomes MissingValue by default, and the replacements say which values become which markers" begin
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
@@ -304,8 +312,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, missing, 1.0]),
             (; choice=[true, missing, true]);
             who_starts=EnvironmentStarts(),
-            missing_observations=NoObservation(),
-            missing_actions=NoAction(),
+            observation_replacements=(missing => NoObservation(),),
+            action_replacements=(missing => NoAction(),),
         )
         @test session_info.observations.reward == [1.0, NoObservation(), 1.0] &&
             session_info.observations.reward isa Vector{Union{NoObservation,Float64}}
@@ -318,29 +326,63 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             rewards,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            missing_observations=NoObservation(),
+            observation_replacements=(missing => NoObservation(),),
         )
         @test rewards.reward[2] === missing
-        @test_throws TypeError SessionInfo(
+        #A single pair can be given on its own, several values can each become a marker, and anything that isn't pairs is an error
+        session_info = SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, missing, -1.0]),
+            (; choice=[1, -1, missing]);
+            who_starts=EnvironmentStarts(),
+            observation_replacements=(
+                missing => UnimputedMissingValue(), -1 => NoObservation()
+            ),
+            action_replacements=-1 => NoAction(),
+        )
+        @test session_info.observations.reward ==
+            [1.0, UnimputedMissingValue(), NoObservation()]
+        @test isequal(session_info.actions.choice, [1, NoAction(), missing])
+        @test_throws "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoAction()), but they are NoObservation()." SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            missing_actions=NoObservation(),
+            action_replacements=NoObservation(),
         )
     end
 
-    @testset "Missing actions that aren't imputed are replaced by NoAction" begin
+    @testset "Missing values that aren't imputed are passed on, and need no environment" begin
         session_info = SessionInfo(
             SessionCounter(),
-            COUNTER_REWARDS,
+            (; reward=[1.0, missing, 1.0]),
             (; choice=[true, MissingValue(), true]);
             who_starts=EnvironmentStarts(),
-            impute_missing_actions=false,
+            observation_replacements=(missing => UnimputedMissingValue(),),
+            action_replacements=(MissingValue() => UnimputedMissingValue(),),
         )
-        @test session_info.actions.choice == [true, NoAction(), true] &&
-            session_info.actions.choice isa Vector{Union{NoAction,Bool}}
+        @test session_info.observations.reward == [1.0, UnimputedMissingValue(), 1.0] &&
+            session_info.observations.reward isa
+              Vector{Union{UnimputedMissingValue,Float64}}
+        @test session_info.actions.choice == [true, UnimputedMissingValue(), true] &&
+            session_info.actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
         @test session_info.recorded_actions == (; choice=[true, true])
+        #Such a timestep has data, so the stopping criterion is checked after it
+        @test session_info.first_timestep_to_check_stopping == 4
+        #A copy with other save histories, and one for prediction, replace nothing more in the data, also when missing was kept as a value
+        kept = SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, missing, 1.0]),
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+            observation_replacements=(),
+        )
+        @test isequal(kept.observations.reward, [1.0, missing, 1.0])
+        @test isequal(
+            SessionInfo(kept; cognitive_save_history=SaveHistory(; states=:n_timesteps)).observations.reward,
+            [1.0, missing, 1.0],
+        )
+        @test isequal(prepare_for_prediction(kept).observations.reward, [1.0, missing, 1.0])
     end
 
     @testset "A column written with a marker in it has the element type Any, and is narrowed to the types it holds" begin
@@ -378,14 +420,14 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         ).includes_environment
-        #A missing action that isn't imputed is an action that wasn't taken, so nothing is missing
+        #A missing action that isn't imputed leaves nothing for the observations to inform, and neither does a missing observation that isn't
         @test !SessionInfo(
             SessionCounter(),
-            COUNTER_REWARDS,
+            (; reward=[1.0, UnimputedMissingValue(), 1.0]),
             (; choice=[true, MissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
-            impute_missing_actions=false,
+            action_replacements=(MissingValue() => UnimputedMissingValue(),),
         ).includes_environment
         #With nothing missing, it doesn't run, and there is no warning
         all_recorded = @test_logs SessionInfo(
@@ -448,7 +490,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test predictive.observations === left_out.observations &&
             !predictive.includes_environment
         #What needs the environment is an error without it
-        @test_throws "include_environment = false leaves the environment out of the session, but the data has missing observations, which only the environment can fill in." SessionInfo(
+        @test_throws "include_environment = false leaves the environment out of the session, but the data has observations that are MissingValue(), which only the environment can impute." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
@@ -556,7 +598,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             timestep_sizes=[1.0, 2.0],
         )
         #Without an environment, no observation can be missing
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to fill them in." SessionInfo(
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
@@ -743,6 +785,59 @@ const COUNTER_TABLE = (;
         )
     end
 
+    @testset "The replacements are made in the whole table, also in the columns an attribute is built from" begin
+        table = (;
+            id=["S1", "S1", "S2", "S2"],
+            outcome=[1.0, missing, 1.0, 0.0],
+            choicecol=[1, 0, -1, 1],
+            rtcol=[0.5, 0.7, 0.9, missing],
+        )
+        sessions_info = MultipleSessionsInfo(
+            SessionCounter(),
+            table;
+            observation_columns=(; reward=:outcome),
+            action_columns=(; choice=(; choice=:choicecol, rt=:rtcol)),
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+            observation_replacements=(missing => UnimputedMissingValue(),),
+            action_replacements=(missing => MissingValue(), -1 => NoAction()),
+        )
+        #A missing observation that isn't imputed needs no environment, and every session has the marker in its type
+        @test sessions_info.sessions[1].observations.reward ==
+            [1.0, UnimputedMissingValue()]
+        @test sessions_info.sessions[2].observations.reward isa
+            Vector{Union{UnimputedMissingValue,Float64}}
+        #A replaced value in any column that an attribute is built from makes the whole value its marker
+        @test sessions_info.sessions[1].actions.choice ==
+            [(; choice=1, rt=0.5), (; choice=0, rt=0.7)]
+        @test sessions_info.sessions[2].actions.choice == [NoAction(), MissingValue()]
+        @test isconcretetype(eltype(sessions_info.sessions))
+        #A value which is equal to a pair's without having its type is replaced too, and every session then has the marker in its type
+        with_code = MultipleSessionsInfo(
+            SessionCounter(),
+            (; id=["S1", "S2"], outcome=[1.0, -1.0], choice=[true, false]);
+            observation_columns=(; reward=:outcome),
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+            observation_replacements=-1 => NoObservation(),
+        )
+        @test with_code.sessions[2].observations.reward == [NoObservation()] &&
+            with_code.sessions[1].observations.reward isa
+              Vector{Union{NoObservation,Float64}}
+        #Without replacements, missing stays in the data as a value
+        kept = MultipleSessionsInfo(
+            SessionCounter(),
+            table;
+            observation_columns=(; reward=:outcome),
+            action_columns=:choicecol,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+            observation_replacements=(),
+        )
+        @test isequal(kept.sessions[1].observations.reward, [1.0, missing])
+    end
+
     @testset "The settings go to every session, and the sizes of the timesteps can come from a column" begin
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
@@ -753,7 +848,7 @@ const COUNTER_TABLE = (;
             who_starts=AgentStarts(),
             timestep_sizes=:dt,
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
-            impute_missing_actions=false,
+            action_replacements=(missing => UnimputedMissingValue(),),
         )
         @test all(
             session ->
@@ -763,7 +858,8 @@ const COUNTER_TABLE = (;
         )
         @test sessions_info.sessions[1].timestep_sizes == [1.0, 0.5] &&
             sessions_info.sessions[2].timestep_sizes == [1.0, 2.0, 1.0]
-        @test sessions_info.sessions[2].actions.choice == [true, NoAction(), false]
+        @test sessions_info.sessions[2].actions.choice ==
+            [true, UnimputedMissingValue(), false]
         @test MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
@@ -799,7 +895,7 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
-            impute_missing_actions=false,
+            action_replacements=(missing => UnimputedMissingValue(),),
         )
         @test !any(session -> session.includes_environment, all_recorded.sessions)
         #A copy with another save history for every session
@@ -965,7 +1061,7 @@ end
             who_starts=AgentStarts(),
             timestep_sizes=[1.0, 2.0, 1.0],
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
-            impute_missing_actions=false,
+            action_replacements=(missing => UnimputedMissingValue(),),
         )
         predictive = prepare_for_prediction(session_info)
         @test predictive.actions == (; choice=fill(MissingValue(), 3))

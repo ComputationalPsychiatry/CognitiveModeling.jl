@@ -12,6 +12,6 @@ else
     include("entry_names_abstractppl.jl")
 end
 
-include("session_values_chain.jl")
+include("session_trajectories_chain.jl")
 
 end

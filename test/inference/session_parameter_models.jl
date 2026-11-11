@@ -57,7 +57,7 @@ end
         )
         @test CognitiveModeling.estimates_parameters(
             GroupedHierarchicalSessionParameters((;
-                probability=(; priors=(; mean=1, sd=2))
+                probability=HierarchicalParameter((; mean=1, sd=2))
             )),
         )
         @test CognitiveModeling.estimates_parameters(ParametersModelOfOwn())
@@ -86,7 +86,7 @@ end
         ) === (:probability, :scale)
         @test CognitiveModeling.parameter_names(
             GroupedHierarchicalSessionParameters((;
-                probability=(; priors=(; mean=1, sd=2))
+                probability=HierarchicalParameter((; mean=1, sd=2))
             )),
         ) === (:probability,)
         @test CognitiveModeling.parameter_names(ParametersModelOfOwn()) === nothing
@@ -122,59 +122,57 @@ end
         @test CognitiveModeling.parameters_by_session(in_order, ["S1", "S2"]) === in_order
     end
 
-    @testset "GroupedHierarchicalSessionParameters fills in the settings that a parameter leaves out" begin
+    @testset "A HierarchicalParameter keeps its settings, with the defaults of those that aren't given" begin
         priors = (; mean=1, sd=2)
-        parameters_model = GroupedHierarchicalSessionParameters((;
-            probability=(; priors),
-            scale=(; priors, transformation=exp, group_by=:diagnosis, centered=true),
-            offset=(;
-                priors=(; location=1), distribution=tuple, group_by=[:diagnosis, :site]
-            ),
-        ))
-        #The default normal distribution is sampled as standardized values, and any other distribution directly
-        @test parameters_model.parameters.probability === (;
-            priors,
-            distribution=nothing,
-            transformation=identity,
-            group_by=(),
-            centered=false,
+        #The default normal distribution is sampled as standardized values, in one group, without a transformation
+        default = HierarchicalParameter(priors)
+        @test default.priors === priors &&
+            default.distribution === nothing &&
+            default.transformation === identity &&
+            default.group_by === () &&
+            default.centered === false
+        #The columns to group by are kept as a tuple of names
+        grouped = HierarchicalParameter(
+            priors; transformation=exp, group_by=:diagnosis, centered=true
         )
-        @test parameters_model.parameters.scale === (;
-            priors,
-            distribution=nothing,
-            transformation=exp,
-            group_by=(:diagnosis,),
-            centered=true,
+        @test grouped.transformation === exp &&
+            grouped.group_by === (:diagnosis,) &&
+            grouped.centered === true
+        #Any other distribution is sampled from directly
+        other = HierarchicalParameter(
+            (; location=1); distribution=tuple, group_by=[:diagnosis, :site]
         )
-        @test parameters_model.parameters.offset === (;
-            priors=(; location=1),
-            distribution=tuple,
-            transformation=identity,
-            group_by=(:diagnosis, :site),
-            centered=true,
-        )
+        @test other.distribution === tuple &&
+            other.group_by === (:diagnosis, :site) &&
+            other.centered === true
+        #GroupedHierarchicalSessionParameters keeps one for each parameter, as they are given
+        parameters = (; probability=default, scale=grouped, offset=other)
+        @test GroupedHierarchicalSessionParameters(parameters).parameters === parameters
     end
 
     @testset "The settings of each parameter are checked" begin
         priors = (; mean=1, sd=2)
-        @test_throws "The settings of probability in GroupedHierarchicalSessionParameters include (:transfomation,), which aren't settings of it. Its settings are (:priors, :distribution, :transformation, :group_by, :centered)." GroupedHierarchicalSessionParameters((;
-            probability=(; priors, transfomation=exp)
-        ))
-        @test_throws "The settings of probability in GroupedHierarchicalSessionParameters must have priors" GroupedHierarchicalSessionParameters((;
-            probability=(; transformation=exp)
-        ))
-        @test_throws "The settings of probability in GroupedHierarchicalSessionParameters must be a NamedTuple" GroupedHierarchicalSessionParameters((;
-            probability=1
-        ))
-        @test_throws "The group-level distribution of probability in GroupedHierarchicalSessionParameters is the default normal distribution, which takes two priors, of its mean and its standard deviation, but probability has the priors (:mean,)." GroupedHierarchicalSessionParameters((;
-            probability=(; priors=(; mean=1))
+        #A setting that there isn't is an unsupported keyword argument
+        @test_throws MethodError HierarchicalParameter(priors; transfomation=exp)
+        @test_throws "A HierarchicalParameter takes the priors of the parameters of its group-level distribution in a NamedTuple, such as (; mean = Normal(0, 1), sd = Exponential(1)), but it was given 1." HierarchicalParameter(
+            1
+        )
+        @test_throws "A HierarchicalParameter takes the priors of the parameters of its group-level distribution in a NamedTuple" HierarchicalParameter(
+            (;); transformation=exp
+        )
+        @test_throws "The group-level distribution of a HierarchicalParameter is a normal distribution by default, which takes two priors, of its mean and its standard deviation, but it was given the priors (:mean,)." HierarchicalParameter((;
+            mean=1
         ))
         #Whether it is centered can only be chosen for the default normal distribution
         for centered in (true, false)
-            @test_throws "probability in GroupedHierarchicalSessionParameters has centered = $centered, but centered only applies to the default normal distribution" GroupedHierarchicalSessionParameters((;
-                probability=(; priors, distribution=tuple, centered)
-            ))
+            @test_throws "A HierarchicalParameter was given centered = $centered, but centered only applies to the default normal distribution" HierarchicalParameter(
+                priors; distribution=tuple, centered
+            )
         end
+        #Each parameter must be given one
+        @test_throws "GroupedHierarchicalSessionParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for probability it was given (priors = (mean = 1, sd = 2),)." GroupedHierarchicalSessionParameters((;
+            probability=(; priors)
+        ))
     end
 
     @testset "The groups of the sessions are found from the table, in the order of their first session" begin
@@ -282,8 +280,8 @@ end
         )
 
         hierarchical = GroupedHierarchicalSessionParameters((;
-            probability=(; priors=(; mean=1, sd=2), group_by=:diagnosis),
-            scale=(; priors=(; mean=1, sd=2)),
+            probability=HierarchicalParameter((; mean=1, sd=2); group_by=:diagnosis),
+            scale=HierarchicalParameter((; mean=1, sd=2)),
         ))
         #The groups are kept in the same kind of model, in a field that is nothing until then
         @test hierarchical.groups === nothing

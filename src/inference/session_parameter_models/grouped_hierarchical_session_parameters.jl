@@ -1,27 +1,31 @@
 ## Each parameter sampled from the distribution of a group of sessions ##
 
 """
-    GroupedHierarchicalSessionParameters(parameters)
+    HierarchicalParameter(priors; distribution=nothing, transformation=identity,
+                          group_by=nothing, centered=nothing)
 
-The session parameter model of a full model which samples each parameter of every session
-from a group-level distribution, whose own parameters are sampled from priors, once for each
-group of sessions. `parameters` is a `NamedTuple` with an entry for each parameter that is
-fitted, a `NamedTuple` of its settings:
-- `priors`: the priors of the parameters of the group-level distribution, in the order in
-  which the distribution takes them, such as `(; mean = Normal(0, 1), sd = Exponential(1))`.
-  Their names name the variables of the group-level parameters.
+How one parameter of a [`GroupedHierarchicalSessionParameters`](@ref) is sampled for every
+session: from a group-level distribution, whose own parameters are sampled from `priors`,
+once for each group of sessions.
+
+# Arguments
+- `priors::NamedTuple`: the priors of the parameters of the group-level distribution, in the
+  order in which the distribution takes them, such as
+  `(; mean = Normal(0, 1), sd = Exponential(1))`. Their names name the variables of the
+  group-level parameters.
+
+# Keyword arguments
 - `distribution=nothing`: the group-level distribution, as a function of its parameters,
   such as `Normal` or `(location, scale) -> Laplace(location, scale)`. `nothing` is a normal
   distribution, whose two priors are those of its mean and its standard deviation.
 - `transformation=identity`: a function applied to the value of each session after it is
   sampled, such as `exp` for a parameter that must be positive or `logistic` for one between
   0 and 1, as an inverse link function does in a regression.
-- `group_by=nothing`: a column of the table in sessions_info that the sessions were split
-  from, or a tuple of columns, whose values group the sessions, so that each group has a
-  group-level distribution of its own, such as `:diagnosis` for a clinical and a
-  non-clinical group. Each session must have one value of each of the columns. Groups are
-  numbered in the order of their first session. With `nothing`, every session is in one
-  group.
+- `group_by=nothing`: a column of the table that the sessions were split from, or a tuple of
+  columns, whose values group the sessions, so that each group has a group-level
+  distribution of its own, such as `:diagnosis` for a clinical and a non-clinical group.
+  Each session must have one value of each of the columns. Groups are numbered in the order
+  of their first session. With `nothing`, every session is in one group.
 - `centered=nothing`: for the default normal distribution, whether the value of each
   session is sampled from the distribution of its group, with `true`, or as a standardized
   value which the group's mean shifts and its standard deviation scales, with `false`,
@@ -29,9 +33,90 @@ fitted, a `NamedTuple` of its settings:
   its parameters little. Any other distribution is always sampled from directly, and
   giving `centered` with one is an error.
 
-The settings that aren't given take their defaults, and the parameters can be grouped by
-different columns. The completed settings are kept in the field `parameters`. A full model
-finds the group of every session once, before it is made, from the table that
+Each argument is kept in a field of the same name, with `group_by` as a tuple of column
+names, which is empty for one group, and `centered` as `true` or `false`.
+
+# Examples
+```jldoctest
+julia> using Distributions: Normal, Exponential
+
+julia> learning_rate = HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp, group_by = :diagnosis);
+
+julia> learning_rate.group_by, learning_rate.centered
+((:diagnosis,), false)
+```
+"""
+struct HierarchicalParameter{
+    Tpriors<:NamedTuple,Tdistribution,Ttransformation,Tgroup_by<:Tuple{Vararg{Symbol}}
+}
+    priors::Tpriors
+    distribution::Tdistribution
+    transformation::Ttransformation
+    group_by::Tgroup_by
+    centered::Bool
+
+    #Checks the settings, and keeps the columns to group by as a tuple of names, and whether the values are sampled from the distribution directly as the distribution decides it by default
+    function HierarchicalParameter(
+        priors;
+        distribution=nothing,
+        transformation=identity,
+        group_by=nothing,
+        centered::Union{Nothing,Bool}=nothing,
+    )
+
+        #The priors of the group-level parameters must be given
+        if !(priors isa NamedTuple) || isempty(priors)
+            throw(
+                ArgumentError(
+                    "A HierarchicalParameter takes the priors of the parameters of its group-level distribution in a NamedTuple, such as (; mean = Normal(0, 1), sd = Exponential(1)), but it was given $(repr(priors)).",
+                ),
+            )
+        end
+
+        #The default normal distribution takes the priors of its mean and its standard deviation
+        if distribution === nothing && length(priors) != 2
+            throw(
+                ArgumentError(
+                    "The group-level distribution of a HierarchicalParameter is a normal distribution by default, which takes two priors, of its mean and its standard deviation, but it was given the priors $(keys(priors)).",
+                ),
+            )
+        end
+
+        #Only the default normal distribution has the choice of being sampled as standardized values, which is its default. Any other distribution is sampled from directly
+        if centered !== nothing && distribution !== nothing
+            throw(
+                ArgumentError(
+                    "A HierarchicalParameter was given centered = $centered, but centered only applies to the default normal distribution, and its distribution is $distribution, which is always sampled from directly. Leave centered out.",
+                ),
+            )
+        end
+        sampled_directly = something(centered, distribution !== nothing)
+
+        #The columns to group by are kept as a tuple of names, which is empty for one group
+        columns_to_group_by = group_by === nothing ? () : as_tuple_of_names(group_by)
+
+        return new{
+            typeof(priors),
+            typeof(distribution),
+            typeof(transformation),
+            typeof(columns_to_group_by),
+        }(
+            priors, distribution, transformation, columns_to_group_by, sampled_directly
+        )
+    end
+end
+
+"""
+    GroupedHierarchicalSessionParameters(parameters)
+
+The session parameter model of a full model which samples each parameter of every session
+from a group-level distribution, whose own parameters are sampled from priors, once for each
+group of sessions. `parameters` is a `NamedTuple` with a [`HierarchicalParameter`](@ref) for
+each parameter that is fitted, which has its priors, its group-level distribution, its
+transformation and the columns that group the sessions, so the parameters can be grouped by
+different columns. It is kept in the field `parameters`.
+
+A full model finds the group of every session once, before it is made, from the table that
 [`MultipleSessionsInfo`](@ref) keeps, so sessions that were prepared one at a time can only
 be in one group. The field `groups` is `nothing` until then, and afterwards has, for each
 parameter, the group of every session, `group_of_each_session`, the number of groups,
@@ -43,14 +128,13 @@ using Turing
 using LogExpFunctions: logistic
 
 session_parameter_model = GroupedHierarchicalSessionParameters((;
-    learning_rate = (;
-        priors = (; mean = Normal(0, 1), sd = Exponential(1)),
+    learning_rate = HierarchicalParameter(
+        (; mean = Normal(0, 1), sd = Exponential(1));
         transformation = logistic,
         group_by = :diagnosis,
     ),
-    inverse_temperature = (;
-        priors = (; mean = Normal(0, 1), sd = Exponential(1)),
-        transformation = exp,
+    inverse_temperature = HierarchicalParameter(
+        (; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp
     ),
 ))
 ```
@@ -61,12 +145,10 @@ struct GroupedHierarchicalSessionParameters{
     parameters::Tparameters
     groups::Tgroups
 
-    #Checks the settings of each parameter, and fills in those it leaves out. The groups of the sessions aren't found yet
+    #Takes a HierarchicalParameter for each parameter. The groups of the sessions aren't found yet
     function GroupedHierarchicalSessionParameters(parameters::NamedTuple)
-        completed = NamedTuple{keys(parameters)}(
-            map(complete_hierarchical_settings, keys(parameters), values(parameters))
-        )
-        return new{typeof(completed),Nothing}(completed, nothing)
+        foreach(check_is_hierarchical_parameter, keys(parameters), values(parameters))
+        return new{typeof(parameters),Nothing}(parameters, nothing)
     end
 
     #The same model with the groups of the sessions it is prepared for
@@ -78,7 +160,7 @@ struct GroupedHierarchicalSessionParameters{
     end
 end
 
-#It gives the parameters it has settings for
+#It gives the parameters it has a HierarchicalParameter for
 function parameter_names(parameters_model::GroupedHierarchicalSessionParameters)
     return keys(parameters_model.parameters)
 end
@@ -91,7 +173,8 @@ function prepare_parameters_model(
     names = keys(parameters_model.parameters)
     groups = NamedTuple{names}(
         map(
-            (name, settings) -> group_sessions(sessions_info, settings.group_by, name),
+            (name, hierarchical_parameter) ->
+                group_sessions(sessions_info, hierarchical_parameter.group_by, name),
             names,
             values(parameters_model.parameters),
         ),
@@ -100,82 +183,17 @@ function prepare_parameters_model(
 end
 
 """
-    complete_hierarchical_settings(name, settings)
+    check_is_hierarchical_parameter(name, hierarchical_parameter)
 
-Return the settings of the parameter `name` of a
-[`GroupedHierarchicalSessionParameters`](@ref), a `NamedTuple`, with every setting it leaves
-out at its default, and `group_by` as a tuple of column names. It is an error when the
-settings have no `priors`, when they have a setting there isn't, when the default normal
-distribution doesn't have two priors, and when `centered` is given with another
-distribution. Used by
-the constructor of `GroupedHierarchicalSessionParameters`.
+Throw an informative error if what a [`GroupedHierarchicalSessionParameters`](@ref) was
+given for the parameter `name` isn't a [`HierarchicalParameter`](@ref). Used by the
+constructor of `GroupedHierarchicalSessionParameters`.
 """
-function complete_hierarchical_settings(name::Symbol, settings::NamedTuple)
-
-    #Every setting must be one there is
-    known_settings = (:priors, :distribution, :transformation, :group_by, :centered)
-    unknown_settings = Tuple(
-        setting for setting in keys(settings) if !(setting in known_settings)
-    )
-    if !isempty(unknown_settings)
-        throw(
-            ArgumentError(
-                "The settings of $name in GroupedHierarchicalSessionParameters include $unknown_settings, which aren't settings of it. Its settings are $known_settings.",
-            ),
-        )
-    end
-
-    #The priors of the group-level parameters must be given
-    if !(
-        haskey(settings, :priors) &&
-        settings.priors isa NamedTuple &&
-        !isempty(settings.priors)
-    )
-        throw(
-            ArgumentError(
-                "The settings of $name in GroupedHierarchicalSessionParameters must have priors, a NamedTuple with the prior of each parameter of the group-level distribution, such as (; mean = Normal(0, 1), sd = Exponential(1)).",
-            ),
-        )
-    end
-
-    #The default normal distribution takes the priors of its mean and its standard deviation
-    distribution = get(settings, :distribution, nothing)
-    if distribution === nothing && length(settings.priors) != 2
-        throw(
-            ArgumentError(
-                "The group-level distribution of $name in GroupedHierarchicalSessionParameters is the default normal distribution, which takes two priors, of its mean and its standard deviation, but $name has the priors $(keys(settings.priors)).",
-            ),
-        )
-    end
-
-    #Only the default normal distribution has the choice of being sampled as standardized values, which is its default. Any other distribution is sampled from directly
-    centered = get(settings, :centered, nothing)
-    if centered !== nothing && distribution !== nothing
-        throw(
-            ArgumentError(
-                "$name in GroupedHierarchicalSessionParameters has centered = $centered, but centered only applies to the default normal distribution, and its distribution is $distribution, which is always sampled from directly. Leave centered out.",
-            ),
-        )
-    end
-    centered = something(centered, distribution !== nothing)
-
-    #The columns to group by are kept as a tuple of names, which is empty for one group
-    group_by = get(settings, :group_by, nothing)
-    group_by = group_by === nothing ? () : as_tuple_of_names(group_by)
-
-    return (;
-        priors=settings.priors,
-        distribution,
-        transformation=get(settings, :transformation, identity),
-        group_by,
-        centered,
-    )
-end
-
-function complete_hierarchical_settings(name::Symbol, settings)
+check_is_hierarchical_parameter(name::Symbol, ::HierarchicalParameter) = nothing
+function check_is_hierarchical_parameter(name::Symbol, hierarchical_parameter)
     return throw(
         ArgumentError(
-            "The settings of $name in GroupedHierarchicalSessionParameters must be a NamedTuple, such as (; priors = (; mean = Normal(0, 1), sd = Exponential(1))), but they are $(repr(settings)).",
+            "GroupedHierarchicalSessionParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for $name it was given $(repr(hierarchical_parameter)).",
         ),
     )
 end

@@ -6,7 +6,7 @@
 
     @testset "The recorded values of each name are kept in order, with the type of the column without the markers" begin
         recorded = CognitiveModeling.recorded_values(
-            CognitiveModeling.replace_missing(actions, MissingValue())
+            CognitiveModeling.replace_data_values(actions, (missing => MissingValue(),))
         )
         @test recorded.choice == [true, false, true] && recorded.choice isa Vector{Bool}
         @test recorded.bet == [1.0, 2.0] && recorded.bet isa Vector{Float64}
@@ -33,54 +33,115 @@
         @test observed.reward == [1.0, 0.0] && observed.reward isa Vector{Float64}
         @test CognitiveModeling.is_recorded(1.0) &&
             !CognitiveModeling.is_recorded(NoObservation()) &&
-            !CognitiveModeling.is_recorded(MissingValue())
+            !CognitiveModeling.is_recorded(MissingValue()) &&
+            !CognitiveModeling.is_recorded(UnimputedMissingValue())
     end
 
-    @testset "Missing actions can be replaced by NoAction, which leaves the recorded ones as they are" begin
-        replaced = CognitiveModeling.without_missing_actions(actions)
-        @test replaced.choice == [true, NoAction(), false, NoAction(), true]
-        @test replaced.bet == [NoAction(), NoAction(), 1.0, 2.0, NoAction()]
+    @testset "A marker that is in the data already can be replaced by another, which leaves the recorded values as they are" begin
+        unimputed = (MissingValue() => UnimputedMissingValue(),)
+        replaced = CognitiveModeling.replace_data_values(actions, unimputed)
+        @test replaced.choice == [true, UnimputedMissingValue(), false, NoAction(), true]
+        @test replaced.bet == [
+            UnimputedMissingValue(),
+            UnimputedMissingValue(),
+            1.0,
+            2.0,
+            UnimputedMissingValue(),
+        ]
         @test CognitiveModeling.recorded_values(replaced) ==
             CognitiveModeling.recorded_values(actions)
-        #The columns of the data aren't changed, and columns that can't hold a missing value keep their type
+        #The columns of the data aren't changed, and a column that can't hold the replaced value keeps its type
         @test actions.choice[2] === MissingValue()
-        @test CognitiveModeling.without_missing_actions((; choice=[true, false])).choice isa
+        @test CognitiveModeling.replace_data_values((; choice=[true, false]), unimputed).choice isa
             Vector{Bool}
-        @test CognitiveModeling.without_missing_actions((;)) === (;)
-        #A column that can hold a missing value gets NoAction in its type whether it holds one or not, and one with the element type Any is left as it is here
-        @test replaced.choice isa Vector{Any} && replaced.bet isa Vector{Any}
-        @test CognitiveModeling.without_missing_actions((;
-            choice=Vector{Union{MissingValue,Bool}}([true, false])
-        )).choice isa Vector{Union{NoAction,Bool}}
-        @test CognitiveModeling.without_missing_actions((;
-            choice=Vector{Union{MissingValue,Bool}}([true, MissingValue()])
-        )).choice isa Vector{Union{NoAction,Bool}}
+        @test CognitiveModeling.replace_data_values((;), unimputed) === (;)
+        #A column that can hold the replaced value gets the marker in its type whether it holds one or not, and loses the type of the replaced value, since none is left
+        @test replaced.choice isa Vector{Union{UnimputedMissingValue,NoAction,Bool}}
+        @test CognitiveModeling.replace_data_values(
+            (; choice=Vector{Union{MissingValue,Bool}}([true, false])), unimputed
+        ).choice isa Vector{Union{UnimputedMissingValue,Bool}}
     end
 
-    @testset "A missing in the data is replaced by the given marker, by the element type of the column" begin
-        replaced = CognitiveModeling.replace_missing(
-            (; reward=[1.0, missing, 0.0], cue=[1, 2, 3]), MissingValue()
+    @testset "The values that the replacements name are replaced by their markers, by the element type of the column" begin
+        default = (missing => MissingValue(),)
+        replaced = CognitiveModeling.replace_data_values(
+            (; reward=[1.0, missing, 0.0], cue=[1, 2, 3]), default
         )
         @test isequal(replaced.reward, [1.0, MissingValue(), 0.0]) &&
             replaced.reward isa Vector{Union{MissingValue,Float64}}
         @test replaced.cue == [1, 2, 3] && replaced.cue isa Vector{Int}
-        @test CognitiveModeling.replace_missing(
-            (; reward=Vector{Union{Missing,Float64}}([1.0, 0.0])), NoObservation()
+        #A column whose element type allows the value gets the marker in its type whether it holds the value or not
+        @test CognitiveModeling.replace_data_values(
+            (; reward=Vector{Union{Missing,Float64}}([1.0, 0.0])),
+            (missing => NoObservation(),),
         ).reward isa Vector{Union{NoObservation,Float64}}
-        @test CognitiveModeling.replace_missing(
-            (; reward=[1.0, missing]), NoObservation()
+        @test CognitiveModeling.replace_data_values(
+            (; reward=[1.0, missing]), (missing => NoObservation(),)
         ).reward == [1.0, NoObservation()]
-        #Anything else is returned as it is, for check_data to report
-        @test CognitiveModeling.replace_missing([1.0, missing], MissingValue()) ==
-            [1.0, MissingValue()]
-        @test CognitiveModeling.replace_missing("data", MissingValue()) == "data"
+        #Several values can be replaced, each by its own marker, and a value is replaced by the first pair that is equal to it
+        @test CognitiveModeling.replace_data_values(
+            [1, missing, -1], (missing => MissingValue(), -1 => NoAction())
+        ) == [1, MissingValue(), NoAction()]
+        @test CognitiveModeling.replace_data_values(
+            [1, -1], (-1 => NoAction(), -1 => MissingValue())
+        ) == [1, NoAction()]
+        #Values are compared with isequal, so a value of another type which is equal is replaced too, and NaN is equal to itself
+        @test CognitiveModeling.replace_data_values([0.5, -1.0], (-1 => NoAction(),)) ==
+            [0.5, NoAction()]
+        @test CognitiveModeling.replace_data_values([0.5, 0.7], (-1 => NoAction(),)) isa
+            Vector{Float64}
+        @test CognitiveModeling.replace_data_values(
+            [0.5, NaN], (NaN => UnimputedMissingValue(),)
+        ) == [0.5, UnimputedMissingValue()]
+        #Without replacements every value is kept, missing too
+        @test isequal(
+            CognitiveModeling.replace_data_values([1.0, missing], ()), [1.0, missing]
+        )
+        #Anything that isn't a vector, or a NamedTuple of them, is returned as it is, for check_data to report
+        @test CognitiveModeling.replace_data_values("data", default) == "data"
         #A column with the element type Any is narrowed to the types it holds
-        @test CognitiveModeling.replace_missing(
-            (; choice=[true, MissingValue(), true]), MissingValue()
+        @test CognitiveModeling.replace_data_values(
+            (; choice=[true, MissingValue(), true]), default
         ).choice isa Vector{Union{MissingValue,Bool}}
-        @test CognitiveModeling.replace_missing(
-            (; choice=Any[true, missing, true]), NoAction()
+        @test CognitiveModeling.replace_data_values(
+            (; choice=Any[true, missing, true]), (missing => NoAction(),)
         ).choice isa Vector{Union{NoAction,Bool}}
+    end
+
+    @testset "The replacements are a tuple of pairs, from a single pair, a tuple or a vector of them" begin
+        @test CognitiveModeling.replacement_pairs(missing => MissingValue()) ===
+            (missing => MissingValue(),)
+        @test CognitiveModeling.replacement_pairs(()) === ()
+        @test isequal(
+            CognitiveModeling.replacement_pairs([
+                missing => MissingValue(), -1 => NoAction()
+            ]),
+            (missing => MissingValue(), -1 => NoAction()),
+        )
+        @test_throws "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoAction()), but they are MissingValue()." CognitiveModeling.replacement_pairs(
+            MissingValue()
+        )
+        #What a value is replaced by comes wrapped, so that a replacement by nothing is told from no replacement
+        @test CognitiveModeling.replacement_of(missing, (missing => MissingValue(),)) ===
+            Some(MissingValue())
+        @test CognitiveModeling.replacement_of(1.0, (missing => MissingValue(),)) ===
+            nothing
+        @test CognitiveModeling.replacement_of(-1, (-1 => nothing,)) === Some(nothing)
+        #Of several values, the first pair which is equal to any of them gives the replacement
+        @test CognitiveModeling.replacement_of_any(
+            (1.0, missing, -1), (-1 => NoAction(), missing => MissingValue())
+        ) === Some(NoAction())
+        @test CognitiveModeling.replacement_of_any((1.0, 2.0), (-1 => NoAction(),)) ===
+            nothing
+        #The element type loses a replaced value that is the only one of its type, and gets the type of each marker
+        @test CognitiveModeling.replaced_eltype(
+            Union{Missing,Float64}, (missing => MissingValue(),)
+        ) === Union{MissingValue,Float64}
+        @test CognitiveModeling.replaced_eltype(Int, (-1 => NoAction(),)) ===
+            Union{NoAction,Int}
+        @test CognitiveModeling.column_can_hold([1.0, 2.0], 0.5) &&
+            CognitiveModeling.column_can_hold([1.0, -1.0], -1) &&
+            !CognitiveModeling.column_can_hold([1.0, 2.0], -1)
     end
 
     @testset "A column is narrowed when its element type is abstract and not a Union" begin
@@ -189,26 +250,35 @@ end
         @test_throws "A column is specified by its name, a NamedTuple or a Tuple of names" CognitiveModeling.columns_used(
             "choicecol"
         )
-        #A row with a missing in any column used is missing
+        #A value that is replaced by a marker in any column used makes the whole value of the row that marker
+        default = (missing => MissingValue(),)
         named = CognitiveModeling.build_column(
-            composite, (; choice=:choicecol, rt=:rtcol), 1:3
+            composite, (; choice=:choicecol, rt=:rtcol), default
         )
-        @test isequal(
-            named, [(; choice=true, rt=0.5), (; choice=false, rt=0.7), missing]
-        ) && named isa Vector{Union{Missing,@NamedTuple{choice::Bool,rt::Float64}}}
-        @test CognitiveModeling.build_column(composite, (:rtcol, :cue), [1, 2]) ==
-            [(0.5, 1), (0.7, 2)]
+        @test named ==
+              [(; choice=true, rt=0.5), (; choice=false, rt=0.7), MissingValue()] &&
+            named isa Vector{Union{MissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
+        @test CognitiveModeling.build_column(composite, (:rtcol, :cue), default) ==
+            [(0.5, 1), (0.7, 2), (0.9, 3)]
         @test CognitiveModeling.build_column(
-            composite, (:rtcol, :cue) => (rt, cue) -> [rt, cue], [2]
-        ) == [[0.7, 2.0]]
-        @test CognitiveModeling.build_column(composite, :cue, [3, 1]) == [3, 1]
-        #The rows of a session come with the model's names
+            composite, (:rtcol, :cue) => (rt, cue) -> [rt, cue], default
+        ) == [[0.5, 1.0], [0.7, 2.0], [0.9, 3.0]]
+        @test CognitiveModeling.build_column(composite, :cue, default) == [1, 2, 3]
+        #Each replaced value gives its own marker, from the first pair which is equal to any value of the row
+        @test CognitiveModeling.build_column(
+            composite, (:choicecol, :cue), (missing => MissingValue(), 2 => NoAction())
+        ) == [(true, 1), NoAction(), MissingValue()]
+        #Without replacements, the values are combined as they are
         @test isequal(
-            CognitiveModeling.select_rows(
-                composite, (; ssm_action=(; choice=:choicecol, rt=:rtcol), cue=:cue), [1, 3]
-            ),
-            (; ssm_action=[(; choice=true, rt=0.5), missing], cue=[1, 3]),
+            CognitiveModeling.build_column(composite, (:choicecol, :cue), ()),
+            [(true, 1), (false, 2), (missing, 3)],
         )
+        #The columns of a kind come with the model's names, and the rows of a session are selected from them
+        columns = CognitiveModeling.build_columns(
+            composite, (; ssm_action=(; choice=:choicecol, rt=:rtcol), cue=:cue), default
+        )
+        @test CognitiveModeling.select_rows(columns, [1, 3]) ==
+            (; ssm_action=[(; choice=true, rt=0.5), MissingValue()], cue=[1, 3])
     end
 
     @testset "Each session is its rows, with its identifier" begin
@@ -223,14 +293,25 @@ end
             [1 => [1, 3], 2 => [2]]
     end
 
-    @testset "The rows of a session are selected with the model's names" begin
-        @test CognitiveModeling.select_rows(table, (; reward=:outcome), [1, 2]) ==
-            (; reward=[1.0, 0.0])
+    @testset "The columns are built for the whole table, and the rows of a session are selected from them" begin
+        columns = CognitiveModeling.build_columns(table, (; reward=:outcome), ())
+        @test CognitiveModeling.select_rows(columns, [1, 2]) == (; reward=[1.0, 0.0])
         #A column with the element type Any is narrowed as a whole, so every session gets the same type
         @test CognitiveModeling.select_rows(
-            (; choice=[true, false, MissingValue()]), (; choice=:choice), [1, 2]
+            CognitiveModeling.build_columns(
+                (; choice=[true, false, MissingValue()]), (; choice=:choice), ()
+            ),
+            [1, 2],
         ).choice isa Vector{Union{MissingValue,Bool}}
-        @test CognitiveModeling.select_rows(table, (;), [1, 2]) === (;)
+        #A value is replaced in the whole column, so a session which doesn't have it gets the marker in its type too
+        @test CognitiveModeling.select_rows(
+            CognitiveModeling.build_columns(
+                (; choice=[1.0, 0.0, -1.0]), (; choice=:choice), (-1 => NoAction(),)
+            ),
+            [1, 2],
+        ).choice isa Vector{Union{NoAction,Float64}}
+        @test CognitiveModeling.build_columns(table, (;), ()) === (;)
+        @test CognitiveModeling.select_rows((;), [1, 2]) === (;)
         @test CognitiveModeling.select_timestep_sizes(table, :dt, [1, 2]) == [0.5, 1.0]
         @test CognitiveModeling.select_timestep_sizes(table, 2, [1, 2]) == 2
     end
@@ -351,10 +432,10 @@ end
         @test length(CognitiveModeling.initialize_all_storage(nothing, saved, 2).states) ==
             2
         #What is returned has the vectors as they are stored, with the timestep sizes
-        returned_values = CognitiveModeling.saved_values(storage, [1, 1, 1])
-        @test keys(returned_values) ==
+        returned_trajectories = CognitiveModeling.saved_trajectories(storage, [1, 1, 1])
+        @test keys(returned_trajectories) ==
             (:states, :observations, :actions, :action_distributions, :timestep_sizes)
-        @test returned_values.action_distributions === storage.action_distributions
+        @test returned_trajectories.action_distributions === storage.action_distributions
         #With an environment, its record is saved too, as its save history selects it, under environment
         with_environment = SessionInfo(
             ScoringModel(),
@@ -413,7 +494,7 @@ end
             initial_both.environment.states === (; level=0.0)
         storage_both = CognitiveModeling.initialize_all_storage(initial_both, saved_both, 2)
         storage_both = CognitiveModeling.store_all_values!(storage_both, saved_both, 3)
-        returned_both = CognitiveModeling.saved_values(storage_both, [1, 1, 1])
+        returned_both = CognitiveModeling.saved_trajectories(storage_both, [1, 1, 1])
         @test keys(returned_both) == (
             :states,
             :observations,
@@ -427,7 +508,7 @@ end
         @test returned_both.environment.states ==
             [(; level=0.0), (; level=0.3), (; level=0.3)]
         #A session whose environment isn't included gets an empty record of it, with the entries in the same order
-        with_empty = CognitiveModeling.with_empty_environment_entry(returned_values)
+        with_empty = CognitiveModeling.with_empty_environment_entry(returned_trajectories)
         @test keys(with_empty) == keys(returned_both)
         @test with_empty.environment.states == fill((;), 3) &&
             with_empty.environment.observation_distributions == fill((;), 3)

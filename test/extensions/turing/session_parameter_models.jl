@@ -1,7 +1,7 @@
 ## The session parameter models on their own, with the three sessions of FULL_TABLE, S1, S2 and S3 ##
 
 @testset "turing_session_parameters_model" begin
-    sessions_info = sessions_for_test(; impute_missing_actions=false)
+    sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
 
     @testset "NoParameters gives no parameters, and samples nothing" begin
         model = CognitiveModeling.turing_session_parameters_model(
@@ -104,15 +104,15 @@ end
 
 @testset "GroupedHierarchicalSessionParameters and CompositeSessionParameters" begin
     sessions_info = sessions_for_test(
-        SessionRescorlaWagner(), GROUPED_FULL_TABLE; impute_missing_actions=false
+        SessionRescorlaWagner(), GROUPED_FULL_TABLE; action_replacements=UNIMPUTED_ACTIONS
     )
 
     @testset "Each session's value is its group's mean plus a standardized value times its group's standard deviation, transformed" begin
         hierarchical = GroupedHierarchicalSessionParameters((;
-            learning_rate=(;
-                priors=GROUP_PRIORS, transformation=to_unit_interval, group_by=:group
+            learning_rate=HierarchicalParameter(
+                GROUP_PRIORS; transformation=to_unit_interval, group_by=:group
             ),
-            inverse_temperature=(; priors=GROUP_PRIORS, transformation=exp),
+            inverse_temperature=HierarchicalParameter(GROUP_PRIORS; transformation=exp),
         ))
         model = CognitiveModeling.turing_session_parameters_model(
             CognitiveModeling.prepare_parameters_model(hierarchical, sessions_info),
@@ -153,8 +153,8 @@ end
 
     @testset "A centered parameter is sampled from the distribution of its group, as name.session" begin
         centered = GroupedHierarchicalSessionParameters((;
-            learning_rate=(;
-                priors=GROUP_PRIORS,
+            learning_rate=HierarchicalParameter(
+                GROUP_PRIORS;
                 transformation=to_unit_interval,
                 group_by=:group,
                 centered=true,
@@ -185,8 +185,8 @@ end
 
     @testset "Another distribution takes the group's values of its parameters, in the order of the priors" begin
         with_laplace = GroupedHierarchicalSessionParameters((;
-            learning_rate=(;
-                priors=(; location=Normal(0, 1), spread=Exponential(1)),
+            learning_rate=HierarchicalParameter(
+                (; location=Normal(0, 1), spread=Exponential(1));
                 distribution=(location, spread) -> Laplace(location, spread),
                 transformation=to_unit_interval,
             ),
@@ -210,7 +210,9 @@ end
     @testset "A composite runs each part with its own variables, and merges what they give" begin
         composite = CompositeSessionParameters(
             GroupedHierarchicalSessionParameters((;
-                learning_rate=(; priors=GROUP_PRIORS, transformation=to_unit_interval)
+                learning_rate=HierarchicalParameter(
+                    GROUP_PRIORS; transformation=to_unit_interval
+                )
             )),
             IndependentSessionParameters((; inverse_temperature=LogNormal(0, 0.5))),
         )
@@ -256,10 +258,10 @@ end
 
     @testset "The full model fits the sessions with the parameters of their groups" begin
         hierarchical = GroupedHierarchicalSessionParameters((;
-            learning_rate=(;
-                priors=GROUP_PRIORS, transformation=to_unit_interval, group_by=:group
+            learning_rate=HierarchicalParameter(
+                GROUP_PRIORS; transformation=to_unit_interval, group_by=:group
             ),
-            inverse_temperature=(; priors=GROUP_PRIORS, transformation=exp),
+            inverse_temperature=HierarchicalParameter(GROUP_PRIORS; transformation=exp),
         ))
         model = turing_full_model(hierarchical, sessions_info)
         values = Dict(

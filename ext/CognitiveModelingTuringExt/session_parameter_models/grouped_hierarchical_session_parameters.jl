@@ -31,8 +31,9 @@ end
 """
     turing_sample_hierarchical_parameters(parameters, groups)
 
-Turing.jl model which samples one parameter at a time from `parameters`, the settings of
-each parameter of a [`GroupedHierarchicalSessionParameters`](@ref), with
+Turing.jl model which samples one parameter at a time from `parameters`, the
+[`HierarchicalParameter`](@ref) of each parameter of a
+[`GroupedHierarchicalSessionParameters`](@ref), with
 [`turing_sample_hierarchical_parameter`](@ref) under the parameter's name, and returns them
 in a `NamedTuple`, each as a vector with a value for every session. `groups` has the groups
 of the sessions for each parameter. Used by `GroupedHierarchicalSessionParameters`.
@@ -62,26 +63,31 @@ Turing.@model function turing_sample_hierarchical_parameters(
 end
 
 """
-    turing_sample_hierarchical_parameter(settings, groups)
+    turing_sample_hierarchical_parameter(hierarchical_parameter, groups)
 
-Turing.jl model which samples one parameter for every session, as `settings` say: the
-parameters of its group-level distribution for each group, with
+Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
+a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
+each group, with
 [`turing_sample_group_parameters`](@ref), then the value of every session from the
 distribution of its group, with [`turing_sample_centered_values`](@ref) or
 [`turing_sample_standardized_values`](@ref), and returns the values with the transformation
 applied to each. Used by [`turing_sample_hierarchical_parameters`](@ref).
 """
-Turing.@model function turing_sample_hierarchical_parameter(settings, groups)
+Turing.@model function turing_sample_hierarchical_parameter(hierarchical_parameter, groups)
 
     #Sample the parameters of the group-level distribution, each as a vector with a value for every group
-    group_parameters ~
-    to_submodel(turing_sample_group_parameters(settings.priors, groups.n_groups), false)
+    group_parameters ~ to_submodel(
+        turing_sample_group_parameters(hierarchical_parameter.priors, groups.n_groups),
+        false,
+    )
 
     #Sample the value of every session, from the distribution of its group or as a standardized value
-    if settings.centered
+    if hierarchical_parameter.centered
         session_values ~ to_submodel(
             turing_sample_centered_values(
-                settings.distribution, group_parameters, groups.group_of_each_session
+                hierarchical_parameter.distribution,
+                group_parameters,
+                groups.group_of_each_session,
             ),
             false,
         )
@@ -95,7 +101,7 @@ Turing.@model function turing_sample_hierarchical_parameter(settings, groups)
     end
 
     #Transform every value to the scale of the parameter
-    return map(settings.transformation, session_values)
+    return map(hierarchical_parameter.transformation, session_values)
 end
 
 """

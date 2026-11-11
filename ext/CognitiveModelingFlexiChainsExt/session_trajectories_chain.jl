@@ -1,7 +1,7 @@
-### WHAT FITTED SESSIONS SAVED, AS A CHAIN ###
+### THE TRAJECTORIES OF FITTED SESSIONS, AS A CHAIN ###
 
 #The results of a full model, or of several sessions, with every entry named after the session it belongs to
-function CognitiveModeling.session_values_chain(
+function CognitiveModeling.session_trajectories_chain(
     results::AbstractMatrix,
     sessions_info::MultipleSessionsInfo;
     iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
@@ -11,15 +11,16 @@ function CognitiveModeling.session_values_chain(
     first_result = first(results)
     entries = empty_entries()
 
-    if first_result isa NamedTuple && hasproperty(first_result, :saved_behavioral_values)
-        #The results of a full model hold what each session saved under saved_behavioral_values
-        check_number_of_sessions(first_result.saved_behavioral_values, sessions_info)
+    if first_result isa NamedTuple &&
+        hasproperty(first_result, :saved_behavioral_trajectories)
+        #The results of a full model hold what each session saved under saved_behavioral_trajectories
+        check_number_of_sessions(first_result.saved_behavioral_trajectories, sessions_info)
         for (i, session_id) in enumerate(sessions_info.session_ids)
             add_session_entries!(
                 entries,
                 results,
                 (session_name(session_id),),
-                result -> result.saved_behavioral_values[i],
+                result -> result.saved_behavioral_trajectories[i],
             )
         end
     elseif first_result isa AbstractVector
@@ -43,7 +44,7 @@ function CognitiveModeling.session_values_chain(
 end
 
 #The results of a single session, with every entry named without a session identifier
-function CognitiveModeling.session_values_chain(
+function CognitiveModeling.session_trajectories_chain(
     results::AbstractMatrix;
     iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
     chain_indices::AbstractVector{<:Integer}=1:size(results, 2),
@@ -80,7 +81,7 @@ function CognitiveModeling.session_parameters_chain(
             ),
         )
     end
-    check_number_of_sessions(first_result.saved_behavioral_values, sessions_info)
+    check_number_of_sessions(first_result.saved_behavioral_trajectories, sessions_info)
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
         name_of_session = session_name(session_id)
@@ -122,26 +123,26 @@ function add_parameter_entries!(
 end
 
 """
-    add_session_entries!(entries, results, session_prefix, saved_values_of)
+    add_session_entries!(entries, results, session_prefix, saved_trajectories_of)
 
-Add an entry to `entries` for everything one session saved, where `saved_values_of` gives
-the session's saved values from the result of one sample, and `session_prefix` holds the
-session's name, or nothing for a single session. The cognitive model's values are named
-under the session alone, and the environment's under `environment` after it, as
-[`add_model_entries!`](@ref) names them. Used by [`session_values_chain`](@ref).
+Add an entry to `entries` for everything one session saved, where `saved_trajectories_of`
+gives the session's saved trajectories from the result of one sample, and `session_prefix`
+holds the session's name, or nothing for a single session. The cognitive model's values are
+named under the session alone, and the environment's under `environment` after it, as
+[`add_model_entries!`](@ref) names them. Used by [`session_trajectories_chain`](@ref).
 """
 function add_session_entries!(
-    entries, results, session_prefix::Tuple{Vararg{Symbol}}, saved_values_of
+    entries, results, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of
 )
     add_model_entries!(
-        entries, results, session_prefix, saved_values_of, :action_distributions
+        entries, results, session_prefix, saved_trajectories_of, :action_distributions
     )
-    if hasproperty(saved_values_of(first(results)), :environment)
+    if hasproperty(saved_trajectories_of(first(results)), :environment)
         add_model_entries!(
             entries,
             results,
             (session_prefix..., :environment),
-            result -> saved_values_of(result).environment,
+            result -> saved_trajectories_of(result).environment,
             :observation_distributions,
         )
     end
@@ -149,22 +150,26 @@ function add_session_entries!(
 end
 
 """
-    add_model_entries!(entries, results, prefix, saved_values_of, distribution_kind)
+    add_model_entries!(entries, results, prefix, saved_trajectories_of, distribution_kind)
 
 Add an entry under `prefix` to `entries` for everything one model of a session saved, where
-`saved_values_of` gives its saved values from the result of one sample, with `states`,
-`observations`, `actions` and `distribution_kind`, which is `action_distributions` for a
-cognitive model and `observation_distributions` for an environment model. There is one entry
-for each observation and action that was saved, named after it alone, since a model uses a
-name for one attribute only, one for each distribution, under its kind, since a distribution
-is named like its value, and one for each state, or one for all of them when a saved state
-isn't a `NamedTuple`. Each entry holds, for every sample, a vector over the timesteps. Used
-by [`add_session_entries!`](@ref).
+`saved_trajectories_of` gives its saved trajectories from the result of one sample, with
+`states`, `observations`, `actions` and `distribution_kind`, which is `action_distributions`
+for a cognitive model and `observation_distributions` for an environment model. There is one
+entry for each observation and action that was saved, named after it alone, since a model
+uses a name for one attribute only, one for each distribution, under its kind, since a
+distribution is named like its value, and one for each state, or one for all of them when a
+saved state isn't a `NamedTuple`. Each entry holds, for every sample, a vector over the
+timesteps. Used by [`add_session_entries!`](@ref).
 """
 function add_model_entries!(
-    entries, results, prefix::Tuple{Vararg{Symbol}}, saved_values_of, distribution_kind
+    entries,
+    results,
+    prefix::Tuple{Vararg{Symbol}},
+    saved_trajectories_of,
+    distribution_kind,
 )
-    first_saved = saved_values_of(first(results))
+    first_saved = saved_trajectories_of(first(results))
 
     #Each observation and action that was saved, named after it alone
     for kind in (:observations, :actions)
@@ -175,7 +180,7 @@ function add_model_entries!(
                 map(
                     result -> [
                         getproperty(value, name) for
-                        value in getproperty(saved_values_of(result), kind)
+                        value in getproperty(saved_trajectories_of(result), kind)
                     ],
                     results,
                 ),
@@ -190,8 +195,8 @@ function add_model_entries!(
             entry_name(prefix..., distribution_kind, name),
             map(
                 result -> [
-                    getproperty(value, name) for
-                    value in getproperty(saved_values_of(result), distribution_kind)
+                    getproperty(value, name) for value in
+                    getproperty(saved_trajectories_of(result), distribution_kind)
                 ],
                 results,
             ),
@@ -204,7 +209,7 @@ function add_model_entries!(
         add_entry!(
             entries,
             entry_name(prefix..., :states),
-            map(result -> saved_values_of(result).states, results),
+            map(result -> saved_trajectories_of(result).states, results),
         )
     else
         for name in saved_names(states)
@@ -213,7 +218,8 @@ function add_model_entries!(
                 entry_name(prefix..., name),
                 map(
                     result -> [
-                        getproperty(state, name) for state in saved_values_of(result).states
+                        getproperty(state, name) for
+                        state in saved_trajectories_of(result).states
                     ],
                     results,
                 ),
@@ -224,14 +230,14 @@ function add_model_entries!(
 end
 
 """
-    saved_names(saved_values)
+    saved_names(saved_trajectories)
 
 Return the names of what was saved of one kind, a vector with a `NamedTuple` for each
 timestep, which has none when nothing of that kind was saved. Used by
 [`add_session_entries!`](@ref).
 """
-function saved_names(saved_values::AbstractVector)
-    return isempty(saved_values) ? () : keys(first(saved_values))
+function saved_names(saved_trajectories::AbstractVector)
+    return isempty(saved_trajectories) ? () : keys(first(saved_trajectories))
 end
 
 ### BUILDING THE CHAIN ###
@@ -241,7 +247,7 @@ end
 
 Return the entries of a chain before any is added: the values of each entry under its key in
 a `Dict`, which has no order, and the names of the entries in the order they are added. Used
-by [`session_values_chain`](@ref).
+by [`session_trajectories_chain`](@ref).
 """
 empty_entries() = (; values=Dict{Any,AbstractMatrix}(), names=VarName[])
 
@@ -273,7 +279,7 @@ Return a `FlexiChain` with `entries`, in the order they were added, and with the
 numbered by `iter_indices` and `chain_indices`. A `FlexiChain` keeps the order of the
 dictionary it is made from, and a `Dict` has none, so the chain is indexed with the names in
 their order afterwards, which gives a chain with the entries in that order. Used by
-[`session_values_chain`](@ref).
+[`session_trajectories_chain`](@ref).
 """
 function chain_of_entries(
     entries, n_iterations::Integer, n_chains::Integer; iter_indices, chain_indices
@@ -291,7 +297,7 @@ end
 
 Throw an informative error if there are no results, or if a sample has `nothing` as its
 result, which a model that catches invalid parameters gives for a rejected sample. Used by
-[`session_values_chain`](@ref).
+[`session_trajectories_chain`](@ref).
 """
 function check_results(results::AbstractMatrix)
     isempty(results) && throw(ArgumentError("There are no results to make a chain of."))
@@ -306,18 +312,18 @@ function check_results(results::AbstractMatrix)
 end
 
 """
-    check_number_of_sessions(saved_values, sessions_info)
+    check_number_of_sessions(saved_trajectories, sessions_info)
 
 Throw an informative error if the results have another number of sessions than
-`sessions_info`. Used by [`session_values_chain`](@ref).
+`sessions_info`. Used by [`session_trajectories_chain`](@ref).
 """
 function check_number_of_sessions(
-    saved_values::AbstractVector, sessions_info::MultipleSessionsInfo
+    saved_trajectories::AbstractVector, sessions_info::MultipleSessionsInfo
 )
-    if length(saved_values) != length(sessions_info.session_ids)
+    if length(saved_trajectories) != length(sessions_info.session_ids)
         throw(
             DimensionMismatch(
-                "The results have $(length(saved_values)) sessions, but the session info has $(length(sessions_info.session_ids)).",
+                "The results have $(length(saved_trajectories)) sessions, but the session info has $(length(sessions_info.session_ids)).",
             ),
         )
     end

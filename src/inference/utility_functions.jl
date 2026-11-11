@@ -4,9 +4,9 @@
     is_recorded(value)
 
 Return whether a single action or observation in the data happened and was recorded, so that
-it is scored: neither [`MissingValue`](@ref) nor a marker for nothing happening, such as
-[`NoAction`](@ref) or [`NoObservation`](@ref). Used by [`recorded_values`](@ref) and
-[`recorded_on_timestep`](@ref).
+it is scored: neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
+[`UnimputedMissingValue`](@ref), [`NoAction`](@ref) or [`NoObservation`](@ref). Used by
+[`recorded_values`](@ref) and [`recorded_on_timestep`](@ref).
 """
 is_recorded(value) = !(value isa MissingValue || value isa AbstractNoValue)
 
@@ -17,9 +17,9 @@ Return the recorded values of each action or observation in `columns`, a `NamedT
 one vector per name, as a `NamedTuple` of vectors in the order of the timesteps. Fitting
 scores these against the distributions the model gave on the same timesteps: the actions
 against the cognitive model's, and the observations against the environment's. Each vector
-has the element type of its column without [`MissingValue`](@ref) and the markers for
-nothing happening, so that a session without recorded values for a name gets an empty vector
-of the same type as other sessions, which scores nothing. A name whose column can only hold
+has the element type of its column without [`MissingValue`](@ref) and the other markers,
+so that a session without recorded values for a name gets an empty vector of the same type
+as other sessions, which scores nothing. A name whose column can only hold
 those markers is left out, which is decided by its type, so that it is the same for every
 session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its fields
 `recorded_actions` and `recorded_observations`.
@@ -61,8 +61,8 @@ end
     last_timestep_with_data(columns)
 
 Return the last timestep on which any column in `columns`, a `NamedTuple` of vectors, has a
-value that isn't [`MissingValue`](@ref), and 0 when none has. A marker for nothing happening
-counts as data, since it says that the timestep happened. Used by
+value that isn't [`MissingValue`](@ref), and 0 when none has. Any other marker counts as
+data, since it says that the timestep happened. Used by
 [`first_timestep_to_check_stopping`](@ref).
 """
 function last_timestep_with_data(columns::NamedTuple)
@@ -75,38 +75,13 @@ function last_timestep_with_data(columns::NamedTuple)
 end
 
 """
-    without_missing_actions(actions)
-
-Return `actions`, a `NamedTuple` with one vector per action, with every
-[`MissingValue`](@ref) replaced by [`NoAction`](@ref), for a session where a missing action
-is passed on as an action that wasn't taken instead of being imputed. As for
-[`replace_missing`](@ref), a column gets `NoAction` in its element type when the element
-type allows a `MissingValue`, whether it holds one or not, and is kept as it is otherwise.
-Used by [`SessionInfo`](@ref) when `impute_missing_actions` is `false`.
-"""
-function without_missing_actions(actions::NamedTuple)
-    return map(without_missing_actions, actions)
-end
-
-function without_missing_actions(column::AbstractVector)
-    MissingValue <: eltype(column) || return column
-    replaced = Vector{Union{Base.typesplit(eltype(column), MissingValue),NoAction}}(
-        undef, length(column)
-    )
-    for i in eachindex(column)
-        replaced[i] = column[i] isa MissingValue ? NoAction() : column[i]
-    end
-    return replaced
-end
-
-"""
     narrow_column(column)
 
 Return `column` with the types it holds as its element type, when its element type is `Any`
 or another abstract type that isn't a `Union`, and `column` itself otherwise. A vector
 written as `[true, MissingValue(), true]` has the element type `Any`, since only `missing`
 is promoted to a `Union`, and an `Any` in the data makes every timestep run with its types
-unknown. Used by [`replace_missing`](@ref) and [`select_rows`](@ref).
+unknown. Used by [`replace_data_values`](@ref) and [`build_column`](@ref).
 """
 function narrow_column(column::AbstractVector)
     T = eltype(column)
@@ -119,34 +94,118 @@ function narrow_column(column::AbstractVector)
 end
 
 """
-    replace_missing(columns, replacement)
+    replacement_pairs(replacements)
 
-Return `columns`, a `NamedTuple` with one vector per name, with every `missing` replaced by
-`replacement`: [`MissingValue`](@ref) for a value that wasn't recorded, or
-[`NoAction`](@ref) or [`NoObservation`](@ref) for nothing happening on that timestep. A
-column whose element type allows `missing` gets the replacement in its element type whether
-it holds a `missing` or not, so that the sessions of one table all have the same type, and a
-column whose element type doesn't is kept as it is, after [`narrow_column`](@ref). Anything
-that isn't a `NamedTuple` of vectors is returned as it is, for [`check_data`](@ref) to
-report. Used by [`SessionInfo`](@ref) on the observations and the actions.
+Return `replacements`, the `observation_replacements` or the `action_replacements` of a
+[`SessionInfo`](@ref), as a tuple of pairs, each from a value in the data to what it is
+replaced by: a tuple of pairs as it is, and a single pair or a vector of pairs as a tuple.
+Anything else is an error. Used by [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
 """
-function replace_missing(columns::NamedTuple, replacement)
-    return map(column -> replace_missing(column, replacement), columns)
+replacement_pairs(replacements::Tuple{Vararg{Pair}}) = replacements
+replacement_pairs(replacement::Pair) = (replacement,)
+replacement_pairs(replacements::AbstractVector{<:Pair}) = Tuple(replacements)
+function replacement_pairs(replacements)
+    return throw(
+        ArgumentError(
+            "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoAction()), but they are $(repr(replacements)).",
+        ),
+    )
 end
 
-function replace_missing(column::AbstractVector, replacement)
+"""
+    replacement_of(value, replacements)
+    replacement_of_any(values, replacements)
+
+Return what `value` is replaced by, wrapped in `Some`, from the first pair in `replacements`
+whose first element is equal to it, as `isequal` compares them, or `nothing` when no pair
+is. The second form takes several values, and returns the replacement from the first pair
+which is equal to any of them. Used by [`replace_data_values`](@ref) and
+[`build_column`](@ref).
+"""
+function replacement_of(value, replacements::Tuple{Vararg{Pair}})
+    for replacement in replacements
+        isequal(first(replacement), value) && return Some(last(replacement))
+    end
+    return nothing
+end
+
+function replacement_of_any(values::Tuple, replacements::Tuple{Vararg{Pair}})
+    for replacement in replacements
+        if any(value -> isequal(first(replacement), value), values)
+            return Some(last(replacement))
+        end
+    end
+    return nothing
+end
+
+"""
+    column_can_hold(column, value)
+
+Return whether `column` can hold `value`, by its element type, or holds a value which is
+equal to it without having its type, such as `-1.0` for `-1`, as `isequal` compares them.
+Used by [`replace_data_values`](@ref).
+"""
+function column_can_hold(column::AbstractVector, value)
+    return typeof(value) <: eltype(column) || any(isequal(value), column)
+end
+
+"""
+    replaced_eltype(T, replacements)
+
+Return the element type of a column with the element type `T` after the replacements in
+`replacements`, a tuple of pairs, are made in it: without the type of a replaced value which
+is the only value of its type, such as `Missing`, since none is left, and with the type of
+what each value is replaced by. Used by [`replace_data_values`](@ref).
+"""
+function replaced_eltype(T::Type, replacements::Tuple{Vararg{Pair}})
+    for replacement in replacements
+        replaced_type = typeof(first(replacement))
+        Base.issingletontype(replaced_type) && (T = Base.typesplit(T, replaced_type))
+    end
+    for replacement in replacements
+        T = Union{T,typeof(last(replacement))}
+    end
+    return T
+end
+
+"""
+    replace_data_values(columns, replacements)
+
+Return `columns`, a `NamedTuple` with one vector per name, with every value which is equal
+to the first element of a pair in `replacements`, as `isequal` compares them, replaced by
+the second: usually a marker, such as [`MissingValue`](@ref) for `missing`. A column gets
+the type of the marker in its element type when its element type allows the replaced value,
+whether it holds one or not, so that sessions whose columns have the same types keep them,
+or when it holds a value equal to it of another type. Any other column is kept as it is,
+after [`narrow_column`](@ref). Anything that isn't a `NamedTuple` of vectors is returned as
+it is, for [`check_data`](@ref) to report. Used by [`SessionInfo`](@ref) on the observations
+and the actions, and by [`build_column`](@ref).
+"""
+function replace_data_values(columns::NamedTuple, replacements::Tuple{Vararg{Pair}})
+    return map(column -> replace_data_values(column, replacements), columns)
+end
+
+function replace_data_values(column::AbstractVector, replacements::Tuple{Vararg{Pair}})
     column = narrow_column(column)
-    Missing <: eltype(column) || return column
-    replaced = Vector{Union{nonmissingtype(eltype(column)),typeof(replacement)}}(
+
+    #Only the replacements of values that the column can hold are made in it
+    replacements_made = filter(
+        replacement -> column_can_hold(column, first(replacement)), replacements
+    )
+    isempty(replacements_made) && return column
+
+    #Replace each value by what the first pair that is equal to it gives
+    replaced = Vector{replaced_eltype(eltype(column), replacements_made)}(
         undef, length(column)
     )
     for i in eachindex(column)
-        replaced[i] = ismissing(column[i]) ? replacement : column[i]
+        replacement = replacement_of(column[i], replacements_made)
+        replaced[i] = replacement === nothing ? column[i] : something(replacement)
     end
     return replaced
 end
 
-replace_missing(x, replacement) = x
+replace_data_values(x, replacements::Tuple{Vararg{Pair}}) = x
 
 #A call of its own, so that a value which can have two types gives one of two NamedTuples with a concrete field each: (; a = x) written out is inferred as a NamedTuple whose field type is the Union, which nothing is compiled for, while a call with a Union-typed argument is split by type
 """
@@ -237,7 +296,7 @@ end
     check_environment_fits(cognitive_model, environment, observations)
 
 Throw an informative error if a session can't run with `environment`: without one, the
-observations in the data can't have a [`MissingValue`](@ref), since nothing fills it in, and
+observations in the data can't have a [`MissingValue`](@ref), since nothing imputes it, and
 with one, it must list the same observations and actions as `cognitive_model`. Used by
 [`SessionInfo`](@ref).
 """
@@ -258,7 +317,7 @@ function check_environment_fits(
     if has_missing_entries(observations)
         throw(
             ArgumentError(
-                "The observations have entries that are MissingValue(), but no environment was given to fill them in.",
+                "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),).",
             ),
         )
     end
@@ -414,8 +473,8 @@ uses, as a tuple. A specification is one of:
 - a `Pair` of a `Tuple` of `Symbol`s and a function, such as
   `(:choicecol, :rtcol) => (choice, rt) -> [choice, rt]`, for a column with what the
   function gives for the values of each row.
-A `missing` in any column used makes the value of that row `missing`. Used by
-[`MultipleSessionsInfo`](@ref) when it checks a table, and by [`build_column`](@ref).
+Used by [`MultipleSessionsInfo`](@ref) when it checks a table, and by
+[`build_column`](@ref).
 """
 columns_used(specification::Symbol) = (specification,)
 function columns_used(
@@ -434,35 +493,45 @@ function columns_used(specification)
 end
 
 """
-    build_column(table, specification, rows)
+    build_column(table, specification, replacements)
 
-Return the column of an attribute at the rows `rows` of `table`, as [`columns_used`](@ref)
-describes the specification: the column itself, or one built row by row from several, where
-a row with a `missing` in any of them gives `missing`. The column is narrowed as a whole
-first, see [`narrow_column`](@ref), so that every session gets the same element type. Used
-by [`select_rows`](@ref).
+Return the column of an attribute for every row of `table`, as [`columns_used`](@ref)
+describes the specification, with the values that `replacements` name replaced by their
+markers, as [`replace_data_values`](@ref) does: the column itself, or one built row by row
+from several, where a value in any of them that is replaced by a marker makes the whole
+value of the row that marker. The column is made for the whole table, so that every session
+gets the same element type. Used by [`build_columns`](@ref).
 """
-function build_column(table::NamedTuple, specification::Symbol, rows)
-    return narrow_column(getproperty(table, specification))[rows]
+function build_column(table::NamedTuple, specification::Symbol, replacements)
+    return replace_data_values(getproperty(table, specification), replacements)
 end
 function build_column(
-    table::NamedTuple, specification::NamedTuple{names,<:Tuple{Vararg{Symbol}}}, rows
+    table::NamedTuple,
+    specification::NamedTuple{names,<:Tuple{Vararg{Symbol}}},
+    replacements,
 ) where {names}
     return build_column(
-        table, values(specification) => (values...) -> NamedTuple{names}(values), rows
+        table,
+        values(specification) => (values...) -> NamedTuple{names}(values),
+        replacements,
     )
 end
-function build_column(table::NamedTuple, specification::Tuple{Vararg{Symbol}}, rows)
-    return build_column(table, specification => tuple, rows)
+function build_column(table::NamedTuple, specification::Tuple{Vararg{Symbol}}, replacements)
+    return build_column(table, specification => tuple, replacements)
 end
-function build_column(table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symbol}}}, rows)
+function build_column(
+    table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symbol}}}, replacements
+)
     columns = map(name -> getproperty(table, name), first(specification))
     combine = last(specification)
     built = map(eachindex(first(columns))) do i
         values = map(column -> column[i], columns)
-        return any(ismissing, values) ? missing : combine(values...)
+
+        #A value that is replaced by a marker in any of the columns makes the whole value that marker
+        replacement = replacement_of_any(values, replacements)
+        return replacement === nothing ? combine(values...) : something(replacement)
     end
-    return narrow_column(built)[rows]
+    return narrow_column(built)
 end
 
 """
@@ -547,16 +616,24 @@ function session_id(table::NamedTuple, id_columns::Tuple{Vararg{Symbol}}, i)
 end
 
 """
-    select_rows(table, columns, rows)
+    build_columns(table, columns, replacements)
 
 Return the columns in `columns`, a `NamedTuple` from the name the model uses to the
-specification of the column in `table`, at the rows `rows`, as a `NamedTuple` with the
-model's names, each built with [`build_column`](@ref). Used by
+specification of the column in `table`, for every row of the table, as a `NamedTuple` with
+the model's names, each built with [`build_column`](@ref). Used by
 [`MultipleSessionsInfo`](@ref) when it splits a table.
 """
-function select_rows(table::NamedTuple, columns::NamedTuple, rows)
-    return map(specification -> build_column(table, specification, rows), columns)
+function build_columns(table::NamedTuple, columns::NamedTuple, replacements)
+    return map(specification -> build_column(table, specification, replacements), columns)
 end
+
+"""
+    select_rows(columns, rows)
+
+Return the rows `rows` of each column in `columns`, a `NamedTuple` of vectors, which are the
+data of one session. Used by [`MultipleSessionsInfo`](@ref) when it splits a table.
+"""
+select_rows(columns::NamedTuple, rows) = map(column -> column[rows], columns)
 
 """
     select_timestep_sizes(table, timestep_sizes, rows)
@@ -606,11 +683,12 @@ end
 
 Return whether a session includes its environment, as the `include_environment` of
 [`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
-`false`, and with `nothing` only when an observation or an action is missing, the
-environment's history is saved, or its stopping criterion is checked on every timestep. A
-session without an environment never includes one. With `false`, it is an error when an
-observation is missing, the environment's history is saved, or its stopping criterion is
-checked on every timestep, since those need the environment. Used by
+`false`, and with `nothing` only when an observation or an action is
+[`MissingValue`](@ref), the environment's history is saved, or its stopping criterion is
+checked on every timestep. A session without an environment never includes one. With
+`false`, it is an error when an observation is `MissingValue()`, the environment's history
+is saved, or its stopping criterion is checked on every timestep, since those need the
+environment. Used by
 [`prepare_session`](@ref).
 """
 function decide_whether_environment_is_included(
@@ -634,7 +712,7 @@ function decide_whether_environment_is_included(
 
     #What can't be done without the environment
     needs_environment = if has_missing_entries(observations)
-        "the data has missing observations, which only the environment can fill in"
+        "the data has observations that are MissingValue(), which only the environment can impute"
     elseif !saves_nothing(environment_save_history)
         "environment_save_history saves its history"
     elseif check_stopping_criterion === true
@@ -651,7 +729,7 @@ function decide_whether_environment_is_included(
         return false
     end
 
-    #By default it is included when it is needed, or when an action is missing, which the observations it scores inform
+    #By default it is included when it is needed, or when an action is to be imputed, which the observations it scores inform
     return needs_environment !== nothing || has_missing_entries(actions)
 end
 
@@ -743,7 +821,7 @@ end
 
 Return whether the save history of either model of any session in `sessions_info` selects
 anything. Used by the full models of the inference backends, to warn when the sessions save
-values that nothing in the model uses.
+trajectories that nothing in the model uses.
 """
 function sessions_save_anything(sessions_info::MultipleSessionsInfo)
     for session in sessions_info.sessions
@@ -920,7 +998,7 @@ end
 Return the index `i` of the session with the identifier `session_id` in a
 [`MultipleSessionsInfo`](@ref), which is how the models of several sessions number it: its
 parameters are element `i` of each vector a session parameter model gives, and its saved
-values are element `i` of what the sessions return. The identifier is the value in the
+trajectories are element `i` of what the sessions return. The identifier is the value in the
 session column, or a `NamedTuple` of the values when there are several, as in
 `sessions_info.session_ids`. Used by users reading the results of a fit, not by the
 models.
@@ -1190,28 +1268,28 @@ end
 initial_session_values(::Val{false}, session_info::SessionInfo, previous) = nothing
 
 """
-    with_empty_environment_entry(saved_values)
+    with_empty_environment_entry(saved_trajectories)
 
-Return `saved_values`, what a session without an environment saved, with an `environment`
-entry whose vectors hold an empty `NamedTuple` for each saved timestep, for a session which
-has an environment but didn't include it, so that every session with an environment returns
-the same entries, in the same order, since the model's return otherwise has two types. Used
-by fitted sessions.
+Return `saved_trajectories`, what a session without an environment saved, with an
+`environment` entry whose vectors hold an empty `NamedTuple` for each saved timestep, for a
+session which has an environment but didn't include it, so that every session with an
+environment returns the same entries, in the same order, since the model's return otherwise
+has two types. Used by fitted sessions.
 """
-function with_empty_environment_entry(saved_values::NamedTuple)
-    empty_vector = fill((;), length(saved_values.states))
+function with_empty_environment_entry(saved_trajectories::NamedTuple)
+    empty_vector = fill((;), length(saved_trajectories.states))
     return (;
-        saved_values.states,
-        saved_values.observations,
-        saved_values.actions,
-        saved_values.action_distributions,
+        saved_trajectories.states,
+        saved_trajectories.observations,
+        saved_trajectories.actions,
+        saved_trajectories.action_distributions,
         environment=(;
             states=empty_vector,
             observations=empty_vector,
             actions=empty_vector,
             observation_distributions=empty_vector,
         ),
-        saved_values.timestep_sizes,
+        saved_trajectories.timestep_sizes,
     )
 end
 

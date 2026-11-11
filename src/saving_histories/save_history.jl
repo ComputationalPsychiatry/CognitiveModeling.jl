@@ -39,8 +39,8 @@ any value. Before the first timestep there is no output distribution, so timeste
 
 Each model of a simulation has one: [`simulate`](@ref) and [`SessionInfo`](@ref) take
 `cognitive_save_history` and `environment_save_history`, and an
-[`InstantiatedModel`](@ref) takes `save_history`. What a simulation or a session returns
-names the saved values by their role: the cognitive model's inputs as `observations` and
+[`InstantiatedModel`](@ref) takes `save_history`. The trajectories that a simulation or a
+session returns are named by their role: the cognitive model's inputs as `observations` and
 outputs as `actions`, and the environment's inputs as `actions` and outputs as
 `observations` under `environment`, as [`simulate`](@ref) describes.
 
