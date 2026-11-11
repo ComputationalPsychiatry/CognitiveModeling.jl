@@ -247,9 +247,6 @@ end
         @test_throws "Every column of the table must have the same length, but their lengths are (id = 2, outcome = 3)." CognitiveModeling.check_table(
             (; id=["S1", "S2"], outcome=[1.0, 0.0, 1.0]), (:id,)
         )
-        @test_throws "The table must be a NamedTuple with one vector for each column" CognitiveModeling.check_table(
-            [1, 2], (:id,)
-        )
     end
 end
 

@@ -466,10 +466,32 @@ function build_column(table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symb
 end
 
 """
+    column_table(table)
+
+Return `table` as a `NamedTuple` with one vector for each column. A `NamedTuple` is returned
+as it is, and any other table is read with Tables.jl, through the package's extension for
+it, which loads with Tables.jl, as it does with DataFrames.jl, CSV.jl and the other packages
+of tables, since they load Tables.jl. Without it, a table that isn't a `NamedTuple` is an
+error. Used by [`MultipleSessionsInfo`](@ref) when it splits a table.
+"""
+column_table(table::NamedTuple) = table
+function column_table(table)
+    tables_extension = Base.get_extension(@__MODULE__, :CognitiveModelingTablesExt)
+    if tables_extension === nothing
+        throw(
+            ArgumentError(
+                "The table has type $(typeof(table)), which is read with Tables.jl. Load Tables.jl, or a package which loads it, such as DataFrames.jl, or give the table as a NamedTuple with one vector for each column.",
+            ),
+        )
+    end
+    return tables_extension.column_table(table)
+end
+
+"""
     check_table(table, columns)
 
-Throw an informative error if `table` isn't a `NamedTuple` of vectors of one length, or
-doesn't have every column in `columns`. Used by [`MultipleSessionsInfo`](@ref) when it
+Throw an informative error if `table`, a `NamedTuple`, doesn't have vectors of one length,
+or doesn't have every column in `columns`. Used by [`MultipleSessionsInfo`](@ref) when it
 splits a table.
 """
 function check_table(table::NamedTuple, columns::Tuple{Vararg{Symbol}})
@@ -494,14 +516,6 @@ function check_table(table::NamedTuple, columns::Tuple{Vararg{Symbol}})
         ),
     )
     return nothing
-end
-
-function check_table(table, columns::Tuple{Vararg{Symbol}})
-    return throw(
-        ArgumentError(
-            "The table must be a NamedTuple with one vector for each column, which Tables.columntable gives for a DataFrame, but it has type $(typeof(table)).",
-        ),
-    )
 end
 
 """

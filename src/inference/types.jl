@@ -358,7 +358,9 @@ Multiple behavioural sessions in a generative model that are fitted together, as
 several sessions take.
 
 The first form splits a table into sessions. `table` is a `NamedTuple` with one vector for
-each column, which is what `Tables.columntable` gives for a `DataFrame` or any other table.
+each column, or any other table that Tables.jl can read, such as a `DataFrame` or a
+`CSV.File`, whose columns are read when Tables.jl is loaded, as it is with DataFrames.jl and
+CSV.jl.
 A `missing` in a column becomes [`MissingValue`](@ref), or the marker for nothing happening,
 as the keyword arguments `missing_observations` and `missing_actions` of `SessionInfo` say.
 Every session must come out with the same type, which they do when they share the models and
@@ -375,9 +377,9 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
 # Arguments
 - `cognitive_model::AbstractModel`: the cognitive model, usually an
   [`AbstractCognitiveModel`](@ref).
-- `table::NamedTuple`: the data of every session, with one vector for each column and one
-  entry for each timestep, such as `(; id = ["S1", "S1", "S2", "S2"], reward = [1.0, 0.0,
-  1.0, 1.0], choice = [true, false, true, true])`.
+- `table`: the data of every session, in columns with one entry for each timestep, such as
+  `(; id = ["S1", "S1", "S2", "S2"], reward = [1.0, 0.0, 1.0, 1.0], choice = [true, false, true, true])`,
+  or a `DataFrame` with those columns.
 
 # Keyword arguments
 - `observation_columns`: the columns with the observations. When the model has only one
@@ -410,7 +412,7 @@ In the REPL, the sessions show a summary on one line each: how many there are, a
 models and the names in the data of the first.
 
 # Examples
-```jldoctest
+```jldoctest multiple_sessions_info
 julia> struct Counter <: AbstractCognitiveModel end
 
 julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; parameters = :probability, states = :n_timesteps, inputs = :reward, outputs = :choice);
@@ -432,6 +434,19 @@ julia> sessions_info.session_ids
 
 julia> sessions_info.sessions[2].actions
 (choice = Union{MissingValue, Bool}[true, MissingValue(), false],)
+```
+
+A `DataFrame` is given in the same way:
+
+```jldoctest multiple_sessions_info
+julia> using DataFrames
+
+julia> data = DataFrame(id = ["S1", "S1", "S2", "S2"], reward = [1.0, 0.0, 1.0, 1.0], choice = [true, missing, false, true]);
+
+julia> sessions_info = MultipleSessionsInfo(Counter(), data; observation_columns = :reward, action_columns = :choice, session_columns = :id, who_starts = EnvironmentStarts());
+
+julia> sessions_info.sessions[1].actions
+(choice = Union{MissingValue, Bool}[true, MissingValue()],)
 ```
 """
 struct MultipleSessionsInfo{
@@ -474,6 +489,9 @@ function MultipleSessionsInfo(
     timestep_sizes=1,
     keywords...,
 )
+
+    #A table of another kind, such as a DataFrame, is read as a NamedTuple of its columns
+    table = column_table(table)
 
     #The columns of each kind, from the names the model uses to the names in the table
     observation_column_map = column_map(observation_columns, cognitive_model, :observations)

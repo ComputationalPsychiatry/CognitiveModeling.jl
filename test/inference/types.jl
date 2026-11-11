@@ -763,14 +763,6 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=EnvironmentStarts(),
         )
-        @test_throws "The table must be a NamedTuple with one vector for each column" MultipleSessionsInfo(
-            SessionCounter(),
-            [1, 2];
-            observation_columns=:reward,
-            action_columns=:choice,
-            session_columns=:id,
-            who_starts=EnvironmentStarts(),
-        )
         @test_throws "Every column of the table must be a vector" MultipleSessionsInfo(
             SessionCounter(),
             (; id="S1", outcome=1.0, choice=true);

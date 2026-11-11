@@ -5,6 +5,7 @@ using Test
 #The Turing.jl extension is tested in an environment of its own, in extensions/turing
 using CommonRLInterface: CommonRLInterface
 using FlexiChains: FlexiChains
+using Tables: Tables
 
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")
