@@ -294,7 +294,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test CognitiveModeling.last_timestep_with_data((;)) == 0
     end
 
-    @testset "A missing in the data becomes MissingValue by default, and the replacements say which values become which markers" begin
+    @testset "A missing in the data becomes MissingValue by default" begin
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
@@ -307,18 +307,6 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.actions.choice == [true, MissingValue(), true] &&
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
         @test session_info.recorded_actions == (; choice=[true, true])
-        session_info = SessionInfo(
-            SessionCounter(),
-            (; reward=[1.0, missing, 1.0]),
-            (; choice=[true, missing, true]);
-            who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoValue(),),
-            action_replacements=(missing => NoValue(),),
-        )
-        @test session_info.observations.reward == [1.0, NoValue(), 1.0] &&
-            session_info.observations.reward isa Vector{Union{NoValue,Float64}}
-        @test session_info.actions.choice == [true, NoValue(), true] &&
-            session_info.actions.choice isa Vector{Union{NoValue,Bool}}
         #The markers can also be in the data already, and the original columns aren't changed
         rewards = (; reward=[1.0, missing, 1.0])
         SessionInfo(
@@ -326,27 +314,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             rewards,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoValue(),),
+            impute_missing_observations=false,
         )
         @test rewards.reward[2] === missing
-        #A single pair can be given on its own, several values can each become a marker, and anything that isn't pairs is an error
-        session_info = SessionInfo(
-            SessionCounter(),
-            (; reward=[1.0, missing, -1.0]),
-            (; choice=[1, -1, missing]);
-            who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => UnimputedMissingValue(), -1 => NoValue()),
-            action_replacements=-1 => NoValue(),
-        )
-        @test session_info.observations.reward == [1.0, UnimputedMissingValue(), NoValue()]
-        @test isequal(session_info.actions.choice, [1, NoValue(), missing])
-        @test_throws "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoValue()), but they are NoValue()." SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            COUNTER_CHOICES;
-            who_starts=EnvironmentStarts(),
-            action_replacements=NoValue(),
-        )
     end
 
     @testset "Missing values that aren't imputed are passed on, and need no environment" begin
@@ -355,8 +325,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, missing, 1.0]),
             (; choice=[true, MissingValue(), true]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => UnimputedMissingValue(),),
-            action_replacements=(MissingValue() => UnimputedMissingValue(),),
+            impute_missing_observations=false,
+            impute_missing_actions=false,
         )
         @test session_info.observations.reward == [1.0, UnimputedMissingValue(), 1.0] &&
             session_info.observations.reward isa
@@ -372,7 +342,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, missing, 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            observation_replacements=(),
+            missing_observation_values=(),
         )
         @test isequal(kept.observations.reward, [1.0, missing, 1.0])
         @test isequal(
@@ -424,7 +394,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; choice=[true, MissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
-            action_replacements=(MissingValue() => UnimputedMissingValue(),),
+            impute_missing_actions=false,
         ).includes_environment
         #With nothing missing, it doesn't run, and there is no warning
         all_recorded = @test_logs SessionInfo(
@@ -595,7 +565,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             timestep_sizes=[1.0, 2.0],
         )
         #Without an environment, no observation can be missing
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." SessionInfo(
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
@@ -782,7 +752,7 @@ const COUNTER_TABLE = (;
         )
     end
 
-    @testset "The replacements are made in the whole table, also in the columns an attribute is built from" begin
+    @testset "Missing values are marked in the whole table, also in the columns an attribute is built from" begin
         table = (;
             id=["S1", "S1", "S2", "S2"],
             outcome=[1.0, missing, 1.0, 0.0],
@@ -796,20 +766,20 @@ const COUNTER_TABLE = (;
             action_columns=(; choice=:choicecol, rt=:rtcol) => :choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => UnimputedMissingValue(),),
-            action_replacements=(missing => MissingValue(), -1 => NoValue()),
+            impute_missing_observations=false,
+            missing_action_values=(missing, -1),
         )
         #A missing observation that isn't imputed needs no environment, and every session has the marker in its type
         @test sessions_info.sessions[1].observations.reward ==
             [1.0, UnimputedMissingValue()]
         @test sessions_info.sessions[2].observations.reward isa
             Vector{Union{UnimputedMissingValue,Float64}}
-        #A replaced value in any column that an attribute is built from makes the whole value its marker
+        #A missing value in any column that an attribute is built from makes the whole value missing
         @test sessions_info.sessions[1].actions.choice ==
             [(; choice=1, rt=0.5), (; choice=0, rt=0.7)]
-        @test sessions_info.sessions[2].actions.choice == [NoValue(), MissingValue()]
+        @test sessions_info.sessions[2].actions.choice == [MissingValue(), MissingValue()]
         @test isconcretetype(eltype(sessions_info.sessions))
-        #A value which is equal to a pair's without having its type is replaced too, and every session then has the marker in its type
+        #A value which is equal to one of them without having its type is marked too, and every session then has the marker in its type
         with_code = MultipleSessionsInfo(
             SessionCounter(),
             (; id=["S1", "S2"], outcome=[1.0, -1.0], choice=[true, false]);
@@ -817,11 +787,13 @@ const COUNTER_TABLE = (;
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
-            observation_replacements=-1 => NoValue(),
+            missing_observation_values=(-1,),
+            impute_missing_observations=false,
         )
-        @test with_code.sessions[2].observations.reward == [NoValue()] &&
-            with_code.sessions[1].observations.reward isa Vector{Union{NoValue,Float64}}
-        #Without replacements, missing stays in the data as a value
+        @test with_code.sessions[2].observations.reward == [UnimputedMissingValue()] &&
+            with_code.sessions[1].observations.reward isa
+              Vector{Union{UnimputedMissingValue,Float64}}
+        #Without values that stand for a missing one, missing stays in the data as a value
         kept = MultipleSessionsInfo(
             SessionCounter(),
             table;
@@ -829,7 +801,7 @@ const COUNTER_TABLE = (;
             action_columns=:choicecol,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
-            observation_replacements=(),
+            missing_observation_values=(),
         )
         @test isequal(kept.sessions[1].observations.reward, [1.0, missing])
     end
@@ -844,7 +816,7 @@ const COUNTER_TABLE = (;
             who_starts=AgentStarts(),
             timestep_sizes=:dt,
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
-            action_replacements=(missing => UnimputedMissingValue(),),
+            impute_missing_actions=false,
         )
         @test all(
             session ->
@@ -891,7 +863,7 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
-            action_replacements=(missing => UnimputedMissingValue(),),
+            impute_missing_actions=false,
         )
         @test !any(session -> session.includes_environment, all_recorded.sessions)
         #A copy with another save history for every session
@@ -1057,7 +1029,7 @@ end
             who_starts=AgentStarts(),
             timestep_sizes=[1.0, 2.0, 1.0],
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
-            action_replacements=(missing => UnimputedMissingValue(),),
+            impute_missing_actions=false,
         )
         predictive = prepare_for_prediction(session_info)
         @test predictive.actions == (; choice=fill(MissingValue(), 3))

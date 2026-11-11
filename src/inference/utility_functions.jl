@@ -81,7 +81,7 @@ Return `column` with the types it holds as its element type, when its element ty
 or another abstract type that isn't a `Union`, and `column` itself otherwise. A vector
 written as `[true, MissingValue(), true]` has the element type `Any`, since only `missing`
 is promoted to a `Union`, and an `Any` in the data makes every timestep run with its types
-unknown. Used by [`replace_data_values`](@ref) and [`build_column`](@ref).
+unknown. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
 """
 function narrow_column(column::AbstractVector)
     T = eltype(column)
@@ -94,118 +94,100 @@ function narrow_column(column::AbstractVector)
 end
 
 """
-    replacement_pairs(replacements)
-
-Return `replacements`, the `observation_replacements` or the `action_replacements` of a
-[`SessionInfo`](@ref), as a tuple of pairs, each from a value in the data to what it is
-replaced by: a tuple of pairs as it is, and a single pair or a vector of pairs as a tuple.
-Anything else is an error. Used by [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
-"""
-replacement_pairs(replacements::Tuple{Vararg{Pair}}) = replacements
-replacement_pairs(replacement::Pair) = (replacement,)
-replacement_pairs(replacements::AbstractVector{<:Pair}) = Tuple(replacements)
-function replacement_pairs(replacements)
-    return throw(
-        ArgumentError(
-            "The replacements of values in the data must be pairs from a value to the marker it becomes, such as (missing => MissingValue(), -1 => NoValue()), but they are $(repr(replacements)).",
-        ),
-    )
-end
-
-"""
-    replacement_of(value, replacements)
-    replacement_of_any(values, replacements)
-
-Return what `value` is replaced by, wrapped in `Some`, from the first pair in `replacements`
-whose first element is equal to it, as `isequal` compares them, or `nothing` when no pair
-is. The second form takes several values, and returns the replacement from the first pair
-which is equal to any of them. Used by [`replace_data_values`](@ref) and
-[`build_column`](@ref).
-"""
-function replacement_of(value, replacements::Tuple{Vararg{Pair}})
-    for replacement in replacements
-        isequal(first(replacement), value) && return Some(last(replacement))
-    end
-    return nothing
-end
-
-function replacement_of_any(values::Tuple, replacements::Tuple{Vararg{Pair}})
-    for replacement in replacements
-        if any(value -> isequal(first(replacement), value), values)
-            return Some(last(replacement))
-        end
-    end
-    return nothing
-end
-
-"""
     column_can_hold(column, value)
 
 Return whether `column` can hold `value`, by its element type, or holds a value which is
 equal to it without having its type, such as `-1.0` for `-1`, as `isequal` compares them.
-Used by [`replace_data_values`](@ref).
+Used by [`mark_missing_values`](@ref).
 """
 function column_can_hold(column::AbstractVector, value)
     return typeof(value) <: eltype(column) || any(isequal(value), column)
 end
 
 """
-    replaced_eltype(T, replacements)
+    as_missing_values(missing_values)
 
-Return the element type of a column with the element type `T` after the replacements in
-`replacements`, a tuple of pairs, are made in it: without the type of a replaced value which
-is the only value of its type, such as `Missing`, since none is left, and with the type of
-what each value is replaced by. Used by [`replace_data_values`](@ref).
+Return `missing_values`, the `missing_observation_values` or the `missing_action_values` of
+a [`SessionInfo`](@ref), as a tuple: a tuple as it is, and a vector as a tuple. Anything
+else is an error. Used by [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
 """
-function replaced_eltype(T::Type, replacements::Tuple{Vararg{Pair}})
-    for replacement in replacements
-        replaced_type = typeof(first(replacement))
-        Base.issingletontype(replaced_type) && (T = Base.typesplit(T, replaced_type))
-    end
-    for replacement in replacements
-        T = Union{T,typeof(last(replacement))}
-    end
-    return T
+as_missing_values(missing_values::Tuple) = missing_values
+as_missing_values(missing_values::AbstractVector) = Tuple(missing_values)
+function as_missing_values(missing_values)
+    return throw(
+        ArgumentError(
+            "The values in the data which stand for a missing value must be given in a tuple or a vector, such as (missing,) or (missing, -1), but they are $(repr(missing_values)).",
+        ),
+    )
 end
 
 """
-    replace_data_values(columns, replacements)
+    missing_value_marker(impute)
 
-Return `columns`, a `NamedTuple` with one vector per name, with every value which is equal
-to the first element of a pair in `replacements`, as `isequal` compares them, replaced by
-the second: usually a marker, such as [`MissingValue`](@ref) for `missing`. A column gets
-the type of the marker in its element type when its element type allows the replaced value,
-whether it holds one or not, so that sessions whose columns have the same types keep them,
-or when it holds a value equal to it of another type. Any other column is kept as it is,
-after [`narrow_column`](@ref). Anything that isn't a `NamedTuple` of vectors is returned as
-it is, for [`check_data`](@ref) to report. Used by [`SessionInfo`](@ref) on the observations
-and the actions, and by [`build_column`](@ref).
+Return the marker which the missing values in the data of a session become:
+[`MissingValue`](@ref) when they are imputed, and [`UnimputedMissingValue`](@ref) when
+`impute` is `false`. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
 """
-function replace_data_values(columns::NamedTuple, replacements::Tuple{Vararg{Pair}})
-    return map(column -> replace_data_values(column, replacements), columns)
+missing_value_marker(impute::Bool) = impute ? MissingValue() : UnimputedMissingValue()
+
+"""
+    is_missing_data_value(value, missing_values)
+
+Return whether `value` is missing in the data: [`MissingValue`](@ref) itself, or equal to
+one of `missing_values`, as `isequal` compares them. Used by [`build_column`](@ref), for a
+value which is built from several columns.
+"""
+function is_missing_data_value(value, missing_values::Tuple)
+    return value isa MissingValue ||
+           any(missing_value -> isequal(missing_value, value), missing_values)
 end
 
-function replace_data_values(column::AbstractVector, replacements::Tuple{Vararg{Pair}})
+"""
+    mark_missing_values(columns, missing_values, impute)
+
+Return `columns`, a `NamedTuple` with one vector per name, or a single vector, with every
+value which is equal to one of `missing_values`, as `isequal` compares them, replaced by the
+marker for a missing value: [`MissingValue`](@ref) when `impute` is `true`. When it is
+`false`, the marker is [`UnimputedMissingValue`](@ref), which every `MissingValue()` that
+is in the data already becomes too.
+
+A column gets the type of the marker in its element type when its element type allows one
+of the values, whether it holds one or not, so that sessions whose columns have the same
+types keep them, or when it holds a value equal to one of them of another type, such as
+`-1.0` for `-1`. Any other column is kept as it is, after [`narrow_column`](@ref). Anything
+that isn't a `NamedTuple` of vectors is returned as it is, for [`check_data`](@ref) to
+report. Used by [`SessionInfo`](@ref) on the observations and the actions, and by
+[`build_column`](@ref).
+"""
+function mark_missing_values(columns::NamedTuple, missing_values::Tuple, impute::Bool)
+    return map(column -> mark_missing_values(column, missing_values, impute), columns)
+end
+
+function mark_missing_values(column::AbstractVector, missing_values::Tuple, impute::Bool)
     column = narrow_column(column)
+    marker = missing_value_marker(impute)
 
-    #Only the replacements of values that the column can hold are made in it
-    replacements_made = filter(
-        replacement -> column_can_hold(column, first(replacement)), replacements
-    )
-    isempty(replacements_made) && return column
+    #Without imputation, a value which is marked as missing in the data already isn't imputed either
+    values = impute ? missing_values : (missing_values..., MissingValue())
 
-    #Replace each value by what the first pair that is equal to it gives
-    replaced = Vector{replaced_eltype(eltype(column), replacements_made)}(
-        undef, length(column)
-    )
-    for i in eachindex(column)
-        replacement = replacement_of(column[i], replacements_made)
-        replaced[i] = replacement === nothing ? column[i] : something(replacement)
+    #Only the values that the column can hold are replaced in it
+    replaced_values = filter(value -> column_can_hold(column, value), values)
+    isempty(replaced_values) && return column
+
+    #The element type loses a replaced value which is the only one of its type, such as Missing, and gets the type of the marker
+    T = eltype(column)
+    for value in replaced_values
+        Base.issingletontype(typeof(value)) && (T = Base.typesplit(T, typeof(value)))
     end
-    return replaced
+    marked = Vector{Union{T,typeof(marker)}}(undef, length(column))
+    for i in eachindex(column)
+        is_replaced = any(value -> isequal(value, column[i]), replaced_values)
+        marked[i] = is_replaced ? marker : column[i]
+    end
+    return marked
 end
 
-replace_data_values(x, replacements::Tuple{Vararg{Pair}}) = x
+mark_missing_values(x, missing_values::Tuple, impute::Bool) = x
 
 #A call of its own, so that a value which can have two types gives one of two NamedTuples with a concrete field each: (; a = x) written out is inferred as a NamedTuple whose field type is the Union, which nothing is compiled for, while a call with a Union-typed argument is split by type
 """
@@ -317,7 +299,7 @@ function check_environment_fits(
     if has_missing_entries(observations)
         throw(
             ArgumentError(
-                "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),).",
+                "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false.",
             ),
         )
     end
@@ -599,45 +581,64 @@ function columns_used(specification)
 end
 
 """
-    build_column(table, specification, replacements)
+    build_column(table, specification, missing_values, impute)
 
 Return the column of an attribute for every row of `table`, as [`columns_used`](@ref)
-describes the specification, with the values that `replacements` name replaced by their
-markers, as [`replace_data_values`](@ref) does: the column itself, or one built row by row
-from several, where a value in any of them that is replaced by a marker makes the whole
-value of the row that marker. The column is made for the whole table, so that every session
-gets the same element type. Used by [`build_columns`](@ref).
+describes the specification, with the values that are missing replaced by their marker, as
+[`mark_missing_values`](@ref) does: the column itself, or one built row by row from several,
+where a missing value in any of them makes the whole value of the row missing. The column is
+made for the whole table, so that every session gets the same element type. Used by
+[`build_columns`](@ref).
 """
-function build_column(table::NamedTuple, specification::Symbol, replacements)
-    return replace_data_values(getproperty(table, specification), replacements)
+function build_column(table::NamedTuple, specification::Symbol, missing_values, impute)
+    return mark_missing_values(getproperty(table, specification), missing_values, impute)
 end
 function build_column(
     table::NamedTuple,
     specification::NamedTuple{names,<:Tuple{Vararg{Symbol}}},
-    replacements,
+    missing_values,
+    impute,
 ) where {names}
     return build_column(
         table,
         values(specification) => (values...) -> NamedTuple{names}(values),
-        replacements,
+        missing_values,
+        impute,
     )
 end
-function build_column(table::NamedTuple, specification::Tuple{Vararg{Symbol}}, replacements)
-    return build_column(table, specification => tuple, replacements)
+function build_column(
+    table::NamedTuple, specification::Tuple{Vararg{Symbol}}, missing_values, impute
+)
+    return build_column(table, specification => tuple, missing_values, impute)
 end
 function build_column(
-    table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symbol}}}, replacements
+    table::NamedTuple, specification::Pair{<:Tuple{Vararg{Symbol}}}, missing_values, impute
 )
     columns = map(name -> getproperty(table, name), first(specification))
     combine = last(specification)
+    marker = missing_value_marker(impute)
     built = map(eachindex(first(columns))) do i
         values = map(column -> column[i], columns)
 
-        #A value that is replaced by a marker in any of the columns makes the whole value that marker
-        replacement = replacement_of_any(values, replacements)
-        return replacement === nothing ? combine(values...) : something(replacement)
+        #A missing value in any of the columns makes the whole value missing
+        is_missing = any(value -> is_missing_data_value(value, missing_values), values)
+        return is_missing ? marker : combine(values...)
     end
     return narrow_column(built)
+end
+
+"""
+    build_columns(table, columns, missing_values, impute)
+
+Return the columns in `columns`, a `NamedTuple` from the name the model uses to the
+specification of the column in `table`, for every row of the table, as a `NamedTuple` with
+the model's names, each built with [`build_column`](@ref). Used by
+[`MultipleSessionsInfo`](@ref) when it splits a table.
+"""
+function build_columns(table::NamedTuple, columns::NamedTuple, missing_values, impute)
+    return map(
+        specification -> build_column(table, specification, missing_values, impute), columns
+    )
 end
 
 """
@@ -719,18 +720,6 @@ function session_id(table::NamedTuple, id_columns::Tuple{Symbol}, i)
 end
 function session_id(table::NamedTuple, id_columns::Tuple{Vararg{Symbol}}, i)
     return NamedTuple{id_columns}(map(column -> getproperty(table, column)[i], id_columns))
-end
-
-"""
-    build_columns(table, columns, replacements)
-
-Return the columns in `columns`, a `NamedTuple` from the name the model uses to the
-specification of the column in `table`, for every row of the table, as a `NamedTuple` with
-the model's names, each built with [`build_column`](@ref). Used by
-[`MultipleSessionsInfo`](@ref) when it splits a table.
-"""
-function build_columns(table::NamedTuple, columns::NamedTuple, replacements)
-    return map(specification -> build_column(table, specification, replacements), columns)
 end
 
 """

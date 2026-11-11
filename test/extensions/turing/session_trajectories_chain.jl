@@ -12,7 +12,7 @@ end
 
 @testset "session_trajectories_chain" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
-    sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+    sessions_info = sessions_for_test(; impute_missing_actions=false)
     model = turing_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 

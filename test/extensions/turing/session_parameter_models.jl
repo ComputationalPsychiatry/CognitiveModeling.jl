@@ -1,7 +1,7 @@
 ## The session parameter models on their own, with the three sessions of FULL_TABLE, S1, S2 and S3 ##
 
 @testset "turing_session_parameters_model" begin
-    sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+    sessions_info = sessions_for_test(; impute_missing_actions=false)
 
     @testset "NoParameters gives no parameters, and samples nothing" begin
         model = CognitiveModeling.turing_session_parameters_model(
@@ -104,7 +104,7 @@ end
 
 @testset "GroupedHierarchicalSessionParameters and CompositeSessionParameters" begin
     sessions_info = sessions_for_test(
-        SessionRescorlaWagner(), GROUPED_FULL_TABLE; action_replacements=UNIMPUTED_ACTIONS
+        SessionRescorlaWagner(), GROUPED_FULL_TABLE; impute_missing_actions=false
     )
 
     @testset "Each session's value is its group's mean plus a standardized value times its group's standard deviation, transformed" begin

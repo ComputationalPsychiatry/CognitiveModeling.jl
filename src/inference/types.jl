@@ -31,9 +31,9 @@ as its observation, or as its previous action on the next timestep, and an envir
 as the action it responds to. A model which is fitted to such data must handle it, as it
 does the other subtypes of [`AbstractNoValue`](@ref). Useful for a session without an
 environment model whose data lacks some observations, and for missing actions which
-shouldn't become latent variables. A [`SessionInfo`](@ref) puts it in place of the values
-that its `observation_replacements` and `action_replacements` say, such as
-`(missing => UnimputedMissingValue(),)`.
+shouldn't become latent variables. A [`SessionInfo`](@ref) puts it in place of the missing
+observations with `impute_missing_observations = false`, and of the missing actions with
+`impute_missing_actions = false`.
 """
 struct UnimputedMissingValue <: AbstractNoValue end
 
@@ -65,13 +65,12 @@ table.
   must have every observation the model lists in [`attribute_names`](@ref), and can have
   more. When the model has only one kind of observation in its attributes, a single vector,
   `[1.0, 0.0, 1.0]`, is the data of that observation, whatever its name. An observation that
-  wasn't recorded is [`MissingValue`](@ref), which `environment` imputes, or
-  [`UnimputedMissingValue`](@ref), which the model receives as it is, and one that wasn't
-  made is [`NoValue`](@ref).
+  wasn't recorded is [`MissingValue`](@ref), which `environment` imputes unless
+  `impute_missing_observations` is `false`, and one that wasn't made is [`NoValue`](@ref).
 - `actions`: the actions in the data, in the same forms, with exactly the actions the model
-  lists. An action that was taken but not recorded is `MissingValue()`, which is imputed, or
-  `UnimputedMissingValue()`, which isn't, and an action that wasn't taken is
-  [`NoValue`](@ref). None of them is scored.
+  lists. An action that was taken but not recorded is `MissingValue()`, which is imputed
+  unless `impute_missing_actions` is `false`, and an action that wasn't taken is
+  `NoValue()`. Neither is scored.
 
 # Keyword arguments
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
@@ -125,15 +124,15 @@ table.
   timesteps after the last one with data. With `true`, it is checked before every timestep,
   and a criterion that is met while the data continues is an error. With `false`, it is
   never checked. The extended help says why.
-- `observation_replacements=(missing => MissingValue(),)` and
-  `action_replacements=(missing => MissingValue(),)`: which values in the data are replaced
-  by a marker, as pairs from the value to the marker, like those `replace` takes, such as
-  `(missing => MissingValue(), -1 => NoValue())`. The marker is [`MissingValue`](@ref) for
-  a value that is imputed, [`UnimputedMissingValue`](@ref) for one that isn't, and
-  [`NoValue`](@ref) or [`NoValue`](@ref) for nothing happening on the timestep. A
-  value is compared to those of the pairs with `isequal`. A single pair can be given on its
-  own, and `()` keeps every value as it is, `missing` too. The markers can also be put in
-  the data directly.
+- `missing_observation_values=(missing,)` and `missing_action_values=(missing,)`: the
+  values in the data which stand for a missing observation or action, in a tuple or a
+  vector, such as `(missing, -1)`. Each is replaced by `MissingValue()`. A value is compared
+  to them with `isequal`, and `()` keeps every value as it is, `missing` too.
+  `MissingValue()` can also be put in the data directly.
+- `impute_missing_observations::Bool=true` and `impute_missing_actions::Bool=true`: whether
+  the observations and the actions that are `MissingValue()` are imputed, as latent
+  variables. With `false`, nothing is sampled for them, and they are replaced by
+  [`UnimputedMissingValue`](@ref) here, which the models receive as it is.
 - `previous_observation` and `previous_action`: what the first timestep receives as the
   observation and the action before it, in the cognitive model's names, with
   [`BeforeFirstTimestep`](@ref) for each name by default, as in `simulate`. The environment
@@ -142,8 +141,9 @@ table.
   not given here, since they come from [`initialize_state`](@ref) with the parameters that
   are fitted.
 
-Each argument is kept in a field of the same name, except the two replacements, which are
-made in the data here. The other fields are `includes_environment`, whether the session
+Each argument is kept in a field of the same name, except the values that stand for a
+missing one and whether they are imputed, whose work is done in the data here. The other
+fields are `includes_environment`, whether the session
 includes the environment, as `include_environment` decides it, `environment_observations`,
 the data of the environment's outputs in its own names, `previous_environment_observation`,
 the observation the environment starts from in its own names, `recorded_actions` and
@@ -171,7 +171,7 @@ julia> struct Counter <: AbstractCognitiveModel end
 
 julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; parameters = :probability, states = :n_timesteps, inputs = :reward, outputs = :choice);
 
-julia> session_info = SessionInfo(Counter(), (; reward = [1.0, 0.0, missing]), (; choice = [true, missing, false]); who_starts = EnvironmentStarts(), observation_replacements = (missing => UnimputedMissingValue(),))
+julia> session_info = SessionInfo(Counter(), (; reward = [1.0, 0.0, missing]), (; choice = [true, missing, false]); who_starts = EnvironmentStarts(), impute_missing_observations = false)
 SessionInfo
 Cognitive model: Counter
 Environment: none
@@ -258,8 +258,8 @@ function SessionInfo(
         session_info.cognitive_model,
         session_info.observations,
         session_info.actions;
-        observation_replacements=(),
-        action_replacements=(),
+        missing_observation_values=(),
+        missing_action_values=(),
         who_starts=session_info.who_starts,
         environment=session_info.environment,
         observation_map=session_info.observation_map,
@@ -285,8 +285,8 @@ check_stopping_criterion_not_met(::NoEnvironment, state, parameters) = nothing
     prepare_session(cognitive_model, observations, actions; who_starts, <keyword arguments>)
 
 Return the [`SessionInfo`](@ref) of one session, with the checks of the data and the names,
-the replacements of values in the data by markers, whether the environment runs, and what is
-scored and returned prepared, as its constructor describes. Used by `SessionInfo` and
+the missing values in the data marked, whether the environment runs, and what is scored and
+returned prepared, as its constructor describes. Used by `SessionInfo` and
 [`MultipleSessionsInfo`](@ref).
 """
 function prepare_session(
@@ -302,8 +302,10 @@ function prepare_session(
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
     check_stopping_criterion::Union{Nothing,Bool}=nothing,
-    observation_replacements=(missing => MissingValue(),),
-    action_replacements=(missing => MissingValue(),),
+    missing_observation_values=(missing,),
+    missing_action_values=(missing,),
+    impute_missing_observations::Bool=true,
+    impute_missing_actions::Bool=true,
     previous_observation=input_before_first_timestep(cognitive_model),
     previous_action=output_before_first_timestep(cognitive_model),
 )
@@ -312,11 +314,15 @@ function prepare_session(
     observations = named_data(observations, cognitive_model, :observations)
     actions = named_data(actions, cognitive_model, :actions)
 
-    #Replace the values in the data that the replacements name by their markers, which by default is missing by the marker for a value that is imputed
-    observations = replace_data_values(
-        observations, replacement_pairs(observation_replacements)
+    #Replace the values in the data which stand for a missing value by the marker for one, which is the marker for a missing value that isn't imputed when imputation isn't asked for
+    observations = mark_missing_values(
+        observations,
+        as_missing_values(missing_observation_values),
+        impute_missing_observations,
     )
-    actions = replace_data_values(actions, replacement_pairs(action_replacements))
+    actions = mark_missing_values(
+        actions, as_missing_values(missing_action_values), impute_missing_actions
+    )
 
     #Check the data against the names the cognitive model lists, and that the environment fits
     n_timesteps = check_data(cognitive_model, observations, actions)
@@ -403,15 +409,14 @@ several sessions take.
 The first form splits a table into sessions. `table` is a `NamedTuple` with one vector for
 each column, or any other table that Tables.jl can read, such as a `DataFrame` or a
 `CSV.File`, whose columns are read when Tables.jl is loaded, as it is with DataFrames.jl and
-CSV.jl. The values of a column that `observation_replacements` and `action_replacements`
-name are replaced by markers, as for [`SessionInfo`](@ref): by default a `missing` becomes
-[`MissingValue`](@ref). Every session must come out with the same type, which they do when
-they share the models and the settings, since the timesteps of different sessions are then
-compiled once. As for [`SessionInfo`](@ref), a session includes its environment where an
-observation or an action is `MissingValue()`, where `environment_save_history` saves
-anything or where `check_stopping_criterion` is `true`, and in an inference backend's full
-model that estimates the environment's parameters, unless `include_environment` says
-otherwise. The
+CSV.jl. The values of a column that stand for a missing observation or action become
+[`MissingValue`](@ref), as for [`SessionInfo`](@ref): by default those that are `missing`.
+Every session must come out with the same type, which they do when they share the models and
+the settings, since the timesteps of different sessions are then compiled once. As for
+[`SessionInfo`](@ref), a session includes its environment where an observation or an action
+is `MissingValue()`, where `environment_save_history` saves anything or where
+`check_stopping_criterion` is `true`, and in an inference backend's full model that
+estimates the environment's parameters, unless `include_environment` says otherwise. The
 table is kept in the field `table`, without being copied, with the rows of each session in
 `session_rows`, so that a session parameter model can read the columns it needs, such as
 those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions by.
@@ -443,20 +448,20 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   function of their values, which needs parentheses around it,
   `(:choicecol, :rtcol) => ((choice, rt) -> [choice, rt]) => :ssm_action`. When the model
   has only one kind of them in its attributes, the name can be left out of the last two, as
-  in `(; choice = :choicecol, rt = :rtcol)`. A value in any of the columns which
-  `observation_replacements` replaces by a marker makes the whole value that marker.
-- `action_columns`: the columns with the actions, in the same forms, with
-  `action_replacements`.
+  in `(; choice = :choicecol, rt = :rtcol)`. A missing value in any of the columns makes the
+  whole value missing.
+- `action_columns`: the columns with the actions, in the same forms.
 - `session_columns`: the column or columns which separate sessions, such as `:id` or
   `(:id, :block)`. A session is every row with one combination of their values, in the
   order of the first row of each. The identifier of a session is its value in a single
   column, or a `NamedTuple` of its values in several.
 - `timestep_sizes=1`: how much time each timestep covers, as one size for all, or the name
   of a column with the size of each timestep.
-- `observation_replacements=(missing => MissingValue(),)` and
-  `action_replacements=(missing => MissingValue(),)`: which values in the columns are
-  replaced by a marker, as for [`SessionInfo`](@ref). They are replaced in the whole table
-  before it is split, so that the columns of every session have the same element types.
+- `missing_observation_values=(missing,)`, `missing_action_values=(missing,)`,
+  `impute_missing_observations=true` and `impute_missing_actions=true`: the values in the
+  columns which stand for a missing observation or action, and whether those are imputed, as
+  for [`SessionInfo`](@ref). They are marked in the whole table before it is split, so that
+  the columns of every session have the same element types.
 - The other keyword arguments of [`SessionInfo`](@ref), which every session gets.
 
 The second form takes sessions that are already prepared. They have no table, unless it is
@@ -564,8 +569,10 @@ function MultipleSessionsInfo(
     action_columns,
     session_columns,
     timestep_sizes=1,
-    observation_replacements=(missing => MissingValue(),),
-    action_replacements=(missing => MissingValue(),),
+    missing_observation_values=(missing,),
+    missing_action_values=(missing,),
+    impute_missing_observations::Bool=true,
+    impute_missing_actions::Bool=true,
     keywords...,
 )
 
@@ -589,23 +596,29 @@ function MultipleSessionsInfo(
     #The rows of each session, and its identifier
     sessions_rows = rows_per_session(table, id_columns)
 
-    #The columns of the observations and of the actions are built once for the whole table, with the values that the replacements name replaced by their markers, so that every session gets the same element types
+    #The columns of the observations and of the actions are built once for the whole table, with the missing values replaced by their marker, so that every session gets the same element types
     observation_columns_of_table = build_columns(
-        table, observation_column_map, replacement_pairs(observation_replacements)
+        table,
+        observation_column_map,
+        as_missing_values(missing_observation_values),
+        impute_missing_observations,
     )
     action_columns_of_table = build_columns(
-        table, action_column_map, replacement_pairs(action_replacements)
+        table,
+        action_column_map,
+        as_missing_values(missing_action_values),
+        impute_missing_actions,
     )
 
-    #Each session is prepared from its rows of those columns, in which nothing more is replaced
+    #Each session is prepared from its rows of those columns, in which the missing values are marked already
     sessions = map(sessions_rows) do (_, rows)
         return prepare_session(
             cognitive_model,
             select_rows(observation_columns_of_table, rows),
             select_rows(action_columns_of_table, rows);
             timestep_sizes=select_timestep_sizes(table, timestep_sizes, rows),
-            observation_replacements=(),
-            action_replacements=(),
+            missing_observation_values=(),
+            missing_action_values=(),
             keywords...,
         )
     end
@@ -676,8 +689,8 @@ function prepare_for_prediction(
         session_info.cognitive_model,
         observations,
         actions;
-        observation_replacements=(),
-        action_replacements=(),
+        missing_observation_values=(),
+        missing_action_values=(),
         who_starts=session_info.who_starts,
         environment=session_info.environment,
         observation_map=session_info.observation_map,

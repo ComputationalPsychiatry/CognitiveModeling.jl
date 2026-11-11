@@ -556,20 +556,21 @@ end
               logpdf(Normal(V₂, 1.0), 0.4)
     end
 
-    @testset "A missing in the data becomes MissingValue, or the marker that the replacements give, and a column keeps one type" begin
+    @testset "A missing in the data becomes MissingValue, or the marker for one that isn't imputed, and a column keeps one type" begin
         session_info = SessionInfo(
             SessionRescorlaWagner(),
             (; reward=[1.0, missing, 0.0]),
             (; choice=[true, missing, false]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => NoValue(),),
+            impute_missing_observations=false,
         )
-        @test session_info.observations.reward == [1.0, NoValue(), 0.0] &&
-            session_info.observations.reward isa Vector{Union{NoValue,Float64}}
+        @test session_info.observations.reward == [1.0, UnimputedMissingValue(), 0.0] &&
+            session_info.observations.reward isa
+              Vector{Union{UnimputedMissingValue,Float64}}
         @test session_info.actions.choice == [true, MissingValue(), false] &&
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
         @test session_info.recorded_actions == (; choice=[true, false])
-        #The model doesn't learn from the observation that wasn't made, and the missing choice is imputed
+        #The model doesn't learn from the observation that isn't there, and the missing choice is imputed
         model = turing_behavioral_session(session_info, SESSION_PARAMETERS)
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), model))) ==
             [@varname(timestep[2].choice.imputed)]
@@ -585,10 +586,10 @@ end
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
-            action_replacements=(missing => NoValue(),),
-        ).actions.choice isa Vector{Union{NoValue,Bool}}
+            impute_missing_actions=false,
+        ).actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
         #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." SessionInfo(
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             SessionRescorlaWagner(),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
@@ -600,7 +601,7 @@ end
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
-            observation_replacements=(missing => UnimputedMissingValue(),),
+            impute_missing_observations=false,
             cognitive_save_history=SaveHistory(SaveEverything()),
         )
         @test unimputed.observations.reward[2] === UnimputedMissingValue()
@@ -796,7 +797,7 @@ end
             (; learning_rate=0.3),
             rewards,
             actions;
-            action_replacements=(MissingValue() => UnimputedMissingValue(),),
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
         )
         @test isempty(keys(rand(Xoshiro(1), model)))
@@ -834,11 +835,7 @@ end
         choices = (; choice=[true, MissingValue(), true])
         @test logjoint(
             session_for_test(
-                RepeatsPreviousChoice(),
-                (;),
-                (;),
-                choices;
-                action_replacements=(MissingValue() => UnimputedMissingValue(),),
+                RepeatsPreviousChoice(), (;), (;), choices; impute_missing_actions=false
             ),
             (;),
         ) ≈ 2 * log(0.5)
@@ -854,7 +851,7 @@ end
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 3)),
             choices;
-            action_replacements=(MissingValue() => UnimputedMissingValue(),),
+            impute_missing_actions=false,
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
@@ -925,7 +922,7 @@ end
         @test returned(model, (;)).observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them unimputed, with observation_replacements = (missing => UnimputedMissingValue(),)." session_for_test(
+        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
             SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES
         )
         #An observation that the environment doesn't give stays NoValue

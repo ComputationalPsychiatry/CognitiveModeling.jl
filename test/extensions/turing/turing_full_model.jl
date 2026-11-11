@@ -67,9 +67,6 @@ const FULL_TABLE = (;
 )
 const FULL_PRIORS = (; learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5))
 
-#The replacement which passes the missing choice of the table on without imputing it, so that the sessions have no variables of their own
-const UNIMPUTED_ACTIONS = (missing => UnimputedMissingValue(),)
-
 #Maps the real line to the values between 0 and 1, as a transformation for a learning rate
 to_unit_interval(x) = 1 / (1 + exp(-x))
 
@@ -123,7 +120,7 @@ end
 @testset "turing_multiple_behavioral_sessions" begin
     @testset "Each session runs with its own parameters under session[i], and the log density is the sum over the sessions" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         learning_rates = [0.2, 0.3, 0.4]
@@ -164,7 +161,7 @@ end
             SessionRescorlaWagner(),
             table;
             environment=DriftingRewards(),
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
         )
         model = turing_multiple_behavioral_sessions(
             sessions_info, (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
@@ -177,7 +174,7 @@ end
     @testset "Sessions whose saved trajectories have different types are returned in one vector which holds them all" begin
         #S3's missing choice isn't imputed, so S3 saves UnimputedMissingValue() there, which the other sessions don't
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; outputs=:choice),
         )
         model = turing_multiple_behavioral_sessions(
@@ -204,7 +201,7 @@ end
 
     @testset "The parameters must have one value for each session" begin
         model = turing_multiple_behavioral_sessions(
-            sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS),
+            sessions_for_test(; impute_missing_actions=false),
             (; learning_rate=[0.3, 0.3], inverse_temperature=[2.0, 2.0]),
         )
         @test_throws BoundsError logjoint(model, (;))
@@ -218,7 +215,7 @@ end
             SessionRescorlaWagner(),
             table;
             environment=RewardsPreviousChoice(),
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         parameters = (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
@@ -237,7 +234,7 @@ end
         )[1].observations[3] == (; reward=1.0)
         @test_throws "Environment parameters were given, (scale = [2.0, 2.0, 2.0],), but the session has no environment." logjoint(
             turing_multiple_behavioral_sessions(
-                sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS),
+                sessions_for_test(; impute_missing_actions=false),
                 parameters,
                 (; scale=fill(2.0, 3)),
             ),
@@ -248,7 +245,7 @@ end
 
 @testset "turing_full_model" begin
     @testset "IndependentSessionParameters samples each parameter for every session from its prior, named after the parameter" begin
-        sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
         model = turing_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
         values = rand(Xoshiro(1), model)
         @test Set(keys(values)) ==
@@ -274,7 +271,7 @@ end
 
     @testset "It returns the parameters of every session, what each session saved, and what the downstream model returned" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         model = saving_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
@@ -300,7 +297,7 @@ end
 
     @testset "With include_submodel_prefixes, the session parameter models and the downstream model have their variables under their names" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         model = turing_full_model(
@@ -340,7 +337,7 @@ end
     end
 
     @testset "A session parameter model of one's own gives the parameters in the same form" begin
-        sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
         model = turing_full_model(SharedLearningRate(), sessions_info)
         @test Set(keys(rand(Xoshiro(1), model))) ==
             Set([@varname(learning_rate), @varname(inverse_temperature)])
@@ -354,7 +351,7 @@ end
 
     @testset "A downstream model of its own gets what the sessions saved" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         measurements = [0.4, 0.6, 0.5]
@@ -381,7 +378,7 @@ end
     end
 
     @testset "The environment parameters and the kinds of the parts are checked" begin
-        sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
         #The parts are checked when the model is made
         @test_throws "The sessions have no environment model, but the session parameter model of the environment, a FixedSessionParameters, gives the parameters (:scale,)." turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
@@ -403,7 +400,7 @@ end
 
     @testset "With IdenticalSessionParameters for the environment, each of its parameters is sampled once, and every session then scores its observations" begin
         sessions_info = sessions_for_test(;
-            environment=RewardsAroundMean(), action_replacements=UNIMPUTED_ACTIONS
+            environment=RewardsAroundMean(), impute_missing_actions=false
         )
         shared = IdenticalSessionParameters((; mean_reward=Normal(0, 1)))
         model = turing_full_model(
@@ -460,7 +457,7 @@ end
 
     @testset "The cognitive parameters can be fixed, for every session or by session, with nothing sampled" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         same = saving_full_model(
@@ -497,7 +494,7 @@ end
 
     @testset "Sessions which save without a downstream model give a warning when the model is made, since the fit is slower for nothing" begin
         saving = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         @test_logs SAVING_WARNING turing_full_model(
@@ -507,7 +504,7 @@ end
         @test_logs SAVING_WARNING turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
             sessions_for_test(;
-                action_replacements=UNIMPUTED_ACTIONS,
+                impute_missing_actions=false,
                 environment=RewardsAroundMean(),
                 environment_save_history=SaveHistory(; outputs=:reward),
             );
@@ -520,13 +517,13 @@ end
         )
         @test_logs turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
-            sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS),
+            sessions_for_test(; impute_missing_actions=false),
         )
     end
 
     @testset "It returns the environment parameters of every session too, as the session parameter model gave them" begin
         sessions_info = sessions_for_test(;
-            environment=RewardsAroundMean(), action_replacements=UNIMPUTED_ACTIONS
+            environment=RewardsAroundMean(), impute_missing_actions=false
         )
         shared = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
@@ -558,7 +555,7 @@ end
     end
 
     @testset "IdenticalSessionParameters gives every session the same sampled cognitive parameters, as name.shared" begin
-        sessions_info = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
         model = turing_full_model(IdenticalSessionParameters(FULL_PRIORS), sessions_info)
         @test Set(keys(rand(Xoshiro(1), model))) ==
             Set([@varname(learning_rate.shared), @varname(inverse_temperature.shared)])
@@ -584,7 +581,7 @@ end
             SessionRescorlaWagner(),
             table;
             environment=RewardsAroundMean(),
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
         )
         model = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
@@ -615,7 +612,7 @@ end
 
     @testset "A warning says when both session parameter models sample a parameter which the cognitive model and the environment share, unless the prefixes are included" begin
         sessions_info = sessions_for_test(;
-            environment=RewardsWithLearningRate(), action_replacements=UNIMPUTED_ACTIONS
+            environment=RewardsWithLearningRate(), impute_missing_actions=false
         )
         warning = (
             :warn,
@@ -660,7 +657,7 @@ end
         @test_logs turing_full_model(
             shared,
             sessions_for_test(;
-                environment=RewardsAroundMean(), action_replacements=UNIMPUTED_ACTIONS
+                environment=RewardsAroundMean(), impute_missing_actions=false
             );
             environment_parameters_model=IdenticalSessionParameters((;
                 mean_reward=Normal()
@@ -671,7 +668,7 @@ end
 
     @testset "It can be sampled, and returned gives the parameters and the states of every session for each sample" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         model = saving_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
@@ -763,7 +760,7 @@ end
 
     @testset "ParallelSessions runs the sessions over the threads, and needs the model to be marked thread-safe" begin
         sessions_info = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
@@ -779,7 +776,7 @@ end
         @test returned(threadsafe, (;))[2].states == returned(in_sequence, (;))[2].states
         #Sessions whose saved trajectories have different types give what they give in sequence, since S3 saves UnimputedMissingValue() for its missing choice
         saving_actions = sessions_for_test(;
-            action_replacements=UNIMPUTED_ACTIONS,
+            impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; outputs=:choice),
         )
         in_parallel_saving_actions = Turing.DynamicPPL.setthreadsafe(
@@ -808,7 +805,7 @@ end
     end
 
     @testset "A chain from a model that saves nothing gives the states through returned with a copy that saves" begin
-        unsaved_sessions = sessions_for_test(; action_replacements=UNIMPUTED_ACTIONS)
+        unsaved_sessions = sessions_for_test(; impute_missing_actions=false)
         saving_sessions = MultipleSessionsInfo(
             unsaved_sessions; cognitive_save_history=SaveHistory(; states=:expected_reward)
         )
@@ -884,9 +881,7 @@ function CognitiveModeling.parameter_domains(::CountsOptions)
 end
 
 @testset "Parameter domains in a full model" begin
-    sessions_info = sessions_for_test(
-        BoundedRescorlaWagner(); action_replacements=UNIMPUTED_ACTIONS
-    )
+    sessions_info = sessions_for_test(BoundedRescorlaWagner(); impute_missing_actions=false)
     within_domains = IndependentSessionParameters((;
         learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
     ))
@@ -969,7 +964,7 @@ end
 @testset "A copy of a full model with other sessions keeps the environment running when its parameters are estimated" begin
     extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
     sessions_info = sessions_for_test(;
-        environment=RewardsAroundMean(), action_replacements=UNIMPUTED_ACTIONS
+        environment=RewardsAroundMean(), impute_missing_actions=false
     )
     @test !any(session -> session.includes_environment, sessions_info.sessions)
     model = turing_full_model(
