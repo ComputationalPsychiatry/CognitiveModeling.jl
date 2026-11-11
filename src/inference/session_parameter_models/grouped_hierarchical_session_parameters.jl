@@ -1,6 +1,16 @@
 ## Each parameter sampled from the distribution of a group of sessions ##
 
 """
+    ConstructsType{T}()
+
+A function which makes an object of the type `T` from its arguments, so that
+`ConstructsType{Normal}()(0, 1)` is `Normal(0, 1)`. Used by [`HierarchicalParameter`](@ref)
+for a group-level distribution that is given as a type.
+"""
+struct ConstructsType{T} end
+(::ConstructsType{T})(arguments...) where {T} = T(arguments...)
+
+"""
     HierarchicalParameter(priors; distribution=nothing, transformation=identity,
                           group_by=nothing, centered=nothing)
 
@@ -34,7 +44,8 @@ once for each group of sessions.
   giving `centered` with one is an error.
 
 Each argument is kept in a field of the same name, with `group_by` as a tuple of column
-names, which is empty for one group, and `centered` as `true` or `false`.
+names, which is empty for one group, `centered` as `true` or `false`, and a `distribution`
+that is given as a type inside a function which makes it.
 
 # Examples
 ```jldoctest
@@ -95,13 +106,20 @@ struct HierarchicalParameter{
         #The columns to group by are kept as a tuple of names, which is empty for one group
         columns_to_group_by = group_by === nothing ? () : as_tuple_of_names(group_by)
 
+        #A distribution given as a type, such as Normal, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
+        kept_distribution = if distribution isa Type
+            ConstructsType{distribution}()
+        else
+            distribution
+        end
+
         return new{
             typeof(priors),
-            typeof(distribution),
+            typeof(kept_distribution),
             typeof(transformation),
             typeof(columns_to_group_by),
         }(
-            priors, distribution, transformation, columns_to_group_by, sampled_directly
+            priors, kept_distribution, transformation, columns_to_group_by, sampled_directly
         )
     end
 end

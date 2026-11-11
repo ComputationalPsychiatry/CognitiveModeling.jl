@@ -145,6 +145,11 @@ end
         @test other.distribution === tuple &&
             other.group_by === (:diagnosis, :site) &&
             other.centered === true
+        #A distribution given as a type is kept inside a function which makes it, and a function as it is
+        of_type = HierarchicalParameter(priors; distribution=Pair)
+        @test of_type.distribution === CognitiveModeling.ConstructsType{Pair}() &&
+            of_type.distribution(1, 2) === (1 => 2) &&
+            of_type.centered === true
         #GroupedHierarchicalSessionParameters keeps one for each parameter, as they are given
         parameters = (; probability=default, scale=grouped, offset=other)
         @test GroupedHierarchicalSessionParameters(parameters).parameters === parameters
