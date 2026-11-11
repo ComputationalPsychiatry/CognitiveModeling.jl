@@ -112,7 +112,7 @@ is for prior and posterior predictive checks, and needs Turing.jl to be loaded.
 `model` is made by [`turing_full_model`](@ref),
 [`turing_multiple_behavioural_sessions`](@ref) or [`turing_behavioural_session`](@ref), or
 is such a model inside [`turing_catch_invalid_parameters`](@ref). Its sessions are prepared
-with [`predictive_sessions`](@ref), so that every action is simulated, and every
+with [`prepare_for_prediction`](@ref), so that every action is simulated, and every
 observation too when the sessions have an environment, and they save what the two save
 histories select. The
 model of those sessions then runs once for each sample, with the sample's parameters, and

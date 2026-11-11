@@ -47,7 +47,7 @@ function CognitiveModeling.predict_session_values(
 )
     predictive_model = with_session_info(
         model,
-        info -> predictive_sessions(
+        info -> prepare_for_prediction(
             with_save_history(info, cognitive_save_history, environment_save_history)
         ),
         "predict_session_values",

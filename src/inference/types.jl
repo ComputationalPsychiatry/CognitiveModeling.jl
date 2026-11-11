@@ -98,7 +98,7 @@ table.
   session ends there, with what it saved up to it. By default it is checked only on the
   timesteps after the last one with data, where a value is neither `MissingValue()` nor a
   marker for nothing happening, so that a fit never checks it and a session prepared by
-  [`predictive_sessions`](@ref), whose data is all missing, ends as a simulation does.
+  [`prepare_for_prediction`](@ref), whose data is all missing, ends as a simulation does.
   With `true` it is checked before every timestep, which makes the environment run, and a
   model whose criterion is met while the data continues is an error, since the recorded
   values after that timestep couldn't be scored: this checks that the models agree with the
@@ -516,21 +516,23 @@ function MultipleSessionsInfo(sessions_info::MultipleSessionsInfo; keywords...)
 end
 
 """
-    predictive_sessions(session_info)
-    predictive_sessions(sessions_info)
+    prepare_for_prediction(session_info; check_stopping_criterion=nothing)
+    prepare_for_prediction(sessions_info; check_stopping_criterion=nothing)
 
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
 [`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
-observation too when the session has an environment model, so that a Turing.jl model of the
-copy simulates them. This is for predictive checks: `predict` with the chain of a model
-fitted to the sessions, or sampling the model of the copy from its prior, simulates each
-session again, with the same number of timesteps at most, the same settings and the same
-environment. The observations of a session without an environment stay those in the data,
-as for an experiment whose observations are fixed in advance. Every missing action is
-imputed, whatever `impute_missing_actions` the session was prepared with. Since no timestep
-of the copy has data, the [`stopping_criterion`](@ref) of the models is checked before every
-timestep unless the session was prepared with `check_stopping_criterion = false`, so the copy
-can end before the data did, as a simulation does.
+observation too when the session has an environment model, so that an inference backend's
+model of the copy simulates them instead of fitting to them. This can be used for
+predictive checks: evaluating the model of the copy with the samples of a fit to the
+sessions, or sampling it from its prior, simulates each session again, with the same number
+of timesteps at most, the same settings and the same environment. The observations of a
+session without an environment stay those in the data, as for an experiment whose
+observations are fixed in advance. Every missing action is imputed, whatever
+`impute_missing_actions` the session was prepared with. The copy checks the
+[`stopping_criterion`](@ref) of the models as `check_stopping_criterion` says, as for
+[`SessionInfo`](@ref), whatever the session was prepared with: by default after the last
+timestep with data, which in a session with an environment is before every timestep, so
+that the copy can end before the data did, as a simulation does.
 
 # Examples
 ```jldoctest
@@ -540,11 +542,13 @@ julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; paramete
 
 julia> session_info = SessionInfo(Counter(), [1.0, 0.0, 1.0], [true, false, true]; who_starts = EnvironmentStarts());
 
-julia> predictive_sessions(session_info).actions
+julia> prepare_for_prediction(session_info).actions
 (choice = [MissingValue(), MissingValue(), MissingValue()],)
 ```
 """
-function predictive_sessions(session_info::SessionInfo)
+function prepare_for_prediction(
+    session_info::SessionInfo; check_stopping_criterion::Union{Nothing,Bool}=nothing
+)
 
     #Every action is missing, and every observation too when there is an environment to give them
     actions = map(column -> fill(MissingValue(), length(column)), session_info.actions)
@@ -566,15 +570,18 @@ function predictive_sessions(session_info::SessionInfo)
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history=session_info.cognitive_save_history,
         environment_save_history=session_info.environment_save_history,
-        check_stopping_criterion=session_info.check_stopping_criterion,
+        check_stopping_criterion,
         previous_observation=session_info.previous_observation,
         previous_action=session_info.previous_action,
     )
 end
 
-function predictive_sessions(sessions_info::MultipleSessionsInfo)
+function prepare_for_prediction(sessions_info::MultipleSessionsInfo; keywords...)
     return MultipleSessionsInfo(
-        map(predictive_sessions, sessions_info.sessions), sessions_info.session_ids
+        map(
+            session -> prepare_for_prediction(session; keywords...), sessions_info.sessions
+        ),
+        sessions_info.session_ids,
     )
 end
 

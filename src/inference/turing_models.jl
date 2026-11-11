@@ -51,7 +51,7 @@ the environment doesn't run, and the session is the same as one without an envir
 the same variables. The [`stopping_criterion`](@ref) of the models is checked as the
 `check_stopping_criterion` of `session_info` says: by default only after the last timestep
 with data, so that a fit runs every timestep and a session from
-[`predictive_sessions`](@ref) can end early.
+[`prepare_for_prediction`](@ref) can end early.
 
 # What it returns
 What the save histories of `session_info` select, in a `NamedTuple` with the same entries as
