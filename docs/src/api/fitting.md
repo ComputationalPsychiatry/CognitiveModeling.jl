@@ -44,6 +44,7 @@ exported.
 
 ```@docs
 CognitiveModeling.parameter_names
+CognitiveModeling.estimates_parameters
 CognitiveModeling.prepare_parameters_model
 ```
 

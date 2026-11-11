@@ -63,7 +63,7 @@ table.
 - `observations`: the observations in the data, as a `NamedTuple` with one vector for each
   name and one entry for each timestep, such as `(; reward = [1.0, 0.0, 1.0])`. The data
   must have every observation the model lists in [`attribute_names`](@ref), and can have
-  more. When the model has only one observation in its attributes, a single vector,
+  more. When the model has only one kind of observation in its attributes, a single vector,
   `[1.0, 0.0, 1.0]`, is the data of that observation, whatever its name. An observation that
   wasn't recorded is [`MissingValue`](@ref), which `environment` imputes, or
   [`UnimputedMissingValue`](@ref), which the model receives as it is, and one that wasn't
@@ -308,7 +308,7 @@ function prepare_session(
     previous_action=output_before_first_timestep(cognitive_model),
 )
 
-    #A single vector is the data of the observation or the action, when the model has only one in its attributes
+    #A single vector is the data of the observation or the action, when the model has only one kind of them in its attributes
     observations = named_data(observations, cognitive_model, :observations)
     actions = named_data(actions, cognitive_model, :actions)
 
@@ -429,20 +429,22 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
 
 # Keyword arguments
 - `observation_columns`: the columns with the observations. When the model has only one
-  observation in its attributes, a single name, such as `:outcome`, is its column, whatever
-  the observation is called. Several observations are given as the names the model lists in
-  [`attribute_names`](@ref) when the columns are named the same, such as `(:reward, :cue)`,
-  or as a `NamedTuple` from the model's name to the column's, such as `(; reward = :outcome,
-  cue = :stimulus)`, so that one model fits tables with other names. A single name that the
-  model lists as one of its actions is an error, since the two keyword arguments may then be
-  swapped. An observation or action whose value is composed from several columns is
-  specified by how to build it from the columns: a `NamedTuple` of column names for a
-  `NamedTuple` in each row, `(; ssm_action = (; choice = :choicecol, rt = :rtcol))`, a
-  `Tuple` of column names for a `Tuple`, `(; ssm_action = (:choicecol, :rtcol))`, or a
-  `Tuple` of column names and a function of their values,
-  `(; ssm_action = (:choicecol, :rtcol) => (choice, rt) -> [choice, rt])`. A value in any
-  of the columns which `observation_replacements` replaces by a marker makes the whole value
-  that marker.
+  kind of observation in its attributes, a single name, such as `:outcome`, is its column,
+  whatever the observation is called. Several observations are given in a tuple, each as the
+  name the model lists in [`attribute_names`](@ref) when the column is named the same, or as
+  a pair from the column's name to the model's, as in a [`NameMap`](@ref), such as
+  `(:outcome => :reward, :cue)`, so that one model fits tables with other names. A single
+  name that the model lists as one of its actions is an error, since the two keyword
+  arguments may then be swapped. An observation or action whose value is composed from
+  several columns is specified by how to build it from the columns, followed by the model's
+  name: a `Tuple` of column names for a `Tuple` in each row,
+  `(:choicecol, :rtcol) => :ssm_action`, a `NamedTuple` of column names for a `NamedTuple`,
+  `(; choice = :choicecol, rt = :rtcol) => :ssm_action`, or a `Tuple` of column names and a
+  function of their values, which needs parentheses around it,
+  `(:choicecol, :rtcol) => ((choice, rt) -> [choice, rt]) => :ssm_action`. When the model
+  has only one kind of them in its attributes, the name can be left out of the last two, as
+  in `(; choice = :choicecol, rt = :rtcol)`. A value in any of the columns which
+  `observation_replacements` replaces by a marker makes the whole value that marker.
 - `action_columns`: the columns with the actions, in the same forms, with
   `action_replacements`.
 - `session_columns`: the column or columns which separate sessions, such as `:id` or
@@ -472,7 +474,7 @@ julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; paramete
 
 julia> table = (; id = ["S1", "S1", "S2", "S2", "S2"], outcome = [1.0, 0.0, 1.0, 1.0, 0.0], choice = [true, false, true, missing, false]);
 
-julia> sessions_info = MultipleSessionsInfo(Counter(), table; observation_columns = (; reward = :outcome), action_columns = :choice, session_columns = :id, who_starts = EnvironmentStarts())
+julia> sessions_info = MultipleSessionsInfo(Counter(), table; observation_columns = :outcome => :reward, action_columns = :choice, session_columns = :id, who_starts = EnvironmentStarts())
 MultipleSessionsInfo
 Sessions: 2
 Cognitive model: Counter

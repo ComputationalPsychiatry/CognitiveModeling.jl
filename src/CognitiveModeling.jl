@@ -60,6 +60,6 @@ public parameter_domains, discrete_parameter_names
 public turing_apply_timestep_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_name, session_column_values
-public parameter_names, prepare_parameters_model, prepare_full_model
+public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 
 end

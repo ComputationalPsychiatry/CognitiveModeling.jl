@@ -135,6 +135,30 @@ julia> CognitiveModeling.parameter_names(FixedSessionParameters((; scale = 2.0, 
 parameter_names(parameters_model::AbstractSessionParametersModel) = nothing
 
 """
+    estimates_parameters(parameters_model)
+
+Return whether `parameters_model`, a session parameter model, estimates the parameters it
+gives from the data, instead of being given their values: `false` for
+[`NoParameters`](@ref), [`FixedSessionParameters`](@ref) and
+[`FixedParametersBySession`](@ref), whether any part does for a
+[`CompositeSessionParameters`](@ref), and `true` for every other kind. When the
+environment's parameters are estimated, a full model includes the environment in every
+session, so that the observations in the data inform them, and it warns when the parameters
+of the two models can have the same variables.
+
+# Implementation
+A session parameter model of one's own can add a method of this function. The default
+returns `true`, and a model which only gives values returns `false`.
+
+# Examples
+```jldoctest
+julia> CognitiveModeling.estimates_parameters(FixedSessionParameters((; scale = 2.0)))
+false
+```
+"""
+estimates_parameters(parameters_model) = true
+
+"""
     prepare_parameters_model(parameters_model, sessions_info)
 
 Return `parameters_model` prepared for the sessions in `sessions_info`, with what doesn't

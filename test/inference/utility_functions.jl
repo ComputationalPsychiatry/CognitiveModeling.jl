@@ -215,9 +215,13 @@ end
     )
 
     @testset "The columns of a kind map the model's names to the table's" begin
+        #A pair goes from the column's name to the model's, as in a NameMap
         @test CognitiveModeling.column_map(
-            (; reward=:outcome), SessionCounter(), :observations
+            :outcome => :reward, SessionCounter(), :observations
         ) === (; reward=:outcome)
+        @test CognitiveModeling.column_map(
+            (:outcome => :reward, :cue), ObservesRewardAndCue(), :observations
+        ) === (; reward=:outcome, cue=:cue)
         @test CognitiveModeling.column_map(:reward, SessionCounter(), :observations) ===
             (; reward=:reward)
         #A single name is the column of the model's only observation or action, whatever it is called
@@ -234,6 +238,50 @@ end
         @test_throws MethodError CognitiveModeling.column_map(
             "reward", SessionCounter(), :observations
         )
+        #Each name can only be given once, and an entry is a name or a pair which ends in the model's name
+        @test_throws "The columns of the observations give the names (:reward, :reward), but each name can only be given once." CognitiveModeling.column_map(
+            (:outcome => :reward, :payoff => :reward), ObservesRewardAndCue(), :observations
+        )
+        @test_throws "An entry of the columns must end in the name the model uses, such as :outcome => :reward or (:choicecol, :rtcol) => combine => :ssm_action, but it is :outcome => 1." CognitiveModeling.column_map(
+            (:outcome => 1,), ObservesRewardAndCue(), :observations
+        )
+        @test_throws "An entry of the columns is a name, or a pair from a column to the name the model uses, such as :outcome => :reward, but it is \"reward\"." CognitiveModeling.column_map(
+            ("reward",), ObservesRewardAndCue(), :observations
+        )
+    end
+
+    @testset "A value built from several columns is given before the model's name, or without it when the model has only one of the kind" begin
+        #A Tuple or a NamedTuple of names, or a Tuple of names and a function, followed by the model's name
+        @test CognitiveModeling.column_map(
+            (:choicecol, :rtcol) => :choice, SessionCounter(), :actions
+        ) === (; choice=(:choicecol, :rtcol))
+        @test CognitiveModeling.column_map(
+            (; choice=:choicecol, rt=:rtcol) => :choice, SessionCounter(), :actions
+        ) === (; choice=(; choice=:choicecol, rt=:rtcol))
+        @test CognitiveModeling.column_map(
+            (:choicecol, :rtcol) => tuple => :choice, SessionCounter(), :actions
+        ) === (; choice=((:choicecol, :rtcol) => tuple))
+        @test CognitiveModeling.column_map(
+            ((:a, :b) => :reward, :stimulus => :cue), ObservesRewardAndCue(), :observations
+        ) === (; reward=(:a, :b), cue=:stimulus)
+        #Without the name, for the model's only action: a NamedTuple of names, or names and a function
+        @test CognitiveModeling.column_map(
+            (; choice=:choicecol, rt=:rtcol), SessionCounter(), :actions
+        ) === (; choice=(; choice=:choicecol, rt=:rtcol))
+        @test CognitiveModeling.column_map(
+            (:choicecol, :rtcol) => tuple, SessionCounter(), :actions
+        ) === (; choice=((:choicecol, :rtcol) => tuple))
+        #A model with several of the kind needs the name
+        @test_throws "observation_columns is (a = :x, b = :y), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but a cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue). Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action." CognitiveModeling.column_map(
+            (; a=:x, b=:y), ObservesRewardAndCue(), :observations
+        )
+        @test_throws "observation_columns is (:x, :y) => tuple, which builds one value from several columns without the name the model uses for it." CognitiveModeling.column_map(
+            (:x, :y) => tuple, ObservesRewardAndCue(), :observations
+        )
+        @test CognitiveModeling.names_its_attribute(:outcome => :reward) &&
+            CognitiveModeling.names_its_attribute((:a, :b) => tuple => :reward) &&
+            !CognitiveModeling.names_its_attribute((:a, :b) => tuple)
+        @test CognitiveModeling.column_entry(:cue) === (:cue => :cue)
     end
 
     @testset "A column can be built from several, as a NamedTuple, a Tuple or what a function gives" begin

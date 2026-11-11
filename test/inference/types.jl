@@ -554,7 +554,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         )
         #A model with several observations needs them by name
-        @test_throws "The observations are a single vector, which can only be their data when the model has only one of them in its attributes, but a cognitive model of type ObservesRewardAndCue has the observations (:reward, :cue)." SessionInfo(
+        @test_throws "The observations are a single vector, which can only be their data when the model has only one kind of them in its attributes, but a cognitive model of type ObservesRewardAndCue has the observations (:reward, :cue)." SessionInfo(
             ObservesRewardAndCue(),
             [1.0, 0.0, 1.0],
             COUNTER_CHOICES;
@@ -668,7 +668,7 @@ const COUNTER_TABLE = (;
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -689,7 +689,7 @@ const COUNTER_TABLE = (;
         by_block = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=(:id, :block),
             who_starts=EnvironmentStarts(),
@@ -724,7 +724,7 @@ const COUNTER_TABLE = (;
             who_starts=EnvironmentStarts(),
         )
         #A model with several observations needs the column of each
-        @test_throws "A cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue), so observation_columns must give the column of each by name, such as (reward = :reward, cue = :cue), and not the single name :outcome." MultipleSessionsInfo(
+        @test_throws "A cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue), so observation_columns must give the column of each, such as (:reward, :cue) when the columns have those names, or with a pair for a column of another name, as in :outcome => :reward, and not the single name :outcome." MultipleSessionsInfo(
             ObservesRewardAndCue(),
             table;
             observation_columns=:outcome,
@@ -744,8 +744,8 @@ const COUNTER_TABLE = (;
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             table;
-            observation_columns=(; reward=:outcome),
-            action_columns=(; choice=(; choice=:choicecol, rt=:rtcol)),
+            observation_columns=:outcome => :reward,
+            action_columns=(; choice=:choicecol, rt=:rtcol) => :choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
         )
@@ -763,16 +763,16 @@ const COUNTER_TABLE = (;
         @test MultipleSessionsInfo(
             SessionCounter(),
             table;
-            observation_columns=(; reward=:outcome),
-            action_columns=(; choice=(:choicecol, :rtcol) => (c, rt) -> (c ? 1 : -1) * rt),
+            observation_columns=:outcome => :reward,
+            action_columns=(:choicecol, :rtcol) => ((c, rt) -> (c ? 1 : -1) * rt) => :choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
         ).sessions[1].actions.choice == [0.5, -0.7]
         @test_throws "The table has no column named rt." MultipleSessionsInfo(
             SessionCounter(),
             table;
-            observation_columns=(; reward=:outcome),
-            action_columns=(; choice=(; choice=:choicecol, rt=:rt)),
+            observation_columns=:outcome => :reward,
+            action_columns=(; choice=:choicecol, rt=:rt),
             session_columns=:id,
             who_starts=EnvironmentStarts(),
         )
@@ -792,8 +792,8 @@ const COUNTER_TABLE = (;
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             table;
-            observation_columns=(; reward=:outcome),
-            action_columns=(; choice=(; choice=:choicecol, rt=:rtcol)),
+            observation_columns=:outcome => :reward,
+            action_columns=(; choice=:choicecol, rt=:rtcol) => :choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
             observation_replacements=(missing => UnimputedMissingValue(),),
@@ -813,7 +813,7 @@ const COUNTER_TABLE = (;
         with_code = MultipleSessionsInfo(
             SessionCounter(),
             (; id=["S1", "S2"], outcome=[1.0, -1.0], choice=[true, false]);
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -825,7 +825,7 @@ const COUNTER_TABLE = (;
         kept = MultipleSessionsInfo(
             SessionCounter(),
             table;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choicecol,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -838,7 +838,7 @@ const COUNTER_TABLE = (;
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=AgentStarts(),
@@ -859,7 +859,7 @@ const COUNTER_TABLE = (;
         @test MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=AgentStarts(),
@@ -872,7 +872,7 @@ const COUNTER_TABLE = (;
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -886,7 +886,7 @@ const COUNTER_TABLE = (;
         all_recorded = @test_logs MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -917,7 +917,7 @@ const COUNTER_TABLE = (;
         @test_throws "The table has no column named time." MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -926,7 +926,7 @@ const COUNTER_TABLE = (;
         @test_throws "Every column of the table must have the same length" MultipleSessionsInfo(
             SessionCounter(),
             (; id=["S1", "S1"], outcome=[1.0, 0.0, 1.0], choice=[true, false]);
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -934,7 +934,7 @@ const COUNTER_TABLE = (;
         @test_throws "Every column of the table must be a vector" MultipleSessionsInfo(
             SessionCounter(),
             (; id="S1", outcome=1.0, choice=true);
-            observation_columns=(; reward=:outcome),
+            observation_columns=:outcome => :reward,
             action_columns=:choice,
             session_columns=:id,
             who_starts=EnvironmentStarts(),
@@ -1033,7 +1033,7 @@ const COUNTER_TABLE = (;
             MultipleSessionsInfo(
                 SessionCounter(),
                 COUNTER_TABLE;
-                observation_columns=(; reward=:outcome),
+                observation_columns=:outcome => :reward,
                 action_columns=:choice,
                 session_columns=:id,
                 who_starts=EnvironmentStarts(),
