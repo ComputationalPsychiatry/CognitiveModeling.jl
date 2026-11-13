@@ -294,6 +294,17 @@ end
             sessions_info,
         )
         @test logjoint(model, given) ≈ logjoint(by_hand, given)
+        #A part of a composite given with a name has its variables under that name, also next to the fixed values
+        named_model = turing_full_model(
+            CompositeSessionParameters(; learning=learning_rate_priors),
+            sessions_info;
+            fixed_cognitive_parameters=(; inverse_temperature=3.0),
+        )
+        @test collect(keys(rand(Xoshiro(1), named_model))) ==
+            [@varname(learning.learning_rate.session)]
+        @test logjoint(
+            named_model, Dict(@varname(learning.learning_rate.session) => learning_rates)
+        ) ≈ logjoint(model, given)
         #A session parameter model of one's own takes them too, and a parameter can't be both fixed and given
         with_own_model = turing_full_model(
             SharedLearningRate(),
@@ -523,7 +534,7 @@ end
         @test returned(by_session, (;)).cognitive_parameters ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         #A session without values is an error when the model is made, since the values are looked up then
-        @test_logs SAVING_WARNING @test_throws "FixedParametersBySession has no values for the session S3." turing_full_model(
+        @test_logs SAVING_WARNING @test_throws "FixedParametersBySession has no parameters for the session S3." turing_full_model(
             FixedParametersBySession((;
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),

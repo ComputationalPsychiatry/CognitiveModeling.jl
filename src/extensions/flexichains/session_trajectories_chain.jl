@@ -22,18 +22,18 @@ entries are the `VarName`s that FlexiChains.jl uses, written as
 as `returned(model, chain)` gives it in Turing.jl. Its elements are what one of three models
 returns:
 - [`turing_full_model`](@ref), given with its `MultipleSessionsInfo`. The entries of each
-  session are named after its identifier, such as `P1.expected_value`. The parameters of the
-  sessions are a chain of their own, see [`session_parameters_chain`](@ref), and what a
+  session are named after its symbol name, such as `P1.expected_value`. The parameters of
+  the sessions are a chain of their own, see [`session_parameters_chain`](@ref), and what a
   downstream model returned isn't included.
 - [`turing_multiple_behavioral_sessions`](@ref), given with its `MultipleSessionsInfo`,
   named in the same way.
-- [`turing_behavioral_session`](@ref), given without a session info, with no session
-  identifier in the names, such as `expected_value`.
+- [`turing_behavioral_session`](@ref), given without a session info, with no symbol name
+  of a session in the names, such as `expected_value`.
 In a model of one's own around these, that model must return what they return, for
 `returned` to give it.
 
 The trajectories each session saved, as its [`SaveHistory`](@ref)s selected, are one entry
-for each name, with the session's identifier first. The cognitive model's values are named
+for each name, with the session's symbol name first. The cognitive model's values are named
 after the attribute alone, since a model uses a name for one attribute only: a state as
 `P1.expected_value`, an observation as `P1.reward` and an action as `P1.choice`. An action
 distribution is named like its action, so it is under its kind, as
@@ -41,13 +41,13 @@ distribution is named like its action, so it is under its kind, as
 same way: `P1.environment.level` for a state, `P1.environment.reward` for an observation it
 gave, `P1.environment.choice` for an action it received and
 `P1.environment.observation_distributions.reward`. Each entry holds a vector over the
-timesteps for every sample, which starts with timestep 0 when the initial values are saved,
-so that element `t + 1` is timestep `t`, as everywhere in the package. The observations, the
-actions and the distributions of timestep 0 are [`BeforeFirstTimestep`](@ref), so a summary
-of those entries needs timestep 0 left out. An identifier from several session columns is
-named by the name and the value of each column, as in `id_S1__block_2`, which
-[`CognitiveModeling.session_name`](@ref) gives. `iter_indices` and `chain_indices` number
-the samples as the chain that was fitted does.
+timesteps for every sample, which starts with timestep 0 when the initial timestep values
+are saved, so that element `t + 1` is timestep `t`, as everywhere in the package. The
+observations, the actions and the distributions of timestep 0 are
+[`BeforeFirstTimestep`](@ref), so a summary of those entries needs timestep 0 left out. The
+symbol name of a session with several session columns joins the name and the value of each
+column, as in `id_S1__block_2`, as [`CognitiveModeling.session_id_to_symbol`](@ref) gives
+it. `iter_indices` and `chain_indices` number the samples as the chain that was fitted does.
 
 The third form, in the Turing extension, takes a model made by one of the three functions,
 or such a model inside [`turing_catch_invalid_parameters`](@ref), and a chain sampled from

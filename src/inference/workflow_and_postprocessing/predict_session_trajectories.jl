@@ -1,4 +1,4 @@
-## The trajectories of fitted sessions simulated again, as a chain, made in the Turing extension ##
+## The trajectories of fitted sessions simulated again, as a chain ##
 
 """
     predict_session_trajectories([rng,] model, chain;

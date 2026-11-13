@@ -129,6 +129,15 @@ end
             SessionCounter(),
             "fixed_cognitive_parameters",
         ).parts === (own, own, fixed)
+        #The parts of a composite keep their names, and the fixed values join without one
+        @test CognitiveModeling.part_names(
+            CognitiveModeling.with_fixed_parameters(
+                CompositeSessionParameters(own; other=own),
+                (; probability=0.3),
+                SessionCounter(),
+                "fixed_cognitive_parameters",
+            ),
+        ) === (nothing, :other, nothing)
         #Nothing fixed leaves the model as it is
         @test CognitiveModeling.with_fixed_parameters(
             own, (;), SessionCounter(), "fixed_cognitive_parameters"

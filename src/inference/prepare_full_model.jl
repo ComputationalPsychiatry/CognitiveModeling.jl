@@ -57,7 +57,7 @@ function prepare_full_model(
     )
 
     #When the environment's parameters are sampled, every session runs its environment, so that its observations inform them
-    sessions_info = sessions_for_environment_parameters(
+    sessions_info = include_environments_if_estimated(
         environment_parameters_model, sessions_info
     )
 
@@ -88,8 +88,9 @@ end
 
 Return `parameters_model`, a session parameter model, combined with the values in
 `fixed_parameters`, which every session gets for the parameters they name: a
-[`CompositeSessionParameters`](@ref) of its parts and a [`FixedSessionParameters`](@ref),
-or `parameters_model` itself when no values are fixed. It is an error when a fixed
+[`CompositeSessionParameters`](@ref) of its parts, which keep their names, and a
+[`FixedSessionParameters`](@ref) without a name, or `parameters_model` itself when no values
+are fixed. It is an error when a fixed
 parameter isn't in the attributes of `model`, and when `parameters_model` gives it too,
 which is checked here when [`parameter_names`](@ref) knows its parameters, and when the full
 model runs otherwise. `keyword` is the name of the keyword argument, for the errors. Used by
@@ -116,14 +117,9 @@ function with_fixed_parameters(
         end
     end
 
-    #Without parameters of its own, the fixed values are all there is. Otherwise they join the model, or the parts of a composite
+    #Without parameters of its own, the fixed values are all there is. Otherwise they join the model, or the parts of a composite, which keep their names
     parameters_model isa NoParameters && return FixedSessionParameters(fixed_parameters)
-    parts = if parameters_model isa CompositeSessionParameters
-        parameters_model.parts
-    else
-        (parameters_model,)
-    end
-    return CompositeSessionParameters(parts..., FixedSessionParameters(fixed_parameters))
+    return add_part_without_name(parameters_model, FixedSessionParameters(fixed_parameters))
 end
 
 """

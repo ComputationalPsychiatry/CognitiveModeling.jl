@@ -676,7 +676,7 @@ function folds(f, argument_types...)
 end
 
 #Saves everything but timestep 0, so that element t of what a simulation returns is timestep t
-const EVERY_TIMESTEP = SaveHistory(SaveEverything(); save_initial_values=false)
+const EVERY_TIMESTEP = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
 
 #Shortens the calls below
 function simulate_for_test(
@@ -1110,9 +1110,11 @@ end
         #The helper saves everything, which selecting everything also does
         everything = run_with()
         @test run_with(;
-            cognitive_save_history=SaveHistory(SaveEverything(); save_initial_values=false),
+            cognitive_save_history=SaveHistory(
+                SaveEverything(); save_initial_timestep_values=false
+            ),
             environment_save_history=SaveHistory(
-                SaveEverything(); save_initial_values=false
+                SaveEverything(); save_initial_timestep_values=false
             ),
         ) == everything
         @test everything.states == [
@@ -1123,7 +1125,7 @@ end
         #Names keep those entries, and a kind that isn't given keeps nothing
         simulation = run_with(;
             cognitive_save_history=SaveHistory(;
-                states=:n_timesteps, save_initial_values=false
+                states=:n_timesteps, save_initial_timestep_values=false
             ),
         )
         @test simulation.observations == fill((;), 3) &&
@@ -1134,7 +1136,7 @@ end
         #Several names keep the entries in the order given
         (; states) = run_with(;
             cognitive_save_history=SaveHistory(;
-                states=(:n_timesteps, :expected_reward), save_initial_values=false
+                states=(:n_timesteps, :expected_reward), save_initial_timestep_values=false
             ),
         )
         @test states[1] === (; n_timesteps=1, expected_reward=0.75)
@@ -1142,7 +1144,7 @@ end
         #observations and its inputs the actions
         simulation = run_with(;
             environment_save_history=SaveHistory(;
-                outputs=:reward, inputs=:choice, save_initial_values=false
+                outputs=:reward, inputs=:choice, save_initial_timestep_values=false
             ),
         )
         @test cognitive_values(simulation) == cognitive_values(everything)
@@ -1152,8 +1154,8 @@ end
         @test simulation.environment.observation_distributions == fill((;), 3)
         #Nothing at all gives empty NamedTuples of everything, followed by the size of the timesteps
         nothing_saved = run_with(;
-            cognitive_save_history=SaveHistory(; save_initial_values=false),
-            environment_save_history=SaveHistory(; save_initial_values=false),
+            cognitive_save_history=SaveHistory(; save_initial_timestep_values=false),
+            environment_save_history=SaveHistory(; save_initial_timestep_values=false),
         )
         @test all(==(fill((;), 3)), saved_vectors(nothing_saved))
         @test nothing_saved.timestep_sizes === 1
@@ -1407,7 +1409,9 @@ end
             environment_parameters=(;),
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-            environment_save_history=SaveHistory(; outputs=:cue, save_initial_values=false),
+            environment_save_history=SaveHistory(;
+                outputs=:cue, save_initial_timestep_values=false
+            ),
         )
         @test simulation.environment.observations == fill((; cue=2), 3)
         @test simulation.environment.actions == fill((;), 3)
@@ -1421,7 +1425,9 @@ end
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
             environment_save_history=SaveHistory(;
-                inputs=:lever, output_distributions=:payoff, save_initial_values=false
+                inputs=:lever,
+                output_distributions=:payoff,
+                save_initial_timestep_values=false,
             ),
         )
         @test simulation.environment.observations == fill((;), 3)
@@ -1439,13 +1445,13 @@ end
             n_steps=3,
             environment_parameters=(;),
             cognitive_save_history=SaveHistory(;
-                inputs=:reward, outputs=:choice, save_initial_values=false
+                inputs=:reward, outputs=:choice, save_initial_timestep_values=false
             ),
         )
         @test observations[1] === (; reward=NoValue())
         @test observations[2] == (; reward=float(actions[1].choice))
         for cognitive_save_history in
-            (SaveHistory(; outputs=(), save_initial_values=false), EVERY_TIMESTEP)
+            (SaveHistory(; outputs=(), save_initial_timestep_values=false), EVERY_TIMESTEP)
             (; actions) = simulate_for_test(
                 OnlyLearns(),
                 RewardsAndCues();
@@ -2879,8 +2885,8 @@ end
         @test history.states == [(; expected_reward=0.25)]
     end
 
-    @testset "It starts empty when the initial values aren't saved, and then has one element for each timestep" begin
-        save_history = SaveHistory(SaveEverything(); save_initial_values=false)
+    @testset "It starts empty when the initial timestep values aren't saved, and then has one element for each timestep" begin
+        save_history = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
         agent = InstantiatedModel(LearnsRewards(), LEARNING; save_history)
         environment = InstantiatedModel(
             FixedRewards(), (; rewards=[1.0, 0.0]); save_history

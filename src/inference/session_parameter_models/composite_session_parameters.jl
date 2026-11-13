@@ -1,17 +1,19 @@
 ## Several session parameter models, each giving some of the parameters ##
 
 """
-    CompositeSessionParameters(parts...)
+    CompositeSessionParameters(parts...; named_parts...)
 
 The session parameter model of a full model which gives some of the parameters with each of
-`parts`, which are session parameter models, such as a
+its parts, which are session parameter models, such as a
 [`GroupedHierarchicalSessionParameters`](@ref) for the learning rate, an
 [`IndependentSessionParameters`](@ref) for the inverse temperature and a
-[`FixedSessionParameters`](@ref) for a bias. What the parts give is merged, and the
-variables of each part are named as that part names them. No two parts can give the same
-parameter: this is checked when it is made, for the parts whose
-[`CognitiveModeling.parameter_names`](@ref) are known, and when it runs, for the others. It
-samples when any part does. The parts are kept in the field `parts`, as a tuple.
+[`FixedSessionParameters`](@ref) for a bias. What the parts give is merged. The variables
+of a part in `parts` are named as that part names them, and those of a part given by
+keyword in `named_parts` are named under its keyword, such as `noise.learning_rate.session`
+for a part given as `noise`. No two parts can give the same parameter: this is checked when
+it is made, for the parts whose [`CognitiveModeling.parameter_names`](@ref) are known, and
+when it runs, for the others. It samples when any part does. The parts are kept in the
+field `parts`, as a tuple, with those in `named_parts` last.
 
 # Examples
 ```julia
@@ -21,16 +23,79 @@ session_parameter_model = CompositeSessionParameters(
     IndependentSessionParameters((; learning_rate = Beta(2, 2))),
     FixedSessionParameters((; inverse_temperature = 2.0)),
 )
+
+#The variables of the part given as noise are named under noise, as noise.bias.session
+session_parameter_model = CompositeSessionParameters(
+    IndependentSessionParameters((; learning_rate = Beta(2, 2)));
+    noise = IndependentSessionParameters((; bias = Normal(0, 1))),
+)
 ```
 """
-struct CompositeSessionParameters{Tparts<:Tuple} <: AbstractSessionParametersModel
+struct CompositeSessionParameters{Tparts<:Tuple,Tpart_names} <:
+       AbstractSessionParametersModel
     parts::Tparts
 
-    #Checks that no two of the parts whose parameters are known give the same parameter
-    function CompositeSessionParameters(parts::AbstractSessionParametersModel...)
+    #Takes the name of each part, or nothing for a part without one, in the type, and checks that no two of the parts whose parameters are known give the same parameter
+    function CompositeSessionParameters{Tparts,Tpart_names}(
+        parts::Tparts
+    ) where {Tparts<:Tuple,Tpart_names}
         check_parts_give_different_parameters(parts)
-        return new{typeof(parts)}(parts)
+        return new{Tparts,Tpart_names}(parts)
     end
+end
+
+#Takes the parts without a name first, and those with a name as keyword arguments, which must be session parameter models too
+function CompositeSessionParameters(
+    parts::AbstractSessionParametersModel...; named_parts...
+)
+    named_parts = NamedTuple(named_parts)
+    for (name, part) in pairs(named_parts)
+        if !(part isa AbstractSessionParametersModel)
+            throw(
+                ArgumentError(
+                    "The part $name of CompositeSessionParameters is of type $(typeof(part)), but every part must be a session parameter model, a subtype of AbstractSessionParametersModel.",
+                ),
+            )
+        end
+    end
+    all_parts = (parts..., values(named_parts)...)
+    part_names = (map(_ -> nothing, parts)..., keys(named_parts)...)
+    return CompositeSessionParameters{typeof(all_parts),part_names}(all_parts)
+end
+
+"""
+    part_names(parameters_model)
+
+Return the name of each part of `parameters_model`, a [`CompositeSessionParameters`](@ref),
+in a tuple in the order of its parts, with `nothing` for a part given without a name. Used
+by the models of `CompositeSessionParameters` in the inference backends, which name the
+variables of a part under its name, and by [`prepare_parameters_model`](@ref) and
+[`add_part_without_name`](@ref), which keep the names.
+"""
+function part_names(
+    ::CompositeSessionParameters{Tparts,Tpart_names}
+) where {Tparts,Tpart_names}
+    return Tpart_names
+end
+
+"""
+    add_part_without_name(parameters_model, part)
+
+Return `parameters_model` with `part` added to it as a part without a name: a
+[`CompositeSessionParameters`](@ref) with its own parts, which keep their names, and then
+`part`, or a new `CompositeSessionParameters` of `parameters_model` and `part` for any other
+session parameter model. Used by [`with_fixed_parameters`](@ref).
+"""
+function add_part_without_name(parameters_model::CompositeSessionParameters, part)
+    parts = (parameters_model.parts..., part)
+    return CompositeSessionParameters{
+        typeof(parts),(part_names(parameters_model)..., nothing)
+    }(
+        parts
+    )
+end
+function add_part_without_name(parameters_model, part)
+    return CompositeSessionParameters(parameters_model, part)
 end
 
 #It gives what its parts give, when every part tells what it gives, and it estimates when any part does
@@ -44,14 +109,15 @@ function estimates_parameters(parameters_model::CompositeSessionParameters)
     return any(estimates_parameters, parameters_model.parts)
 end
 
-#Each part is prepared for the sessions
+#Each part is prepared for the sessions, and keeps its name
 function prepare_parameters_model(
     parameters_model::CompositeSessionParameters, sessions_info::MultipleSessionsInfo
 )
-    return CompositeSessionParameters(
-        map(
-            part -> prepare_parameters_model(part, sessions_info), parameters_model.parts
-        )...,
+    prepared_parts = map(
+        part -> prepare_parameters_model(part, sessions_info), parameters_model.parts
+    )
+    return CompositeSessionParameters{typeof(prepared_parts),part_names(parameters_model)}(
+        prepared_parts
     )
 end
 

@@ -45,7 +45,7 @@
             sessions_info,
         )
         @test from_dictionary() == model()
-        @test_throws "FixedParametersBySession has no values for the session S3. It has values for (:S1, :S2)." CognitiveModeling.turing_session_parameters_model(
+        @test_throws "FixedParametersBySession has no parameters for the session S3. It has parameters for (:S1, :S2)." CognitiveModeling.turing_session_parameters_model(
             FixedParametersBySession((;
                 S1=(; learning_rate=0.2), S2=(; learning_rate=0.3)
             )),

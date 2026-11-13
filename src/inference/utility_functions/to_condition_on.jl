@@ -1,4 +1,4 @@
-## Scoring the values to condition on ##
+## Values to condition on ##
 
 """
     find_outputs_to_condition_on(data_output, output_distribution, model)
@@ -45,7 +45,7 @@ function find_outputs_to_condition_on(
 end
 
 """
-    initialize_distributions(distributions_for_conditioning)
+    initialize_output_distributions_for_conditioning(distributions_for_conditioning)
 
 Return an empty vector for the distributions of each output that has values to condition on
 in a session, typed by the distribution the model gave on the first timestep, so that the
@@ -54,7 +54,9 @@ the model doesn't give on the first timestep gets a `Vector{Union{}}()`, which t
 distribution kept sets the type of, as for [`push_value!`](@ref). Used by fitted sessions,
 after their first timestep.
 """
-function initialize_distributions(distributions_for_conditioning::NamedTuple)
+function initialize_output_distributions_for_conditioning(
+    distributions_for_conditioning::NamedTuple
+)
     return map(
         distribution -> if distribution isa AbstractNoValue
             Vector{Union{}}()
@@ -65,8 +67,9 @@ function initialize_distributions(distributions_for_conditioning::NamedTuple)
 end
 
 """
-    store_distributions(distributions, distributions_for_conditioning,
-                        outputs_to_condition_on)
+    store_output_distributions_for_conditioning(distributions,
+                                                distributions_for_conditioning,
+                                                outputs_to_condition_on)
 
 Add the distributions of the outputs to condition on at one timestep, which
 `outputs_to_condition_on` says, to the vectors in `distributions`, one for each output that
@@ -74,7 +77,7 @@ has values to condition on in the session, and return them. A distribution of an
 than its vector widens the vector, as for [`push_value!`](@ref). Used by fitted sessions, on
 every timestep.
 """
-function store_distributions(
+function store_output_distributions_for_conditioning(
     distributions::NamedTuple{names},
     distributions_for_conditioning::NamedTuple,
     outputs_to_condition_on::NamedTuple,

@@ -77,8 +77,12 @@ function run_bandit(
     action_name=:arm,
     n_steps=4,
     cognitive_parameters=(; arm_to_pull=1),
-    cognitive_save_history=SaveHistory(SaveEverything(); save_initial_values=false),
-    environment_save_history=SaveHistory(SaveEverything(); save_initial_values=false),
+    cognitive_save_history=SaveHistory(
+        SaveEverything(); save_initial_timestep_values=false
+    ),
+    environment_save_history=SaveHistory(
+        SaveEverything(); save_initial_timestep_values=false
+    ),
     keywords...,
 )
     return simulate(
@@ -239,7 +243,7 @@ end
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
         @test rl_env.clones == 4
         #The state can be selected by its name
-        selected = SaveHistory(; states=:rl_env, save_initial_values=false)
+        selected = SaveHistory(; states=:rl_env, save_initial_timestep_values=false)
         environment_states =
             run_bandit(CountingBandit(0, 0); environment_save_history=selected).environment.states
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]

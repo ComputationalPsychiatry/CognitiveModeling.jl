@@ -19,7 +19,7 @@ function CognitiveModeling.session_trajectories_chain(
             add_session_entries!(
                 entries,
                 results,
-                (session_name(session_id),),
+                (session_id_to_symbol(session_id),),
                 result -> result.saved_behavioral_trajectories[i],
             )
         end
@@ -28,7 +28,7 @@ function CognitiveModeling.session_trajectories_chain(
         check_number_of_sessions(first_result, sessions_info)
         for (i, session_id) in enumerate(sessions_info.session_ids)
             add_session_entries!(
-                entries, results, (session_name(session_id),), result -> result[i]
+                entries, results, (session_id_to_symbol(session_id),), result -> result[i]
             )
         end
     else
@@ -84,14 +84,18 @@ function CognitiveModeling.session_parameters_chain(
     check_number_of_sessions(first_result.saved_behavioral_trajectories, sessions_info)
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
-        name_of_session = session_name(session_id)
+        symbol_name_of_session = session_id_to_symbol(session_id)
         add_parameter_entries!(
-            entries, results, (name_of_session,), result -> result.cognitive_parameters, i
+            entries,
+            results,
+            (symbol_name_of_session,),
+            result -> result.cognitive_parameters,
+            i,
         )
         add_parameter_entries!(
             entries,
             results,
-            (name_of_session, :environment),
+            (symbol_name_of_session, :environment),
             result -> result.environment_parameters,
             i,
         )
@@ -127,9 +131,10 @@ end
 
 Add an entry to `entries` for everything one session saved, where `saved_trajectories_of`
 gives the session's saved trajectories from the result of one sample, and `session_prefix`
-holds the session's name, or nothing for a single session. The cognitive model's values are
-named under the session alone, and the environment's under `environment` after it, as
-[`add_model_entries!`](@ref) names them. Used by [`session_trajectories_chain`](@ref).
+holds the session's symbol name, or nothing for a single session. The cognitive model's
+values are named under the session alone, and the environment's under `environment` after
+it, as [`add_model_entries!`](@ref) names them. Used by
+[`session_trajectories_chain`](@ref).
 """
 function add_session_entries!(
     entries, results, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of

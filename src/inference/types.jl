@@ -132,10 +132,10 @@ table.
   and a criterion that is met while the data continues is an error. With `false`, it is
   never checked. The extended help says why.
 - `missing_observation_values=(missing,)` and `missing_action_values=(missing,)`: the
-  values in the data which stand for a missing observation or action, in a tuple or a
-  vector, such as `(missing, -1)`. Each is replaced by `MissingValue()`. A value is compared
-  to them with `isequal`, and `()` keeps every value as it is, `missing` too.
-  `MissingValue()` can also be put in the data directly.
+  values in the data which stand for a missing observation or action, as one value, such as
+  `-1`, or several in a tuple or a vector, such as `(missing, -1)`. Each is replaced by
+  `MissingValue()`. A value is compared to them with `isequal`, and `()` keeps every value
+  as it is, `missing` too. `MissingValue()` can also be put in the data directly.
 - `impute_missing_observations::Bool=true` and `impute_missing_actions::Bool=true`: whether
   the observations and the actions that are `MissingValue()` are imputed, as latent
   variables. With `false`, nothing is sampled for them, and they are replaced by
@@ -316,12 +316,10 @@ function prepare_session(
 
     #Replace the values in the data which stand for a missing value by the marker for one, which is the marker for a missing value that isn't imputed when imputation isn't asked for
     observations = mark_missing_values(
-        observations,
-        as_missing_values(missing_observation_values),
-        impute_missing_observations,
+        observations, as_tuple(missing_observation_values), impute_missing_observations
     )
     actions = mark_missing_values(
-        actions, as_missing_values(missing_action_values), impute_missing_actions
+        actions, as_tuple(missing_action_values), impute_missing_actions
     )
 
     #Check the data against the names in the cognitive model's attributes, and that the environment fits
@@ -466,6 +464,13 @@ The second form takes sessions that are already prepared. They have no table, un
 given as `table`, with the rows of each session in it as `session_rows`, a vector of
 vectors of row numbers. Each argument is kept in a field of the same name.
 
+Each session is identified in three ways: by its order, its index in `sessions`, which the
+models of several sessions number it by and [`CognitiveModeling.session_index`](@ref)
+finds; by its identifier, the value of its session column, or a `NamedTuple` of the values
+when there are several, as in `session_ids`; and by its symbol name, a `Symbol` made from
+the identifier by [`CognitiveModeling.session_id_to_symbol`](@ref), such as `S1` or
+`id_S1__block_2`, which the chains of a fit name its entries after.
+
 In the REPL, the sessions show a summary on one line each: how many there are, and the
 models and the names in the data of the first.
 
@@ -544,7 +549,7 @@ struct MultipleSessionsInfo{
                 ),
             )
         end
-        check_unique_session_names(session_ids)
+        check_unique_session_symbol_names(session_ids)
         if !isconcretetype(eltype(sessions))
             throw(
                 ArgumentError(
@@ -580,7 +585,7 @@ function MultipleSessionsInfo(
     #The columns of each kind, from the names the model uses to the names in the table
     observation_column_map = column_map(observation_columns, cognitive_model, :observations)
     action_column_map = column_map(action_columns, cognitive_model, :actions)
-    id_columns = as_tuple_of_names(session_columns)
+    id_columns = as_tuple(session_columns)::Tuple{Vararg{Symbol}}
     check_table(
         table,
         (
@@ -598,14 +603,11 @@ function MultipleSessionsInfo(
     observation_columns_of_table = build_columns(
         table,
         observation_column_map,
-        as_missing_values(missing_observation_values),
+        as_tuple(missing_observation_values),
         impute_missing_observations,
     )
     action_columns_of_table = build_columns(
-        table,
-        action_column_map,
-        as_missing_values(missing_action_values),
-        impute_missing_actions,
+        table, action_column_map, as_tuple(missing_action_values), impute_missing_actions
     )
 
     #Each session is prepared from its rows of those columns, in which the missing values are marked already

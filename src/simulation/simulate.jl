@@ -54,7 +54,7 @@ end
 Return what the receiver gets of the outputs `x`: all of `x` without a map, and with a
 [`NameMap`](@ref) the outputs it takes, under the names it gives them. Used on each timestep
 of a simulation, by [`simulate_timestep`](@ref), and for timestep 0 by
-[`collect_initial_values`](@ref).
+[`collect_initial_timestep_values`](@ref).
 """
 map_names(x, ::Nothing) = x
 
@@ -288,13 +288,14 @@ observation, in a `NamedTuple`. Used by [`collect_timestep_values`](@ref).
 environment_values(state, observation) = (; state, observation)
 
 """
-    collect_initial_values(save_initial_values::Val, previous_values, cognitive_model,
-                           environment, observation_map, action_map,
-                           cognitive_save_history, environment_save_history)
+    collect_initial_timestep_values(save_initial_timestep_values::Val,
+                                    previous_timestep_values, cognitive_model,
+                                    environment, observation_map, action_map,
+                                    cognitive_save_history, environment_save_history)
 
 Return what is saved from before the first timestep, as timestep 0, arranged as the `saved`
-values of [`collect_timestep_values`](@ref), or `nothing` when `save_initial_values` is
-`Val(false)`.
+values of [`collect_timestep_values`](@ref), or `nothing` when
+`save_initial_timestep_values` is `Val(false)`.
 
 The observation and the action are the previous ones, as each side receives them, the
 output distributions are [`BeforeFirstTimestep`](@ref) for every output, since none was
@@ -302,9 +303,9 @@ given yet, and the states are the states before the first timestep. They must be
 before the first timestep is simulated, since it can change a state in place. Used by
 [`simulate_all_timesteps`](@ref).
 """
-function collect_initial_values(
+function collect_initial_timestep_values(
     ::Val{false},
-    previous_values,
+    previous_timestep_values,
     cognitive_model,
     environment,
     observation_map,
@@ -315,9 +316,9 @@ function collect_initial_values(
     return nothing
 end
 
-function collect_initial_values(
+function collect_initial_timestep_values(
     ::Val{true},
-    previous_values,
+    previous_timestep_values,
     cognitive_model,
     environment,
     observation_map,
@@ -327,14 +328,16 @@ function collect_initial_values(
 )
     return (;
         states=save_state(
-            cognitive_model, previous_values.state, state_selection(cognitive_save_history)
+            cognitive_model,
+            previous_timestep_values.state,
+            state_selection(cognitive_save_history),
         ),
         observations=select_names(
-            map_names(previous_values.environment.observation, observation_map),
+            map_names(previous_timestep_values.environment.observation, observation_map),
             input_selection(cognitive_save_history),
         ),
         actions=select_names(
-            previous_values.action, output_selection(cognitive_save_history)
+            previous_timestep_values.action, output_selection(cognitive_save_history)
         ),
         action_distributions=select_names(
             output_before_first_timestep(cognitive_model),
@@ -343,15 +346,15 @@ function collect_initial_values(
         environment=(;
             states=save_state(
                 environment,
-                previous_values.environment.state,
+                previous_timestep_values.environment.state,
                 state_selection(environment_save_history),
             ),
             observations=select_names(
-                previous_values.environment.observation,
+                previous_timestep_values.environment.observation,
                 output_selection(environment_save_history),
             ),
             actions=select_names(
-                map_names(previous_values.action, action_map),
+                map_names(previous_timestep_values.action, action_map),
                 input_selection(environment_save_history),
             ),
             observation_distributions=select_names(
@@ -405,35 +408,35 @@ shorten the vectors of the storage of a simulation and of a fitted session.
 end
 
 """
-    initialize_all_storage(initial_values, saved, n_steps)
+    initialize_all_storage(initial_timestep_values, saved, n_steps)
 
 Create the vectors for saving `n_steps` timesteps, arranged as [`map_saved`](@ref) arranges
-them, and typed by `saved`, what the first timestep saved. When `initial_values` isn't
-`nothing`, each vector starts with what it has for timestep 0, from
-[`collect_initial_values`](@ref). Used by [`simulate_all_timesteps`](@ref) and by fitted
-sessions.
+them, and typed by `saved`, what the first timestep saved. When `initial_timestep_values`
+isn't `nothing`, each vector starts with what it has for timestep 0, from
+[`collect_initial_timestep_values`](@ref). Used by [`simulate_all_timesteps`](@ref) and by
+fitted sessions.
 """
 function initialize_all_storage(::Nothing, saved, n_steps)
     return map_saved(value -> initialize_storage(value, n_steps), saved)
 end
 
-function initialize_all_storage(initial_values::NamedTuple, saved, n_steps)
+function initialize_all_storage(initial_timestep_values::NamedTuple, saved, n_steps)
     return map_saved(
         (initial_value, value) -> initialize_storage(initial_value, value, n_steps),
-        initial_values,
+        initial_timestep_values,
         saved,
     )
 end
 
 """
-    store_all_values!(storage, saved, t)
+    store_timestep_values!(storage, saved, t)
 
 Store `saved`, what timestep `t` saved, as element `t` of each vector in `storage`, with
 [`store_value!`](@ref), and return the vectors arranged in the same way, in which a vector
 is wider when a value didn't fit it. Used by [`simulate_remaining_timesteps`](@ref) and by
 fitted sessions.
 """
-function store_all_values!(storage, saved, t)
+function store_timestep_values!(storage, saved, t)
     return map_saved((vector, value) -> store_value!(vector, value, t), storage, saved)
 end
 
@@ -721,7 +724,7 @@ function simulate_remaining_timesteps(
         )
 
         #Store what the timestep saved
-        storage = store_all_values!(storage, timestep_values.saved, t + offset)
+        storage = store_timestep_values!(storage, timestep_values.saved, t + offset)
     end
 
     #Return what was stored, and the values of the last timestep for continuing from
@@ -729,22 +732,22 @@ function simulate_remaining_timesteps(
 end
 
 """
-    simulate_all_timesteps(previous_values, who_starts, cognitive_model, environment,
-                           cognitive_parameters, environment_parameters,
+    simulate_all_timesteps(previous_timestep_values, who_starts, cognitive_model,
+                           environment, cognitive_parameters, environment_parameters,
                            cognitive_save_history, environment_save_history,
                            observation_map, action_map, rng, timestep_sizes, n_steps,
-                           save_initial_values::Val, check_stopping_criterion)
+                           save_initial_timestep_values::Val, check_stopping_criterion)
 
-Simulate up to `n_steps` timesteps starting from `previous_values`, and return the vectors
-with what the simulated timesteps saved, followed by the values of the last one. When
-`check_stopping_criterion` is `true`, the simulation stops before `n_steps` timesteps if
-[`stopping_criterion`](@ref) of either model is met, and none can be simulated if it is met
-already. When `save_initial_values` is `Val(true)`, each vector starts with what is saved
-from before the first timestep, as timestep 0.
+Simulate up to `n_steps` timesteps starting from `previous_timestep_values`, and return the
+vectors with what the simulated timesteps saved, followed by the values of the last one.
+When `check_stopping_criterion` is `true`, the simulation stops before `n_steps` timesteps
+if [`stopping_criterion`](@ref) of either model is met, and none can be simulated if it is
+met already. When `save_initial_timestep_values` is `Val(true)`, each vector starts with
+what is saved from before the first timestep, as timestep 0.
 
-`previous_values` and the values returned are those of a timestep: the state and the action
-of the cognitive model, and under `environment` the state and the observation of the
-environment, each in its own names. The vectors are arranged as [`map_saved`](@ref)
+`previous_timestep_values` and the values returned are those of a timestep: the state and
+the action of the cognitive model, and under `environment` the state and the observation of
+the environment, each in its own names. The vectors are arranged as [`map_saved`](@ref)
 arranges them, with what `cognitive_save_history` and `environment_save_history` select.
 
 [`simulate!`](@ref) continues from the values of the last timestep instead of from what was
@@ -753,7 +756,7 @@ next simulation can change a state in place. Used by [`simulate`](@ref) and
 [`simulate!`](@ref).
 """
 function simulate_all_timesteps(
-    previous_values,
+    previous_timestep_values,
     who_starts,
     cognitive_model,
     environment,
@@ -766,7 +769,7 @@ function simulate_all_timesteps(
     rng,
     timestep_sizes,
     n_steps,
-    save_initial_values,
+    save_initial_timestep_values,
     check_stopping_criterion,
 )
 
@@ -785,17 +788,17 @@ function simulate_all_timesteps(
     #No timestep can be simulated when the stopping criterion of either model is met already
     if check_stopping_criterion
         check_stopping_criterion_not_met(
-            environment, previous_values.environment.state, environment_parameters
+            environment, previous_timestep_values.environment.state, environment_parameters
         )
         check_stopping_criterion_not_met(
-            cognitive_model, previous_values.state, cognitive_parameters
+            cognitive_model, previous_timestep_values.state, cognitive_parameters
         )
     end
 
     #Save what is kept from before the first timestep before it is simulated, since it can change a state in place
-    initial_values = collect_initial_values(
-        save_initial_values,
-        previous_values,
+    initial_timestep_values = collect_initial_timestep_values(
+        save_initial_timestep_values,
+        previous_timestep_values,
         cognitive_model,
         environment,
         observation_map,
@@ -817,12 +820,14 @@ function simulate_all_timesteps(
         action_map,
         rng,
         get_timestep_size(timestep_sizes, 1),
-        previous_values,
+        previous_timestep_values,
     )
 
     #Initialize storage for the trajectories that are saved, which start with timestep 0 when it is kept
-    storage = initialize_all_storage(initial_values, timestep_values.saved, n_steps)
-    offset = initial_values === nothing ? 0 : 1
+    storage = initialize_all_storage(
+        initial_timestep_values, timestep_values.saved, n_steps
+    )
+    offset = initial_timestep_values === nothing ? 0 : 1
 
     #Simulate the remaining timesteps
     return simulate_remaining_timesteps(
@@ -869,11 +874,11 @@ element `t + 1` is timestep `t`.
 
 `cognitive_save_history` and `environment_save_history` select what is kept of each element
 of each model, which is nothing by default: give `SaveHistory(SaveEverything())` to keep
-everything, and `SaveHistory(SaveEverything(); save_initial_values = false)` to leave out
-timestep 0, so that element `t` is timestep `t`. The vectors of both models have the same
-length, which `cognitive_save_history` decides. The sizes of the timesteps are returned as
-they were given: a single size as it is, and a vector of sizes with the sizes of the
-timesteps that ran, after `BeforeFirstTimestep()` for timestep 0 when it is there.
+everything, and `SaveHistory(SaveEverything(); save_initial_timestep_values = false)` to
+leave out timestep 0, so that element `t` is timestep `t`. The vectors of both models have
+the same length, which `cognitive_save_history` decides. The sizes of the timesteps are
+returned as they were given: a single size as it is, and a vector of sizes with the sizes of
+the timesteps that ran, after `BeforeFirstTimestep()` for timestep 0 when it is there.
 
 Parameters that aren't given take the values in [`default_parameters`](@ref), if
 `cognitive_model` or `environment` provides defaults for them. The names of the parameters,
@@ -1062,16 +1067,18 @@ function simulate(
     check_savehistory_selection_names(environment_save_history, environment)
 
     #Collect the values from before the first timestep, each side's in its own names
-    previous_values = (;
+    previous_timestep_values = (;
         state=previous_cognitive_state,
         action=previous_action,
         environment=(; state=previous_environment_state, observation=previous_observation),
     )
 
-    #Simulate the timesteps, starting with timestep 0 when the cognitive model's save history saves the initial values
-    save_initial_values = Val(saves_initial_values(cognitive_save_history))
+    #Simulate the timesteps, starting with timestep 0 when the cognitive model's save history saves the initial timestep values
+    save_initial_timestep_values = Val(
+        saves_initial_timestep_values(cognitive_save_history)
+    )
     storage, _ = simulate_all_timesteps(
-        previous_values,
+        previous_timestep_values,
         who_starts,
         cognitive_model,
         environment,
@@ -1084,15 +1091,16 @@ function simulate(
         rng,
         timestep_sizes,
         n_steps,
-        save_initial_values,
+        save_initial_timestep_values,
         check_stopping_criterion,
     )
 
     #The sizes of the timesteps that were simulated, since a model can stop the simulation early
     n_timesteps_simulated =
-        length(storage.states) - (saves_initial_values(cognitive_save_history) ? 1 : 0)
+        length(storage.states) -
+        (saves_initial_timestep_values(cognitive_save_history) ? 1 : 0)
     timestep_sizes_simulated = returned_timestep_sizes(
-        timestep_sizes, n_timesteps_simulated, save_initial_values
+        timestep_sizes, n_timesteps_simulated, save_initial_timestep_values
     )
 
     #Return what was saved
@@ -1109,7 +1117,7 @@ and action distributions on each timestep, what `environment.save_history` selec
 environment's under `environment`, and the sizes of the timesteps. What the two select is
 also added to `agent.history` and `environment.history`, in each model's own names, together
 with the sizes of the timesteps, unless a selection is empty. A history has timestep 0 from
-where the model started, when its [`SaveHistory`](@ref) saves the initial values.
+where the model started, when its [`SaveHistory`](@ref) saves the initial timestep values.
 
 The two models must fit together, as for `simulate`, directly or through `observation_map`
 and `action_map`. The agent's history holds the observations as its model received them,
@@ -1200,15 +1208,15 @@ function simulate!(
     check_names_fit(agent.model, environment.model, observation_map, action_map)
 
     #Collect where the agent and the environment are, each in its own names
-    previous_values = (;
+    previous_timestep_values = (;
         state=agent.state,
         action=agent.previous_output,
         environment=(; state=environment.state, observation=environment.previous_output),
     )
 
     #Simulate the timesteps, without timestep 0, which the histories have from where the agent and the environment started
-    storage, last_values = simulate_all_timesteps(
-        previous_values,
+    storage, last_timestep_values = simulate_all_timesteps(
+        previous_timestep_values,
         who_starts,
         agent.model,
         environment.model,
@@ -1226,10 +1234,10 @@ function simulate!(
     )
 
     #Update agent and environment
-    agent.state = last_values.state
-    agent.previous_output = last_values.action
-    environment.state = last_values.environment.state
-    environment.previous_output = last_values.environment.observation
+    agent.state = last_timestep_values.state
+    agent.previous_output = last_timestep_values.action
+    environment.state = last_timestep_values.environment.state
+    environment.previous_output = last_timestep_values.environment.observation
 
     #The sizes of the timesteps that were simulated, since a model can stop the simulation early
     n_timesteps_simulated = length(storage.states)

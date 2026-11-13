@@ -139,7 +139,7 @@ environment model when the environment starts. [`NoValue`](@ref) is different: i
 nothing was observed or done on a timestep that did run.
 
 Before the first timestep is timestep 0, which a simulation, a history and a fitted session
-start with when their [`SaveHistory`](@ref) saves the initial values, as it does by
+start with when their [`SaveHistory`](@ref) saves the initial timestep values, as it does by
 default. Its observation and action are this marker unless others are given, and so is its
 size.
 """
@@ -422,25 +422,27 @@ struct ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs} end
 #Takes the names by keyword, puts a single name or a vector of names in a tuple, checks that each is used once, and keeps them in the type
 function ModelAttributes(; parameters, states, inputs, outputs)
     attributes = ModelAttributes{
-        as_tuple_of_names(parameters),
-        as_tuple_of_names(states),
-        as_tuple_of_names(inputs),
-        as_tuple_of_names(outputs),
+        as_tuple(parameters)::Tuple{Vararg{Symbol}},
+        as_tuple(states)::Tuple{Vararg{Symbol}},
+        as_tuple(inputs)::Tuple{Vararg{Symbol}},
+        as_tuple(outputs)::Tuple{Vararg{Symbol}},
     }()
     check_unique_attribute_names(attributes)
     return attributes
 end
 
 """
-    as_tuple_of_names(names)
+    as_tuple(values)
 
-Return `names` as a `Tuple` of `Symbol`s, which is how a [`ModelAttributes`](@ref) keeps
-them: a tuple as it is, a single `Symbol` in a tuple, and a `Vector` of them as a tuple.
-Used by the constructors of [`ModelAttributes`](@ref) and [`MultipleSessionsInfo`](@ref).
+Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
+tuple of one. Used for the arguments that take one value or several: the names given to
+[`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref) and
+[`GroupedHierarchicalSessionParameters`](@ref), which are then asserted to be `Symbol`s,
+and the values that stand for a missing value in [`SessionInfo`](@ref).
 """
-as_tuple_of_names(names::Tuple{Vararg{Symbol}}) = names
-as_tuple_of_names(name::Symbol) = (name,)
-as_tuple_of_names(names::AbstractVector{Symbol}) = Tuple(names)
+as_tuple(values::Tuple) = values
+as_tuple(values::AbstractVector) = Tuple(values)
+as_tuple(value) = (value,)
 
 """
     check_unique_attribute_names(attributes)

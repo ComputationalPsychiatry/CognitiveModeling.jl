@@ -31,9 +31,10 @@ include("inference/functions_to_extend.jl")
 include("inference/utility_functions/prepare_session_data.jl")
 include("inference/utility_functions/split_table_into_sessions.jl")
 include("inference/utility_functions/read_session_setup.jl")
-include("inference/utility_functions/score_values_to_condition_on.jl")
+include("inference/utility_functions/to_condition_on.jl")
 include("inference/utility_functions/save_fitted_session_trajectories.jl")
 include("inference/utility_functions/display_sessions.jl")
+include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
 #the package, with their docstrings, and the helpers that call an extension
@@ -42,7 +43,6 @@ include("extensions/flexichains/session_trajectories_chain.jl")
 include("extensions/tables/column_table.jl")
 include("extensions/turing/functions_to_extend.jl")
 include("extensions/turing/turing_models.jl")
-include("extensions/turing/predict_session_trajectories.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
@@ -75,7 +75,7 @@ public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, discrete_parameter_names
 public turing_apply_timestep_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
-public ModelHistory, n_sessions, session_index, session_name, session_column_values
+public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 
 end

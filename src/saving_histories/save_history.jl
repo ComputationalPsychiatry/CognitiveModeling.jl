@@ -8,8 +8,8 @@ struct SaveEverything end
 
 """
     SaveHistory(; states=(), inputs=(), outputs=(), output_distributions=(),
-                save_initial_values=true)
-    SaveHistory(SaveEverything(); save_initial_values=true)
+                save_initial_timestep_values=true)
+    SaveHistory(SaveEverything(); save_initial_timestep_values=true)
 
 Which states, inputs, outputs and output distributions of a model a simulation or a fitted
 session saves, by name, and whether it saves them from before the first timestep too.
@@ -25,8 +25,8 @@ saves nothing, so `SaveHistory()` saves nothing, which is the default everywhere
 `SaveHistory(SaveEverything())` saves everything. The selections are read as properties,
 such as `save_history.states`.
 
-`save_initial_values` is whether what is saved starts with timestep 0, before the first
-timestep: the initial states, and the previous input and output, which are
+`save_initial_timestep_values` is whether what is saved starts with timestep 0, before the
+first timestep: the initial states, and the previous input and output, which are
 [`BeforeFirstTimestep`](@ref) unless others are given. It is `true` by default, which
 matters when the initial state depends on parameters that are fitted. Since Julia counts
 from 1, element `t + 1` of what is saved is then timestep `t`, and with `false`, element `t`
@@ -51,7 +51,7 @@ States: expected_reward, surprise
 Inputs: none
 Outputs: choice
 Output distributions: none
-Initial values: saved
+Initial timestep values: saved
 
 julia> save_history.states
 (:expected_reward, :surprise)
@@ -59,59 +59,59 @@ julia> save_history.states
 julia> SaveHistory(SaveEverything()).inputs
 SaveEverything()
 
-julia> SaveHistory(SaveEverything(); save_initial_values = false).save_initial_values
+julia> SaveHistory(SaveEverything(); save_initial_timestep_values = false).save_initial_timestep_values
 false
 ```
 """
-struct SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values} end
+struct SaveHistory{
+    Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+} end
 
-#Takes the names by keyword, and puts each selection in the type, and whether the initial values are saved
+#Takes the names by keyword, and puts each selection in the type, and whether the initial timestep values are saved
 function SaveHistory(;
     states=(),
     inputs=(),
     outputs=(),
     output_distributions=(),
-    save_initial_values::Bool=true,
+    save_initial_timestep_values::Bool=true,
 )
     return SaveHistory{
         as_selection(states),
         as_selection(inputs),
         as_selection(outputs),
         as_selection(output_distributions),
-        save_initial_values,
+        save_initial_timestep_values,
     }()
 end
 
 #Saves everything of every kind
-function SaveHistory(::SaveEverything; save_initial_values::Bool=true)
+function SaveHistory(::SaveEverything; save_initial_timestep_values::Bool=true)
     return SaveHistory(;
         states=SaveEverything(),
         inputs=SaveEverything(),
         outputs=SaveEverything(),
         output_distributions=SaveEverything(),
-        save_initial_values,
+        save_initial_timestep_values,
     )
 end
 
 """
     as_selection(names)
 
-Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it: a `Tuple` of
-`Symbol`s, made from a single `Symbol` or a `Vector` of them too, or
-[`SaveEverything`](@ref) as it is. Used by the constructor of [`SaveHistory`](@ref).
+Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it:
+[`SaveEverything`](@ref) as it is, and otherwise a `Tuple` of `Symbol`s, as
+[`as_tuple`](@ref) makes it. Used by the constructor of [`SaveHistory`](@ref).
 """
-as_selection(names::Tuple{Vararg{Symbol}}) = names
-as_selection(name::Symbol) = (name,)
-as_selection(names::AbstractVector{Symbol}) = Tuple(names)
 as_selection(::SaveEverything) = SaveEverything()
+as_selection(names) = as_tuple(names)::Tuple{Vararg{Symbol}}
 
-#Reads the selections in the type as properties, and whether the initial values are saved
+#Reads the selections in the type as properties, and whether the initial timestep values are saved
 function Base.getproperty(
     save_history::SaveHistory{
-        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
     },
     name::Symbol,
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     if name === :states
         return Tstates
     elseif name === :inputs
@@ -120,18 +120,20 @@ function Base.getproperty(
         return Toutputs
     elseif name === :output_distributions
         return Toutput_distributions
-    elseif name === :save_initial_values
-        return Tsave_initial_values
+    elseif name === :save_initial_timestep_values
+        return Tsave_initial_timestep_values
     else
         throw(FieldError(typeof(save_history), name))
     end
 end
 
 function Base.propertynames(::SaveHistory)
-    return (:states, :inputs, :outputs, :output_distributions, :save_initial_values)
+    return (
+        :states, :inputs, :outputs, :output_distributions, :save_initial_timestep_values
+    )
 end
 
-#Shows the selections on one line each in the REPL and notebooks, and whether the initial values are saved
+#Shows the selections on one line each in the REPL and notebooks, and whether the initial timestep values are saved
 function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
     print(io, "SaveHistory")
     for (kind, selection) in (
@@ -150,7 +152,9 @@ function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
         end
     end
     print(
-        io, "\nInitial values: ", save_history.save_initial_values ? "saved" : "not saved"
+        io,
+        "\nInitial timestep values: ",
+        save_history.save_initial_timestep_values ? "saved" : "not saved",
     )
     return nothing
 end
@@ -166,37 +170,47 @@ Return the selection of one kind in a [`SaveHistory`](@ref) as a `Val`. Used whe
 something is saved, by simulations, instantiated models and fitted sessions.
 """
 function state_selection(
-    ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
+    ::SaveHistory{
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+    },
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     return Val(Tstates)
 end
 function input_selection(
-    ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
+    ::SaveHistory{
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+    },
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     return Val(Tinputs)
 end
 function output_selection(
-    ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
+    ::SaveHistory{
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+    },
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     return Val(Toutputs)
 end
 function output_distribution_selection(
-    ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
+    ::SaveHistory{
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+    },
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     return Val(Toutput_distributions)
 end
 
 """
-    saves_initial_values(save_history)
+    saves_initial_timestep_values(save_history)
 
 Return whether `save_history` saves the values from before the first timestep, as
 timestep 0. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref),
 [`saved_timestep_sizes`](@ref) and fitted sessions, to decide whether timestep 0 is saved.
 """
-function saves_initial_values(
-    ::SaveHistory{Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_values}
-    return Tsave_initial_values
+function saves_initial_timestep_values(
+    ::SaveHistory{
+        Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
+    },
+) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
+    return Tsave_initial_timestep_values
 end
 
 """
@@ -281,12 +295,13 @@ save_state(model, state, ::Val{()}) = (;)
     saves_nothing(save_history)
 
 Return whether `save_history` selects nothing of any kind. Whether it saves the initial
-values doesn't matter, since there is nothing to save of them. Used by [`simulate!`](@ref),
+timestep values doesn't matter, since there is nothing to save of them. Used by
+[`simulate!`](@ref),
 [`InstantiatedModel`](@ref) and fitted sessions, which save nothing at all then.
 """
 function saves_nothing(
-    ::SaveHistory{(),(),(),(),Tsave_initial_values}
-) where {Tsave_initial_values}
+    ::SaveHistory{(),(),(),(),Tsave_initial_timestep_values}
+) where {Tsave_initial_timestep_values}
     return true
 end
 saves_nothing(::SaveHistory) = false
@@ -308,13 +323,13 @@ function each_timestep_size(timestep_size, n_steps)
 end
 
 """
-    returned_timestep_sizes(timestep_sizes, n_timesteps, save_initial_values::Val)
+    returned_timestep_sizes(timestep_sizes, n_timesteps, save_initial_timestep_values::Val)
 
 Return the sizes of the `n_timesteps` timesteps that ran, as a simulation returns them. A
 vector of sizes is cut to those timesteps, since a model can stop a simulation early, and
-starts with [`BeforeFirstTimestep`](@ref) for timestep 0 when `save_initial_values` is
-`Val(true)`, so that it has an element for each element of what is saved. Anything else is
-returned as it is, since it is the size of every timestep. Used by [`simulate`](@ref),
+starts with [`BeforeFirstTimestep`](@ref) for timestep 0 when `save_initial_timestep_values`
+is `Val(true)`, so that it has an element for each element of what is saved. Anything else
+is returned as it is, since it is the size of every timestep. Used by [`simulate`](@ref),
 [`simulate!`](@ref) and [`saved_timestep_sizes`](@ref).
 """
 function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::Val{false})
@@ -333,7 +348,7 @@ function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::
     return sizes
 end
 
-function returned_timestep_sizes(timestep_size, n_timesteps, save_initial_values)
+function returned_timestep_sizes(timestep_size, n_timesteps, save_initial_timestep_values)
     return timestep_size
 end
 
@@ -342,18 +357,18 @@ end
 
 Return the sizes of `n_steps` timesteps as they are returned with a history: one size for
 each timestep when `save_history` saves anything, after [`BeforeFirstTimestep`](@ref) for
-timestep 0 when it saves the initial values, and an empty vector when it saves nothing. Used
-by [`SessionInfo`](@ref), for the sizes a fitted session returns.
+timestep 0 when it saves the initial timestep values, and an empty vector when it saves
+nothing. Used by [`SessionInfo`](@ref), for the sizes a fitted session returns.
 """
 function saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory)
     return returned_timestep_sizes(
         each_timestep_size(timestep_sizes, n_steps),
         n_steps,
-        Val(saves_initial_values(save_history)),
+        Val(saves_initial_timestep_values(save_history)),
     )
 end
 function saved_timestep_sizes(
-    timestep_sizes, n_steps, ::SaveHistory{(),(),(),(),Tsave_initial_values}
-) where {Tsave_initial_values}
+    timestep_sizes, n_steps, ::SaveHistory{(),(),(),(),Tsave_initial_timestep_values}
+) where {Tsave_initial_timestep_values}
     return empty(each_timestep_size(timestep_sizes, 0))
 end

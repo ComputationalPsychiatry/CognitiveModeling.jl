@@ -637,7 +637,9 @@ end
         history = returned(
             session_for_test(;
                 cognitive_save_history=SaveHistory(;
-                    states=:expected_reward, outputs=:choice, save_initial_values=false
+                    states=:expected_reward,
+                    outputs=:choice,
+                    save_initial_timestep_values=false,
                 ),
             ),
             (;),
@@ -693,7 +695,7 @@ end
             session_for_test(;
                 timestep_sizes=sizes,
                 cognitive_save_history=SaveHistory(
-                    SaveEverything(); save_initial_values=false
+                    SaveEverything(); save_initial_timestep_values=false
                 ),
             ),
             (;),
@@ -1085,12 +1087,12 @@ end
             choices;
             environment=RewardsPreviousChoice(),
         )
-        without_environment = session_for_test(
+        remake_session_without_environment = session_for_test(
             SessionRescorlaWagner(), SESSION_PARAMETERS, matching, choices
         )
         imputed = Dict(@varname(timestep[3].choice.imputed) => true)
         @test (@test_logs match_mode = :any loglikelihood(model, imputed)) ≈
-            loglikelihood(without_environment, imputed)
+            loglikelihood(remake_session_without_environment, imputed)
         #A reward the environment couldn't have given makes the log density -Inf
         mismatching = session_for_test(
             SessionRescorlaWagner(),
@@ -1194,7 +1196,7 @@ end
             choices;
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(;
-                states=:expected_reward, save_initial_values=false
+                states=:expected_reward, save_initial_timestep_values=false
             ),
             environment_save_history=SaveHistory(; states=:n_timesteps),
         )

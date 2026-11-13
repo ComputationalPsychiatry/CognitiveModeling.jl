@@ -21,7 +21,7 @@ Pages = ["extensions/turing/turing_models.jl"]
 Modules = [CognitiveModeling]
 Private = false
 Pages = [
-    "extensions/turing/predict_session_trajectories.jl",
+    "inference/workflow_and_postprocessing/predict_session_trajectories.jl",
     "extensions/flexichains/session_trajectories_chain.jl",
 ]
 ```

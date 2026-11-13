@@ -222,11 +222,14 @@ using Random: Xoshiro, default_rng
         @test_throws UndefKeywordError ModelAttributes(;
             parameters=(:learning_rate,), states=(), inputs=()
         )
-        @test_throws MethodError ModelAttributes(;
+        @test_throws TypeError ModelAttributes(;
             parameters=("learning_rate",), states=(), inputs=(), outputs=()
         )
-        @test_throws MethodError ModelAttributes(;
+        @test_throws TypeError ModelAttributes(;
             parameters=(:learning_rate, 1), states=(), inputs=(), outputs=()
+        )
+        @test_throws TypeError ModelAttributes(;
+            parameters="learning_rate", states=(), inputs=(), outputs=()
         )
     end
 

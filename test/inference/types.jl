@@ -417,7 +417,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         ).includes_environment
         #The copy without the environment is the same session otherwise
-        without = CognitiveModeling.without_environment(with_missing_reward)
+        without = CognitiveModeling.remake_session_without_environment(with_missing_reward)
         @test without.environment === NoEnvironment() && !without.includes_environment
         @test without.observations === with_missing_reward.observations &&
             without.previous_observation === with_missing_reward.previous_observation
@@ -494,8 +494,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             include_environment=true,
         )
         #A full model which estimates the environment's parameters includes it in every session, which a session that leaves it out can't be
-        @test CognitiveModeling.including_environment(nothing_missing).includes_environment
-        @test_throws "The environment's parameters are estimated, which every session must include its environment for, but a session was prepared with include_environment = false." CognitiveModeling.including_environment(
+        @test CognitiveModeling.remake_session_including_environment(nothing_missing).includes_environment
+        @test_throws "The environment's parameters are estimated, which every session must include its environment for, but a session was prepared with include_environment = false." CognitiveModeling.remake_session_including_environment(
             left_out
         )
     end
@@ -997,7 +997,7 @@ const COUNTER_TABLE = (;
         @test_throws "The session identifier \"A\" is given for more than one session." MultipleSessionsInfo(
             [session, session], ["A", "A"]
         )
-        @test_throws "The session identifiers 1 and \"1\" both give the session name 1," MultipleSessionsInfo(
+        @test_throws "The session identifiers 1 and \"1\" both give the symbol name 1," MultipleSessionsInfo(
             [session, session], Any[1, "1"]
         )
     end
@@ -1109,10 +1109,11 @@ end
     @test isbitstype(NoDownstreamModel) && isbitstype(NoEnvironment)
     @test isbitstype(SerialSessions) && isbitstype(ParallelSessions)
 
-    @testset "The name of a session is its identifier, or the name and the value of each of several columns" begin
-        @test CognitiveModeling.session_name("S1") === :S1
-        @test CognitiveModeling.session_name(2) === Symbol("2")
-        @test CognitiveModeling.session_name((; id="S1", block=2)) === :id_S1__block_2
+    @testset "The symbol name of a session is its identifier, or the name and the value of each of several columns" begin
+        @test CognitiveModeling.session_id_to_symbol("S1") === :S1
+        @test CognitiveModeling.session_id_to_symbol(2) === Symbol("2")
+        @test CognitiveModeling.session_id_to_symbol((; id="S1", block=2)) ===
+            :id_S1__block_2
     end
 
     @testset "With sampled environment parameters, every session with an environment runs it" begin
@@ -1127,10 +1128,10 @@ end
             environment=GivesReward(),
         )
         @test !sessions_info.sessions[1].includes_environment
-        @test CognitiveModeling.sessions_for_environment_parameters(
+        @test CognitiveModeling.include_environments_if_estimated(
             NoParameters(), sessions_info
         ) === sessions_info
-        @test CognitiveModeling.sessions_for_environment_parameters(
+        @test CognitiveModeling.include_environments_if_estimated(
             FixedSessionParameters((; scale=2.0)), sessions_info
         ) === sessions_info
         for sampling in (
@@ -1138,7 +1139,7 @@ end
             IndependentSessionParameters((; scale=1)),
             ParametersModelOfOwn(),
         )
-            sampled = CognitiveModeling.sessions_for_environment_parameters(
+            sampled = CognitiveModeling.include_environments_if_estimated(
                 sampling, sessions_info
             )
             @test all(session -> session.includes_environment, sampled.sessions)
@@ -1157,7 +1158,7 @@ end
         )
         @test !any(
             session -> session.includes_environment,
-            CognitiveModeling.sessions_for_environment_parameters(
+            CognitiveModeling.include_environments_if_estimated(
                 IdenticalSessionParameters((; scale=1)), without
             ).sessions,
         )

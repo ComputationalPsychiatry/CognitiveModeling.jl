@@ -49,12 +49,17 @@ that is given as a type inside a function which makes it.
 
 # Examples
 ```jldoctest
-julia> using Distributions: Normal, Exponential
+julia> using Distributions: Normal, Exponential, Laplace
 
 julia> learning_rate = HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp, group_by = :diagnosis);
 
 julia> learning_rate.group_by, learning_rate.centered
 ((:diagnosis,), false)
+
+julia> inverse_temperature = HierarchicalParameter((; location = Normal(0, 1), scale = Exponential(1)); distribution = Laplace, transformation = exp);
+
+julia> inverse_temperature.centered
+true
 ```
 """
 struct HierarchicalParameter{
@@ -104,7 +109,8 @@ struct HierarchicalParameter{
         sampled_directly = something(centered, distribution !== nothing)
 
         #The columns to group by are kept as a tuple of names, which is empty for one group
-        columns_to_group_by = group_by === nothing ? () : as_tuple_of_names(group_by)
+        columns_to_group_by =
+            group_by === nothing ? () : as_tuple(group_by)::Tuple{Vararg{Symbol}}
 
         #A distribution given as a type, such as Normal, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
         kept_distribution = if distribution isa Type
@@ -138,7 +144,7 @@ A full model finds the group of every session once, before it is made, from the 
 [`MultipleSessionsInfo`](@ref) keeps, so sessions that were prepared one at a time can only
 be in one group. The field `groups` is `nothing` until then, and afterwards has, for each
 parameter, the group of every session, `group_of_each_session`, the number of groups,
-`n_groups`, and the name of each group, `group_names`.
+`n_groups`, and the symbol name of each group, `group_symbol_names`.
 
 # Examples
 ```julia
@@ -222,10 +228,11 @@ end
 Return the groups of the sessions in `sessions_info` by the values of the columns in
 `group_by`, a tuple of names, for the parameter `parameter_name` of a
 [`GroupedHierarchicalSessionParameters`](@ref): a `NamedTuple` with the group of every
-session, `group_of_each_session`, the number of groups, `n_groups`, and the name of each
-group, `group_names`, as [`session_name`](@ref) names identifiers. Groups are numbered in
-the order of their first session, and with no columns every session is in one group. A
-session with more than one value, or a missing value, in one of the columns is an error.
+session, `group_of_each_session`, the number of groups, `n_groups`, and the symbol name of
+each group, `group_symbol_names`, made from its values as [`session_id_to_symbol`](@ref)
+makes the symbol name of a session from its identifier. Groups are numbered in the order of
+their first session, and with no columns every session is in one group. A session with more
+than one value, or a missing value, in one of the columns is an error.
 Used by [`prepare_parameters_model`](@ref).
 """
 function group_sessions(
@@ -234,7 +241,7 @@ function group_sessions(
     return (;
         group_of_each_session=fill(1, n_sessions(sessions_info)),
         n_groups=1,
-        group_names=[:all_sessions],
+        group_symbol_names=[:all_sessions],
     )
 end
 
@@ -273,6 +280,6 @@ function group_sessions(
             findfirst(isequal(group), groups) for group in group_of_sessions
         ],
         n_groups=length(groups),
-        group_names=map(session_name, groups),
+        group_symbol_names=map(session_id_to_symbol, groups),
     )
 end

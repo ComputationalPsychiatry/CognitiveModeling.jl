@@ -30,34 +30,39 @@ using CognitiveModeling:
     find_outputs_to_condition_on,
     n_sessions,
     has_environment,
-    without_environment,
-    sessions_for_environment_parameters,
+    remake_session_without_environment,
+    include_environments_if_estimated,
     estimates_parameters,
     sessions_save_anything,
-    parameters_by_session,
+    collect_parameters_in_session_order,
     prepare_full_model,
     prepare_parameters_model,
     parameter_names,
-    merge_parameters_of_parts
+    merge_parameters_of_parts,
+    part_names
 using CognitiveModeling:
-    initialize_distributions,
-    store_distributions,
+    initialize_output_distributions_for_conditioning,
+    store_output_distributions_for_conditioning,
     select_row,
     build_named_entry,
     has_missing_value
 using CognitiveModeling:
-    saved_session_values,
-    initial_session_values,
+    select_timestep_values_to_save,
+    select_initial_timestep_values_to_save,
     map_saved,
     initialize_all_storage,
-    store_all_values!,
+    store_timestep_values!,
     saved_trajectories,
     with_empty_environment_entry,
     timestep_sizes_until
 using CognitiveModeling:
     stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data
 using CognitiveModeling:
-    select_names, saves_initial_values, get_timestep_size, initialize_storage, store_value!
+    select_names,
+    saves_initial_timestep_values,
+    get_timestep_size,
+    initialize_storage,
+    store_value!
 using Random: AbstractRNG, default_rng
 using Turing
 using Turing: DynamicPPL

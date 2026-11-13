@@ -84,8 +84,8 @@ the model's own: for a cognitive model the inputs are its observations and the o
 actions, and for an environment model the inputs are the actions it received and the outputs
 the observations it gave. The model's [`SaveHistory`](@ref) selects what is kept of each
 kind, and when it selects nothing at all, the vectors stay empty. Each vector starts with
-timestep 0, where the model started, when the `SaveHistory` saves the initial values, which
-it does by default, so that element `t + 1` is timestep `t`.
+timestep 0, where the model started, when the `SaveHistory` saves the initial timestep
+values, which it does by default, so that element `t + 1` is timestep `t`.
 
 The vectors hold values of any type, since what is saved can change type from one timestep
 to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a value.
@@ -243,8 +243,8 @@ end
 Return the history that an [`InstantiatedModel`](@ref) starts with: a [`ModelHistory`](@ref)
 with what `save_history` selects of where it starts, as timestep 0, and
 [`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has run yet. When
-nothing is selected, or `save_history` doesn't save the initial values, the vectors are
-empty.
+nothing is selected, or `save_history` doesn't save the initial timestep values, the vectors
+are empty.
 
 A model hasn't received anything when it starts, so that entry has every input in the
 model's attributes as `BeforeFirstTimestep()`, and so has every output distribution.
@@ -253,7 +253,7 @@ model's attributes as `BeforeFirstTimestep()`, and so has every output distribut
 function starting_history(
     model::AbstractTimestepModel, state, previous_output, save_history::SaveHistory
 )
-    if saves_nothing(save_history) || !saves_initial_values(save_history)
+    if saves_nothing(save_history) || !saves_initial_timestep_values(save_history)
         return ModelHistory(Any[], Any[], Any[], Any[], Any[])
     end
     return ModelHistory(
@@ -277,9 +277,9 @@ Put `instantiated_model` back to where a new one starts, and return it.
 The state becomes the output of [`initialize_state`](@ref) with the parameters it has, the
 previous output has every output as [`BeforeFirstTimestep`](@ref) again, and `n_timesteps`
 is 0. The history is a new one which starts from there, as timestep 0 when the
-[`SaveHistory`](@ref) saves the initial values, so a history that was read before the reset,
-as in `history = agent.history`, is kept as it was. The model, the parameters and the
-`SaveHistory` stay the same.
+[`SaveHistory`](@ref) saves the initial timestep values, so a history that was read before
+the reset, as in `history = agent.history`, is kept as it was. The model, the parameters and
+the `SaveHistory` stay the same.
 
 An instantiated model that was created with a state or a previous output of its own doesn't
 return to those. Create a new one for that.

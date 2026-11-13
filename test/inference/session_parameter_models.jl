@@ -92,34 +92,39 @@ end
         @test CognitiveModeling.parameter_names(ParametersModelOfOwn()) === nothing
     end
 
-    @testset "The values of each session are found by its name or its identifier, and become one vector for each parameter in the order of the sessions" begin
-        values_by_session = (; S2=(; scale=2.0, offset=0.1), S1=(; scale=1.0, offset=0.0))
-        @test CognitiveModeling.parameters_by_session(values_by_session, ["S1", "S2"]) ==
-            (; scale=[1.0, 2.0], offset=[0.0, 0.1])
-        #A session from several columns is found by the name and the value of each column
-        @test CognitiveModeling.parameters_by_session(
+    @testset "The parameters of each session are found by its symbol name or its identifier, and become one vector for each parameter in the order of the sessions" begin
+        parameters_by_session = (;
+            S2=(; scale=2.0, offset=0.1), S1=(; scale=1.0, offset=0.0)
+        )
+        @test CognitiveModeling.collect_parameters_in_session_order(
+            parameters_by_session, ["S1", "S2"]
+        ) == (; scale=[1.0, 2.0], offset=[0.0, 0.1])
+        #A session from several columns is found by its symbol name, from the name and the value of each column
+        @test CognitiveModeling.collect_parameters_in_session_order(
             (; id_S1__block_2=(; scale=3.0)), [(; id="S1", block=2)]
         ) == (; scale=[3.0])
-        #A session without values, or with other parameters than the first, is an error
-        @test_throws "FixedParametersBySession has no values for the session S3. It has values for (:S2, :S1)." CognitiveModeling.parameters_by_session(
-            values_by_session, ["S1", "S3"]
+        #A session without parameters, or with other parameters than the first, is an error
+        @test_throws "FixedParametersBySession has no parameters for the session S3. It has parameters for (:S2, :S1)." CognitiveModeling.collect_parameters_in_session_order(
+            parameters_by_session, ["S1", "S3"]
         )
-        @test_throws "FixedParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have values for the same parameters." CognitiveModeling.parameters_by_session(
+        @test_throws "FixedParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have the same parameters." CognitiveModeling.collect_parameters_in_session_order(
             (; S1=(; scale=1.0), S2=(; offset=0.0)), ["S1", "S2"]
         )
-        #The values can be in a dictionary from each session's identifier too, of one column or of several
-        @test CognitiveModeling.parameters_by_session(
+        #The parameters can be in a dictionary from each session's identifier too, of one column or of several
+        @test CognitiveModeling.collect_parameters_in_session_order(
             Dict("S2" => (; scale=2.0), "S1" => (; scale=1.0)), ["S1", "S2"]
         ) == (; scale=[1.0, 2.0])
-        @test CognitiveModeling.parameters_by_session(
+        @test CognitiveModeling.collect_parameters_in_session_order(
             Dict((; id="S1", block=2) => (; scale=3.0)), [(; id="S1", block=2)]
         ) == (; scale=[3.0])
-        @test_throws "FixedParametersBySession has no values for the session \"S3\". It has values for the sessions [\"S1\"]." CognitiveModeling.parameters_by_session(
+        @test_throws "FixedParametersBySession has no parameters for the session \"S3\". It has parameters for the sessions [\"S1\"]." CognitiveModeling.collect_parameters_in_session_order(
             Dict("S1" => (; scale=1.0)), ["S1", "S3"]
         )
-        #Values that are already one vector for each parameter are kept as they are
+        #Parameters that are already one vector for each parameter are kept as they are
         in_order = (; scale=[1.0, 2.0], offset=[0.0, 0.1])
-        @test CognitiveModeling.parameters_by_session(in_order, ["S1", "S2"]) === in_order
+        @test CognitiveModeling.collect_parameters_in_session_order(
+            in_order, ["S1", "S2"]
+        ) === in_order
     end
 
     @testset "A HierarchicalParameter keeps its settings, with the defaults of those that aren't given" begin
@@ -187,7 +192,7 @@ end
         ) == (;
             group_of_each_session=[1, 2, 1, 2],
             n_groups=2,
-            group_names=[:clinical, :control],
+            group_symbol_names=[:clinical, :control],
         )
         #With several columns, a group is a combination of their values
         @test CognitiveModeling.group_sessions(
@@ -195,7 +200,7 @@ end
         ) == (;
             group_of_each_session=[1, 2, 3, 4],
             n_groups=4,
-            group_names=[
+            group_symbol_names=[
                 :diagnosis_clinical__site_1,
                 :diagnosis_control__site_1,
                 :diagnosis_clinical__site_2,
@@ -204,7 +209,9 @@ end
         )
         #Without columns, every session is in one group, also when the sessions have no table
         @test CognitiveModeling.group_sessions(sessions_info, (), :probability) == (;
-            group_of_each_session=[1, 1, 1, 1], n_groups=1, group_names=[:all_sessions]
+            group_of_each_session=[1, 1, 1, 1],
+            n_groups=1,
+            group_symbol_names=[:all_sessions],
         )
         without_table = MultipleSessionsInfo(
             sessions_info.sessions, sessions_info.session_ids
@@ -241,6 +248,20 @@ end
         composite = CompositeSessionParameters(sampled, fixed)
         @test composite.parts === (sampled, fixed)
         @test CognitiveModeling.parameter_names(composite) === (:probability, :scale)
+        #A part given by keyword has a name, and comes after the parts without one
+        named = CompositeSessionParameters(sampled; noise=fixed)
+        @test named.parts === (sampled, fixed)
+        @test CognitiveModeling.part_names(named) === (nothing, :noise)
+        @test CognitiveModeling.part_names(composite) === (nothing, nothing)
+        @test CognitiveModeling.part_names(CompositeSessionParameters(; noise=fixed)) ===
+            (:noise,)
+        @test CognitiveModeling.parameter_names(named) === (:probability, :scale)
+        @test_throws "The part noise of CompositeSessionParameters is of type Float64, but every part must be a session parameter model, a subtype of AbstractSessionParametersModel." CompositeSessionParameters(
+            sampled; noise=2.0
+        )
+        @test_throws "Two parts of CompositeSessionParameters give the parameter probability" CompositeSessionParameters(
+            sampled; noise=FixedSessionParameters((; probability=0.5))
+        )
         #It samples when any part does
         @test CognitiveModeling.estimates_parameters(composite)
         @test !CognitiveModeling.estimates_parameters(
@@ -308,5 +329,11 @@ end
         )
         @test composite.parts[1].parameters_by_session ==
               (; probability=[0.1, 0.2, 0.3, 0.4]) && composite.parts[2] === sampled
+        #The parts keep their names
+        named = CognitiveModeling.prepare_parameters_model(
+            CompositeSessionParameters(sampled; by_session), sessions_info
+        )
+        @test CognitiveModeling.part_names(named) === (nothing, :by_session) &&
+            named.parts[2].parameters_by_session == (; probability=[0.1, 0.2, 0.3, 0.4])
     end
 end

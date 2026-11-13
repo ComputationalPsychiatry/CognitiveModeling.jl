@@ -94,12 +94,12 @@ ran, which `returned(model, chain)` gives for each sample. Timestep 0 has the pr
 observation and action, which are [`BeforeFirstTimestep`](@ref) unless others are given,
 `BeforeFirstTimestep()` for every distribution, and the initial states, which can depend on
 the parameters. Element `t + 1` is then timestep `t`, and a [`SaveHistory`](@ref) with
-`save_initial_values = false` leaves timestep 0 out. The returned actions and observations
-are those the models received, with the imputed values. `timestep_sizes` has the size of
-each timestep, after `BeforeFirstTimestep()` for timestep 0 when it is there, when anything
-is selected, and is empty otherwise. Any latent variable in a session, imputed or from a
-model which samples within a timestep, greatly increases the amount of estimated variables,
-which will generally make fitting the model much slower.
+`save_initial_timestep_values = false` leaves timestep 0 out. The returned actions and
+observations are those the models received, with the imputed values. `timestep_sizes` has
+the size of each timestep, after `BeforeFirstTimestep()` for timestep 0 when it is there,
+when anything is selected, and is empty otherwise. Any latent variable in a session, imputed
+or from a model which samples within a timestep, greatly increases the amount of estimated
+variables, which will generally make fitting the model much slower.
 
 # Examples
 ```julia
@@ -253,9 +253,11 @@ such as `learning_rate.session`, so the learning rate of the third session is
 a group-level distribution is a vector with a value for each group, named after its prior,
 such as `learning_rate.mean.group` and `learning_rate.sd.group`, and the values of the
 sessions before the transformation are `learning_rate.standardized`, or
-`learning_rate.session` for a parameter that is centered. The variables of the sessions are
-under `session[i]`, and those of the downstream model as it names them, or under
-`downstream_model` with the prefixes.
+`learning_rate.session` for a parameter that is centered. A part of a
+[`CompositeSessionParameters`](@ref) that is given with a name has its variables under that
+name, such as `noise.bias.session`. The variables of the sessions are under `session[i]`,
+and those of the downstream model as it names them, or under `downstream_model` with the
+prefixes.
 
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,
 `saved_behavioral_trajectories` and `downstream_values`: the cognitive parameters and the

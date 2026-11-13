@@ -166,7 +166,7 @@ function with_session_info(
         new_args = merge(
             args,
             (;
-                sessions_info=sessions_for_environment_parameters(
+                sessions_info=include_environments_if_estimated(
                     model.defaults.environment_parameters_model, change(args.sessions_info)
                 ),
             ),

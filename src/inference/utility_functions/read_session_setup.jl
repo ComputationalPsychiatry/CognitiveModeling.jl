@@ -85,13 +85,13 @@ function decide_whether_environment_is_included(
 end
 
 """
-    without_environment(session_info)
+    remake_session_without_environment(session_info)
 
 Return the session with `NoEnvironment()` as its environment and everything else the same,
 so that it runs as a session without an environment. Used by fitted sessions whose
 environment doesn't run, since every observation is in the data.
 """
-function without_environment(session_info::SessionInfo)
+function remake_session_without_environment(session_info::SessionInfo)
     return SessionInfo(
         session_info.cognitive_model,
         NoEnvironment(),
@@ -119,19 +119,60 @@ function without_environment(session_info::SessionInfo)
 end
 
 """
-    sessions_for_environment_parameters(environment_parameters_model, sessions_info)
+    remake_session_including_environment(session_info)
+
+Return the session including its environment when it has one, and everything else the
+same. A session that was prepared with `include_environment = false` is an error. Used by
+[`include_environments_if_estimated`](@ref).
+"""
+function remake_session_including_environment(session_info::SessionInfo)
+    if has_environment(session_info) && session_info.include_environment === false
+        throw(
+            ArgumentError(
+                "The environment's parameters are estimated, which every session must include its environment for, but a session was prepared with include_environment = false.",
+            ),
+        )
+    end
+    return SessionInfo(
+        session_info.cognitive_model,
+        session_info.environment,
+        session_info.observation_map,
+        session_info.action_map,
+        session_info.include_environment,
+        has_environment(session_info),
+        session_info.observations,
+        session_info.actions,
+        session_info.environment_observations,
+        session_info.actions_to_condition_on,
+        session_info.observations_to_condition_on,
+        session_info.n_timesteps,
+        session_info.who_starts,
+        session_info.timestep_sizes,
+        session_info.saved_timestep_sizes,
+        session_info.cognitive_save_history,
+        session_info.environment_save_history,
+        session_info.check_stopping_criterion,
+        session_info.first_timestep_to_check_stopping,
+        session_info.previous_observation,
+        session_info.previous_action,
+        session_info.previous_environment_observation,
+    )
+end
+
+"""
+    include_environments_if_estimated(environment_parameters_model, sessions_info)
 
 Return the sessions as a full model runs them with `environment_parameters_model`: as they
 are when it estimates nothing, and otherwise with every session that has an environment
 including it, so that the observations in the data inform the parameters. Used by
 [`prepare_full_model`](@ref).
 """
-function sessions_for_environment_parameters(
+function include_environments_if_estimated(
     environment_parameters_model, sessions_info::MultipleSessionsInfo
 )
     estimates_parameters(environment_parameters_model) || return sessions_info
     return MultipleSessionsInfo(
-        map(including_environment, sessions_info.sessions),
+        map(remake_session_including_environment, sessions_info.sessions),
         sessions_info.session_ids;
         table=sessions_info.table,
         session_rows=sessions_info.session_rows,
@@ -185,50 +226,48 @@ function sessions_save_anything(sessions_info::MultipleSessionsInfo)
 end
 
 """
-    session_name(session_id)
+    session_id_to_symbol(session_id)
 
-Return the name of a session, as a `Symbol`, from its identifier: the value of a single
-session column, as in `S1`, and the name and the value of each of several columns, joined
-by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The chains of a
-fit name the entries of a session after it, such as `S1.learning_rate`, and
+Return the symbol name of a session, a `Symbol` made from its identifier: the value of a
+single session column, as in `S1`, and the name and the value of each of several columns,
+joined by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The
+chains of a fit name the entries of a session after it, such as `S1.learning_rate`, and
 [`FixedParametersBySession`](@ref) can find the values of a session by it. After
-`using CognitiveModeling: session_name`, the learning rate of a session is
-`chain[@varname(\$(session_name(session_id)).learning_rate)]`.
+`using CognitiveModeling: session_id_to_symbol`, the learning rate of a session is
+`chain[@varname(\$(session_id_to_symbol(session_id)).learning_rate)]`.
 
 # Examples
 ```jldoctest
-julia> CognitiveModeling.session_name("S1")
+julia> CognitiveModeling.session_id_to_symbol("S1")
 :S1
 
-julia> CognitiveModeling.session_name((; id = "S1", block = 2))
+julia> CognitiveModeling.session_id_to_symbol((; id = "S1", block = 2))
 :id_S1__block_2
 ```
 """
-function session_name(session_id)
+function session_id_to_symbol(session_id)
 
     #Asserted, since the compiler can't infer that Symbol gives a Symbol for an identifier of any type
     return Symbol(session_id)::Symbol
 end
-function session_name(session_id::NamedTuple)
+function session_id_to_symbol(session_id::NamedTuple)
     return Symbol(
         join((string(name, "_", value) for (name, value) in pairs(session_id)), "__")
     )
 end
 
 """
-    check_unique_session_names(session_ids)
+    check_unique_session_symbol_names(session_ids)
 
-Throw an informative error if two sessions have the same name, as [`session_name`](@ref)
-gives it, since the chains of a fit and [`FixedParametersBySession`](@ref) find a session by
-its name. Two sessions have the same name when they have the same identifier, or when their
-identifiers give the same text, such as `1` and `"1"`. Used by
-[`MultipleSessionsInfo`](@ref).
+Throw an informative error if the identifiers of two sessions give the same symbol name, as
+[`session_id_to_symbol`](@ref) gives it: when they are the same identifier, or give the same
+text, such as `1` and `"1"`. Used by [`MultipleSessionsInfo`](@ref).
 """
-function check_unique_session_names(session_ids::AbstractVector)
-    names = map(session_name, session_ids)
-    allunique(names) && return nothing
-    for (i, name) in enumerate(names)
-        first_i = findfirst(==(name), names)
+function check_unique_session_symbol_names(session_ids::AbstractVector)
+    symbol_names = map(session_id_to_symbol, session_ids)
+    allunique(symbol_names) && return nothing
+    for (i, symbol_name) in enumerate(symbol_names)
+        first_i = findfirst(==(symbol_name), symbol_names)
         first_i == i && continue
         first_id = session_ids[first_i]
         session_id = session_ids[i]
@@ -241,52 +280,11 @@ function check_unique_session_names(session_ids::AbstractVector)
         end
         throw(
             ArgumentError(
-                "The session identifiers $(repr(first_id)) and $(repr(session_id)) both give the session name $name, which the chains of a fit and FixedParametersBySession find a session by. Every session must have a name of its own.",
+                "The session identifiers $(repr(first_id)) and $(repr(session_id)) both give the symbol name $symbol_name, which the chains of a fit and FixedParametersBySession find a session by. The identifier of every session must give a symbol name of its own.",
             ),
         )
     end
     return nothing
-end
-
-"""
-    including_environment(session_info)
-
-Return the session including its environment when it has one, and everything else the
-same. A session that was prepared with `include_environment = false` is an error. Used by
-[`sessions_for_environment_parameters`](@ref).
-"""
-function including_environment(session_info::SessionInfo)
-    if has_environment(session_info) && session_info.include_environment === false
-        throw(
-            ArgumentError(
-                "The environment's parameters are estimated, which every session must include its environment for, but a session was prepared with include_environment = false.",
-            ),
-        )
-    end
-    return SessionInfo(
-        session_info.cognitive_model,
-        session_info.environment,
-        session_info.observation_map,
-        session_info.action_map,
-        session_info.include_environment,
-        has_environment(session_info),
-        session_info.observations,
-        session_info.actions,
-        session_info.environment_observations,
-        session_info.actions_to_condition_on,
-        session_info.observations_to_condition_on,
-        session_info.n_timesteps,
-        session_info.who_starts,
-        session_info.timestep_sizes,
-        session_info.saved_timestep_sizes,
-        session_info.cognitive_save_history,
-        session_info.environment_save_history,
-        session_info.check_stopping_criterion,
-        session_info.first_timestep_to_check_stopping,
-        session_info.previous_observation,
-        session_info.previous_action,
-        session_info.previous_environment_observation,
-    )
 end
 
 """

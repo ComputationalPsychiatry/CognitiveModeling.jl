@@ -484,7 +484,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     if !session_info.includes_environment
         saved_trajectories ~ to_submodel(
             turing_behavioral_session(
-                without_environment(session_info), cognitive_parameters
+                remake_session_without_environment(session_info), cognitive_parameters
             ),
             false,
         )
@@ -599,8 +599,8 @@ Turing.@model function turing_run_timesteps(
     end
 
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
-    initial_saved = initial_session_values(
-        Val(saves_initial_values(session_info.cognitive_save_history)),
+    initial_saved = select_initial_timestep_values_to_save(
+        Val(saves_initial_timestep_values(session_info.cognitive_save_history)),
         session_info,
         previous,
     )
@@ -618,7 +618,9 @@ Turing.@model function turing_run_timesteps(
 
     #Initialize storage for what is saved, arranged as it is returned, which starts with timestep 0 when it is kept
     storage = initialize_all_storage(
-        initial_saved, saved_session_values(session_info, timestep_values), n_timesteps
+        initial_saved,
+        select_timestep_values_to_save(session_info, timestep_values),
+        n_timesteps,
     )
     offset = initial_saved === nothing ? 0 : 1
 
@@ -664,8 +666,10 @@ Turing.@model function turing_run_timesteps(
             false,
         )
         timestep_values = next_timestep_values
-        storage = store_all_values!(
-            storage, saved_session_values(session_info, timestep_values), t + offset
+        storage = store_timestep_values!(
+            storage,
+            select_timestep_values_to_save(session_info, timestep_values),
+            t + offset,
         )
         distributions = store_distributions_for_conditioning(
             session_info, distributions, timestep_values
@@ -716,16 +720,17 @@ scorable_distributions(::Vector{Union{}}) = Normal{Float64}[]
 Keep the distributions that the values to condition on of a session are scored against: the
 cognitive model's for the actions, and the environment's for the observations when the
 environment runs, in a `NamedTuple` with `actions` and `observations`, each a `NamedTuple`
-with a vector for each name to condition on, as [`initialize_distributions`](@ref) and
-[`store_distributions`](@ref) make them from the values of a timestep. A
-[`Deterministic`](@ref) is kept as the `Dirac` which scores it, see
+with a vector for each name to condition on, as
+[`initialize_output_distributions_for_conditioning`](@ref) and
+[`store_output_distributions_for_conditioning`](@ref) make them from the values of a
+timestep. A [`Deterministic`](@ref) is kept as the `Dirac` which scores it, see
 [`scorable_distribution`](@ref). Used by [`turing_run_timesteps`](@ref).
 """
 function initialize_distributions_for_conditioning(
     session_info::SessionInfo, timestep_values
 )
     return (;
-        actions=initialize_distributions(
+        actions=initialize_output_distributions_for_conditioning(
             scorable_distribution_of_each(
                 select_names(
                     timestep_values.action_distribution,
@@ -733,7 +738,7 @@ function initialize_distributions_for_conditioning(
                 ),
             ),
         ),
-        observations=initialize_distributions(
+        observations=initialize_output_distributions_for_conditioning(
             scorable_distribution_of_each(
                 select_names(
                     observation_distribution_of(session_info, timestep_values),
@@ -748,7 +753,7 @@ function store_distributions_for_conditioning(
     session_info::SessionInfo, distributions, timestep_values
 )
     return (;
-        actions=store_distributions(
+        actions=store_output_distributions_for_conditioning(
             distributions.actions,
             scorable_distribution_of_each(
                 select_names(
@@ -758,7 +763,7 @@ function store_distributions_for_conditioning(
             ),
             timestep_values.actions_to_condition_on_at_timestep,
         ),
-        observations=store_distributions(
+        observations=store_output_distributions_for_conditioning(
             distributions.observations,
             scorable_distribution_of_each(
                 select_names(

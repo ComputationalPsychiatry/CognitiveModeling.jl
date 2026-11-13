@@ -62,12 +62,12 @@ Public = false
 Pages = ["inference/utility_functions/read_session_setup.jl"]
 ```
 
-### Scoring the values to condition on
+### Values to condition on
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/score_values_to_condition_on.jl"]
+Pages = ["inference/utility_functions/to_condition_on.jl"]
 ```
 
 ### Saving what a fitted session returns

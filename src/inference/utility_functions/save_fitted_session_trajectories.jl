@@ -1,7 +1,7 @@
 ## Saving what a fitted session returns ##
 
 """
-    saved_session_values(session_info, timestep_values)
+    select_timestep_values_to_save(session_info, timestep_values)
 
 Return what a session saves of the values of one timestep, or of where it starts, as the
 save histories of `session_info` select it, arranged as the session returns it: the
@@ -12,26 +12,26 @@ model's `state`, `observation`, `action` and `action_distribution`, and under `e
 the environment's `state`, `observation`, `action` and `observation_distribution`, each in
 its own names. Used by fitted sessions, on every timestep.
 """
-function saved_session_values(
+function select_timestep_values_to_save(
     session_info::SessionInfo{<:Any,NoEnvironment}, timestep_values
 )
-    return saved_cognitive_values(
+    return select_cognitive_timestep_values_to_save(
         session_info.cognitive_model, timestep_values, session_info.cognitive_save_history
     )
 end
 
-function saved_session_values(
+function select_timestep_values_to_save(
     session_info::SessionInfo{<:Any,<:AbstractTimestepModel}, timestep_values
 )
     return merge(
-        saved_cognitive_values(
+        select_cognitive_timestep_values_to_save(
             session_info.cognitive_model,
             timestep_values,
             session_info.cognitive_save_history,
         ),
         build_named_entry(
             Val(:environment),
-            saved_environment_values(
+            select_environment_timestep_values_to_save(
                 session_info.environment,
                 timestep_values.environment,
                 session_info.environment_save_history,
@@ -41,17 +41,20 @@ function saved_session_values(
 end
 
 """
-    saved_cognitive_values(cognitive_model, timestep_values, save_history)
-    saved_environment_values(environment, environment_timestep_values, save_history)
+    select_cognitive_timestep_values_to_save(cognitive_model, timestep_values, save_history)
+    select_environment_timestep_values_to_save(environment, environment_timestep_values,
+                                               save_history)
 
 Return what `save_history` selects of one model's part of the values of a timestep: the
 `states`, `observations`, `actions` and `action_distributions` of the cognitive model, or
 the `states`, `observations`, `actions` and `observation_distributions` of the environment,
 from the values of the environment alone. The observation and the action can have one of
 two types, so they go in through [`build_named_entry`](@ref). Used by
-[`saved_session_values`](@ref).
+[`select_timestep_values_to_save`](@ref).
 """
-function saved_cognitive_values(cognitive_model, timestep_values, save_history)
+function select_cognitive_timestep_values_to_save(
+    cognitive_model, timestep_values, save_history
+)
     return merge(
         (;
             states=save_state(
@@ -75,7 +78,9 @@ function saved_cognitive_values(cognitive_model, timestep_values, save_history)
     )
 end
 
-function saved_environment_values(environment, environment_timestep_values, save_history)
+function select_environment_timestep_values_to_save(
+    environment, environment_timestep_values, save_history
+)
     return merge(
         (;
             states=save_state(
@@ -104,21 +109,22 @@ function saved_environment_values(environment, environment_timestep_values, save
 end
 
 """
-    initial_session_values(save_initial_values::Val, session_info, previous)
+    select_initial_timestep_values_to_save(save_initial_timestep_values::Val, session_info,
+                                           previous)
 
 Return what a session saves from before the first timestep, as timestep 0, when
-`save_initial_values` is `Val(true)`, and `nothing` otherwise. `previous` has the values
-that the first timestep starts from, arranged as those of a timestep. The distributions of
-timestep 0 are [`BeforeFirstTimestep`](@ref) for every output of each model, since none was
-given yet. Used by fitted sessions, before their first timestep runs.
+`save_initial_timestep_values` is `Val(true)`, and `nothing` otherwise. `previous` has the
+values that the first timestep starts from, arranged as those of a timestep. The
+distributions of timestep 0 are [`BeforeFirstTimestep`](@ref) for every output of each
+model, since none was given yet. Used by fitted sessions, before their first timestep runs.
 """
-function initial_session_values(
+function select_initial_timestep_values_to_save(
     ::Val{true}, session_info::SessionInfo{<:Any,NoEnvironment}, previous
 )
     cognitive_model = session_info.cognitive_model
 
     #No action distribution was given before the first timestep
-    return saved_session_values(
+    return select_timestep_values_to_save(
         session_info,
         merge(
             previous, (; action_distribution=output_before_first_timestep(cognitive_model))
@@ -126,7 +132,7 @@ function initial_session_values(
     )
 end
 
-function initial_session_values(
+function select_initial_timestep_values_to_save(
     ::Val{true}, session_info::SessionInfo{<:Any,<:AbstractTimestepModel}, previous
 )
     cognitive_model = session_info.cognitive_model
@@ -140,7 +146,7 @@ function initial_session_values(
     )
 
     #Nor an action distribution
-    return saved_session_values(
+    return select_timestep_values_to_save(
         session_info,
         merge(
             previous,
@@ -151,7 +157,11 @@ function initial_session_values(
         ),
     )
 end
-initial_session_values(::Val{false}, session_info::SessionInfo, previous) = nothing
+function select_initial_timestep_values_to_save(
+    ::Val{false}, session_info::SessionInfo, previous
+)
+    return nothing
+end
 
 """
     with_empty_environment_entry(saved_trajectories)

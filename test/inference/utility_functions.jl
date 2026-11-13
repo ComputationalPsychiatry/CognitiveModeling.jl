@@ -106,14 +106,7 @@
         ).choice isa Vector{Union{UnimputedMissingValue,Bool}}
     end
 
-    @testset "The values which stand for a missing one are given in a tuple or a vector" begin
-        @test CognitiveModeling.as_missing_values((missing, -1)) === (missing, -1)
-        @test CognitiveModeling.as_missing_values(()) === ()
-        @test isequal(CognitiveModeling.as_missing_values([missing, -1]), (missing, -1))
-        @test_throws "The values in the data which stand for a missing value must be given in a tuple or a vector, such as (missing,) or (missing, -1), but they are missing." CognitiveModeling.as_missing_values(
-            missing
-        )
-        #A value is missing when it is the marker itself, or equal to one of the values
+    @testset "A value is missing when it is the marker itself, or equal to one of the values that stand for a missing one" begin
         @test CognitiveModeling.is_missing_data_value(MissingValue(), ()) &&
             CognitiveModeling.is_missing_data_value(-1.0, (missing, -1)) &&
             !CognitiveModeling.is_missing_data_value(1.0, (missing, -1))
@@ -374,7 +367,7 @@ function CognitiveModeling.attribute_names(::ScoringEnvironment)
     return ModelAttributes(; parameters=(), states=:level, inputs=:choice, outputs=:reward)
 end
 
-@testset "Scoring the values to condition on" begin
+@testset "Values to condition on" begin
     distributions = (; choice=NormalByHand(0.0, 1.0), bet=NoValue())
 
     @testset "An output is conditioned on at a timestep when the data has a value, and such a value where the model gave nothing is an error" begin
@@ -418,7 +411,9 @@ end
             ),
         )
         #What is saved is arranged as the session returns it, without an entry for an environment
-        saved = CognitiveModeling.saved_session_values(session_info, timestep_values)
+        saved = CognitiveModeling.select_timestep_values_to_save(
+            session_info, timestep_values
+        )
         @test saved === (;
             states=(; expected_reward=0.5),
             observations=(;),
@@ -435,12 +430,12 @@ end
         saving_everything = SessionInfo(
             session_info; cognitive_save_history=SaveHistory(SaveEverything())
         )
-        initial = CognitiveModeling.initial_session_values(
+        initial = CognitiveModeling.select_initial_timestep_values_to_save(
             Val(true), saving_everything, previous
         )
         @test initial.action_distributions === (; choice=BeforeFirstTimestep()) &&
             initial.actions === (; choice=BeforeFirstTimestep())
-        @test CognitiveModeling.initial_session_values(
+        @test CognitiveModeling.select_initial_timestep_values_to_save(
             Val(false), saving_everything, previous
         ) === nothing
         #The storage of a simulation takes the arrangement without an environment too: it starts with timestep 0 when it is kept, and later timesteps go in by index
@@ -448,7 +443,7 @@ end
         @test keys(storage) == (:states, :observations, :actions, :action_distributions)
         @test length(storage.action_distributions) == 3 &&
             storage.action_distributions[1] === (; choice=BeforeFirstTimestep())
-        storage = CognitiveModeling.store_all_values!(storage, saved, 3)
+        storage = CognitiveModeling.store_timestep_values!(storage, saved, 3)
         @test storage.action_distributions[3] === (; choice=BernoulliByHand(0.7)) &&
             storage.states[3] === (; expected_reward=0.5)
         @test length(CognitiveModeling.initialize_all_storage(nothing, saved, 2).states) ==
@@ -482,7 +477,7 @@ end
                 ),
             ),
         )
-        saved_both = CognitiveModeling.saved_session_values(
+        saved_both = CognitiveModeling.select_timestep_values_to_save(
             with_environment, values_with_environment
         )
         @test saved_both === (;
@@ -497,7 +492,7 @@ end
                 observation_distributions=(; reward=NormalByHand(0.0, 1.0)),
             ),
         )
-        initial_both = CognitiveModeling.initial_session_values(
+        initial_both = CognitiveModeling.select_initial_timestep_values_to_save(
             Val(true),
             with_environment,
             merge(
@@ -515,7 +510,7 @@ end
               (; reward=BeforeFirstTimestep()) &&
             initial_both.environment.states === (; level=0.0)
         storage_both = CognitiveModeling.initialize_all_storage(initial_both, saved_both, 2)
-        storage_both = CognitiveModeling.store_all_values!(storage_both, saved_both, 3)
+        storage_both = CognitiveModeling.store_timestep_values!(storage_both, saved_both, 3)
         returned_both = CognitiveModeling.saved_trajectories(storage_both, [1, 1, 1])
         @test keys(returned_both) == (
             :states,
@@ -546,18 +541,18 @@ end
     end
 
     @testset "The vectors of distributions are typed by the first timestep, and widened when a later one differs" begin
-        initial = CognitiveModeling.initialize_distributions((;
+        initial = CognitiveModeling.initialize_output_distributions_for_conditioning((;
             choice=NormalByHand(0.0, 1.0), bet=NoValue()
         ))
         @test initial.choice isa Vector{NormalByHand{Float64}} && isempty(initial.choice)
         @test initial.bet isa Vector{Union{}}
-        stored = CognitiveModeling.store_distributions(
+        stored = CognitiveModeling.store_output_distributions_for_conditioning(
             initial,
             (; choice=NormalByHand(0.0, 1.0), bet=NoValue()),
             (; choice=true, bet=false),
         )
         @test stored.choice == [NormalByHand(0.0, 1.0)] && isempty(stored.bet)
-        stored = CognitiveModeling.store_distributions(
+        stored = CognitiveModeling.store_output_distributions_for_conditioning(
             stored,
             (; choice=NormalByHand(1.0, 1.0), bet=NormalByHand(2.0, 0.5)),
             (; choice=false, bet=true),
@@ -566,7 +561,7 @@ end
             stored.bet == [NormalByHand(2.0, 0.5)] &&
             stored.bet isa Vector{NormalByHand{Float64}}
         #A distribution of another type widens the vector
-        stored = CognitiveModeling.store_distributions(
+        stored = CognitiveModeling.store_output_distributions_for_conditioning(
             stored,
             (; choice=NormalByHand(1.0f0, 1.0f0), bet=NormalByHand(2.0, 0.5)),
             (; choice=true, bet=false),

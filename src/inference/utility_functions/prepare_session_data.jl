@@ -106,23 +106,6 @@ function column_can_hold(column::AbstractVector, value)
 end
 
 """
-    as_missing_values(missing_values)
-
-Return `missing_values`, the `missing_observation_values` or the `missing_action_values` of
-a [`SessionInfo`](@ref), as a tuple: a tuple as it is, and a vector as a tuple. Anything
-else is an error. Used by [`SessionInfo`](@ref) and [`MultipleSessionsInfo`](@ref).
-"""
-as_missing_values(missing_values::Tuple) = missing_values
-as_missing_values(missing_values::AbstractVector) = Tuple(missing_values)
-function as_missing_values(missing_values)
-    return throw(
-        ArgumentError(
-            "The values in the data which stand for a missing value must be given in a tuple or a vector, such as (missing,) or (missing, -1), but they are $(repr(missing_values)).",
-        ),
-    )
-end
-
-"""
     missing_value_marker(impute)
 
 Return the marker which the missing values in the data of a session become:
@@ -196,7 +179,7 @@ mark_missing_values(x, missing_values::Tuple, impute::Bool) = x
 
 Return `(; name = value)`. A `NamedTuple` which holds a value that can have two types is
 built with `merge` of these, as [`select_row`](@ref) does. Used by [`select_row`](@ref), by
-[`saved_session_values`](@ref) and by the timesteps of fitted sessions.
+[`select_timestep_values_to_save`](@ref) and by the timesteps of fitted sessions.
 """
 build_named_entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
 

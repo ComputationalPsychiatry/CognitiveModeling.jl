@@ -8,8 +8,9 @@
         @test save_history.inputs === SaveEverything()
         @test save_history.outputs === (:choice,)
         @test save_history.states === (:expected_reward, :surprise)
-        @test propertynames(save_history) ==
-            (:states, :inputs, :outputs, :output_distributions, :save_initial_values)
+        @test propertynames(save_history) == (
+            :states, :inputs, :outputs, :output_distributions, :save_initial_timestep_values
+        )
         @test save_history.output_distributions === ()
         @test_throws FieldError save_history.parameters
         #The kinds are named as the model's own, not by their role in a simulation
@@ -17,22 +18,24 @@
         @test_throws FieldError save_history.actions
     end
 
-    @testset "It saves the initial values by default, and can leave them out" begin
-        @test SaveHistory().save_initial_values === true
-        @test SaveHistory(SaveEverything()).save_initial_values === true
-        @test SaveHistory(; states=:expected_reward, save_initial_values=false).save_initial_values ===
+    @testset "It saves the initial timestep values by default, and can leave them out" begin
+        @test SaveHistory().save_initial_timestep_values === true
+        @test SaveHistory(SaveEverything()).save_initial_timestep_values === true
+        @test SaveHistory(; states=:expected_reward, save_initial_timestep_values=false).save_initial_timestep_values ===
             false
-        @test SaveHistory(SaveEverything(); save_initial_values=false).states ===
+        @test SaveHistory(SaveEverything(); save_initial_timestep_values=false).states ===
             SaveEverything()
-        @test CognitiveModeling.saves_initial_values(SaveHistory()) &&
-            !CognitiveModeling.saves_initial_values(
-            SaveHistory(; save_initial_values=false)
+        @test CognitiveModeling.saves_initial_timestep_values(SaveHistory()) &&
+            !CognitiveModeling.saves_initial_timestep_values(
+            SaveHistory(; save_initial_timestep_values=false)
         )
-        @test_throws TypeError SaveHistory(; save_initial_values=1)
+        @test_throws TypeError SaveHistory(; save_initial_timestep_values=1)
         @test SaveHistory(SaveEverything()).output_distributions === SaveEverything()
         @test SaveHistory(; output_distributions=:choice).output_distributions ===
             (:choice,)
-        @test CognitiveModeling.saves_nothing(SaveHistory(; save_initial_values=false))
+        @test CognitiveModeling.saves_nothing(
+            SaveHistory(; save_initial_timestep_values=false)
+        )
     end
 
     @testset "A single name or a vector of names is put in a tuple" begin
@@ -63,9 +66,9 @@
     end
 
     @testset "It only takes names" begin
-        @test_throws MethodError SaveHistory(; states="expected_reward")
-        @test_throws MethodError SaveHistory(; states=(:expected_reward, 1))
-        @test_throws MethodError SaveHistory(; states=true)
+        @test_throws TypeError SaveHistory(; states="expected_reward")
+        @test_throws TypeError SaveHistory(; states=(:expected_reward, 1))
+        @test_throws TypeError SaveHistory(; states=true)
     end
 
     @testset "The selections are in the type, so constructing it from literals is inferred, and holding it costs nothing" begin
@@ -74,7 +77,7 @@
         @test Base.return_types(from_literals, Tuple{})[1] ===
             SaveHistory{(:expected_reward, :surprise),(),(:choice,),(),true}
         without_initial_values() =
-            SaveHistory(; states=:expected_reward, save_initial_values=false)
+            SaveHistory(; states=:expected_reward, save_initial_timestep_values=false)
         @test Base.return_types(without_initial_values, Tuple{})[1] ===
             SaveHistory{(:expected_reward,),(),(),(),false}
         @test @inferred(SaveHistory(SaveEverything())) isa SaveHistory
@@ -93,16 +96,16 @@ States: expected_reward, surprise
 Inputs: none
 Outputs: choice
 Output distributions: none
-Initial values: saved"""
+Initial timestep values: saved"""
         @test repr(
-            "text/plain", SaveHistory(SaveEverything(); save_initial_values=false)
+            "text/plain", SaveHistory(SaveEverything(); save_initial_timestep_values=false)
         ) == """
 SaveHistory
 States: everything
 Inputs: everything
 Outputs: everything
 Output distributions: everything
-Initial values: not saved"""
+Initial timestep values: not saved"""
     end
 
     @testset "select_names keeps what is selected" begin
@@ -134,15 +137,17 @@ Initial values: not saved"""
     end
 
     @testset "The sizes of the timesteps are kept with a history, one for each timestep, when anything is saved" begin
-        saves_states = SaveHistory(; states=:expected_reward, save_initial_values=false)
+        saves_states = SaveHistory(;
+            states=:expected_reward, save_initial_timestep_values=false
+        )
         @test CognitiveModeling.saved_timestep_sizes(1, 3, saves_states) == [1, 1, 1]
         @test CognitiveModeling.saved_timestep_sizes(
-            0.5, 2, SaveHistory(SaveEverything(); save_initial_values=false)
+            0.5, 2, SaveHistory(SaveEverything(); save_initial_timestep_values=false)
         ) == [0.5, 0.5]
         #A vector of sizes is kept as it is, in a vector of its own
         sizes = [0.5, 2.0, 0.25]
         @test CognitiveModeling.saved_timestep_sizes(sizes, 3, saves_states) == sizes
-        #With the initial values, the sizes start with BeforeFirstTimestep for timestep 0
+        #With the initial timestep values, the sizes start with BeforeFirstTimestep for timestep 0
         @test isequal(
             CognitiveModeling.saved_timestep_sizes(
                 sizes, 3, SaveHistory(; states=:expected_reward)
