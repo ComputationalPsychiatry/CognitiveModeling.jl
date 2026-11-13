@@ -274,18 +274,6 @@ end
         )
         @test entry_names(session_trajectories_chain(reshape([empty_environment], 1, 1))) ==
             ["expected_value"]
-        #A state of the environment that isn't a NamedTuple is one entry
-        plain_states = session_result(
-            1;
-            environment=(;
-                states=[0.0, 0.5],
-                observations=fill((;), 2),
-                actions=fill((;), 2),
-                observation_distributions=fill((;), 2),
-            ),
-        )
-        @test entry_names(session_trajectories_chain(reshape([plain_states], 1, 1))) ==
-            ["environment.states"]
     end
 
     @testset "The results of several sessions have the same names, and those of a single session no identifier" begin
@@ -307,21 +295,21 @@ end
         @test entry(chain, "expected_value")[1] == [0.0, 0.0, 0.5]
     end
 
-    @testset "Identifiers from several session columns are named by each column's name and value, and a state that isn't a NamedTuple is one entry" begin
+    @testset "Identifiers from several session columns are named by each column's name and value" begin
         sessions = [
-            session_result(1; states=[0.0, 0.5]),
-            session_result(1; states=[0.0, 0.0]),
-            session_result(1; states=[0.0, 0.2]),
+            saves_expected_values([0.0, 0.5]),
+            saves_expected_values([0.0, 0.0]),
+            saves_expected_values([0.0, 0.2]),
         ]
         chain = session_trajectories_chain(
             reshape([sessions], 1, 1), chain_sessions((:participant, :block))
         )
         @test entry_names(chain) == [
-            "participant_P1__block_1.states",
-            "participant_P1__block_2.states",
-            "participant_P2__block_1.states",
+            "participant_P1__block_1.expected_value",
+            "participant_P1__block_2.expected_value",
+            "participant_P2__block_1.expected_value",
         ]
-        @test entry(chain, "participant_P1__block_1.states")[1] == [0.0, 0.5]
+        @test entry(chain, "participant_P1__block_1.expected_value")[1] == [0.0, 0.5]
     end
 
     @testset "The samples are numbered as given" begin

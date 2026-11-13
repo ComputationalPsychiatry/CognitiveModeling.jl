@@ -344,10 +344,12 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   [`Deterministic`](@ref) for an output that isn't random, and the sampled outputs keep the
   names. An output that isn't given on this timestep is [`NoValue`](@ref), and a model
   without outputs gives an empty `NamedTuple`, `(;)`.
-- `new_state=(;)`: the state of the model after this timestep, which is the
-  `previous_state` of the next one. The outputs are sampled after it is made, so it can't
-  depend on them: the model receives them as `context.previous_output` on the next
-  timestep.
+- `new_state::NamedTuple=(;)`: the state of the model after this timestep, which is the
+  `previous_state` of the next one, with one entry for each state in the model's
+  attributes, also when the state is a single object, as in `(; rl_env)`. A model without a
+  state gives an empty `NamedTuple`, `(;)`. The outputs are sampled after the state is made,
+  so it can't depend on them: the model receives them as `context.previous_output` on the
+  next timestep.
 
 # Examples
 ```jldoctest
@@ -367,8 +369,8 @@ struct ModelOutput{Toutput,Tstate}
     output_distribution::Toutput
     new_state::Tstate
 
-    #Only takes named output distributions, so that the model names every output
-    function ModelOutput(output_distribution::NamedTuple, new_state=(;))
+    #Only takes named output distributions and a named state, so that the model names every output and state
+    function ModelOutput(output_distribution::NamedTuple, new_state::NamedTuple=(;))
         return new{typeof(output_distribution),typeof(new_state)}(
             output_distribution, new_state
         )

@@ -156,11 +156,9 @@ Add an entry under `prefix` to `entries` for everything one model of a session s
 `saved_trajectories_of` gives its saved trajectories from the result of one sample, with
 `states`, `observations`, `actions` and `distribution_kind`, which is `action_distributions`
 for a cognitive model and `observation_distributions` for an environment model. There is one
-entry for each observation and action that was saved, named after it alone, since a model
-uses a name for one attribute only, one for each distribution, under its kind, since a
-distribution is named like its value, and one for each state, or one for all of them when a
-saved state isn't a `NamedTuple`. Each entry holds, for every sample, a vector over the
-timesteps. Used by [`add_session_entries!`](@ref).
+entry for each observation and action that was saved, named after it alone, one for each
+distribution, under its kind, and one for each state. Each entry holds, for every sample, a
+vector over the timesteps. Used by [`add_session_entries!`](@ref).
 """
 function add_model_entries!(
     entries,
@@ -203,28 +201,19 @@ function add_model_entries!(
         )
     end
 
-    #Each state, or all of them in one entry when a saved state isn't a NamedTuple
-    states = first_saved.states
-    if !isempty(states) && !(first(states) isa NamedTuple)
+    #Each state that was saved, named after it alone
+    for name in saved_names(first_saved.states)
         add_entry!(
             entries,
-            entry_name(prefix..., :states),
-            map(result -> saved_trajectories_of(result).states, results),
+            entry_name(prefix..., name),
+            map(
+                result -> [
+                    getproperty(state, name) for
+                    state in saved_trajectories_of(result).states
+                ],
+                results,
+            ),
         )
-    else
-        for name in saved_names(states)
-            add_entry!(
-                entries,
-                entry_name(prefix..., name),
-                map(
-                    result -> [
-                        getproperty(state, name) for
-                        state in saved_trajectories_of(result).states
-                    ],
-                    results,
-                ),
-            )
-        end
     end
     return entries
 end

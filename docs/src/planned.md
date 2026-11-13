@@ -27,6 +27,12 @@ This page lists what is planned and not written yet. The list will grow.
 - Cognitive models in continuous time, probably with DifferentialEquations.jl, whose states
   change between the timesteps as well as on them.
 
+## Defining models
+
+- A macro that defines a cognitive model or an environment in one command, and writes the
+  methods of the functions to extend where it can deduce them, such as `attribute_names`
+  from the names the model uses.
+
 ## Fitting
 
 - Dyadic interaction, with another agent as the environment of the agent that is fitted.
@@ -37,9 +43,9 @@ This page lists what is planned and not written yet. The list will grow.
   `session[i]`, if a way is found that doesn't compile the session once per identifier.
 - A convenient way to fit a single session, with the full model or a variant of it.
 - Choosing a sampler for each parameter from whether it is discrete or continuous.
-- Mixture models and model selection within the fitted model, in the style of Michael D. Lee:
-  a latent variable for each session, or each group, chooses which of several cognitive
-  models generated its behavior, and its posterior compares the models.
+- Mixture models and model selection within the fitted model, in the style of
+  Michael D. Lee: a latent variable for each session, or each group, chooses which of
+  several cognitive models generated its behavior, and its posterior compares the models.
 - Several sets of experimental data in one hierarchical model, such as different experiments
   or tasks done by the same participants, which share the parameters they have in common.
 

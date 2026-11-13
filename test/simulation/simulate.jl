@@ -2077,9 +2077,10 @@ end
         #The order of the names doesn't matter
         @test InstantiatedModel(HasDefaults(), (; initial_value=0.5, learning_rate=0.1)).parameters.learning_rate ==
             0.1
-        #A state that isn't a NamedTuple isn't checked
-        @test InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoValue())).state ==
-            [0.5]
+        #A state must be a NamedTuple, also when it is a single object
+        @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type HasDefaults, (:expected_reward,), also when it is a single object." InstantiatedModel(
+            HasDefaults(), (;), [0.5], (; choice=NoValue())
+        )
         #A model without names can't be simulated or be instantiated
         @test_throws "There is no attribute_names method for a cognitive model of type WithoutNames. Each model must define CognitiveModeling.attribute_names(model::WithoutNames), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs." InstantiatedModel(
             WithoutNames(), (;)
@@ -2125,9 +2126,10 @@ end
         @test_throws "must be a NamedTuple with the outputs in the attributes of" InstantiatedModel(
             RewardsWithDefaults(), (;), (; last_choice=NoValue()), (; cue=1)
         )
-        #A state that isn't a NamedTuple isn't checked
-        @test InstantiatedModel(RewardsWithDefaults(), (;), [0.5], (; reward=NoValue())).state ==
-            [0.5]
+        #A state must be a NamedTuple, also when it is a single object
+        @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of an environment model of type RewardsWithDefaults, (:last_choice,), also when it is a single object." InstantiatedModel(
+            RewardsWithDefaults(), (;), [0.5], (; reward=NoValue())
+        )
         #An environment model without names can't be simulated or be instantiated
         @test_throws "There is no attribute_names method for an environment model of type EnvironmentWithoutNames. Each model must define CognitiveModeling.attribute_names(model::EnvironmentWithoutNames)" InstantiatedModel(
             EnvironmentWithoutNames(), (;)
@@ -2185,18 +2187,19 @@ end
         @test_throws "must be a NamedTuple with the outputs" run_with(
             LearnsRewards(), RewardsWithProbability(); previous_observation=NoValue()
         )
-        #The order of the names doesn't matter, and a state that isn't a NamedTuple isn't checked
+        #The order of the names doesn't matter
         @test run_with(
             HasDefaults(),
             RewardsWithProbability();
             cognitive_parameters=(; initial_value=0.5, learning_rate=0.1),
         ) isa NamedTuple
-        @test run_with(
+        #A state must be a NamedTuple, also when it is a single object
+        @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type NeedsGivenState, (:value,), also when it is a single object." run_with(
             NeedsGivenState(),
             RewardsWithProbability();
             cognitive_parameters=(;),
             previous_cognitive_state=[1.0],
-        ) isa NamedTuple
+        )
     end
 
     @testset "The checks of the names are decided at compile time, so they cost nothing" begin
@@ -3386,14 +3389,6 @@ end
         Timesteps simulated: 0
         Parameters: none
         State: none"""
-        #A state that isn't a NamedTuple is shown as it is
-        @test occursin(
-            "\nState: [0.5]",
-            repr(
-                "text/plain",
-                InstantiatedModel(HasDefaults(), (;), [0.5], (; choice=NoValue())),
-            ),
-        )
     end
 
     @testset "The REPL shows only how many values there are when there are more than five, and shortens large arrays" begin

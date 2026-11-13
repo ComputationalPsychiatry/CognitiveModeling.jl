@@ -40,8 +40,7 @@ distribution is named like its action, so it is under its kind, as
 `P1.action_distributions.choice`. The environment's values are under `environment`, in the
 same way: `P1.environment.level` for a state, `P1.environment.reward` for an observation it
 gave, `P1.environment.choice` for an action it received and
-`P1.environment.observation_distributions.reward`. A saved state that isn't a `NamedTuple`
-is one entry, `P1.states` or `P1.environment.states`. Each entry holds a vector over the
+`P1.environment.observation_distributions.reward`. Each entry holds a vector over the
 timesteps for every sample, which starts with timestep 0 when the initial values are saved,
 so that element `t + 1` is timestep `t`, as everywhere in the package. The observations, the
 actions and the distributions of timestep 0 are [`BeforeFirstTimestep`](@ref), so a summary

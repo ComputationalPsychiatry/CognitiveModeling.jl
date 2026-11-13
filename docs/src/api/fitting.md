@@ -18,15 +18,19 @@ Pages = ["fitting.md"]
 Modules = [CognitiveModeling]
 Private = false
 Pages = ["inference/types.jl"]
+Filter = t -> t !== AbstractSessionParametersModel
 ```
 
 ## Session parameter models
+
+```@docs
+AbstractSessionParametersModel
+```
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
 Pages = [
-    "inference/session_parameter_models/supertype.jl",
     "inference/session_parameter_models/no_parameters.jl",
     "inference/session_parameter_models/fixed_session_parameters.jl",
     "inference/session_parameter_models/fixed_parameters_by_session.jl",

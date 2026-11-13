@@ -32,10 +32,9 @@ matters when the initial state depends on parameters that are fitted. Since Juli
 from 1, element `t + 1` of what is saved is then timestep `t`, and with `false`, element `t`
 is.
 
-Saving some names of a kind gives a `NamedTuple` with those names on each timestep, which
-only works when the value is a `NamedTuple`, and saving none gives an empty one, `(;)`, for
-any value. Before the first timestep there is no output distribution, so timestep 0 has
-`BeforeFirstTimestep()` for each name that is saved.
+Saving some names of a kind gives a `NamedTuple` with those names on each timestep, and
+saving none gives an empty one, `(;)`. Before the first timestep there is no output
+distribution, so timestep 0 has `BeforeFirstTimestep()` for each name that is saved.
 
 Each model of a simulation has one: [`simulate`](@ref) and [`SessionInfo`](@ref) take
 `cognitive_save_history` and `environment_save_history`, and an
@@ -217,7 +216,7 @@ function select_names(x, ::Val{names}) where {names}
         return NamedTuple{names}(x)
     else
         error(
-            "A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). Use SaveEverything() or () for this kind of attribute.",
+            "A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). The state that prepare_state_for_saving returns must be a NamedTuple with the states in the model's attributes.",
         )
     end
 end

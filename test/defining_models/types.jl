@@ -116,6 +116,14 @@ using Random: Xoshiro, default_rng
         @test ModelOutput((; choice=0.7), state).new_state === state
     end
 
+    @testset "ModelOutput only takes a named state, also for a single object" begin
+        @test ModelOutput((; choice=0.7), (; values=[0.5, 0.5])).new_state.values ==
+            [0.5, 0.5]
+        @test_throws MethodError ModelOutput((; choice=0.7), 0.5)
+        @test_throws MethodError ModelOutput((; choice=0.7), [0.5, 0.5])
+        @test_throws MethodError ModelOutput((; choice=0.7), nothing)
+    end
+
     @testset "ModelOutput for an environment model only takes named observation distributions" begin
         @test ModelOutput((; reward=Deterministic(1.0))).output_distribution ===
             (; reward=Deterministic(1.0))

@@ -70,10 +70,11 @@ Create the initial state that `model` has before its first timestep, which can d
 `parameters`.
 
 # Implementation
-Every model must add a method of this function, which throws an error otherwise. A model
-without a state returns an empty `NamedTuple`, `(;)`. For use within PPLs, this function
-can also have special implementations: see the documentation for the specific PPL for
-details.
+Every model must add a method of this function, which throws an error otherwise. It returns
+a `NamedTuple` with one entry for each state in the model's attributes, also when the state
+is a single object, as in `(; rl_env)`, and a model without a state returns an empty
+`NamedTuple`, `(;)`. For use within PPLs, this function can also have special
+implementations: see the documentation for the specific PPL for details.
 
 # Examples
 ```jldoctest
@@ -111,12 +112,12 @@ gives. Nothing checks that they match while the model runs.
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
-without one kind of attribute gives `()` for it, and so does one whose state isn't a
-`NamedTuple`. [`simulate`](@ref) and [`InstantiatedModel`](@ref) use the output names for
-the output before the first timestep, and check the parameters, the previous output and a
-`NamedTuple` state against the names. A simulation with an environment also checks that the
-two models fit together: the outputs of each must be the inputs of the other, unless a
-[`NameMap`](@ref) says which of them are passed on, and under which names.
+without one kind of attribute gives `()` for it. [`simulate`](@ref) and
+[`InstantiatedModel`](@ref) use the output names for the output before the first timestep,
+and check the parameters, the previous output and the state against the names. A
+simulation with an environment also checks that the two models fit together: the outputs
+of each must be the inputs of the other, unless a [`NameMap`](@ref) says which of them are
+passed on, and under which names.
 
 # Examples
 ```jldoctest

@@ -125,9 +125,9 @@ Each argument is kept in a field of the same name, such as `agent.state`. Parame
 aren't given take the values in [`default_parameters`](@ref), if the model provides defaults
 for them. The state defaults to the output of [`initialize_state`](@ref) with the full
 parameters, and the previous output to every output being [`BeforeFirstTimestep`](@ref). The
-names of the parameters, of the previous output, and of the state when it is a `NamedTuple`,
-must be those in the model's attributes, from [`attribute_names`](@ref), or an error is
-thrown.
+previous output and the state must be `NamedTuple`s, and the names of the parameters, of the
+previous output and of the state must be those in the model's attributes, from
+[`attribute_names`](@ref), or an error is thrown.
 
 `agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a

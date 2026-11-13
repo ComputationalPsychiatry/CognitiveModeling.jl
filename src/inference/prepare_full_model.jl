@@ -23,8 +23,7 @@ model gives, when [`CognitiveModeling.parameter_names`](@ref) knows them, agains
 the cognitive model and of the environment model: a parameter that isn't in the model's
 attributes is an error, and so is one in its attributes which is neither given nor has a
 default value, unless it is a parameter of an environment that no session runs. It prepares
-each session
-parameter model for the sessions with
+each session parameter model for the sessions with
 [`CognitiveModeling.prepare_parameters_model`](@ref). When the environment's parameters are
 sampled, every session with an environment runs it, so that the observations in the data
 inform them.
