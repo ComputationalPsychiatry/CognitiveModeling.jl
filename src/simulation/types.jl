@@ -5,18 +5,19 @@
 
 Which outputs of one side of a simulation the other side receives, and under which names.
 
-Each argument is `:given => :received`, for an output which the receiver lists under
-another name, or a single `Symbol`, for one which keeps its name. Outputs that aren't in the
-map aren't passed on, and each name can only be there once.
+Each argument is `:given => :received`, for an output which has another name in the
+receiver's attributes, or a single `Symbol`, for one which keeps its name. Outputs that
+aren't in the map aren't passed on, and each name can only be there once.
 
 [`simulate`](@ref) and [`simulate!`](@ref) take one as `observation_map`, from the
-observations the environment model gives to those the cognitive model lists, and one as
-`action_map`, from the actions the cognitive model gives to those the environment model
-lists. A cognitive model and an environment which name things differently, or where one
-gives something the other doesn't list, can then be used together, and the map says which
-outputs the receiver gets: it must give exactly the names the receiver lists in
-[`attribute_names`](@ref). `NameMap()` passes nothing on, for a receiver which lists
-nothing. Without a map, the two must list the same names.
+observations the environment model gives to those in the cognitive model's attributes, and
+one as `action_map`, from the actions the cognitive model gives to those in the environment
+model's attributes. A cognitive model and an environment which name things differently, or
+where one gives something that isn't in the other's attributes, can then be used together,
+and the map says which outputs the receiver gets: it must give exactly the names in the
+receiver's attributes, from [`attribute_names`](@ref). `NameMap()` passes nothing on, for a
+receiver without inputs in its attributes. Without a map, the two must have the same names
+in their attributes.
 
 # Examples
 ```jldoctest
@@ -94,8 +95,8 @@ to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a v
   state. Later states are those after each timestep. All of them are as returned by
   [`prepare_state_for_saving`](@ref).
 - `inputs::Vector{Any}`: what the model received on each timestep, starting at timestep 0
-  with every input the model lists as [`BeforeFirstTimestep`](@ref), since it has received
-  nothing before the simulation.
+  with every input in the model's attributes as [`BeforeFirstTimestep`](@ref), since it has
+  received nothing before the simulation.
 - `outputs::Vector{Any}`: what the model gave on each timestep, starting at timestep 0 with
   its previous output, which by default has every output as `BeforeFirstTimestep()`.
 - `output_distributions::Vector{Any}`: what the model gave each output to be sampled from,
@@ -125,14 +126,15 @@ aren't given take the values in [`default_parameters`](@ref), if the model provi
 for them. The state defaults to the output of [`initialize_state`](@ref) with the full
 parameters, and the previous output to every output being [`BeforeFirstTimestep`](@ref). The
 names of the parameters, of the previous output, and of the state when it is a `NamedTuple`,
-must be those that [`attribute_names`](@ref) lists, or an error is thrown.
+must be those in the model's attributes, from [`attribute_names`](@ref), or an error is
+thrown.
 
 `agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a
 [`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
 stay empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs
-can only be selected by name among those the model lists, since the history starts from
-those names.
+can only be selected by name among those in the model's attributes, since the history starts
+from those names.
 `agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved.
 
 In the REPL, an instantiated model shows the kind and the type of its model, how many
@@ -220,11 +222,11 @@ function InstantiatedModel(
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check that the parameters, the state and the previous output have the names the model lists, and that each parameter is within its domain
+    #Check that the parameters, the state and the previous output have the names in the model's attributes, and that each parameter is within its domain
     check_match_attribute_names(model, parameters, state, previous_output)
     check_parameter_domains(model, parameters)
 
-    #Check that the inputs and outputs selected for the history are among those the model lists
+    #Check that the inputs and outputs selected for the history are among those in the model's attributes
     check_savehistory_selection_names(save_history, model)
 
     #Start the history from where the model starts
@@ -244,9 +246,9 @@ with what `save_history` selects of where it starts, as timestep 0, and
 nothing is selected, or `save_history` doesn't save the initial values, the vectors are
 empty.
 
-A model hasn't received anything when it starts, so that entry has every input the model
-lists as `BeforeFirstTimestep()`, and so has every output distribution. [`reset!`](@ref)
-starts from the same history as the constructors.
+A model hasn't received anything when it starts, so that entry has every input in the
+model's attributes as `BeforeFirstTimestep()`, and so has every output distribution.
+[`reset!`](@ref) starts from the same history as the constructors.
 """
 function starting_history(
     model::AbstractTimestepModel, state, previous_output, save_history::SaveHistory

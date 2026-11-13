@@ -1315,7 +1315,7 @@ end
             environment_parameters=rewards,
             cognitive_save_history=SaveHistory(; outputs=:choice),
         ).action_distributions == fill((;), 4)
-        @test_throws "The SaveHistory selects the output distributions (:bet,), but attribute_names lists the outputs of a cognitive model of type LearnsRewards as (:choice,). A history can only select names that the model lists." InstantiatedModel(
+        @test_throws "The SaveHistory selects the output distributions (:bet,), but the outputs in the attributes of a cognitive model of type LearnsRewards are (:choice,). A history can only select names in the model's attributes." InstantiatedModel(
             LearnsRewards(), LEARNING; save_history=SaveHistory(; output_distributions=:bet)
         )
         #A state changed in place is saved before the first timestep changes it
@@ -1527,12 +1527,12 @@ end
     end
 
     @testset "Selecting a name that isn't there, or from something that isn't a NamedTuple, gives an error" begin
-        @test_throws "The SaveHistory selects the states (:surprise,), but attribute_names lists the states of a cognitive model of type LearnsAndCounts as (:expected_reward, :n_timesteps)." simulate_for_test(
+        @test_throws "The SaveHistory selects the states (:surprise,), but the states in the attributes of a cognitive model of type LearnsAndCounts are (:expected_reward, :n_timesteps)." simulate_for_test(
             LearnsAndCounts(),
             RewardsWithProbability();
             cognitive_save_history=SaveHistory(; states=:surprise),
         )
-        @test_throws "The SaveHistory selects the inputs (:cue,), but attribute_names lists the inputs of a cognitive model of type LearnsAndCounts as (:reward,)." simulate_for_test(
+        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type LearnsAndCounts are (:reward,)." simulate_for_test(
             LearnsAndCounts(),
             RewardsWithProbability();
             cognitive_save_history=SaveHistory(; inputs=:cue),
@@ -2062,16 +2062,16 @@ end
     end
 
     @testset "An agent checks the names of the parameters and the state against attribute_names" begin
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but attribute_names lists the parameters of a cognitive model of type HasDefaults as (:learning_rate, :initial_value)" InstantiatedModel(
+        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults are (:learning_rate, :initial_value)" InstantiatedModel(
             HasDefaults(), (; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but attribute_names lists the states of a cognitive model of type HasDefaults as (:expected_reward,)" InstantiatedModel(
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type HasDefaults are (:expected_reward,)" InstantiatedModel(
             HasDefaults(), (;), (; value=0.5), (; choice=NoValue())
         )
-        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs that attribute_names lists for a cognitive model of type HasDefaults, (:choice,)." InstantiatedModel(
+        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type HasDefaults, (:choice,)." InstantiatedModel(
             HasDefaults(), (;), (; expected_reward=0.5), NoValue()
         )
-        @test_throws "must be a NamedTuple with the outputs that attribute_names lists" InstantiatedModel(
+        @test_throws "must be a NamedTuple with the outputs in the attributes of" InstantiatedModel(
             HasDefaults(), (;), (; expected_reward=0.5), (; bet=true)
         )
         #The order of the names doesn't matter
@@ -2113,16 +2113,16 @@ end
             RewardsWithDefaults(), (; bias=0.5), (; last_choice=true), (; reward=1.0)
         ).parameters == (; reward_size=1.0, bias=0.5)
         @test InstantiatedModel(RewardsWithProbability(), REWARDS).parameters === REWARDS
-        @test_throws "The parameters are named (:reward_size, :bias, :noise), but attribute_names lists the parameters of an environment model of type RewardsWithDefaults as (:reward_size, :bias)" InstantiatedModel(
+        @test_throws "The parameters are named (:reward_size, :bias, :noise), but the parameters in the attributes of an environment model of type RewardsWithDefaults are (:reward_size, :bias)" InstantiatedModel(
             RewardsWithDefaults(), (; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but attribute_names lists the states of an environment model of type RewardsWithDefaults as (:last_choice,)" InstantiatedModel(
+        @test_throws "The state is named (:value,), but the states in the attributes of an environment model of type RewardsWithDefaults are (:last_choice,)" InstantiatedModel(
             RewardsWithDefaults(), (;), (; value=0.5), (; reward=NoValue())
         )
-        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs that attribute_names lists for an environment model of type RewardsWithDefaults, (:reward,)." InstantiatedModel(
+        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs in the attributes of an environment model of type RewardsWithDefaults, (:reward,)." InstantiatedModel(
             RewardsWithDefaults(), (;), (; last_choice=NoValue()), NoValue()
         )
-        @test_throws "must be a NamedTuple with the outputs that attribute_names lists" InstantiatedModel(
+        @test_throws "must be a NamedTuple with the outputs in the attributes of" InstantiatedModel(
             RewardsWithDefaults(), (;), (; last_choice=NoValue()), (; cue=1)
         )
         #A state that isn't a NamedTuple isn't checked
@@ -2157,29 +2157,29 @@ end
         @test all(observation -> observation.reward >= 0.5, simulation.observations)
         @test simulation.environment.states[end].last_choice isa Bool
         #The names of the parameters, the states, the previous action and the previous observation are checked
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but attribute_names lists the parameters of a cognitive model of type HasDefaults" run_with(
+        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults" run_with(
             HasDefaults(), RewardsWithProbability(); cognitive_parameters=(; noise=0.1)
         )
-        @test_throws "The parameters are named (:reward_probability, :noise), but attribute_names lists the parameters of an environment model of type RewardsWithProbability" run_with(
+        @test_throws "The parameters are named (:reward_probability, :noise), but the parameters in the attributes of an environment model of type RewardsWithProbability" run_with(
             LearnsRewards(),
             RewardsWithProbability();
             environment_parameters=(; reward_probability=0.8, noise=0.1),
         )
-        @test_throws "The state is named (:value,), but attribute_names lists the states of a cognitive model of type LearnsRewards" run_with(
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type LearnsRewards" run_with(
             LearnsRewards(),
             RewardsWithProbability();
             previous_cognitive_state=(; value=0.5),
         )
-        @test_throws "The state is named (:value,), but attribute_names lists the states of an environment model of type FixedRewards" run_with(
+        @test_throws "The state is named (:value,), but the states in the attributes of an environment model of type FixedRewards" run_with(
             LearnsRewards(),
             FixedRewards();
             environment_parameters=(; rewards=[1.0, 0.0]),
             previous_environment_state=(; value=0),
         )
-        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs that attribute_names lists for a cognitive model of type LearnsRewards, (:choice,)." run_with(
+        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type LearnsRewards, (:choice,)." run_with(
             LearnsRewards(), RewardsWithProbability(); previous_action=(; bet=true)
         )
-        @test_throws "The previous output is (cue = 1,), but it must be a NamedTuple with the outputs that attribute_names lists for an environment model of type RewardsWithProbability, (:reward,)." run_with(
+        @test_throws "The previous output is (cue = 1,), but it must be a NamedTuple with the outputs in the attributes of an environment model of type RewardsWithProbability, (:reward,)." run_with(
             LearnsRewards(), RewardsWithProbability(); previous_observation=(; cue=1)
         )
         @test_throws "must be a NamedTuple with the outputs" run_with(
@@ -2230,26 +2230,26 @@ end
             !CognitiveModeling.has_every_name((:reward, :cue), (:reward,))
     end
 
-    @testset "Without maps, the model and the environment must list the same observations and actions" begin
-        #An environment which gives something else, or more, than the model lists
-        @test_throws "A cognitive model of type LearnsRewards lists the observations (:reward,) as its inputs, but an environment model of type OnlyCues gives (:cue,). Without a map, the two must list the same observations. A NameMap as observation_map can select and rename them." simulate_for_test(
+    @testset "Without maps, the model and the environment must have the same observations and actions in their attributes" begin
+        #An environment which gives something else, or more, than the inputs in the model's attributes
+        @test_throws "The attributes of a cognitive model of type LearnsRewards have the observations (:reward,) as inputs, but an environment model of type OnlyCues gives (:cue,). Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them." simulate_for_test(
             LearnsRewards(), OnlyCues(); environment_parameters=(;)
         )
-        @test_throws "A cognitive model of type LearnsRewards lists the observations (:reward,) as its inputs, but an environment model of type RewardsAndCues gives (:reward, :cue). Without a map, the two must list the same observations." simulate_for_test(
+        @test_throws "The attributes of a cognitive model of type LearnsRewards have the observations (:reward,) as inputs, but an environment model of type RewardsAndCues gives (:reward, :cue). Without a map, the two must have the same observations in their attributes." simulate_for_test(
             LearnsRewards(), RewardsAndCues(); environment_parameters=(;)
         )
-        #A model which lists fewer observations than the environment gives
-        @test_throws "A cognitive model of type OnlyChooses lists the observations () as its inputs, but an environment model of type RewardsTrue gives (:reward,)." simulate_for_test(
+        #A model with fewer observations in its attributes than the environment gives
+        @test_throws "The attributes of a cognitive model of type OnlyChooses have the observations () as inputs, but an environment model of type RewardsTrue gives (:reward,)." simulate_for_test(
             OnlyChooses(),
             RewardsTrue();
             cognitive_parameters=(;),
             environment_parameters=(;),
         )
-        #A model which gives fewer actions than the environment lists, or more
-        @test_throws "A cognitive model of type OnlyLearns gives the actions (), but an environment model of type RewardsTrue lists (:choice,) as its inputs. Without a map, the two must list the same actions. A NameMap as action_map can select and rename them." simulate_for_test(
+        #A model which gives fewer actions than the inputs in the environment's attributes, or more
+        @test_throws "A cognitive model of type OnlyLearns gives the actions (), but the attributes of an environment model of type RewardsTrue have (:choice,) as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
             OnlyLearns(), RewardsTrue(); environment_parameters=(;)
         )
-        @test_throws "A cognitive model of type LearnsRewards gives the actions (:choice,), but an environment model of type RewardsAndCues lists () as its inputs. Without a map, the two must list the same actions." simulate_for_test(
+        @test_throws "A cognitive model of type LearnsRewards gives the actions (:choice,), but the attributes of an environment model of type RewardsAndCues have () as inputs. Without a map, the two must have the same actions in their attributes." simulate_for_test(
             LearnsRewards(),
             RewardsAndCues();
             environment_parameters=(;),
@@ -2263,13 +2263,13 @@ end
             NameMap(:second_choice => :choice),
         ) === nothing
         #simulate! checks it too
-        @test_throws "Without a map, the two must list the same observations." simulate!(
+        @test_throws "Without a map, the two must have the same observations in their attributes." simulate!(
             InstantiatedModel(LearnsRewards(), LEARNING),
             InstantiatedModel(OnlyCues(), (;));
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
-        @test_throws "Without a map, the two must list the same actions." simulate!(
+        @test_throws "Without a map, the two must have the same actions in their attributes." simulate!(
             InstantiatedModel(OnlyLearns(), LEARNING),
             InstantiatedModel(RewardsTrue(), (;));
             who_starts=EnvironmentStarts(),
@@ -2318,10 +2318,10 @@ end
             @test [action.lever for action in mapped.environment.actions] == [action.choice for action in same_names.environment.actions]
         end
         #Without the maps, the two don't fit
-        @test_throws "Without a map, the two must list the same observations. A NameMap as observation_map can select and rename them." simulate_for_test(
+        @test_throws "Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them." simulate_for_test(
             LearnsRewards(), PaysForLever(); environment_parameters=(;)
         )
-        @test_throws "Without a map, the two must list the same actions. A NameMap as action_map can select and rename them." simulate_for_test(
+        @test_throws "Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
             LearnsRewards(),
             PaysForLever();
             environment_parameters=(;),
@@ -2365,7 +2365,7 @@ end
         @test simulation.environment.actions == fill((; choice=false), 3)
     end
 
-    @testset "A map must take names that are given, and give exactly the names the receiver lists" begin
+    @testset "A map must take names that are given, and give exactly the names in the receiver's attributes" begin
         @test_throws "The observation_map takes the observations (:prize,), but an environment model of type PaysForLever gives (:payoff, :cue). A map can only take observations the environment gives." simulate_for_test(
             LearnsRewards(),
             PaysForLever();
@@ -2373,14 +2373,14 @@ end
             observation_map=NameMap(:prize => :reward),
             action_map=CHOICE_AS_LEVER,
         )
-        @test_throws "The observation_map gives the observations (:reward, :cue), but a cognitive model of type LearnsRewards lists (:reward,) as its inputs. A map must give exactly the observations the cognitive model lists." simulate_for_test(
+        @test_throws "The observation_map gives the observations (:reward, :cue), but the attributes of a cognitive model of type LearnsRewards have (:reward,) as inputs. A map must give exactly the observations in the cognitive model's attributes." simulate_for_test(
             LearnsRewards(),
             PaysForLever();
             environment_parameters=(;),
             observation_map=NameMap(:payoff => :reward, :cue),
             action_map=CHOICE_AS_LEVER,
         )
-        @test_throws "The observation_map gives the observations (:cue,), but a cognitive model of type LearnsRewards lists (:reward,) as its inputs." simulate_for_test(
+        @test_throws "The observation_map gives the observations (:cue,), but the attributes of a cognitive model of type LearnsRewards have (:reward,) as inputs." simulate_for_test(
             LearnsRewards(),
             PaysForLever();
             environment_parameters=(;),
@@ -2394,7 +2394,7 @@ end
             observation_map=PAYOFF_AS_REWARD,
             action_map=NameMap(:press => :lever),
         )
-        @test_throws "The action_map gives the actions (:choice,), but an environment model of type PaysForLever lists (:lever,) as its inputs. A map must give exactly the actions the environment lists." simulate_for_test(
+        @test_throws "The action_map gives the actions (:choice,), but the attributes of an environment model of type PaysForLever have (:lever,) as inputs. A map must give exactly the actions in the environment's attributes." simulate_for_test(
             LearnsRewards(),
             PaysForLever();
             environment_parameters=(;),
@@ -2500,7 +2500,7 @@ end
             action_map=CHOICE_AS_LEVER,
         ) isa NamedTuple
         #simulate! checks the maps too
-        @test_throws "A map must give exactly the observations the cognitive model lists." simulate!(
+        @test_throws "A map must give exactly the observations in the cognitive model's attributes." simulate!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2652,9 +2652,9 @@ end
         @test agent.state == (; expected_reward=0.5)
     end
 
-    @testset "The input must be a NamedTuple with the inputs the model lists, and can have more" begin
+    @testset "The input must be a NamedTuple with the inputs in the model's attributes, and can have more" begin
         agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs that attribute_names lists for a cognitive model of type LearnsRewards, (:reward,)." simulate!(
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type LearnsRewards, (:reward,)." simulate!(
             agent, 1.0
         )
         @test_throws "must be a NamedTuple with the inputs" simulate!(agent, NoValue())
@@ -2690,7 +2690,7 @@ end
             [(; reward=BeforeFirstTimestep()), (; reward=1.5)]
         @test environment.history.output_distributions ==
             [(; reward=BeforeFirstTimestep()), (; reward=Deterministic(1.5))]
-        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs that attribute_names lists for an environment model of type RewardsWithDefaults, (:choice,)." simulate!(
+        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type RewardsWithDefaults, (:choice,)." simulate!(
             environment, (; cue=1)
         )
     end
@@ -2780,10 +2780,10 @@ end
         @test cognitive_state == (; expected_reward=0.9)
         @test simulate(HasDefaults(), (; reward=1.0); parameters=(;))[2].expected_reward ≈
             0.55
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but attribute_names lists the parameters of a cognitive model of type HasDefaults" simulate(
+        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults" simulate(
             HasDefaults(), (; reward=1.0); parameters=(; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but attribute_names lists the states of a cognitive model of type LearnsRewards" simulate(
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type LearnsRewards" simulate(
             LearnsRewards(),
             (; reward=1.0);
             parameters=LEARNING,
@@ -2795,10 +2795,10 @@ end
             parameters=LEARNING,
             previous_output=(; bet=true),
         )
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs that attribute_names lists for a cognitive model of type LearnsRewards, (:reward,)." simulate(
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type LearnsRewards, (:reward,)." simulate(
             LearnsRewards(), 1.0; parameters=LEARNING
         )
-        #An input can have more than the model lists, and an observation can be NoValue
+        #An input can have more than the inputs in the model's attributes, and an observation can be NoValue
         @test simulate(LearnsRewards(), (; reward=1.0, cue=2); parameters=LEARNING)[2] ==
             (; expected_reward=0.75)
         @test simulate(LearnsRewards(), (; reward=NoValue()); parameters=LEARNING)[2] ==
@@ -2946,32 +2946,32 @@ end
         @test environment.state == (; n_timesteps=2)
     end
 
-    @testset "A history can only select names that the model lists" begin
-        @test_throws "The SaveHistory selects the inputs (:reward,), but attribute_names lists the inputs of a cognitive model of type OnlyChooses as (). A history can only select names that the model lists." InstantiatedModel(
+    @testset "A history can only select names in the model's attributes" begin
+        @test_throws "The SaveHistory selects the inputs (:reward,), but the inputs in the attributes of a cognitive model of type OnlyChooses are (). A history can only select names in the model's attributes." InstantiatedModel(
             OnlyChooses(), (;); save_history=SaveHistory(; inputs=:reward)
         )
-        @test_throws "The SaveHistory selects the outputs (:bet,), but attribute_names lists the outputs of a cognitive model of type LearnsRewards as (:choice,)." InstantiatedModel(
+        @test_throws "The SaveHistory selects the outputs (:bet,), but the outputs in the attributes of a cognitive model of type LearnsRewards are (:choice,)." InstantiatedModel(
             LearnsRewards(), LEARNING; save_history=SaveHistory(; outputs=:bet)
         )
         #For an environment, the inputs are the actions it receives, and the outputs the observations it gives
-        @test_throws "The SaveHistory selects the inputs (:choice,), but attribute_names lists the inputs of an environment model of type RewardsAndCues as ()." InstantiatedModel(
+        @test_throws "The SaveHistory selects the inputs (:choice,), but the inputs in the attributes of an environment model of type RewardsAndCues are ()." InstantiatedModel(
             RewardsAndCues(), (;); save_history=SaveHistory(; inputs=:choice)
         )
-        @test_throws "The SaveHistory selects the outputs (:cue,), but attribute_names lists the outputs of an environment model of type FixedRewards as (:reward,)" InstantiatedModel(
+        @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type FixedRewards are (:reward,)" InstantiatedModel(
             FixedRewards(), (; rewards=[1.0]); save_history=SaveHistory(; outputs=:cue)
         )
-        @test_throws "The SaveHistory selects the output distributions (:cue,), but attribute_names lists the outputs of an environment model of type FixedRewards as (:reward,)" InstantiatedModel(
+        @test_throws "The SaveHistory selects the output distributions (:cue,), but the outputs in the attributes of an environment model of type FixedRewards are (:reward,)" InstantiatedModel(
             FixedRewards(),
             (; rewards=[1.0]);
             save_history=SaveHistory(; output_distributions=:cue),
         )
-        #The states are checked too, since prepare_state_for_saving returns a state with the names the model lists
-        @test_throws "The SaveHistory selects the states (:first_value,), but attribute_names lists the states of a cognitive model of type LearnsInPlace" InstantiatedModel(
+        #The states are checked too, since prepare_state_for_saving returns a state with the names in the model's attributes
+        @test_throws "The SaveHistory selects the states (:first_value,), but the states in the attributes of a cognitive model of type LearnsInPlace" InstantiatedModel(
             LearnsInPlace(deepcopy),
             LEARNING;
             save_history=SaveHistory(; states=:first_value),
         )
-        #Everything can always be selected, and an input with more than the model lists is saved in full
+        #Everything can always be selected, and an input with more than the inputs in the model's attributes is saved in full
         agent = InstantiatedModel(
             OnlyChooses(), (;); save_history=SaveHistory(SaveEverything())
         )
@@ -3178,7 +3178,7 @@ end
         )
         @test environment.history isa CognitiveModeling.ModelHistory
         @test environment.history.outputs == [(; reward=BeforeFirstTimestep())]
-        #It starts with the actions it lists as its inputs, which an environment can have none of
+        #It starts with the actions in its attributes as inputs, which an environment can have none of
         @test environment.history.inputs == [(; choice=BeforeFirstTimestep())]
         @test InstantiatedModel(
             RewardsAndCues(), (;); save_history=SaveHistory(SaveEverything())

@@ -44,3 +44,11 @@ Modules = [CognitiveModeling]
 Public = false
 Pages = ["inference/utility_functions.jl"]
 ```
+
+## Reading tables with Tables.jl
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["extensions/tables/column_table.jl"]
+```

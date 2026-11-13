@@ -16,8 +16,8 @@ session saves, by name, and whether it saves them from before the first timestep
 
 `states`, `inputs`, `outputs` and `output_distributions` are each the names of that kind to
 save, in a `Tuple` of `Symbol`s, a single `Symbol` or a `Vector` of them, or
-[`SaveEverything`](@ref) for all of them. The names are the model's own, as
-[`attribute_names`](@ref) lists them: for a cognitive model the inputs are its observations
+[`SaveEverything`](@ref) for all of them. The names are those in the model's attributes,
+from [`attribute_names`](@ref): for a cognitive model the inputs are its observations
 and the outputs its actions, and for an environment model the inputs are the actions it
 receives and the outputs the observations it gives. The output distributions are what the
 model gave its outputs to be sampled from, named like the outputs. A kind that isn't given
@@ -226,9 +226,9 @@ end
     check_savehistory_selection_names(save_history, model)
 
 Throw an informative error if `save_history` selects a state, an input, an output or an
-output distribution by name that [`attribute_names`](@ref) of `model`, a cognitive model or
-an environment model, doesn't list, since a history starts from those names, and
-[`prepare_state_for_saving`](@ref) returns a state with them. Used by
+output distribution by name that isn't in the attributes of `model`, a cognitive model or an
+environment model, from [`attribute_names`](@ref), since a history starts from those names,
+and [`prepare_state_for_saving`](@ref) returns a state with them. Used by
 [`InstantiatedModel`](@ref), [`simulate`](@ref) and [`SessionInfo`](@ref), before anything
 is saved.
 """
@@ -248,8 +248,8 @@ end
 """
     check_selection_names(selection, names, kind, model)
 
-Throw an informative error if `selection` has a name that isn't among `names`, those that
-`model` lists for `kind`, which is `"states"`, `"inputs"`, `"outputs"` or
+Throw an informative error if `selection` has a name that isn't among `names`, those of
+`kind` in the attributes of `model`, where `kind` is `"states"`, `"inputs"`, `"outputs"` or
 `"output distributions"`, the last being named like the outputs. [`SaveEverything`](@ref)
 can always be selected. Used by [`check_savehistory_selection_names`](@ref) for each kind.
 """
@@ -258,7 +258,7 @@ function check_selection_names(selection::Tuple, names, kind, model)
     if !has_every_name(selection, names)
         throw(
             ArgumentError(
-                "The SaveHistory selects the $kind $selection, but attribute_names lists the $(kind == "output distributions" ? "outputs" : kind) of $(describe_model(model)) as $names. A history can only select names that the model lists.",
+                "The SaveHistory selects the $kind $selection, but the $(kind == "output distributions" ? "outputs" : kind) in the attributes of $(describe_model(model)) are $names. A history can only select names in the model's attributes.",
             ),
         )
     end

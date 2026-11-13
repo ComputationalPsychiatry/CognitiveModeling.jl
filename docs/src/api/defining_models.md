@@ -46,5 +46,5 @@ CognitiveModeling.discrete_parameter_names
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["environments/common_rl_environment.jl"]
+Pages = ["extensions/common_rl_interface/common_rl_environment.jl"]
 ```

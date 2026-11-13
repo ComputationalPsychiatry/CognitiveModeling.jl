@@ -58,7 +58,7 @@ end
 
     @testset "The parameters that a session parameter model gives are checked against those of the model" begin
         sessions_info = sessions_to_prepare()
-        @test_throws "The session parameter model, a IndependentSessionParameters, gives the parameters (:bias,), which a cognitive model of type SessionCounter doesn't list. It lists the parameters (:probability,)." CognitiveModeling.prepare_full_model(
+        @test_throws "The session parameter model, a IndependentSessionParameters, gives the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
             IndependentSessionParameters((; probability=1, bias=2)), sessions_info
         )
         @test_throws "The session parameter model, a NoParameters, doesn't give the parameters (:probability,) of a cognitive model of type SessionCounter, which have no default values." CognitiveModeling.prepare_full_model(
@@ -141,11 +141,11 @@ end
         @test prepared.environment_parameters_model ===
             FixedSessionParameters((; scale=2.0))
         @test !any(session -> session.includes_environment, prepared.sessions_info.sessions)
-        #A parameter is either fixed or given, a fixed one must be listed, and sessions without an environment take none for it
+        #A parameter is either fixed or given, a fixed one must be in the model's attributes, and sessions without an environment take none for it
         @test_throws "fixed_cognitive_parameters fixes the parameters (:probability,), which the session parameter model, a IndependentSessionParameters, gives too. A parameter is either fixed or given by the session parameter model." CognitiveModeling.prepare_full_model(
             sampled, sessions_info; fixed_cognitive_parameters=(; probability=0.3)
         )
-        @test_throws "fixed_cognitive_parameters fixes the parameters (:bias,), which a cognitive model of type SessionCounter doesn't list. It lists the parameters (:probability,)." CognitiveModeling.prepare_full_model(
+        @test_throws "fixed_cognitive_parameters fixes the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
             own, sessions_info; fixed_cognitive_parameters=(; bias=1.0)
         )
         @test_throws "fixed_environment_parameters fixes the parameters (:scale,), but the sessions have no environment model." CognitiveModeling.prepare_full_model(

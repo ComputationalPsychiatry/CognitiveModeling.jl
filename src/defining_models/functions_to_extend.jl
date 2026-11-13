@@ -154,7 +154,7 @@ isn't affected.
 A model can add a method of this function. The default returns `state` as it is, so nothing
 is copied. One which changes an object in its state in place must add a method which copies
 it, or all the saved states show the final values, with no error. The method must return the
-state with the names that [`attribute_names`](@ref) lists for it, since a
+state with the names in the model's attributes, since a
 [`SaveHistory`](@ref) selects states by those names. Nothing checks this while the model
 runs.
 

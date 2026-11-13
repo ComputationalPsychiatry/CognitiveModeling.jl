@@ -25,9 +25,9 @@ using CognitiveModeling:
     map_names
 using CognitiveModeling:
     check_environment_parameters,
-    recorded_action_names,
-    recorded_observation_names,
-    recorded_on_timestep,
+    action_names_to_condition_on,
+    observation_names_to_condition_on,
+    find_outputs_to_condition_on,
     n_sessions,
     has_environment,
     without_environment,
@@ -40,7 +40,11 @@ using CognitiveModeling:
     parameter_names,
     merge_parameters_of_parts
 using CognitiveModeling:
-    initialize_distributions, store_distributions, row, entry, has_missing_value
+    initialize_distributions,
+    store_distributions,
+    select_row,
+    build_named_entry,
+    has_missing_value
 using CognitiveModeling:
     saved_session_values,
     initial_session_values,

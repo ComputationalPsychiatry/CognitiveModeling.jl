@@ -25,7 +25,7 @@ Supertype for cognitive models, whose inputs are observations and whose outputs 
 In the REPL, a cognitive model shows its type, the values of its fields if it has any, and
 the names of its attributes, or `not specified` if it has no method of
 [`attribute_names`](@ref). A kind of attribute with more than five names shows only how many
-there are, and `attribute_names` lists them. On one line, as inside a vector, a model shows
+there are, and `attribute_names` gives them. On one line, as inside a vector, a model shows
 its type and its kind.
 
 # Implementation

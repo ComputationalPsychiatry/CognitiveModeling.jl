@@ -69,12 +69,12 @@ end
 
 Throw an informative error if `cognitive_model` and `environment` can't be simulated
 together. Without a map, the outputs of each must be the inputs of the other in
-[`attribute_names`](@ref): the observations the environment gives are what the cognitive
-model lists as its inputs, and the actions the cognitive model gives are what the
-environment lists as its inputs. With a [`NameMap`](@ref) for the observations or the
-actions, the map must take names the giver lists, and give exactly the names the receiver
-lists. Used by [`simulate`](@ref), [`simulate!`](@ref), and [`SessionInfo`](@ref) for a
-session with an environment.
+[`attribute_names`](@ref): the observations the environment gives are the inputs in the
+cognitive model's attributes, and the actions the cognitive model gives are the inputs in
+the environment's attributes. With a [`NameMap`](@ref) for the observations or the actions,
+the map must take names in the giver's attributes, and give exactly the names in the
+receiver's attributes. Used by [`simulate`](@ref), [`simulate!`](@ref), and
+[`SessionInfo`](@ref) for a session with an environment.
 """
 function check_names_fit(
     cognitive_model::AbstractTimestepModel,
@@ -88,14 +88,14 @@ function check_names_fit(
     environment_attributes = check_type_attribute_names(
         attribute_names(environment), environment
     )
-    check_observations_fit(
+    check_observation_names_fit(
         cognitive_model,
         environment,
         cognitive_attributes.inputs,
         environment_attributes.outputs,
         observation_map,
     )
-    check_actions_fit(
+    check_action_names_fit(
         cognitive_model,
         environment,
         cognitive_attributes.outputs,
@@ -106,45 +106,46 @@ function check_names_fit(
 end
 
 """
-    check_observations_fit(cognitive_model, environment, cognitive_model_names,
-                           environment_names, observation_map)
-    check_actions_fit(cognitive_model, environment, cognitive_model_names,
-                      environment_names, action_map)
+    check_observation_names_fit(cognitive_model, environment, cognitive_model_names,
+                                environment_names, observation_map)
+    check_action_names_fit(cognitive_model, environment, cognitive_model_names,
+                           environment_names, action_map)
 
 Throw an informative error if the observations `environment` gives, its outputs, don't fit
-those `cognitive_model` lists as its inputs, or the actions `cognitive_model` gives, its
-outputs, don't fit those `environment` lists as its inputs, as [`check_names_fit`](@ref)
-describes, with or without a [`NameMap`](@ref). Used by [`check_names_fit`](@ref).
+the inputs in the attributes of `cognitive_model`, or the actions `cognitive_model` gives,
+its outputs, don't fit the inputs in the attributes of `environment`, as
+[`check_names_fit`](@ref) describes, with or without a [`NameMap`](@ref). Used by
+[`check_names_fit`](@ref).
 """
-function check_observations_fit(
+function check_observation_names_fit(
     cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing
 )
     if !same_names(cognitive_model_names, environment_names)
         throw(
             ArgumentError(
-                "$(uppercasefirst(describe_model(cognitive_model))) lists the observations $cognitive_model_names as its inputs, but $(describe_model(environment)) gives $environment_names. Without a map, the two must list the same observations. A NameMap as observation_map can select and rename them.",
+                "The attributes of $(describe_model(cognitive_model)) have the observations $cognitive_model_names as inputs, but $(describe_model(environment)) gives $environment_names. Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them.",
             ),
         )
     end
     return nothing
 end
 
-#Without a map, the actions the cognitive model gives must be those the environment lists as its inputs. The method above is for the observations
-function check_actions_fit(
+#Without a map, the actions the cognitive model gives must be the inputs in the environment's attributes. The method above is for the observations
+function check_action_names_fit(
     cognitive_model, environment, cognitive_model_names, environment_names, ::Nothing
 )
     if !same_names(cognitive_model_names, environment_names)
         throw(
             ArgumentError(
-                "$(uppercasefirst(describe_model(cognitive_model))) gives the actions $cognitive_model_names, but $(describe_model(environment)) lists $environment_names as its inputs. Without a map, the two must list the same actions. A NameMap as action_map can select and rename them.",
+                "$(uppercasefirst(describe_model(cognitive_model))) gives the actions $cognitive_model_names, but the attributes of $(describe_model(environment)) have $environment_names as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them.",
             ),
         )
     end
     return nothing
 end
 
-#With a map, it must take observations the environment gives, and give exactly those the cognitive model lists as its inputs
-function check_observations_fit(
+#With a map, it must take observations the environment gives, and give exactly the inputs in the cognitive model's attributes
+function check_observation_names_fit(
     cognitive_model,
     environment,
     cognitive_model_names,
@@ -161,15 +162,15 @@ function check_observations_fit(
     if !same_names(Treceived, cognitive_model_names)
         throw(
             ArgumentError(
-                "The observation_map gives the observations $Treceived, but $(describe_model(cognitive_model)) lists $cognitive_model_names as its inputs. A map must give exactly the observations the cognitive model lists.",
+                "The observation_map gives the observations $Treceived, but the attributes of $(describe_model(cognitive_model)) have $cognitive_model_names as inputs. A map must give exactly the observations in the cognitive model's attributes.",
             ),
         )
     end
     return nothing
 end
 
-#With a map, it must take actions the cognitive model gives, and give exactly those the environment lists as its inputs
-function check_actions_fit(
+#With a map, it must take actions the cognitive model gives, and give exactly the inputs in the environment's attributes
+function check_action_names_fit(
     cognitive_model,
     environment,
     cognitive_model_names,
@@ -186,7 +187,7 @@ function check_actions_fit(
     if !same_names(Treceived, environment_names)
         throw(
             ArgumentError(
-                "The action_map gives the actions $Treceived, but $(describe_model(environment)) lists $environment_names as its inputs. A map must give exactly the actions the environment lists.",
+                "The action_map gives the actions $Treceived, but the attributes of $(describe_model(environment)) have $environment_names as inputs. A map must give exactly the actions in the environment's attributes.",
             ),
         )
     end
@@ -879,8 +880,8 @@ Parameters that aren't given take the values in [`default_parameters`](@ref), if
 the states, the previous action and the previous observation must be those in
 [`attribute_names`](@ref), and the outputs of each model must be the inputs of the other,
 or an `ArgumentError` is thrown before the first timestep. When the two name things
-differently, or one gives something the other doesn't list, `observation_map` and
-`action_map` say which outputs of one the other receives, and under which names.
+differently, or one gives something that isn't in the other's attributes, `observation_map`
+and `action_map` say which outputs of one the other receives, and under which names.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
 model is met, unless `check_stopping_criterion` is `false`, and everything returned then has
@@ -891,7 +892,7 @@ the timesteps that ran.
   [`AbstractCognitiveModel`](@ref).
 - `environment::AbstractTimestepModel`: the environment model, usually an
   [`AbstractEnvironmentModel`](@ref). A cognitive model can serve as the environment of
-  another when its outputs are what the other lists as its inputs, and vice versa.
+  another when its outputs are the inputs in the other's attributes, and vice versa.
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: who moves first on each timestep. It
   has no default, because a wrong choice shifts the model by a timestep without any error.
 - `n_steps::Int`: the number of timesteps to simulate, which must be at least 1. It is the
@@ -917,13 +918,14 @@ the timesteps that ran.
   models have the same length.
 - `observation_map::Union{Nothing, NameMap}=nothing`: which observations of `environment`
   are passed on to `cognitive_model`, and under which names, as a [`NameMap`](@ref) from
-  the names `environment` gives to exactly those `cognitive_model` lists. Without one, the
-  two must list the same observations, which `cognitive_model` receives under the same
-  names.
+  the names `environment` gives to exactly those in the attributes of `cognitive_model`.
+  Without one, the two must have the same observations in their attributes, which
+  `cognitive_model` receives under the same names.
 - `action_map::Union{Nothing, NameMap}=nothing`: which actions of `cognitive_model` are
   passed on to `environment`, and under which names, as a `NameMap` from the names
-  `cognitive_model` gives to exactly those `environment` lists. Without one, the two must
-  list the same actions, which `environment` receives under the same names.
+  `cognitive_model` gives to exactly those in the attributes of `environment`. Without one,
+  the two must have the same actions in their attributes, which `environment` receives
+  under the same names.
 - `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
   models is checked before each timestep. With `false`, all of `n_steps` timesteps run.
 - `previous_cognitive_state=initialize_state(cognitive_model, ...)`: the state of
@@ -1276,8 +1278,8 @@ end
 Simulate a timestep of `model` on `input`, without the other side of a simulation, and
 return the output sampled from what it gave, its new state, and under `saved` what
 `save_history` selects of its `states`, `inputs`, `outputs` and `output_distributions`, in a
-`NamedTuple`. The input must have the names that `model` lists. [`simulate`](@ref) and
-[`simulate!`](@ref) on a single input both use this.
+`NamedTuple`. The input must have the names in the attributes of `model`. [`simulate`](@ref)
+and [`simulate!`](@ref) on a single input both use this.
 """
 function simulate_timestep(
     model,
@@ -1290,7 +1292,7 @@ function simulate_timestep(
     save_history,
 )
 
-    #Check that the input has the names the model lists
+    #Check that the input has the names in the model's attributes
     check_input_names(model, input)
 
     #Update the model
@@ -1343,10 +1345,11 @@ the same for an [`InstantiatedModel`](@ref), which keeps them. This is type stab
 instantiated model isn't, so it is the faster of the two.
 
 The output is in a `NamedTuple` with the names the model gave it, as in `output.choice`. The
-input must be a `NamedTuple` with every input the model lists in [`attribute_names`](@ref),
-or an `ArgumentError` is thrown. Parameters that aren't given take the values in
-[`default_parameters`](@ref), if `model` provides defaults for them, and the names of the
-parameters, the state and the previous output are checked as in a full simulation.
+input must be a `NamedTuple` with every input in the model's attributes, from
+[`attribute_names`](@ref), or an `ArgumentError` is thrown. Parameters that aren't given
+take the values in [`default_parameters`](@ref), if `model` provides defaults for them, and
+the names of the parameters, the state and the previous output are checked as in a full
+simulation.
 
 # Arguments
 - `model::AbstractTimestepModel`: the model.
@@ -1446,8 +1449,8 @@ and the output distribution is added to `instantiated_model.history`, together w
 of the timestep.
 
 The output is in a `NamedTuple` with the names the model gave it, as in `output.choice`, as
-for [`simulate`](@ref). The input must be a `NamedTuple` with every input the model lists in
-[`attribute_names`](@ref), or an `ArgumentError` is thrown.
+for [`simulate`](@ref). The input must be a `NamedTuple` with every input in the model's
+attributes, from [`attribute_names`](@ref), or an `ArgumentError` is thrown.
 
 # Arguments
 - `instantiated_model::InstantiatedModel`: the model to update.

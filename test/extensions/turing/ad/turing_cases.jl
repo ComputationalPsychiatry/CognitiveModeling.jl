@@ -136,7 +136,7 @@ const TURING_MISSING_REWARDS = (;
     ]
 )
 # The rewards TuringRewardsPreviousChoice gives with a scale of 1, the previous choice and 0.5 before the first, with some missing, so that
-# the recorded ones match what it gives, which they must, since a Deterministic is scored as a point mass
+# the ones in the data match what it gives, which they must, since a Deterministic is scored as a point mass
 const TURING_MISSING_PREVIOUS_CHOICE_REWARDS = (;
     reward=[
         MissingValue(),
@@ -196,7 +196,7 @@ Turing.@model function fit_with_environment(session_info)
     return nothing
 end
 
-# The same with the environment's scale fixed at 1, for an environment which gives its rewards without randomness: the recorded rewards
+# The same with the environment's scale fixed at 1, for an environment which gives its rewards without randomness: the rewards in the data
 # are scored as point masses, which a fitted scale would make -Inf everywhere but at one value
 Turing.@model function fit_with_fixed_environment(session_info)
     learning_rate ~ Turing.Flat()

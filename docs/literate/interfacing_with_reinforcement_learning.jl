@@ -20,10 +20,11 @@ using ReinforcementLearningCore: EpsilonGreedyExplorer, PreEpisodeStage, PostAct
 using ReinforcementLearningTrajectories: Trajectory, CircularArraySARTSTraces
 using ReinforcementLearningTrajectories: DummySampler, InsertSampleRatioController
 
-# Both models list the observations `observation`, `reward` and `terminated` as their
-# inputs, which are the names that [`CommonRLEnvironment`](@ref) gives, so they can be used
-# with an environment from ReinforcementLearning.jl as they are. The observation must be the
-# number of the state the environment is in, since the learners here keep a table of values.
+# The attributes of both models have the observations `observation`, `reward` and
+# `terminated` as inputs, which are the names that [`CommonRLEnvironment`](@ref) gives, so
+# they can be used with an environment from ReinforcementLearning.jl as they are. The
+# observation must be the number of the state the environment is in, since the learners here
+# keep a table of values.
 #
 # Both also need the environment to move first on each timestep, with
 # [`EnvironmentStarts`](@ref), so that there is an observation to act on. On the first

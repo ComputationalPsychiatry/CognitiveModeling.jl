@@ -1,5 +1,6 @@
+#The methods of the environment, its constructor among them, are in the CommonRLInterface.jl extension, since they need it
 """
-    CommonRLEnvironment(rl_env; action_name)
+    CommonRLEnvironment(rl_env::CommonRLInterface.AbstractEnv; action_name)
 
 An environment model around `rl_env`, an environment from CommonRLInterface.jl, which needs
 CommonRLInterface.jl to be loaded. `action_name` is the name of the cognitive model's action
@@ -14,22 +15,24 @@ problem gives them, such as one with a belief updater of POMDPTools.jl, can't us
 ReinforcementLearningBase.jl defines `convert(CommonRLInterface.AbstractEnv, rl_env)` for
 its environments.
 
-`rl_env` itself is the state: `initialize_state` resets it with CommonRLInterface.jl's
-`reset!` and returns it, every timestep changes it in place with `act!` and passes it on as
-the new state, and `prepare_state_for_saving` copies it, with `clone` if it provides it and
-with `deepcopy` otherwise. A method of `prepare_state_for_saving` for a
-`CommonRLEnvironment` with a specific type of `rl_env` can save something lighter. The
-parameters aren't used, and neither is the random number generator, since an environment of
-CommonRLInterface.jl has its own randomness.
+The state is `(; rl_env)`: `initialize_state` resets `rl_env` with CommonRLInterface.jl's
+`reset!` and returns it in the state, every timestep changes it in place with `act!` and
+passes it on in the new state, and `prepare_state_for_saving` copies it, with `clone` if it
+provides it and with `deepcopy` otherwise. Every simulation with the same
+`CommonRLEnvironment` therefore resets and changes the same `rl_env`, so simulations that
+run at the same time, such as on several threads, need one each. A method of
+`prepare_state_for_saving` for a `CommonRLEnvironment` with a specific type of `rl_env` can
+save something lighter. The parameters aren't used, and neither is the random number
+generator, since an environment of CommonRLInterface.jl has its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
-gives, the reward that `act!` returned, and whether the episode has ended. They are given as
-they are, each in a [`Deterministic`](@ref), so nothing more is sampled. Before the first
-action, when the action is [`BeforeFirstTimestep`](@ref), the environment is at its initial
-observation, so the reward is [`NoValue`](@ref) and nothing is done with the action.
-The same goes for a timestep where the model takes no action, [`NoValue`](@ref): the
-environment stays where it is. Its [`attribute_names`](@ref) are these three observations,
-the one action, no parameters and no states, since `rl_env` isn't a `NamedTuple`. Use
+gives, copied unless it is plain data such as a number, the reward that `act!` returned, and
+whether the episode has ended. Each is given in a [`Deterministic`](@ref), so nothing more
+is sampled. Before the first action, when the action is [`BeforeFirstTimestep`](@ref), the
+environment is at its initial observation, so the reward is [`NoValue`](@ref) and nothing
+is done with the action. The same goes for a timestep where the model takes no action,
+[`NoValue`](@ref): the environment stays where it is. Its [`attribute_names`](@ref) are
+these three observations, the one action, no parameters and the state `rl_env`. Use
 [`EnvironmentStarts`](@ref), so that the model observes before it acts.
 
 A simulation stops by itself when the episode ends, since the
@@ -84,21 +87,4 @@ foreach(println, simulation.observations)
 """
 struct CommonRLEnvironment{Trl_env,action_name} <: AbstractEnvironmentModel
     rl_env::Trl_env
-end
-
-#Takes the name of the action by keyword, and keeps it in the type, so that reading the action by name costs nothing
-function CommonRLEnvironment(rl_env; action_name::Symbol)
-    return CommonRLEnvironment{typeof(rl_env),action_name}(rl_env)
-end
-
-#The observations it gives are always the same three, the action it receives is the one named, and rl_env isn't a NamedTuple, so there are no named states
-function attribute_names(
-    ::CommonRLEnvironment{Trl_env,action_name}
-) where {Trl_env,action_name}
-    return ModelAttributes(;
-        parameters=(),
-        states=(),
-        inputs=action_name,
-        outputs=(:observation, :reward, :terminated),
-    )
 end

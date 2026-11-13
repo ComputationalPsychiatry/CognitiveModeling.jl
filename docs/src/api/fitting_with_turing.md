@@ -12,7 +12,7 @@ Pages = ["fitting_with_turing.md"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["inference/turing_models.jl"]
+Pages = ["extensions/turing/turing_models.jl"]
 ```
 
 ## Postprocessing
@@ -20,7 +20,10 @@ Pages = ["inference/turing_models.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["inference/postprocessing.jl"]
+Pages = [
+    "extensions/turing/predict_session_trajectories.jl",
+    "extensions/flexichains/session_trajectories_chain.jl",
+]
 ```
 
 ## Functions that a model can implement for Turing.jl

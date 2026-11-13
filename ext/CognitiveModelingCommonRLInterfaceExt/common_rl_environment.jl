@@ -1,19 +1,39 @@
-#Resets the environment from CommonRLInterface.jl and uses the object itself as the state
+#Takes the name of the action by keyword, and keeps it in the type, so that reading the action by name costs nothing
+function CognitiveModeling.CommonRLEnvironment(
+    rl_env::CommonRLInterface.AbstractEnv; action_name::Symbol
+)
+    return CommonRLEnvironment{typeof(rl_env),action_name}(rl_env)
+end
+
+#The observations it gives are always the same three, the action it receives is the one named, and its one state is the
+#environment from CommonRLInterface.jl
+function CognitiveModeling.attribute_names(
+    ::CommonRLEnvironment{Trl_env,action_name}
+) where {Trl_env,action_name}
+    return ModelAttributes(;
+        parameters=(),
+        states=:rl_env,
+        inputs=action_name,
+        outputs=(:observation, :reward, :terminated),
+    )
+end
+
+#Resets the environment from CommonRLInterface.jl and uses the object itself as the state, in a NamedTuple
 function CognitiveModeling.initialize_state(environment::CommonRLEnvironment, parameters)
     reset!(environment.rl_env)
-    return environment.rl_env
+    return (; rl_env=environment.rl_env)
 end
 
 #Gives the observation the environment is at when there is no action to take, and acts otherwise
 function CognitiveModeling.apply_timestep_model(
     environment::CommonRLEnvironment{Trl_env,action_name}, context::ModelContext
 ) where {Trl_env,action_name}
-    rl_env = context.previous_state
+    rl_env = context.previous_state.rl_env
     action = getproperty(context.input, action_name)
 
     #Before the first action, and when the model takes none, the environment stays where it is
     if action isa AbstractNoValue
-        return ModelOutput(observation_without_action(rl_env), rl_env)
+        return ModelOutput(observation_without_action(rl_env), (; rl_env))
     end
 
     #An episode that has ended can't take another action, and isn't started again here
@@ -27,33 +47,39 @@ function CognitiveModeling.apply_timestep_model(
     reward = act!(rl_env, action)
     return ModelOutput(
         (;
-            observation=Deterministic(observe(rl_env)),
+            observation=Deterministic(copied_observation(rl_env)),
             reward=Deterministic(reward),
             terminated=Deterministic(terminated(rl_env)),
         ),
-        rl_env,
+        (; rl_env),
     )
 end
 
 #Copies the environment with its own clone, or with deepcopy if it has none
-function CognitiveModeling.prepare_state_for_saving(
-    environment::CommonRLEnvironment, rl_env
-)
-    return provided(clone, rl_env) ? clone(rl_env) : deepcopy(rl_env)
+function CognitiveModeling.prepare_state_for_saving(environment::CommonRLEnvironment, state)
+    rl_env = state.rl_env
+    return (; rl_env=provided(clone, rl_env) ? clone(rl_env) : deepcopy(rl_env))
 end
 
 #A simulation stops when the episode of the environment from CommonRLInterface.jl has ended
 function CognitiveModeling.stopping_criterion(
-    environment::CommonRLEnvironment, rl_env, parameters
+    environment::CommonRLEnvironment, state, parameters
 )
-    return terminated(rl_env)
+    return terminated(state.rl_env)
 end
 
-#The observation when no action is taken, where there is no reward
+#The observation when no action is taken, where there is no reward, and whether the episode has ended, as after an action
 function observation_without_action(rl_env)
     return (;
-        observation=Deterministic(observe(rl_env)),
+        observation=Deterministic(copied_observation(rl_env)),
         reward=NoValue(),
-        terminated=Deterministic(false),
+        terminated=Deterministic(terminated(rl_env)),
     )
+end
+
+#What observe gives, copied unless it is plain data, such as a number, since an environment can give an object of its
+#own, which it changes in place when it acts again
+function copied_observation(rl_env)
+    observation = observe(rl_env)
+    return isbits(observation) ? observation : deepcopy(observation)
 end

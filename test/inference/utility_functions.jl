@@ -4,37 +4,39 @@
         bet=Any[MissingValue(), MissingValue(), 1.0, 2.0, MissingValue()],
     )
 
-    @testset "The recorded values of each name are kept in order, with the type of the column without the markers" begin
-        recorded = CognitiveModeling.recorded_values(
+    @testset "The values to condition on of each name are kept in order, with the type of the column without the markers" begin
+        values_to_condition_on = CognitiveModeling.collect_values_to_condition_on(
             CognitiveModeling.mark_missing_values(actions, (missing,), true)
         )
-        @test recorded.choice == [true, false, true] && recorded.choice isa Vector{Bool}
-        @test recorded.bet == [1.0, 2.0] && recorded.bet isa Vector{Float64}
-        @test CognitiveModeling.recorded_values((; choice=[true, false])) ==
+        @test values_to_condition_on.choice == [true, false, true] &&
+            values_to_condition_on.choice isa Vector{Bool}
+        @test values_to_condition_on.bet == [1.0, 2.0] &&
+            values_to_condition_on.bet isa Vector{Float64}
+        @test CognitiveModeling.collect_values_to_condition_on((; choice=[true, false])) ==
             (; choice=[true, false])
-        #A name without recorded values is kept as an empty vector of the type other sessions have, so that the sessions share a type
-        never = CognitiveModeling.recorded_values((;
+        #A name without values to condition on is kept as an empty vector of the type other sessions have, so that the sessions share a type
+        never = CognitiveModeling.collect_values_to_condition_on((;
             choice=Vector{Union{MissingValue,Bool}}([MissingValue()]),
             skipped=Vector{Union{NoValue,Float64}}([NoValue(), NoValue()]),
         ))
         @test never.choice == Bool[] && never.choice isa Vector{Bool}
         @test never.skipped == Float64[] && never.skipped isa Vector{Float64}
         #A name whose column can only hold the markers is left out, by its type
-        @test CognitiveModeling.recorded_values((;
+        @test CognitiveModeling.collect_values_to_condition_on((;
             choice=[true], never=[NoValue(), NoValue()], skipped=[MissingValue()]
         )) == (; choice=[true])
-        @test CognitiveModeling.recorded_values((;)) === (;)
+        @test CognitiveModeling.collect_values_to_condition_on((;)) === (;)
         #The same for observations, where nothing happening is NoValue
-        observed = CognitiveModeling.recorded_values((;
+        observed = CognitiveModeling.collect_values_to_condition_on((;
             reward=Vector{Union{Float64,NoValue,MissingValue}}([
                 1.0, NoValue(), MissingValue(), 0.0
             ]),
         ))
         @test observed.reward == [1.0, 0.0] && observed.reward isa Vector{Float64}
-        @test CognitiveModeling.is_recorded(1.0) &&
-            !CognitiveModeling.is_recorded(NoValue()) &&
-            !CognitiveModeling.is_recorded(MissingValue()) &&
-            !CognitiveModeling.is_recorded(UnimputedMissingValue())
+        @test CognitiveModeling.is_value_to_condition_on(1.0) &&
+            !CognitiveModeling.is_value_to_condition_on(NoValue()) &&
+            !CognitiveModeling.is_value_to_condition_on(MissingValue()) &&
+            !CognitiveModeling.is_value_to_condition_on(UnimputedMissingValue())
     end
 
     @testset "Without imputation, missing values become the marker for one that isn't imputed, also those marked in the data already" begin
@@ -47,8 +49,8 @@
             2.0,
             UnimputedMissingValue(),
         ]
-        @test CognitiveModeling.recorded_values(marked) ==
-            CognitiveModeling.recorded_values(actions)
+        @test CognitiveModeling.collect_values_to_condition_on(marked) ==
+            CognitiveModeling.collect_values_to_condition_on(actions)
         #The columns of the data aren't changed, and a column that can't hold a missing value keeps its type
         @test actions.choice[2] === MissingValue()
         @test CognitiveModeling.mark_missing_values(
@@ -93,7 +95,7 @@
         @test isequal(
             CognitiveModeling.mark_missing_values([1.0, missing], (), true), [1.0, missing]
         )
-        #Anything that isn't a vector, or a NamedTuple of them, is returned as it is, for check_data to report
+        #Anything that isn't a vector, or a NamedTuple of them, is returned as it is, for check_data_fits to report
         @test CognitiveModeling.mark_missing_values("data", (missing,), true) == "data"
         #A column with the element type Any is narrowed to the types it holds
         @test CognitiveModeling.mark_missing_values(
@@ -121,32 +123,36 @@
     end
 
     @testset "A column is narrowed when its element type is abstract and not a Union" begin
-        @test CognitiveModeling.narrow_column([true, MissingValue(), true]) isa
+        @test CognitiveModeling.narrow_element_type([true, MissingValue(), true]) isa
             Vector{Union{MissingValue,Bool}}
-        @test CognitiveModeling.narrow_column(Real[1, 2.0]) isa Vector{Union{Float64,Int}}
-        @test CognitiveModeling.narrow_column(Any[1.0, 2.0]) isa Vector{Float64}
+        @test CognitiveModeling.narrow_element_type(Real[1, 2.0]) isa
+            Vector{Union{Float64,Int}}
+        @test CognitiveModeling.narrow_element_type(Any[1.0, 2.0]) isa Vector{Float64}
         #A concrete element type or a Union is kept, since a Union says what the column can hold whether it does or not
         column = Vector{Union{MissingValue,Bool}}([true, false])
-        @test CognitiveModeling.narrow_column(column) === column
-        @test CognitiveModeling.narrow_column([1.0, 2.0]) isa Vector{Float64}
+        @test CognitiveModeling.narrow_element_type(column) === column
+        @test CognitiveModeling.narrow_element_type([1.0, 2.0]) isa Vector{Float64}
     end
 
-    @testset "is_recorded" begin
-        @test CognitiveModeling.is_recorded(1.0) && CognitiveModeling.is_recorded(true)
-        @test !CognitiveModeling.is_recorded(MissingValue()) &&
-            !CognitiveModeling.is_recorded(NoValue())
+    @testset "is_value_to_condition_on" begin
+        @test CognitiveModeling.is_value_to_condition_on(1.0) &&
+            CognitiveModeling.is_value_to_condition_on(true)
+        @test !CognitiveModeling.is_value_to_condition_on(MissingValue()) &&
+            !CognitiveModeling.is_value_to_condition_on(NoValue())
     end
 
     @testset "A row has the value of each column at one timestep, as one of two NamedTuples when a column holds two types" begin
-        @test CognitiveModeling.row((; reward=[1.0, 0.0], cue=[1, 2]), 2) ===
+        @test CognitiveModeling.select_row((; reward=[1.0, 0.0], cue=[1, 2]), 2) ===
             (; reward=0.0, cue=2)
-        @test @inferred(CognitiveModeling.row((; reward=[1.0, 0.0]), 1)) === (; reward=1.0)
-        @test CognitiveModeling.row((;), 1) === (;)
+        @test @inferred(CognitiveModeling.select_row((; reward=[1.0, 0.0]), 1)) ===
+            (; reward=1.0)
+        @test CognitiveModeling.select_row((;), 1) === (;)
         #A column that holds two types gives a NamedTuple with a concrete field, of one of two types, which a call is split over
         column = Vector{Union{MissingValue,Float64}}([1.0, MissingValue()])
-        @test CognitiveModeling.row((; choice=column), 1) === (; choice=1.0)
-        @test CognitiveModeling.row((; choice=column), 2) === (; choice=MissingValue())
-        row_of(t) = CognitiveModeling.row((; choice=column, cue=[1, 2]), t)
+        @test CognitiveModeling.select_row((; choice=column), 1) === (; choice=1.0)
+        @test CognitiveModeling.select_row((; choice=column), 2) ===
+            (; choice=MissingValue())
+        row_of(t) = CognitiveModeling.select_row((; choice=column, cue=[1, 2]), t)
         @test Base.return_types(row_of, Tuple{Int})[1] === Union{
             NamedTuple{(:choice, :cue),Tuple{MissingValue,Int}},
             NamedTuple{(:choice, :cue),Tuple{Float64,Int}},
@@ -156,9 +162,10 @@
     end
 
     @testset "An entry is one of two NamedTuples when its value can have two types" begin
-        @test CognitiveModeling.entry(Val(:choice), 0.5) === (; choice=0.5)
-        @test CognitiveModeling.entry(Val(:choice), NoValue()) === (; choice=NoValue())
-        value_of(t) = CognitiveModeling.entry(
+        @test CognitiveModeling.build_named_entry(Val(:choice), 0.5) === (; choice=0.5)
+        @test CognitiveModeling.build_named_entry(Val(:choice), NoValue()) ===
+            (; choice=NoValue())
+        value_of(t) = CognitiveModeling.build_named_entry(
             Val(:choice), Vector{Union{NoValue,Float64}}([0.5, NoValue()])[t]
         )
         @test Base.return_types(value_of, Tuple{Int})[1] === Union{
@@ -171,7 +178,7 @@
         @test !CognitiveModeling.has_missing_value((; choice=true, bet=1.0)) &&
             !CognitiveModeling.has_missing_value((;))
         @test CognitiveModeling.has_missing_value(
-            CognitiveModeling.row(
+            CognitiveModeling.select_row(
                 (; choice=Vector{Union{MissingValue,Float64}}([1.0, MissingValue()])), 2
             ),
         )
@@ -249,7 +256,7 @@ end
             (:choicecol, :rtcol) => tuple, SessionCounter(), :actions
         ) === (; choice=((:choicecol, :rtcol) => tuple))
         #A model with several of the kind needs the name
-        @test_throws "observation_columns is (a = :x, b = :y), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but a cognitive model of type ObservesRewardAndCue lists the observations (:reward, :cue). Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action." CognitiveModeling.column_map(
+        @test_throws "observation_columns is (a = :x, b = :y), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but the attributes of a cognitive model of type ObservesRewardAndCue have the observations (:reward, :cue). Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action." CognitiveModeling.column_map(
             (; a=:x, b=:y), ObservesRewardAndCue(), :observations
         )
         @test_throws "observation_columns is (:x, :y) => tuple, which builds one value from several columns without the name the model uses for it." CognitiveModeling.column_map(
@@ -367,25 +374,26 @@ function CognitiveModeling.attribute_names(::ScoringEnvironment)
     return ModelAttributes(; parameters=(), states=:level, inputs=:choice, outputs=:reward)
 end
 
-@testset "Scoring the recorded values" begin
+@testset "Scoring the values to condition on" begin
     distributions = (; choice=NormalByHand(0.0, 1.0), bet=NoValue())
 
-    @testset "An output is recorded on a timestep when the data has a value, and a recorded value where the model gave nothing is an error" begin
-        @test CognitiveModeling.recorded_on_timestep(
+    @testset "An output is conditioned on at a timestep when the data has a value, and such a value where the model gave nothing is an error" begin
+        @test CognitiveModeling.find_outputs_to_condition_on(
             (; choice=0.5, bet=NoValue()), distributions, ScoringModel()
         ) === (; choice=true, bet=false)
-        @test CognitiveModeling.recorded_on_timestep(
+        @test CognitiveModeling.find_outputs_to_condition_on(
             (; choice=MissingValue(), bet=MissingValue()), distributions, ScoringModel()
         ) === (; choice=false, bet=false)
-        @test CognitiveModeling.recorded_on_timestep((;), (;), ScoringModel()) === (;)
-        @test_throws "A cognitive model of type ScoringModel gave no output bet on a timestep where the data has 2.0 for it." CognitiveModeling.recorded_on_timestep(
+        @test CognitiveModeling.find_outputs_to_condition_on((;), (;), ScoringModel()) ===
+            (;)
+        @test_throws "A cognitive model of type ScoringModel gave no output bet on a timestep where the data has 2.0 for it." CognitiveModeling.find_outputs_to_condition_on(
             (; choice=0.5, bet=2.0), distributions, ScoringModel()
         )
         #The same for the observations an environment gives
-        @test CognitiveModeling.recorded_on_timestep(
+        @test CognitiveModeling.find_outputs_to_condition_on(
             (; reward=1.0), (; reward=NormalByHand(0.0, 1.0)), ScoringEnvironment()
         ) === (; reward=true)
-        @test_throws "An environment model of type ScoringEnvironment gave no output reward on a timestep where the data has 1.0 for it." CognitiveModeling.recorded_on_timestep(
+        @test_throws "An environment model of type ScoringEnvironment gave no output reward on a timestep where the data has 1.0 for it." CognitiveModeling.find_outputs_to_condition_on(
             (; reward=1.0), (; reward=NoValue()), ScoringEnvironment()
         )
     end

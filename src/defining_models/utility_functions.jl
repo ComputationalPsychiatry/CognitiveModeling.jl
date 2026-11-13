@@ -71,7 +71,7 @@ end
 
 Return whether `name` is among the tuple `names`, and whether every name in the tuple
 `names` is among `other_names`. Used by [`unique_names`](@ref), and by the checks that a
-name map, a save history or the data has names that a model lists.
+name map, a save history or the data has names in a model's attributes.
 """
 has_name(name::Symbol, names::Tuple{}) = false
 function has_name(name::Symbol, names::Tuple)
@@ -99,9 +99,9 @@ end
     check_match_attribute_names(model, parameters, state, previous_output)
 
 Throw an informative error if the names of the parameters, of the previous output, or of a
-state that is a `NamedTuple`, aren't those that [`attribute_names`](@ref) lists for `model`,
-a cognitive model or an environment model. Used by [`InstantiatedModel`](@ref),
-[`simulate`](@ref) and fitted sessions, before anything runs.
+state that is a `NamedTuple`, aren't those in the attributes of `model`, a cognitive model
+or an environment model, from [`attribute_names`](@ref). Used by
+[`InstantiatedModel`](@ref), [`simulate`](@ref) and fitted sessions, before anything runs.
 """
 function check_match_attribute_names(
     model::AbstractTimestepModel, parameters, state, previous_output
@@ -110,7 +110,7 @@ function check_match_attribute_names(
     if !same_names(keys(parameters), attributes.parameters)
         throw(
             ArgumentError(
-                "The parameters are named $(keys(parameters)), but attribute_names lists the parameters of $(describe_model(model)) as $(attributes.parameters).",
+                "The parameters are named $(keys(parameters)), but the parameters in the attributes of $(describe_model(model)) are $(attributes.parameters).",
             ),
         )
     end
@@ -120,14 +120,14 @@ function check_match_attribute_names(
     )
         throw(
             ArgumentError(
-                "The previous output is $previous_output, but it must be a NamedTuple with the outputs that attribute_names lists for $(describe_model(model)), $(attributes.outputs).",
+                "The previous output is $previous_output, but it must be a NamedTuple with the outputs in the attributes of $(describe_model(model)), $(attributes.outputs).",
             ),
         )
     end
     if state isa NamedTuple && !same_names(keys(state), attributes.states)
         throw(
             ArgumentError(
-                "The state is named $(keys(state)), but attribute_names lists the states of $(describe_model(model)) as $(attributes.states).",
+                "The state is named $(keys(state)), but the states in the attributes of $(describe_model(model)) are $(attributes.states).",
             ),
         )
     end
@@ -138,16 +138,16 @@ end
     check_input_names(model, input)
 
 Throw an informative error if `input`, given to a model without the other side of a
-simulation, isn't a `NamedTuple` with every input that [`attribute_names`](@ref) lists for
-`model`. It can have more than those. Used by [`simulate`](@ref) and [`simulate!`](@ref) on
-a single input.
+simulation, isn't a `NamedTuple` with every input in the attributes of `model`, from
+[`attribute_names`](@ref). It can have more than those. Used by [`simulate`](@ref) and
+[`simulate!`](@ref) on a single input.
 """
 function check_input_names(model::AbstractTimestepModel, input)
     attributes = check_type_attribute_names(attribute_names(model), model)
     if !(input isa NamedTuple && has_every_name(attributes.inputs, keys(input)))
         throw(
             ArgumentError(
-                "The input is $input, but it must be a NamedTuple with the inputs that attribute_names lists for $(describe_model(model)), $(attributes.inputs).",
+                "The input is $input, but it must be a NamedTuple with the inputs in the attributes of $(describe_model(model)), $(attributes.inputs).",
             ),
         )
     end
@@ -163,9 +163,9 @@ domain in [`parameter_domains`](@ref) of `model`: below `lower`, above `upper`, 
 whole number when it is `discrete`. Real numbers and arrays of them are checked, and
 anything else is left alone, such as the traced numbers of Reactant.jl, whose values can't
 be compared while a simulation is compiled. It is an `ArgumentError` when the domains name
-a parameter that the model doesn't list, or have a field other than `lower`, `upper` and
-`discrete`. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and fitted sessions,
-before anything runs.
+a parameter that isn't in the model's attributes, or have a field other than `lower`,
+`upper` and `discrete`. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref) and fitted
+sessions, before anything runs.
 """
 function check_parameter_domains(model::AbstractTimestepModel, parameters::NamedTuple)
     domains = parameter_domains(model)
@@ -178,17 +178,18 @@ end
     check_domains_fit_model(model, domains)
 
 Throw an `ArgumentError` if `domains`, what [`parameter_domains`](@ref) returns for `model`,
-names a parameter that [`attribute_names`](@ref) doesn't list for it, or has a domain that
-isn't a `NamedTuple` with only `lower`, `upper` and `discrete`. Used by
+names a parameter that isn't in its attributes, from [`attribute_names`](@ref), or has a
+domain that isn't a `NamedTuple` with only `lower`, `upper` and `discrete`. Used by
 [`check_parameter_domains`](@ref).
 """
 check_domains_fit_model(::AbstractTimestepModel, ::NamedTuple{()}) = nothing
 function check_domains_fit_model(model::AbstractTimestepModel, domains::NamedTuple)
-    listed_names = check_type_attribute_names(attribute_names(model), model).parameters
-    if !has_every_name(keys(domains), listed_names)
+    names_in_attributes =
+        check_type_attribute_names(attribute_names(model), model).parameters
+    if !has_every_name(keys(domains), names_in_attributes)
         throw(
             ArgumentError(
-                "parameter_domains of $(describe_model(model)) has domains for $(keys(domains)), but attribute_names lists its parameters as $listed_names.",
+                "parameter_domains of $(describe_model(model)) has domains for $(keys(domains)), but the parameters in its attributes are $names_in_attributes.",
             ),
         )
     end
@@ -295,9 +296,10 @@ end
     input_before_first_timestep(attributes)
 
 Return the output and the input from before the first timestep: a `NamedTuple` with the
-output or the input names that [`attribute_names`](@ref) lists for `model`, a cognitive
-model or an environment model, or that `attributes`, a [`ModelAttributes`](@ref), has, each
-[`BeforeFirstTimestep`](@ref). A model's names are checked to be a `ModelAttributes` first.
+output or the input names in the attributes of `model`, a cognitive model or an environment
+model, from [`attribute_names`](@ref), or those that `attributes`, a
+[`ModelAttributes`](@ref), has, each [`BeforeFirstTimestep`](@ref). A model's names are
+checked to be a `ModelAttributes` first.
 Used wherever a model starts: by [`InstantiatedModel`](@ref), [`reset!`](@ref),
 [`simulate`](@ref) and fitted sessions, for the previous output and for the output
 distributions saved as timestep 0.

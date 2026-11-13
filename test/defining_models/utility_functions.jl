@@ -67,7 +67,7 @@ function CognitiveModeling.parameter_domains(model::ModelWithDomains)
     return (; learning_rate=(; lower=0, upper=1), n_options=(; lower=1, discrete=true))
 end
 
-#Models whose domains don't fit them: a parameter the model doesn't list, and a domain with a field there isn't
+#Models whose domains don't fit them: a parameter that isn't in the model's attributes, and a domain with a field there isn't
 struct ModelWithUnknownDomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithUnknownDomain)
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
@@ -130,8 +130,8 @@ end
         ) === nothing
     end
 
-    @testset "The domains must be of parameters the model lists, with only lower, upper and discrete" begin
-        @test_throws "parameter_domains of a cognitive model of type ModelWithUnknownDomain has domains for (:noise,), but attribute_names lists its parameters as (:learning_rate,)." CognitiveModeling.check_parameter_domains(
+    @testset "The domains must be of parameters in the model's attributes, with only lower, upper and discrete" begin
+        @test_throws "parameter_domains of a cognitive model of type ModelWithUnknownDomain has domains for (:noise,), but the parameters in its attributes are (:learning_rate,)." CognitiveModeling.check_parameter_domains(
             ModelWithUnknownDomain(), (; learning_rate=0.5)
         )
         @test_throws "The domain of learning_rate in parameter_domains of a cognitive model of type ModelWithMisspelledDomain is (lowest = 0,), but it must be a NamedTuple with any of lower, upper and discrete, such as (; lower = 0, upper = 1)." CognitiveModeling.check_parameter_domains(

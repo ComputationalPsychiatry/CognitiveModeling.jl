@@ -92,8 +92,8 @@ end
 # `CommonRLEnvironment(POMDPCommonRLEnv{Any}(TigerPOMDP()); action_name = :choice)`. The
 # `{Any}` makes POMDPTools.jl give the observations as they are, which the updater needs.
 # Without it, as with `convert`, each observation is put in an array, and the updater throws
-# an error. That environment also gives `reward` and `terminated`, which this cognitive
-# model doesn't list, so a [`NameMap`](@ref) must select the observation for it:
+# an error. That environment also gives `reward` and `terminated`, which aren't in this
+# cognitive model's attributes, so a [`NameMap`](@ref) must select the observation for it:
 # `observation_map = NameMap(:observation)`.
 #
 # The learners in TabularTDLearning.jl can't be used this way. They are solvers which run

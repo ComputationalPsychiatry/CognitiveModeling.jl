@@ -636,7 +636,7 @@ end
             @varname(inverse_temperature.session),
             @varname(session[1].timestep[2].environment.reward.imputed),
         ])
-        #S1's rewards, the imputed one and the two recorded, are scored against its own mean, since its environment runs, and the rewards of the other sessions aren't
+        #S1's rewards, the imputed one and the two in the data, are scored against its own mean, since its environment runs, and the rewards of the other sessions aren't
         given = Dict(
             @varname(learning_rate.session) => [0.2, 0.3, 0.4],
             @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
@@ -889,7 +889,7 @@ end
         long_model = model_with(10_000)
         logjoint(short_model, given)
         logjoint(long_model, given)
-        #Doubling the timesteps only adds the vectors of the distributions of the recorded actions, about 23 bytes per timestep
+        #Doubling the timesteps only adds the vectors of the distributions of the actions to condition on, about 23 bytes per timestep
         @test @allocated(logjoint(long_model, given)) -
               @allocated(logjoint(short_model, given)) <= 40 * 10_000
     end

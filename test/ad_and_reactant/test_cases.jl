@@ -66,7 +66,7 @@ function CognitiveModeling.attribute_names(environment::RewardsFollowActions)
     )
 end
 
-# The same environment under other names than the model's, with an observation the model doesn't list, which
+# The same environment under other names than the model's, with an observation that isn't in the model's attributes, which
 # can't share the name of the state it comes from, since a model uses a name for one attribute
 struct PayoffsFollowLevers <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters)
@@ -240,7 +240,7 @@ function CognitiveModeling.attribute_names(model::LearnsInPlace)
 end
 
 # The same model, which copies its state with deepcopy when it's saved. ReverseDiff gave zero gradients through deepcopy
-# of a container of tracked numbers before v1.18.8, which is why the environment of the AD suite asks for that version
+# of a container of tracked numbers before v1.18.8
 struct LearnsInPlaceWithDeepcopy <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters)
     return CognitiveModeling.initialize_state(LearnsInPlace(), parameters)

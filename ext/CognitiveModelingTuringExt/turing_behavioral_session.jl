@@ -13,7 +13,7 @@ function CognitiveModeling.turing_full_model(
     fixed_cognitive_parameters::NamedTuple=(;),
     fixed_environment_parameters::NamedTuple=(;),
     catch_invalid_parameters::Bool=false,
-    parallelization=NoParallelization(),
+    parallelization=SerialSessions(),
     include_submodel_prefixes::Bool=false,
 )
     warn_if_parameter_names_overlap(
@@ -56,11 +56,11 @@ end
                                     environment_parameters_model, sessions_info,
                                     include_submodel_prefixes)
 
-Warn when the cognitive model and the environment model of the sessions list a parameter of
-the same name, both session parameter models sample, and the variables have no prefixes,
-since their variables can then have the same names, and a name that both use is one
-variable, which `sample` rejects. Whether both sample is decided by their types. Used by
-`turing_full_model` when it creates the model, outside the model's body, which is
+Warn when the attributes of the cognitive model and of the environment model of the sessions
+have a parameter of the same name, both session parameter models sample, and the variables
+have no prefixes, since their variables can then have the same names, and a name that both
+use is one variable, which `sample` rejects. Whether both sample is decided by their types.
+Used by `turing_full_model` when it creates the model, outside the model's body, which is
 differentiated.
 """
 function warn_if_parameter_names_overlap(
@@ -203,7 +203,7 @@ Turing.@model function turing_run_full_model(
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
     catch_invalid_parameters::Bool=false,
-    parallelization=NoParallelization(),
+    parallelization=SerialSessions(),
     include_submodel_prefixes::Bool=false,
 )
 
@@ -299,7 +299,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     sessions_info::MultipleSessionsInfo,
     cognitive_parameters,
     environment_parameters=(;);
-    parallelization=NoParallelization(),
+    parallelization=SerialSessions(),
 )
     check_environment_parameters(sessions_info, environment_parameters)
     saved_trajectories ~ to_submodel(
@@ -320,20 +320,21 @@ Turing.jl model which runs every session in `sessions_info` as a submodel with t
 the loop, so that the vector has its type. Sessions of one type can still save trajectories
 of different types, such as an action that is `NoValue()` in one session only, and a
 session whose trajectories have another type widens the vector, as [`store_value!`](@ref)
-does. With
-[`NoParallelization`](@ref) the sessions run one after the other, and with
+does. With [`SerialSessions`](@ref) the sessions run one after the other, and with
 [`ParallelSessions`](@ref) over the threads Julia was started with, which needs the model
 that is evaluated to be marked thread-safe, since the log density is silently wrong
 otherwise. Used by [`turing_multiple_behavioral_sessions`](@ref).
 """
 Turing.@model function turing_run_sessions(
-    ::NoParallelization, sessions_info, cognitive_parameters, environment_parameters
+    ::SerialSessions, sessions_info, cognitive_parameters, environment_parameters
 )
     sessions = sessions_info.sessions
     first_saved ~ to_submodel(
         prefix(
             turing_behavioral_session(
-                sessions[1], row(cognitive_parameters, 1), row(environment_parameters, 1)
+                sessions[1],
+                select_row(cognitive_parameters, 1),
+                select_row(environment_parameters, 1),
             ),
             @varname(session[1]),
         ),
@@ -345,8 +346,8 @@ Turing.@model function turing_run_sessions(
             prefix(
                 turing_behavioral_session(
                     sessions[i],
-                    row(cognitive_parameters, i),
-                    row(environment_parameters, i),
+                    select_row(cognitive_parameters, i),
+                    select_row(environment_parameters, i),
                 ),
                 @varname(session[i]),
             ),
@@ -372,7 +373,9 @@ Turing.@model function turing_run_sessions(
     first_saved ~ to_submodel(
         prefix(
             turing_behavioral_session(
-                sessions[1], row(cognitive_parameters, 1), row(environment_parameters, 1)
+                sessions[1],
+                select_row(cognitive_parameters, 1),
+                select_row(environment_parameters, 1),
             ),
             @varname(session[1]),
         ),
@@ -387,8 +390,8 @@ Turing.@model function turing_run_sessions(
             prefix(
                 turing_behavioral_session(
                     sessions[i],
-                    row(cognitive_parameters, i),
-                    row(environment_parameters, i),
+                    select_row(cognitive_parameters, i),
+                    select_row(environment_parameters, i),
                 ),
                 @varname(session[i]),
             ),
@@ -569,8 +572,8 @@ end
 
 Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
 as [`turing_behavioral_timestep`](@ref) with the prefix `timestep[t]`, saves what the save
-histories of `session_info` select, and scores the recorded actions, and the recorded
-observations when the environment runs, against the distributions of their timesteps all at
+histories of `session_info` select, and scores the actions in the data, and the observations
+in the data when the environment runs, against the distributions of their timesteps all at
 once at the end, as observed values. Before each timestep from
 `first_timestep_to_check_stopping` of `session_info` on, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
@@ -619,9 +622,9 @@ Turing.@model function turing_run_timesteps(
     )
     offset = initial_saved === nothing ? 0 : 1
 
-    #Initialize the distributions of the recorded actions and observations
-    distributions = initialize_recorded_distributions(session_info, timestep_values)
-    distributions = store_recorded_distributions(
+    #Initialize the distributions of the actions and observations to condition on
+    distributions = initialize_distributions_for_conditioning(session_info, timestep_values)
+    distributions = store_distributions_for_conditioning(
         session_info, distributions, timestep_values
     )
 
@@ -664,19 +667,19 @@ Turing.@model function turing_run_timesteps(
         storage = store_all_values!(
             storage, saved_session_values(session_info, timestep_values), t + offset
         )
-        distributions = store_recorded_distributions(
+        distributions = store_distributions_for_conditioning(
             session_info, distributions, timestep_values
         )
     end
 
-    #Score the recorded actions, and the recorded observations with an environment, against the distributions of their timesteps, all at once as observed values
-    if !isempty(session_info.recorded_actions)
-        session_info.recorded_actions ~ product_distribution(
+    #Score the actions in the data, and the observations in the data with an environment, against the distributions of their timesteps, all at once as observed values
+    if !isempty(session_info.actions_to_condition_on)
+        session_info.actions_to_condition_on ~ product_distribution(
             map(product_distribution, map(scorable_distributions, distributions.actions))
         )
     end
-    if has_environment(session_info) && !isempty(session_info.recorded_observations)
-        session_info.recorded_observations ~ product_distribution(
+    if has_environment(session_info) && !isempty(session_info.observations_to_condition_on)
+        session_info.observations_to_condition_on ~ product_distribution(
             map(
                 product_distribution,
                 map(scorable_distributions, distributions.observations),
@@ -697,33 +700,36 @@ end
 """
     scorable_distributions(distributions)
 
-Return the vector of the distributions of one recorded value as it is, or an empty vector of
-`Normal`s for a value the model gave on no timestep and the data recorded on none, whose
-vector never got a type. Either scores an empty vector of recorded values as zero, where a
-`Vector{Union{}}` can't be made into a product distribution at all. Used by
-[`turing_run_timesteps`](@ref) before the recorded values are scored.
+Return the vector of the distributions of one output to condition on as it is, or an empty
+vector of `Normal`s for an output the model gave on no timestep and the data has on none,
+whose vector never got a type. Either scores an empty vector of values to condition on as
+zero, where a `Vector{Union{}}` can't be made into a product distribution at all. Used by
+[`turing_run_timesteps`](@ref) before the values to condition on are scored.
 """
 scorable_distributions(distributions::AbstractVector) = distributions
 scorable_distributions(::Vector{Union{}}) = Normal{Float64}[]
 
 """
-    initialize_recorded_distributions(session_info, timestep_values)
-    store_recorded_distributions(session_info, distributions, timestep_values)
+    initialize_distributions_for_conditioning(session_info, timestep_values)
+    store_distributions_for_conditioning(session_info, distributions, timestep_values)
 
-Keep the distributions that the recorded values of a session are scored against: the
+Keep the distributions that the values to condition on of a session are scored against: the
 cognitive model's for the actions, and the environment's for the observations when the
 environment runs, in a `NamedTuple` with `actions` and `observations`, each a `NamedTuple`
-with a vector for each recorded name, as [`initialize_distributions`](@ref) and
+with a vector for each name to condition on, as [`initialize_distributions`](@ref) and
 [`store_distributions`](@ref) make them from the values of a timestep. A
 [`Deterministic`](@ref) is kept as the `Dirac` which scores it, see
 [`scorable_distribution`](@ref). Used by [`turing_run_timesteps`](@ref).
 """
-function initialize_recorded_distributions(session_info::SessionInfo, timestep_values)
+function initialize_distributions_for_conditioning(
+    session_info::SessionInfo, timestep_values
+)
     return (;
         actions=initialize_distributions(
             scorable_distribution_of_each(
                 select_names(
-                    timestep_values.action_distribution, recorded_action_names(session_info)
+                    timestep_values.action_distribution,
+                    action_names_to_condition_on(session_info),
                 ),
             ),
         ),
@@ -731,14 +737,14 @@ function initialize_recorded_distributions(session_info::SessionInfo, timestep_v
             scorable_distribution_of_each(
                 select_names(
                     observation_distribution_of(session_info, timestep_values),
-                    recorded_observation_names(session_info),
+                    observation_names_to_condition_on(session_info),
                 ),
             ),
         ),
     )
 end
 
-function store_recorded_distributions(
+function store_distributions_for_conditioning(
     session_info::SessionInfo, distributions, timestep_values
 )
     return (;
@@ -746,32 +752,33 @@ function store_recorded_distributions(
             distributions.actions,
             scorable_distribution_of_each(
                 select_names(
-                    timestep_values.action_distribution, recorded_action_names(session_info)
+                    timestep_values.action_distribution,
+                    action_names_to_condition_on(session_info),
                 ),
             ),
-            timestep_values.recorded_actions_on_timestep,
+            timestep_values.actions_to_condition_on_at_timestep,
         ),
         observations=store_distributions(
             distributions.observations,
             scorable_distribution_of_each(
                 select_names(
                     observation_distribution_of(session_info, timestep_values),
-                    recorded_observation_names(session_info),
+                    observation_names_to_condition_on(session_info),
                 ),
             ),
-            recorded_observations_on_timestep_of(session_info, timestep_values),
+            observations_to_condition_on_at_timestep_of(session_info, timestep_values),
         ),
     )
 end
 
 """
     observation_distribution_of(session_info, timestep_values)
-    recorded_observations_on_timestep_of(session_info, timestep_values)
+    observations_to_condition_on_at_timestep_of(session_info, timestep_values)
 
-Return the distributions the environment gave for the observations of a timestep, and
-which observations are recorded on it, from the environment's part of the values of the
+Return the distributions the environment gave for the observations of a timestep, and which
+observations to condition on at it, from the environment's part of the values of the
 timestep, or an empty `NamedTuple` for a session without an environment, whose observations
-aren't scored. Used by [`store_recorded_distributions`](@ref).
+aren't scored. Used by [`store_distributions_for_conditioning`](@ref).
 """
 observation_distribution_of(::SessionInfo{<:Any,NoEnvironment}, timestep_values) = (;)
 function observation_distribution_of(
@@ -779,35 +786,35 @@ function observation_distribution_of(
 )
     return timestep_values.environment.observation_distribution
 end
-function recorded_observations_on_timestep_of(
+function observations_to_condition_on_at_timestep_of(
     ::SessionInfo{<:Any,NoEnvironment}, timestep_values
 )
     return (;)
 end
-function recorded_observations_on_timestep_of(
+function observations_to_condition_on_at_timestep_of(
     ::SessionInfo{<:Any,<:AbstractTimestepModel}, timestep_values
 )
-    return timestep_values.environment.recorded_observations_on_timestep
+    return timestep_values.environment.observations_to_condition_on_at_timestep
 end
 
 """
     scorable_distribution(distribution)
     scorable_distribution_of_each(distributions)
 
-Return what a recorded value is scored against: `distribution` as it is, or the `Dirac` at
-the value of a [`Deterministic`](@ref), which gives a log density of 0 to that value and
-`-Inf` to any other. Only a number or a `Bool` can be scored as a point mass, so a
+Return what a value to condition on is scored against: `distribution` as it is, or the
+`Dirac` at the value of a [`Deterministic`](@ref), which gives a log density of 0 to that
+value and `-Inf` to any other. Only a number or a `Bool` can be scored as a point mass, so a
 `Deterministic` with another value is an error, which asks for a distribution. A marker for
-no output is kept, since it is only there on timesteps where nothing is recorded, which
-[`recorded_on_timestep`](@ref) checks. The second form maps over a `NamedTuple` of
-distributions. Used by [`store_recorded_distributions`](@ref).
+no output is kept, since it is only there on timesteps where the data has no value to
+condition on, which [`find_outputs_to_condition_on`](@ref) checks. The second form maps over
+a `NamedTuple` of distributions. Used by [`store_distributions_for_conditioning`](@ref).
 """
 scorable_distribution(distribution) = distribution
 scorable_distribution(deterministic::Deterministic{<:Real}) = Dirac(deterministic.value)
 function scorable_distribution(deterministic::Deterministic)
     return throw(
         ArgumentError(
-            "A value recorded in the data is scored against what the model gave for it, which is Deterministic($(repr(deterministic.value))), of type $(typeof(deterministic.value)). Only a number or a Bool can be scored as a point mass. Give a distribution for an output that is recorded, or leave it out of the data.",
+            "A value in the data is scored against what the model gave for it, which is Deterministic($(repr(deterministic.value))), of type $(typeof(deterministic.value)). Only a number or a Bool can be scored as a point mass. Give a distribution for an output that has values in the data, or leave it out of the data.",
         ),
     )
 end
@@ -820,8 +827,8 @@ end
 
 Throw an informative error if the data of a session has a value on a timestep after `t`, the
 last one that ran, since a session which ends while its data continues can't score the
-recorded values after it. By default the criterion is only checked after the last timestep
-with data, so this only happens with `check_stopping_criterion = true`. Used by
+values in the data after it. By default the criterion is only checked after the last
+timestep with data, so this only happens with `check_stopping_criterion = true`. Used by
 [`turing_run_timesteps`](@ref) when a stopping criterion is met.
 """
 function check_no_data_after(session_info::SessionInfo, t)
@@ -849,10 +856,11 @@ Turing.jl model which runs timestep `t` of a session from `previous`, the values
 timestep before, and returns the values of this one: what the next one starts from, together
 with what the session saves and scores. They are arranged as a simulation arranges them. The
 cognitive model's are at the top: its `state`, the `observation` it received, its `action`,
-the `action_distribution` it gave, and `recorded_actions_on_timestep`. The environment's are
-under `environment`, in its own names: its `state`, its `observation`, the `action` it
-received, the `observation_distribution` it gave, and `recorded_observations_on_timestep`.
-Without an environment, `environment` only has a `state`, which is `nothing`.
+the `action_distribution` it gave, and `actions_to_condition_on_at_timestep`. The
+environment's are under `environment`, in its own names: its `state`, its `observation`, the
+`action` it received, the `observation_distribution` it gave, and
+`observations_to_condition_on_at_timestep`. Without an environment, `environment` only has a
+`state`, which is `nothing`.
 
 Each model runs as [`turing_model_timestep`](@ref), the environment's under the prefix
 `environment`. Without an environment, the observation comes from the data: the model acts
@@ -868,7 +876,7 @@ Turing.@model function turing_behavioral_timestep(
     environment_parameters,
     previous,
 )
-    data_observation = row(session_info.observations, t)
+    data_observation = select_row(session_info.observations, t)
 
     #The model acts on this timestep's observation when the environment starts, and on the previous one when the agent starts
     observation = if session_info.who_starts isa EnvironmentStarts
@@ -894,14 +902,14 @@ Turing.@model function turing_behavioral_timestep(
         false,
     )
 
-    #The next timestep starts from this timestep's observation in the data. The observation and the action can have one of two types, so they go in through entry
+    #The next timestep starts from this timestep's observation in the data. The observation and the action can have one of two types, so they go in through build_named_entry
     return merge(
         (; state=cognitive.new_state),
-        entry(Val(:observation), data_observation),
-        entry(Val(:action), cognitive.output),
+        build_named_entry(Val(:observation), data_observation),
+        build_named_entry(Val(:action), cognitive.output),
         (;
             action_distribution=cognitive.output_distribution,
-            recorded_actions_on_timestep=cognitive.recorded_on_timestep,
+            actions_to_condition_on_at_timestep=cognitive.outputs_to_condition_on,
             environment=(; state=nothing),
         ),
     )
@@ -992,27 +1000,27 @@ Turing.@model function turing_behavioral_timestep(
         observation = map_names(environment_observation, session_info.observation_map)
     end
 
-    #Collect the environment's values, in its own names. The observations and the actions can have one of two types, so they go in through entry
+    #Collect the environment's values, in its own names. The observations and the actions can have one of two types, so they go in through build_named_entry
     environment_timestep_values = merge(
         (; state=environment.new_state),
-        entry(Val(:observation), environment_observation),
-        entry(Val(:action), environment_action),
+        build_named_entry(Val(:observation), environment_observation),
+        build_named_entry(Val(:action), environment_action),
         (;
             observation_distribution=environment.output_distribution,
-            recorded_observations_on_timestep=environment.recorded_on_timestep,
+            observations_to_condition_on_at_timestep=environment.outputs_to_condition_on,
         ),
     )
 
     #Collect the cognitive model's values at the top, with the environment's under environment
     return merge(
         (; state=cognitive.new_state),
-        entry(Val(:observation), observation),
-        entry(Val(:action), action),
+        build_named_entry(Val(:observation), observation),
+        build_named_entry(Val(:action), action),
         (;
             action_distribution=cognitive.output_distribution,
-            recorded_actions_on_timestep=cognitive.recorded_on_timestep,
+            actions_to_condition_on_at_timestep=cognitive.outputs_to_condition_on,
         ),
-        entry(Val(:environment), environment_timestep_values),
+        build_named_entry(Val(:environment), environment_timestep_values),
     )
 end
 
@@ -1022,31 +1030,33 @@ end
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
 environment model: `model` runs on `context` with [`turing_apply_timestep_model`](@ref), and
-its outputs are then taken from row `t` of `data_columns`, the data for them, where they are
-recorded, imputed from what the model gave where they are [`MissingValue`](@ref), as
+its outputs are then taken from row `t` of `data_columns`, the data for them, where it has
+values, imputed from what the model gave where they are [`MissingValue`](@ref), as
 [`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
 otherwise, such as `UnimputedMissingValue()` or `NoValue()`. It returns the output, the
-model's new state, the distribution it gave for the output and which outputs are recorded on
-the timestep, as [`recorded_on_timestep`](@ref) gives it, so that the recorded values can be
-scored against the distributions at the end of the session. The row is taken here and not
-given. Used by [`turing_behavioral_timestep`](@ref).
+model's new state, the distribution it gave for the output and which outputs to condition on
+at the timestep, as [`find_outputs_to_condition_on`](@ref) gives it, so that their values
+can be scored against the distributions at the end of the session. The row is taken here and
+not given. Used by [`turing_behavioral_timestep`](@ref).
 """
 Turing.@model function turing_model_timestep(model, context, data_columns, t)
-    data_output = row(data_columns, t)
+    data_output = select_row(data_columns, t)
     model_output ~ to_submodel(turing_apply_timestep_model(model, context), false)
     model_output = check_model_output(model_output, model)
     output ~ to_submodel(
         turing_impute_missing_values(data_output, model_output.output_distribution), false
     )
-    recorded = recorded_on_timestep(data_output, model_output.output_distribution, model)
+    outputs_to_condition_on = find_outputs_to_condition_on(
+        data_output, model_output.output_distribution, model
+    )
 
-    #The output can have one of two types, so it goes in through entry
+    #The output can have one of two types, so it goes in through build_named_entry
     return merge(
-        entry(Val(:output), output),
+        build_named_entry(Val(:output), output),
         (;
             new_state=model_output.new_state,
             output_distribution=model_output.output_distribution,
-            recorded_on_timestep=recorded,
+            outputs_to_condition_on=outputs_to_condition_on,
         ),
     )
 end
@@ -1091,7 +1101,7 @@ Turing.@model function turing_impute_each_value(
         false,
     )
     rest ~ to_submodel(turing_impute_each_value(Base.tail(data), distributions), false)
-    return merge(entry(Val(name), value), rest)
+    return merge(build_named_entry(Val(name), value), rest)
 end
 
 Turing.@model function turing_impute_each_value(data::NamedTuple{()}, distributions)

@@ -1,41 +1,42 @@
 ## Preparing the data of a session ##
 
 """
-    is_recorded(value)
+    is_value_to_condition_on(value)
 
-Return whether a single action or observation in the data happened and was recorded, so that
-it is scored: neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
-[`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by [`recorded_values`](@ref) and
-[`recorded_on_timestep`](@ref).
+Return whether a single action or observation in the data is a value to condition on:
+neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
+[`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by
+[`collect_values_to_condition_on`](@ref) and [`find_outputs_to_condition_on`](@ref).
 """
-is_recorded(value) = !(value isa MissingValue || value isa AbstractNoValue)
+is_value_to_condition_on(value) = !(value isa MissingValue || value isa AbstractNoValue)
 
 """
-    recorded_values(columns)
+    collect_values_to_condition_on(columns)
 
-Return the recorded values of each action or observation in `columns`, a `NamedTuple` with
-one vector per name, as a `NamedTuple` of vectors in the order of the timesteps. Fitting
-scores these against the distributions the model gave on the same timesteps: the actions
-against the cognitive model's, and the observations against the environment's. Each vector
-has the element type of its column without [`MissingValue`](@ref) and the other markers,
-so that a session without recorded values for a name gets an empty vector of the same type
-as other sessions, which scores nothing. A name whose column can only hold
+Return the values to condition on of each action or observation in `columns`, a `NamedTuple`
+with one vector per name, as a `NamedTuple` of vectors in the order of the timesteps.
+Fitting scores these against the distributions the model gave on the same timesteps: the
+actions against the cognitive model's, and the observations against the environment's. Each
+vector has the element type of its column without [`MissingValue`](@ref) and the other
+markers, so that a session without values to condition on for a name gets an empty vector of
+the same type as other sessions, which scores nothing. A name whose column can only hold
 those markers is left out, which is decided by its type, so that it is the same for every
 session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its fields
-`recorded_actions` and `recorded_observations`.
+`actions_to_condition_on` and `observations_to_condition_on`.
 """
-function recorded_values(columns::NamedTuple{names}) where {names}
-    recorded = map(
+function collect_values_to_condition_on(columns::NamedTuple{names}) where {names}
+    values_to_condition_on = map(
         column ->
             Vector{Base.typesplit(eltype(column), Union{MissingValue,AbstractNoValue})}(
-                filter(is_recorded, column)
+                filter(is_value_to_condition_on, column)
             ),
         columns,
     )
     names_with_a_type = Tuple(
-        name for name in names if eltype(getproperty(recorded, name)) !== Union{}
+        name for
+        name in names if eltype(getproperty(values_to_condition_on, name)) !== Union{}
     )
-    return NamedTuple{names_with_a_type}(recorded)
+    return NamedTuple{names_with_a_type}(values_to_condition_on)
 end
 
 """
@@ -75,7 +76,7 @@ function last_timestep_with_data(columns::NamedTuple)
 end
 
 """
-    narrow_column(column)
+    narrow_element_type(column)
 
 Return `column` with the types it holds as its element type, when its element type is `Any`
 or another abstract type that isn't a `Union`, and `column` itself otherwise. A vector
@@ -83,7 +84,7 @@ written as `[true, MissingValue(), true]` has the element type `Any`, since only
 is promoted to a `Union`, and an `Any` in the data makes every timestep run with its types
 unknown. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
 """
-function narrow_column(column::AbstractVector)
+function narrow_element_type(column::AbstractVector)
     T = eltype(column)
     (isconcretetype(T) || T isa Union) && return column
     narrowed_type = Union{}
@@ -154,17 +155,17 @@ is in the data already becomes too.
 A column gets the type of the marker in its element type when its element type allows one
 of the values, whether it holds one or not, so that sessions whose columns have the same
 types keep them, or when it holds a value equal to one of them of another type, such as
-`-1.0` for `-1`. Any other column is kept as it is, after [`narrow_column`](@ref). Anything
-that isn't a `NamedTuple` of vectors is returned as it is, for [`check_data`](@ref) to
-report. Used by [`SessionInfo`](@ref) on the observations and the actions, and by
-[`build_column`](@ref).
+`-1.0` for `-1`. Any other column is kept as it is, after [`narrow_element_type`](@ref).
+Anything that isn't a `NamedTuple` of vectors is returned as it is, for
+[`check_data_fits`](@ref) to report. Used by [`SessionInfo`](@ref) on the observations and
+the actions, and by [`build_column`](@ref).
 """
 function mark_missing_values(columns::NamedTuple, missing_values::Tuple, impute::Bool)
     return map(column -> mark_missing_values(column, missing_values, impute), columns)
 end
 
 function mark_missing_values(column::AbstractVector, missing_values::Tuple, impute::Bool)
-    column = narrow_column(column)
+    column = narrow_element_type(column)
     marker = missing_value_marker(impute)
 
     #Without imputation, a value which is marked as missing in the data already isn't imputed either
@@ -191,27 +192,30 @@ mark_missing_values(x, missing_values::Tuple, impute::Bool) = x
 
 #A call of its own, so that a value which can have two types gives one of two NamedTuples with a concrete field each: (; a = x) written out is inferred as a NamedTuple whose field type is the Union, which nothing is compiled for, while a call with a Union-typed argument is split by type
 """
-    entry(::Val{name}, value)
+    build_named_entry(::Val{name}, value)
 
 Return `(; name = value)`. A `NamedTuple` which holds a value that can have two types is
-built with `merge` of these, as [`row`](@ref) does. Used by [`row`](@ref), by
+built with `merge` of these, as [`select_row`](@ref) does. Used by [`select_row`](@ref), by
 [`saved_session_values`](@ref) and by the timesteps of fitted sessions.
 """
-entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
+build_named_entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,))
 
 """
-    row(columns, t)
+    select_row(columns, t)
 
 Return the `NamedTuple` of the values at timestep `t` of `columns`, a `NamedTuple` of
-vectors with one entry for each timestep, built with [`entry`](@ref) so that a column which
-holds two types, such as an action that is [`MissingValue`](@ref) on some timesteps, gives
-one of two `NamedTuple`s with concrete fields rather than one without a definite type. Used
-by the timesteps of fitted sessions, and by the models of several sessions, which read the
-parameters of one session with it.
+vectors with one entry for each timestep, built with [`build_named_entry`](@ref) so that a
+column which holds two types, such as an action that is [`MissingValue`](@ref) on some
+timesteps, gives one of two `NamedTuple`s with concrete fields rather than one without a
+definite type. Used by the timesteps of fitted sessions, and by the models of several
+sessions, which read the parameters of one session with it.
 """
-row(columns::NamedTuple{()}, t) = (;)
-function row(columns::NamedTuple{names}, t) where {names}
-    return merge(entry(Val(first(names)), first(columns)[t]), row(Base.tail(columns), t))
+select_row(columns::NamedTuple{()}, t) = (;)
+function select_row(columns::NamedTuple{names}, t) where {names}
+    return merge(
+        build_named_entry(Val(first(names)), first(columns)[t]),
+        select_row(Base.tail(columns), t),
+    )
 end
 
 """
@@ -224,14 +228,14 @@ imputing when nothing is missing.
 has_missing_value(data::NamedTuple) = any(value -> value isa MissingValue, Tuple(data))
 
 """
-    check_data(cognitive_model, observations, actions)
+    check_data_fits(cognitive_model, observations, actions)
 
 Throw an informative error if the data of a session isn't a `NamedTuple` of vectors for the
-observations and one for the actions, doesn't have the observations and the actions that
-[`attribute_names`](@ref) lists, or has columns of different lengths, and return the number
-of timesteps otherwise. Used by [`SessionInfo`](@ref).
+observations and one for the actions, doesn't have the observations and the actions in the
+cognitive model's attributes, from [`attribute_names`](@ref), or has columns of different
+lengths, and return the number of timesteps otherwise. Used by [`SessionInfo`](@ref).
 """
-function check_data(
+function check_data_fits(
     cognitive_model::AbstractTimestepModel, observations::NamedTuple, actions::NamedTuple
 )
     attributes = check_type_attribute_names(
@@ -240,14 +244,14 @@ function check_data(
     if !has_every_name(attributes.inputs, keys(observations))
         throw(
             ArgumentError(
-                "The observations in the data are named $(keys(observations)), but attribute_names lists the observations of $(describe_model(cognitive_model)), its inputs, as $(attributes.inputs). The data must have every observation the cognitive model lists.",
+                "The observations in the data are named $(keys(observations)), but the observations in the attributes of $(describe_model(cognitive_model)), its inputs, are $(attributes.inputs). The data must have every observation in the cognitive model's attributes.",
             ),
         )
     end
     if !same_names(keys(actions), attributes.outputs)
         throw(
             ArgumentError(
-                "The actions in the data are named $(keys(actions)), but attribute_names lists the actions of $(describe_model(cognitive_model)), its outputs, as $(attributes.outputs).",
+                "The actions in the data are named $(keys(actions)), but the actions in the attributes of $(describe_model(cognitive_model)), its outputs, are $(attributes.outputs).",
             ),
         )
     end
@@ -266,7 +270,7 @@ function check_data(
 end
 
 #The same for the data that isn't a NamedTuple of vectors
-function check_data(cognitive_model::AbstractTimestepModel, observations, actions)
+function check_data_fits(cognitive_model::AbstractTimestepModel, observations, actions)
     return throw(
         ArgumentError(
             "The observations and the actions must each be a NamedTuple with one vector for each name, such as (; reward = [1.0, 0.0]), or a single vector when the model has only one kind of them in its attributes, but they have types $(typeof(observations)) and $(typeof(actions)).",
@@ -279,8 +283,8 @@ end
 
 Throw an informative error if a session can't run with `environment`: without one, the
 observations in the data can't have a [`MissingValue`](@ref), since nothing imputes it, and
-with one, it must list the same observations and actions as `cognitive_model`. Used by
-[`SessionInfo`](@ref).
+with one, its attributes must have the same observations and actions as those of
+`cognitive_model`. Used by [`SessionInfo`](@ref).
 """
 function check_environment_fits(
     cognitive_model::AbstractTimestepModel,
@@ -318,19 +322,19 @@ function check_environment_fits(
 end
 
 """
-    environment_view(values, environment, observation_map, filler)
+    map_to_environment_outputs(values, environment, observation_map, filler)
 
 Return `values`, a `NamedTuple` in the names under which the cognitive model receives the
-observations, as `environment` gives them: under each output name that the environment
-lists, the value that `observation_map` passes on from it, or `filler` for an output that
-the map doesn't pass on. Without a map the names are the same. Without an environment
+observations, as `environment` gives them: under each output name in the environment's
+attributes, the value that `observation_map` passes on from it, or `filler` for an output
+that the map doesn't pass on. Without a map the names are the same. Without an environment
 `values` is returned as it is. Used by [`SessionInfo`](@ref) for the environment's data,
 with a column of [`MissingValue`](@ref) for each output that isn't passed on, so that it is
 imputed, and for the observation the environment starts from, with
 [`BeforeFirstTimestep`](@ref).
 """
-environment_view(values, ::NoEnvironment, observation_map, filler) = values
-function environment_view(
+map_to_environment_outputs(values, ::NoEnvironment, observation_map, filler) = values
+function map_to_environment_outputs(
     values, environment::AbstractTimestepModel, observation_map, filler
 )
     outputs = check_type_attribute_names(attribute_names(environment), environment).outputs
@@ -344,7 +348,7 @@ end
 
 Return the value in `values` that the environment's output `name` is received as: under the
 same name without a map, under the name `observation_map` gives it, or `filler` when the map
-doesn't pass it on. Used by [`environment_view`](@ref).
+doesn't pass it on. Used by [`map_to_environment_outputs`](@ref).
 """
 value_passed_on(values, name, ::Nothing, filler) = values[name]
 function value_passed_on(
@@ -359,9 +363,9 @@ end
 """
     data_names(cognitive_model, kind)
 
-Return the names that [`attribute_names`](@ref) of `cognitive_model` lists for the data of
-`kind`, `:observations` or `:actions`: its inputs for the observations and its outputs for
-the actions. Used by [`column_map`](@ref) and [`named_data`](@ref).
+Return the names in the attributes of `cognitive_model`, from [`attribute_names`](@ref), for
+the data of `kind`, `:observations` or `:actions`: its inputs for the observations and its
+outputs for the actions. Used by [`column_map`](@ref) and [`named_data`](@ref).
 """
 function data_names(cognitive_model, kind::Symbol)
     attributes = check_type_attribute_names(
@@ -382,9 +386,9 @@ the model uses to the specification of the column, from what `observation_column
 - one such pair on its own;
 - a single name, which is the column of the attribute of that kind when the model has only
   one in its attributes, whatever the column is called. It is an error when the model has
-  several, and when the model lists the name as an attribute of the other kind only, since
-  `observation_columns` and `action_columns` may then be swapped. When the model lists
-  none, it is a column of that name;
+  several, and when the model's attributes have the name as one of the other kind only,
+  since `observation_columns` and `action_columns` may then be swapped. When its attributes
+  have none of that kind, it is a column of that name;
 - how to build a value from several columns, without the model's name: a `NamedTuple` of
   names, or a pair of a tuple of names and a function, for the attribute of that kind when
   the model has only one in its attributes.
@@ -426,11 +430,11 @@ function column_map(column::Symbol, cognitive_model, kind::Symbol)
     other_kind = kind === :observations ? :actions : :observations
     keyword = kind === :observations ? "observation_columns" : "action_columns"
 
-    #A name the model lists as an attribute of the other kind only may mean that the two keyword arguments are swapped
+    #A name of the other kind only, in the model's attributes, may mean that the two keyword arguments are swapped
     if column in data_names(cognitive_model, other_kind) && !(column in names)
         throw(
             ArgumentError(
-                "$keyword is $(repr(column)), which $(describe_model(cognitive_model)) lists among its $other_kind, not its $kind. Check that observation_columns and action_columns aren't swapped.",
+                "$keyword is $(repr(column)), which is among the $other_kind in the attributes of $(describe_model(cognitive_model)), not its $kind. Check that observation_columns and action_columns aren't swapped.",
             ),
         )
     end
@@ -441,7 +445,7 @@ function column_map(column::Symbol, cognitive_model, kind::Symbol)
     elseif length(names) > 1
         throw(
             ArgumentError(
-                "$(uppercasefirst(describe_model(cognitive_model))) lists the $kind $names, so $keyword must give the column of each, such as $names when the columns have those names, or with a pair for a column of another name, as in :outcome => $(repr(first(names))), and not the single name $(repr(column)).",
+                "The attributes of $(describe_model(cognitive_model)) have the $kind $names, so $keyword must give the column of each, such as $names when the columns have those names, or with a pair for a column of another name, as in :outcome => $(repr(first(names))), and not the single name $(repr(column)).",
             ),
         )
     end
@@ -514,7 +518,7 @@ function only_attribute_name(cognitive_model, kind::Symbol, columns)
     if length(names) != 1
         throw(
             ArgumentError(
-                "$keyword is $(repr(columns)), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but $(describe_model(cognitive_model)) lists the $kind $names. Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action.",
+                "$keyword is $(repr(columns)), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but the attributes of $(describe_model(cognitive_model)) have the $kind $names. Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action.",
             ),
         )
     end
@@ -527,15 +531,15 @@ end
 Return the data of `kind`, `:observations` or `:actions`, as a `NamedTuple` of vectors: a
 single vector as the data of the attribute of that kind when the model has only one in its
 attributes, which is an error when it has another number of them, and anything else as it
-is, for [`check_data`](@ref) to check. A vector of `NamedTuple`s with the model's names is
-the data written as one row for each timestep, which is returned as it is, for `check_data`
-to report. Used by [`SessionInfo`](@ref).
+is, for [`check_data_fits`](@ref) to check. A vector of `NamedTuple`s with the model's names
+is the data written as one row for each timestep, which is returned as it is, for
+`check_data_fits` to report. Used by [`SessionInfo`](@ref).
 """
 named_data(data, cognitive_model, kind::Symbol) = data
 function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
     names = data_names(cognitive_model, kind)
 
-    #NamedTuples with the model's names are the data written as one row for each timestep, which check_data reports
+    #NamedTuples with the model's names are the data written as one row for each timestep, which check_data_fits reports
     eltype(data) <: NamedTuple{names} && return data
 
     #Otherwise the vector is the data of the attribute of that kind, of which the model must have only one in its attributes
@@ -624,7 +628,7 @@ function build_column(
         is_missing = any(value -> is_missing_data_value(value, missing_values), values)
         return is_missing ? marker : combine(values...)
     end
-    return narrow_column(built)
+    return narrow_element_type(built)
 end
 
 """
@@ -639,28 +643,6 @@ function build_columns(table::NamedTuple, columns::NamedTuple, missing_values, i
     return map(
         specification -> build_column(table, specification, missing_values, impute), columns
     )
-end
-
-"""
-    column_table(table)
-
-Return `table` as a `NamedTuple` with one vector for each column. A `NamedTuple` is returned
-as it is, and any other table is read with Tables.jl, through the package's extension for
-it, which loads with Tables.jl, as it does with DataFrames.jl, CSV.jl and the other packages
-of tables, since they load Tables.jl. Without it, a table that isn't a `NamedTuple` is an
-error. Used by [`MultipleSessionsInfo`](@ref) when it splits a table.
-"""
-column_table(table::NamedTuple) = table
-function column_table(table)
-    tables_extension = Base.get_extension(@__MODULE__, :CognitiveModelingTablesExt)
-    if tables_extension === nothing
-        throw(
-            ArgumentError(
-                "The table has type $(typeof(table)), which is read with Tables.jl. Load Tables.jl, or a package which loads it, such as DataFrames.jl, or give the table as a NamedTuple with one vector for each column.",
-            ),
-        )
-    end
-    return tables_extension.column_table(table)
 end
 
 """
@@ -846,8 +828,8 @@ function without_environment(session_info::SessionInfo)
         session_info.observations,
         session_info.actions,
         session_info.observations,
-        session_info.recorded_actions,
-        session_info.recorded_observations,
+        session_info.actions_to_condition_on,
+        session_info.observations_to_condition_on,
         session_info.n_timesteps,
         session_info.who_starts,
         session_info.timestep_sizes,
@@ -1020,8 +1002,8 @@ function including_environment(session_info::SessionInfo)
         session_info.observations,
         session_info.actions,
         session_info.environment_observations,
-        session_info.recorded_actions,
-        session_info.recorded_observations,
+        session_info.actions_to_condition_on,
+        session_info.observations_to_condition_on,
         session_info.n_timesteps,
         session_info.who_starts,
         session_info.timestep_sizes,
@@ -1072,21 +1054,23 @@ function check_environment_parameters(
 end
 
 """
-    recorded_action_names(session_info)
-    recorded_observation_names(session_info)
+    action_names_to_condition_on(session_info)
+    observation_names_to_condition_on(session_info)
 
-Return the names of the actions, or of the observations, that have recorded values in the
-data of a session, which are scored against the distributions the cognitive model, or the
-environment model, gave for them, in a `Val`. A session without an environment scores no
+Return the names of the actions, or of the observations, that have values to condition on in
+the data of a session, which are scored against the distributions the cognitive model, or
+the environment model, gave for them, in a `Val`. A session without an environment scores no
 observations, so it has no such names. Used by fitted sessions, to select the distributions
 they score.
 """
-recorded_action_names(session_info::SessionInfo) = Val(keys(session_info.recorded_actions))
-recorded_observation_names(::SessionInfo{<:Any,NoEnvironment}) = Val(())
-function recorded_observation_names(
+function action_names_to_condition_on(session_info::SessionInfo)
+    return Val(keys(session_info.actions_to_condition_on))
+end
+observation_names_to_condition_on(::SessionInfo{<:Any,NoEnvironment}) = Val(())
+function observation_names_to_condition_on(
     session_info::SessionInfo{<:Any,<:AbstractTimestepModel}
 )
-    return Val(keys(session_info.recorded_observations))
+    return Val(keys(session_info.observations_to_condition_on))
 end
 
 """
@@ -1119,35 +1103,38 @@ backends, such as those of [`IndependentSessionParameters`](@ref).
 """
 n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
-## Scoring the recorded values ##
+## Scoring the values to condition on ##
 
 """
-    recorded_on_timestep(data_output, output_distribution, model)
+    find_outputs_to_condition_on(data_output, output_distribution, model)
 
-Return whether each output of `model` on one timestep has a recorded value in the data, as a
-`NamedTuple` of `Bool`s with the names of `data_output`: the actions of a cognitive model,
-or the observations an environment model gives. A recorded value is scored against the
-distribution the model gave for it in `output_distribution`, so it is an error when the
-model gave nothing for it, [`NoValue`](@ref). Used by the timesteps of fitted sessions.
+Return whether each output of `model` on one timestep has a value to condition on in the
+data, as a `NamedTuple` of `Bool`s with the names of `data_output`: the actions of a
+cognitive model, or the observations an environment model gives. Such a value is scored
+against the distribution the model gave for it in `output_distribution`, so it is an error
+when the model gave nothing for it, [`NoValue`](@ref). Used by the timesteps of fitted
+sessions.
 """
-function recorded_on_timestep(
+function find_outputs_to_condition_on(
     data_output::NamedTuple{names}, output_distribution::NamedTuple, model
 ) where {names}
     return NamedTuple{names}(
-        recorded_on_timestep(names, Tuple(data_output), output_distribution, model)
+        find_outputs_to_condition_on(names, Tuple(data_output), output_distribution, model)
     )
 end
 
-function recorded_on_timestep(
+function find_outputs_to_condition_on(
     names::Tuple{}, data_values::Tuple{}, output_distribution, model
 )
     return ()
 end
-function recorded_on_timestep(names::Tuple, data_values::Tuple, output_distribution, model)
+function find_outputs_to_condition_on(
+    names::Tuple, data_values::Tuple, output_distribution, model
+)
     name = first(names)
     value = first(data_values)
-    recorded = is_recorded(value)
-    if recorded && getproperty(output_distribution, name) isa AbstractNoValue
+    to_condition_on = is_value_to_condition_on(value)
+    if to_condition_on && getproperty(output_distribution, name) isa AbstractNoValue
         throw(
             ArgumentError(
                 "$(uppercasefirst(describe_model(model))) gave no output $name on a timestep where the data has $value for it.",
@@ -1155,51 +1142,54 @@ function recorded_on_timestep(names::Tuple, data_values::Tuple, output_distribut
         )
     end
     return (
-        recorded,
-        recorded_on_timestep(
+        to_condition_on,
+        find_outputs_to_condition_on(
             Base.tail(names), Base.tail(data_values), output_distribution, model
         )...,
     )
 end
 
 """
-    initialize_distributions(recorded_distributions)
+    initialize_distributions(distributions_for_conditioning)
 
-Return an empty vector for the distributions of each output that is recorded in a session,
-typed by the distribution the model gave on the first timestep, so that the vectors keep one
-type through the session when every timestep gives the same type. An output the model
-doesn't give on the first timestep gets a `Vector{Union{}}()`, which the first distribution
-kept sets the type of, as for [`push_value!`](@ref). Used by fitted sessions, after their
-first timestep.
+Return an empty vector for the distributions of each output that has values to condition on
+in a session, typed by the distribution the model gave on the first timestep, so that the
+vectors keep one type through the session when every timestep gives the same type. An output
+the model doesn't give on the first timestep gets a `Vector{Union{}}()`, which the first
+distribution kept sets the type of, as for [`push_value!`](@ref). Used by fitted sessions,
+after their first timestep.
 """
-function initialize_distributions(recorded_distributions::NamedTuple)
-    return map(distribution -> if distribution isa AbstractNoValue
-        Vector{Union{}}()
-    else
-        Vector{typeof(distribution)}()
-    end, recorded_distributions)
+function initialize_distributions(distributions_for_conditioning::NamedTuple)
+    return map(
+        distribution -> if distribution isa AbstractNoValue
+            Vector{Union{}}()
+        else
+            Vector{typeof(distribution)}()
+        end, distributions_for_conditioning
+    )
 end
 
 """
-    store_distributions(distributions, recorded_distributions, recorded_on_timestep)
+    store_distributions(distributions, distributions_for_conditioning,
+                        outputs_to_condition_on)
 
-Add the distributions of the outputs that are recorded on one timestep, where
-`recorded_on_timestep` says which, to the vectors in `distributions`, one for each output
-that is recorded in the session, and return them. A distribution of another type than its
-vector widens the vector, as for [`push_value!`](@ref). Used by fitted sessions, on every
-timestep.
+Add the distributions of the outputs to condition on at one timestep, which
+`outputs_to_condition_on` says, to the vectors in `distributions`, one for each output that
+has values to condition on in the session, and return them. A distribution of another type
+than its vector widens the vector, as for [`push_value!`](@ref). Used by fitted sessions, on
+every timestep.
 """
 function store_distributions(
     distributions::NamedTuple{names},
-    recorded_distributions::NamedTuple,
-    recorded_on_timestep::NamedTuple,
+    distributions_for_conditioning::NamedTuple,
+    outputs_to_condition_on::NamedTuple,
 ) where {names}
     return NamedTuple{names}(
         map(
-            name -> if getproperty(recorded_on_timestep, name)
+            name -> if getproperty(outputs_to_condition_on, name)
                 push_value!(
                     getproperty(distributions, name),
-                    getproperty(recorded_distributions, name),
+                    getproperty(distributions_for_conditioning, name),
                 )
             else
                 getproperty(distributions, name)
@@ -1240,7 +1230,7 @@ function saved_session_values(
             timestep_values,
             session_info.cognitive_save_history,
         ),
-        entry(
+        build_named_entry(
             Val(:environment),
             saved_environment_values(
                 session_info.environment,
@@ -1259,7 +1249,8 @@ Return what `save_history` selects of one model's part of the values of a timest
 `states`, `observations`, `actions` and `action_distributions` of the cognitive model, or
 the `states`, `observations`, `actions` and `observation_distributions` of the environment,
 from the values of the environment alone. The observation and the action can have one of
-two types, so they go in through [`entry`](@ref). Used by [`saved_session_values`](@ref).
+two types, so they go in through [`build_named_entry`](@ref). Used by
+[`saved_session_values`](@ref).
 """
 function saved_cognitive_values(cognitive_model, timestep_values, save_history)
     return merge(
@@ -1268,11 +1259,11 @@ function saved_cognitive_values(cognitive_model, timestep_values, save_history)
                 cognitive_model, timestep_values.state, state_selection(save_history)
             ),
         ),
-        entry(
+        build_named_entry(
             Val(:observations),
             select_names(timestep_values.observation, input_selection(save_history)),
         ),
-        entry(
+        build_named_entry(
             Val(:actions),
             select_names(timestep_values.action, output_selection(save_history)),
         ),
@@ -1294,13 +1285,13 @@ function saved_environment_values(environment, environment_timestep_values, save
                 state_selection(save_history),
             ),
         ),
-        entry(
+        build_named_entry(
             Val(:observations),
             select_names(
                 environment_timestep_values.observation, output_selection(save_history)
             ),
         ),
-        entry(
+        build_named_entry(
             Val(:actions),
             select_names(environment_timestep_values.action, input_selection(save_history)),
         ),

@@ -362,7 +362,7 @@ function CognitiveModeling.attribute_names(environment::RewardsAfterFirstChoice)
     return ModelAttributes(; parameters=(), states=(), inputs=:choice, outputs=:reward)
 end
 
-#The log density of the recorded choices of a Rescorla-Wagner session, and the saved states, by hand
+#The log density of the choices in the data of a Rescorla-Wagner session, and the saved states, by hand
 function session_by_hand(rewards, choices, learning_rate, inverse_temperature, who_starts)
     V = 0.5
     log_density = 0.0
@@ -430,7 +430,7 @@ end
         ) ≈ 2 * log(0.9) + log(0.1)
     end
 
-    @testset "The log density is the sum over the recorded actions, with the agent or the environment starting" begin
+    @testset "The log density is the sum over the actions in the data, with the agent or the environment starting" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             model = session_for_test(;
                 who_starts, cognitive_save_history=SaveHistory(SaveEverything())
@@ -460,17 +460,17 @@ end
             session_for_test(SessionRescorlaWagner(), (; learning_rate=0.3)), (;)
         ) ≈ logjoint(session_for_test(), (;))
         #The parameters are only known when the model is evaluated, so they are checked then
-        @test_throws "The parameters are named (:inverse_temperature, :learning_rate, :noise), but attribute_names lists the parameters of a cognitive model of type SessionRescorlaWagner" logjoint(
+        @test_throws "The parameters are named (:inverse_temperature, :learning_rate, :noise), but the parameters in the attributes of a cognitive model of type SessionRescorlaWagner" logjoint(
             session_for_test(SessionRescorlaWagner(), (; learning_rate=0.3, noise=1.0)), (;)
         )
         #The data is checked when the session is prepared
-        @test_throws "The observations in the data are named (:cue,), but attribute_names lists the observations of a cognitive model of type SessionRescorlaWagner, its inputs, as (:reward,). The data must have every observation the cognitive model lists." session_for_test(
+        @test_throws "The observations in the data are named (:cue,), but the observations in the attributes of a cognitive model of type SessionRescorlaWagner, its inputs, are (:reward,). The data must have every observation in the cognitive model's attributes." session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             (; cue=[1.0, 0.0]),
             (; choice=[true, false]),
         )
-        @test_throws "The actions in the data are named (:bet,), but attribute_names lists the actions of a cognitive model of type SessionRescorlaWagner, its outputs, as (:choice,)." session_for_test(
+        @test_throws "The actions in the data are named (:bet,), but the actions in the attributes of a cognitive model of type SessionRescorlaWagner, its outputs, are (:choice,)." session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             SESSION_REWARDS,
@@ -488,10 +488,10 @@ end
         @test_throws "timestep_sizes must have one size for each timestep, but it has 2 sizes and the data has 5 timesteps." session_for_test(;
             timestep_sizes=[1.0, 2.0]
         )
-        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs that attribute_names lists for a cognitive model of type SessionRescorlaWagner" logjoint(
+        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type SessionRescorlaWagner" logjoint(
             session_for_test(; previous_action=(; bet=true)), (;)
         )
-        #The data can have more observations than the model lists
+        #The data can have more observations than those in the model's attributes
         @test logjoint(
             session_for_test(
                 SessionRescorlaWagner(),
@@ -507,7 +507,7 @@ end
     end
 
     @testset "The model is told who starts" begin
-        #The data has no recorded actions, since a Deterministic action can't be scored yet
+        #The data has no actions to condition on, since a Deterministic action can't be scored yet
         for who_starts in (EnvironmentStarts(), AgentStarts())
             model = session_for_test(
                 RecordsWhoStarts(),
@@ -569,7 +569,7 @@ end
               Vector{Union{UnimputedMissingValue,Float64}}
         @test session_info.actions.choice == [true, MissingValue(), false] &&
             session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
-        @test session_info.recorded_actions == (; choice=[true, false])
+        @test session_info.actions_to_condition_on == (; choice=[true, false])
         #The model doesn't learn from the observation that isn't there, and the missing choice is imputed
         model = turing_behavioral_session(session_info, SESSION_PARAMETERS)
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), model))) ==
@@ -644,8 +644,8 @@ end
         )
         @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
         @test history.states[1] == (; expected_reward=0.65) && length(history.states) == 5
-        #An input the model doesn't list can't be selected, which the session checks when it is prepared
-        @test_throws "The SaveHistory selects the inputs (:cue,), but attribute_names lists the inputs of a cognitive model of type TwoContinuousActions as (:reward,)." returned(
+        #An input that isn't in the model's attributes can't be selected, which the session checks when it is prepared
+        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type TwoContinuousActions are (:reward,)." returned(
             session_for_test(
                 TwoContinuousActions(),
                 (; learning_rate=0.3),
@@ -754,7 +754,7 @@ end
                 actions.choice[t]
             end
             bet = actions.bet[t] isa MissingValue ? imputed[2] : actions.bet[t]
-            #An imputed action is a latent, so its density is prior, and a recorded one is likelihood
+            #An imputed action is a latent, so its density is prior, and one in the data is likelihood
             if actions.choice[t] isa MissingValue
                 expected_prior += logpdf(Normal(V, 1.0), choice)
             else
@@ -801,7 +801,7 @@ end
             cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
         )
         @test isempty(keys(rand(Xoshiro(1), model)))
-        #Only the recorded actions are scored
+        #Only the actions in the data are scored
         V = 0.5
         expected = 0.0
         for t in 1:4
@@ -878,7 +878,7 @@ end
         @test returned(model, (;)).observations[2:end] ==
             [(; reward) for reward in full.reward]
         #The environment's defaults are filled in and its names checked when the model is evaluated
-        @test_throws "attribute_names lists the parameters of an environment model of type RewardsPreviousChoice" logjoint(
+        @test_throws "the parameters in the attributes of an environment model of type RewardsPreviousChoice" logjoint(
             session_for_test(
                 SessionRescorlaWagner(),
                 SESSION_PARAMETERS,
@@ -902,7 +902,7 @@ end
         @test returned(scaled, (;)).observations[2:end] == [
             (; reward=0.5), (; reward=2.0), (; reward=0.0), (; reward=2.0), (; reward=1.0)
         ]
-        @test_throws "A cognitive model of type SessionRescorlaWagner lists the observations (:reward,) as its inputs, but an environment model of type GivesNothing gives (). Without a map, the two must list the same observations." session_for_test(
+        @test_throws "The attributes of a cognitive model of type SessionRescorlaWagner have the observations (:reward,) as inputs, but an environment model of type GivesNothing gives (). Without a map, the two must have the same observations in their attributes." session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             SESSION_REWARDS,
@@ -1019,20 +1019,20 @@ end
         @test (@test_logs match_mode = :any returned(model, rewards)).observations[2:end] ==
             [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
         #They count in the log density with the environment's distribution, beside the choices given those rewards, and so does the reward in the data
-        recorded = session_for_test(
+        nothing_imputed = session_for_test(
             SessionRescorlaWagner(),
             SESSION_PARAMETERS,
             (; reward=[0.7, 1.0, -0.4]),
             choices,
         )
         @test (@test_logs match_mode = :any logjoint(model, rewards)) ≈
-            logjoint(recorded, (;)) +
+            logjoint(nothing_imputed, (;)) +
               logpdf(Normal(0.5, 1.0), 0.7) +
               logpdf(Normal(0.5, 1.0), 1.0) +
               logpdf(Normal(0.5, 1.0), -0.4)
         #The reward in the data is part of the likelihood, and the imputed ones of the prior
         @test (@test_logs match_mode = :any loglikelihood(model, rewards)) ≈
-            loglikelihood(recorded, (;)) + logpdf(Normal(0.5, 1.0), 1.0)
+            loglikelihood(nothing_imputed, (;)) + logpdf(Normal(0.5, 1.0), 1.0)
         #With the data complete, the environment doesn't run, with no warning, so the session is the same as one without it
         model = @test_logs session_for_test(
             SessionRescorlaWagner(),
@@ -1042,7 +1042,7 @@ end
             environment=NoisyRewards(),
         )
         @test isempty(keys(rand(Xoshiro(1), model)))
-        @test logjoint(model, (;)) ≈ logjoint(recorded, (;))
+        @test logjoint(model, (;)) ≈ logjoint(nothing_imputed, (;))
     end
 
     @testset "The observations in the data are scored against the environment, so a reward informs the missing choice before it" begin
@@ -1057,7 +1057,7 @@ end
             environment=PaysForChoice(),
         )
         for imputed_choice in (true, false)
-            recorded = session_for_test(
+            nothing_imputed = session_for_test(
                 SessionRescorlaWagner(),
                 SESSION_PARAMETERS,
                 rewards,
@@ -1070,7 +1070,7 @@ end
                 logpdf(Bernoulli(0.8), 1.0)
             @test (@test_logs match_mode = :any logjoint(
                 model, Dict(@varname(timestep[2].choice.imputed) => imputed_choice)
-            )) ≈ logjoint(recorded, (;)) + reward_scores
+            )) ≈ logjoint(nothing_imputed, (;)) + reward_scores
         end
     end
 
@@ -1100,8 +1100,8 @@ end
             environment=RewardsPreviousChoice(),
         )
         @test (@test_logs match_mode = :any loglikelihood(mismatching, imputed)) == -Inf
-        #A Deterministic which isn't a number can't be scored, and a recorded value where the environment gives nothing is an error too
-        @test_throws "A value recorded in the data is scored against what the model gave for it, which is Deterministic(:win), of type Symbol. Only a number or a Bool can be scored as a point mass." logjoint(
+        #A Deterministic which isn't a number can't be scored, and a value in the data where the environment gives nothing is an error too
+        @test_throws "A value in the data is scored against what the model gave for it, which is Deterministic(:win), of type Symbol. Only a number or a Bool can be scored as a point mass." logjoint(
             session_for_test(
                 SessionRescorlaWagner(),
                 SESSION_PARAMETERS,
@@ -1397,7 +1397,7 @@ end
             ),
             (;),
         ) ≈ logpdf(Bernoulli(0.7), false)
-        #An action that is never recorded in a session scores nothing, also when the model never took it
+        #An action that is never in the data of a session scores nothing, also when the model never took it
         @test logjoint(
             session_for_test(
                 ActsEverySecondTimestep(),
@@ -1413,7 +1413,7 @@ end
             ),
             (;),
         ) == 0
-        #A recorded action where the model took none is an error
+        #An action in the data where the model took none is an error
         @test_throws "A cognitive model of type ActsEverySecondTimestep gave no output choice on a timestep where the data has true for it." logjoint(
             session_for_test(
                 ActsEverySecondTimestep(),
@@ -1498,8 +1498,8 @@ end
         long_session = session_with(20_000)
         logjoint(short_session, (;))
         logjoint(long_session, (;))
-        #Doubling the timesteps only adds the vector of the distributions of the recorded actions, about 23 bytes per timestep.
-        #When the names of the recorded actions reached the timesteps as a plain tuple, it was about 1500 bytes, and each timestep was a hundred times slower
+        #Doubling the timesteps only adds the vector of the distributions of the actions to condition on, about 23 bytes per timestep.
+        #When the names of the actions to condition on reached the timesteps as a plain tuple, it was about 1500 bytes, and each timestep was a hundred times slower
         extra_bytes =
             @allocated(logjoint(long_session, (;))) -
             @allocated(logjoint(short_session, (;)))

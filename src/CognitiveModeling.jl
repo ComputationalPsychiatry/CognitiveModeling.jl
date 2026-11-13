@@ -8,7 +8,6 @@ using Random: AbstractRNG, default_rng
 include("defining_models/types.jl")
 include("defining_models/functions_to_extend.jl")
 include("defining_models/utility_functions.jl")
-include("environments/common_rl_environment.jl")
 include("saving_histories/save_history.jl")
 include("saving_histories/storage.jl")
 include("simulation/types.jl")
@@ -25,8 +24,15 @@ include("inference/session_parameter_models/composite_session_parameters.jl")
 include("inference/prepare_full_model.jl")
 include("inference/functions_to_extend.jl")
 include("inference/utility_functions.jl")
-include("inference/turing_models.jl")
-include("inference/postprocessing.jl")
+
+#What the package has for each of its extensions, which add the methods: the types and functions users reach through
+#the package, with their docstrings, and the helpers that call an extension
+include("extensions/common_rl_interface/common_rl_environment.jl")
+include("extensions/flexichains/session_trajectories_chain.jl")
+include("extensions/tables/column_table.jl")
+include("extensions/turing/functions_to_extend.jl")
+include("extensions/turing/turing_models.jl")
+include("extensions/turing/predict_session_trajectories.jl")
 
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
@@ -48,7 +54,7 @@ export AbstractSessionParametersModel,
     HierarchicalParameter,
     CompositeSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
-export NoParallelization, ParallelSessions
+export SerialSessions, ParallelSessions
 export turing_behavioral_session,
     turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 export session_trajectories_chain, session_parameters_chain, predict_session_trajectories

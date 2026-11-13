@@ -58,18 +58,11 @@ activity on a session where every column of the data has one type.
 
 These aren't failures of the package's own code, but a model can run into them.
 
-- **Enzyme reverse and `SVector` states:** updating an `SVector` in a state with `setindex`
-  gives wrong gradients for some sizes, with no error. A `Vector` changed in place or by
-  broadcasting is right.
 - **Enzyme reverse with runtime activity and a softmax in one line:** a softmax written as
   `exp.(v .- maximum(v)) ./ sum(exp.(v .- maximum(v)))` gives wrong gradients, with no
   error, when it runs in a loop on values that differ between the timesteps. The `softmax`
   of LogExpFunctions.jl is right, and so is any softmax which keeps its exponentials in a
   variable and divides them by their sum. It is reported as Enzyme.jl issue 4030.
-- **ReverseDiff before 1.18.8 and `deepcopy`:** a `prepare_state_for_saving` method which
-  copies the state with `deepcopy` gives zero gradients, with no error, and so does
-  `deepcopy` of any container which holds a tracked number. It was reported as
-  ReverseDiff.jl issue 327, and is fixed from version 1.18.8 on.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.

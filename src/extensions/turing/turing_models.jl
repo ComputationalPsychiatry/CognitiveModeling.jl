@@ -6,8 +6,8 @@
                               environment_parameters=(;))
 
 Create a Turing.jl model of one session: the cognitive model in `session_info` goes through
-the timesteps of its data with `cognitive_parameters`, and the recorded actions are scored
-against the action distributions it gives. The second form is for a session with an
+the timesteps of its data with `cognitive_parameters`, and the actions in the data are
+scored against the action distributions it gives. The second form is for a session with an
 environment model, which takes its parameters too. This needs Turing.jl to be loaded.
 
 The model is a building block for a Turing.jl model which samples the parameters, as a
@@ -42,8 +42,8 @@ for t in 1:n_timesteps
     choice.imputed ~ output.output_distribution.choice
 end
 
-#The recorded actions are scored once, against the distributions of their timesteps
-recorded_actions ~ product_distribution(action_distributions)
+#The actions in the data are scored once, against the distributions of their timesteps
+actions_to_condition_on ~ product_distribution(action_distributions)
 
 #The trajectories over the timesteps that the save histories select
 return saved_trajectories
@@ -51,7 +51,7 @@ return saved_trajectories
 
 A session which includes its environment runs the environment model in the same way on each
 timestep, before the cognitive model when the environment starts and after it when the agent
-starts, and scores the recorded observations like the actions.
+starts, and scores the observations in the data like the actions.
 
 The states where the session starts come from [`turing_initialize_state`](@ref) of each
 model with the parameters, so that a starting state which is a parameter is fitted like any
@@ -67,15 +67,15 @@ that distribution, named `timestep[3].choice.imputed` or
 [`Deterministic`](@ref). Where the data has [`UnimputedMissingValue`](@ref), or a marker for
 nothing happening, the models receive the marker as it is, and nothing is sampled or scored
 for it. The sampler must handle the type of a latent variable: a continuous value can be
-sampled with NUTS, a discrete one needs a sampler for discrete variables. The recorded
-actions are scored at the end as observed values, in one `product_distribution` over every
+sampled with NUTS, a discrete one needs a sampler for discrete variables. The actions in the
+data are scored at the end as observed values, in one `product_distribution` over every
 action and timestep, against the distributions the cognitive model gave for them. The
-recorded observations are scored the same way against the distributions the environment
+observations in the data are scored the same way against the distributions the environment
 gave, so that they inform the missing values and the environment's parameters. A
 `Deterministic` is scored as a point mass, with a log density of 0 for its value and `-Inf`
-for any other, and only a number or a `Bool` can be, so a recorded value the model gives as
-another kind of `Deterministic` is an error. A recorded value where the model gave nothing,
-[`NoValue`](@ref), is an error too. When the session doesn't include its environment, as the
+for any other, and only a number or a `Bool` can be, so a value in the data that the model
+gives as another kind of `Deterministic` is an error, and so is one where the model gave
+nothing, [`NoValue`](@ref). When the session doesn't include its environment, as the
 `include_environment` of `session_info` decides, which by default is when nothing in the
 data is `MissingValue()` and the environment's history isn't saved, the session is the same
 as one without an environment, with the same variables. The [`stopping_criterion`](@ref) of
@@ -165,7 +165,7 @@ function turing_behavioral_session end
 """
     turing_multiple_behavioral_sessions(sessions_info::MultipleSessionsInfo,
                                         cognitive_parameters, environment_parameters=(;);
-                                        parallelization=NoParallelization())
+                                        parallelization=SerialSessions())
 
 Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for every session
 in `sessions_info`, each with its own cognitive parameters, as a submodel with the prefix
@@ -196,7 +196,7 @@ function turing_multiple_behavioral_sessions end
                       environment_parameters_model=NoParameters(),
                       downstream_model=NoDownstreamModel(),
                       fixed_cognitive_parameters=(;), fixed_environment_parameters=(;),
-                      catch_invalid_parameters=false, parallelization=NoParallelization(),
+                      catch_invalid_parameters=false, parallelization=SerialSessions(),
                       include_submodel_prefixes=false)
 
 Create the Turing.jl model which fits a cognitive model to several sessions, in three parts:
@@ -227,12 +227,12 @@ of a measurement on a state. This needs Turing.jl to be loaded.
   `fixed_environment_parameters::NamedTuple=(;)`: values which every session gets for the
   parameters they name, such as `(; initial_value = 0.3)`, while the session parameter
   models give the others. A parameter is either fixed here or given by its session
-  parameter model, and a fixed parameter must be one that the model lists.
+  parameter model, and a fixed parameter must be one in the model's attributes.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
   session rejects the sample instead of stopping the sampler, by running the sessions inside
   [`turing_catch_invalid_parameters`](@ref). If the first draw is rejected and the
   downstream model has variables of its own, give the sampler valid `initial_params`.
-- `parallelization=NoParallelization()`: whether the sessions run over the threads Julia was
+- `parallelization=SerialSessions()`: whether the sessions run over the threads Julia was
   started with, with `ParallelSessions()`. **The model must then be marked with
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
   threaded model has a wrong log density with no error, so the sessions throw an error

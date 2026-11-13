@@ -12,6 +12,7 @@ This page lists what is planned and not written yet. The list will grow.
 - Bayesian models made with RxInfer.jl.
 - Active inference models, which a separate package is being made for.
 - An example of a cognitive model which uses Turing.jl to select its actions.
+- Models with discrete parameters, to show how they are fitted.
 
 ## Interfaces
 
@@ -36,6 +37,11 @@ This page lists what is planned and not written yet. The list will grow.
   `session[i]`, if a way is found that doesn't compile the session once per identifier.
 - A convenient way to fit a single session, with the full model or a variant of it.
 - Choosing a sampler for each parameter from whether it is discrete or continuous.
+- Mixture models and model selection within the fitted model, in the style of Michael D. Lee:
+  a latent variable for each session, or each group, chooses which of several cognitive
+  models generated its behavior, and its posterior compares the models.
+- Several sets of experimental data in one hierarchical model, such as different experiments
+  or tasks done by the same participants, which share the parameters they have in common.
 
 ## Plots
 
