@@ -1,7 +1,7 @@
 ## Given parameters for each session ##
 
 """
-    FixedParametersBySession(parameters_by_session)
+    FixedSessionParametersBySession(parameters_by_session)
 
 The session parameter model of a full model which gives each session parameters of its own,
 with nothing sampled. `parameters_by_session` holds the parameters of each session in one
@@ -15,26 +15,27 @@ order of the sessions, as a `NamedTuple` with one vector for each parameter, suc
 parameters. A full model makes the first two forms into the third once, before it is made.
 The parameters are kept in the field `parameters_by_session`.
 """
-struct FixedParametersBySession{Tparameters_by_session<:Union{NamedTuple,AbstractDict}} <:
-       AbstractSessionParametersModel
+struct FixedSessionParametersBySession{
+    Tparameters_by_session<:Union{NamedTuple,AbstractDict}
+} <: AbstractSessionParametersModel
     parameters_by_session::Tparameters_by_session
 end
 
 #It gives the parameters of its vectors, or those of its first session, and estimates nothing
-function parameter_names(parameters_model::FixedParametersBySession)
+function parameter_names(parameters_model::FixedSessionParametersBySession)
     parameters_by_session = parameters_model.parameters_by_session
     isempty(parameters_by_session) && return ()
     has_vector_for_each_parameter(parameters_by_session) &&
         return keys(parameters_by_session)
     return keys(first(values(parameters_by_session)))
 end
-estimates_parameters(::FixedParametersBySession) = false
+estimates_parameters(::FixedSessionParametersBySession) = false
 
 #The parameters of every session are looked up once, when a full model is prepared, and kept as one vector for each parameter
 function prepare_parameters_model(
-    parameters_model::FixedParametersBySession, sessions_info::MultipleSessionsInfo
+    parameters_model::FixedSessionParametersBySession, sessions_info::MultipleSessionsInfo
 )
-    return FixedParametersBySession(
+    return FixedSessionParametersBySession(
         collect_parameters_in_session_order(
             parameters_model.parameters_by_session, sessions_info.session_ids
         ),
@@ -44,8 +45,8 @@ end
 """
     has_vector_for_each_parameter(parameters_by_session)
 
-Return whether `parameters_by_session`, as a [`FixedParametersBySession`](@ref) holds it,
-gives the parameters in the order of the sessions, as a `NamedTuple` with one vector for
+Return whether `parameters_by_session`, as a [`FixedSessionParametersBySession`](@ref) holds
+it, gives the parameters in the order of the sessions, as a `NamedTuple` with one vector for
 each parameter, and not by the sessions' symbol names or identifiers. Used by
 [`parameter_names`](@ref) and [`collect_parameters_in_session_order`](@ref).
 """
@@ -58,13 +59,13 @@ end
     collect_parameters_in_session_order(parameters_by_session, session_ids)
 
 Return the parameters of each session in `parameters_by_session`, as
-[`FixedParametersBySession`](@ref) holds them, as one vector for each parameter with a value
-for every session, in the order of `session_ids`, with the parameters of each session found
-by [`parameters_of_session`](@ref). A session with other parameters than the first is an
-error. Parameters that are already in the order of the sessions are returned as they are,
-after checking that each vector has a value for every session. Used by
-[`prepare_parameters_model`](@ref), and by the models of `FixedParametersBySession` in the
-inference backends.
+[`FixedSessionParametersBySession`](@ref) holds them, as one vector for each parameter with
+a value for every session, in the order of `session_ids`, with the parameters of each
+session found by [`parameters_of_session`](@ref). A session with other parameters than the
+first is an error. Parameters that are already in the order of the sessions are returned as
+they are, after checking that each vector has a value for every session. Used by
+[`prepare_parameters_model`](@ref), and by the models of `FixedSessionParametersBySession`
+in the inference backends.
 """
 function collect_parameters_in_session_order(parameters_by_session, session_ids)
 
@@ -74,7 +75,7 @@ function collect_parameters_in_session_order(parameters_by_session, session_ids)
             if length(values) != length(session_ids)
                 throw(
                     DimensionMismatch(
-                        "FixedParametersBySession has $(length(values)) values of $name, but there are $(length(session_ids)) sessions. A vector must have one value for every session, in the order of the sessions.",
+                        "FixedSessionParametersBySession has $(length(values)) values of $name, but there are $(length(session_ids)) sessions. A vector must have one value for every session, in the order of the sessions.",
                     ),
                 )
             end
@@ -91,7 +92,7 @@ function collect_parameters_in_session_order(parameters_by_session, session_ids)
         if keys(parameters) != names
             throw(
                 ArgumentError(
-                    "FixedParametersBySession gives the session $(repr(session_id)) the parameters $(keys(parameters)), and the first session the parameters $names. Every session must have the same parameters.",
+                    "FixedSessionParametersBySession gives the session $(repr(session_id)) the parameters $(keys(parameters)), and the first session the parameters $names. Every session must have the same parameters.",
                 ),
             )
         end
@@ -118,7 +119,7 @@ function parameters_of_session(parameters_by_session::NamedTuple, session_id)
     if !haskey(parameters_by_session, symbol_name)
         throw(
             ArgumentError(
-                "FixedParametersBySession has no parameters for the session $symbol_name. It has parameters for $(keys(parameters_by_session)).",
+                "FixedSessionParametersBySession has no parameters for the session $symbol_name. It has parameters for $(keys(parameters_by_session)).",
             ),
         )
     end
@@ -129,7 +130,7 @@ function parameters_of_session(parameters_by_session::AbstractDict, session_id)
     if !haskey(parameters_by_session, session_id)
         throw(
             ArgumentError(
-                "FixedParametersBySession has no parameters for the session $(repr(session_id)). It has parameters for the sessions $(collect(keys(parameters_by_session))).",
+                "FixedSessionParametersBySession has no parameters for the session $(repr(session_id)). It has parameters for the sessions $(collect(keys(parameters_by_session))).",
             ),
         )
     end

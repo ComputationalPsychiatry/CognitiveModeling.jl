@@ -521,7 +521,7 @@ end
             (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
         #By session, the values are found by the session's identifier, in any order
         by_session = saving_full_model(
-            FixedParametersBySession((;
+            FixedSessionParametersBySession((;
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),
                 S3=(; learning_rate=0.4, inverse_temperature=3.0),
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
@@ -534,8 +534,8 @@ end
         @test returned(by_session, (;)).cognitive_parameters ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         #A session without values is an error when the model is made, since the values are looked up then
-        @test_logs SAVING_WARNING @test_throws "FixedParametersBySession has no parameters for the session S3." turing_full_model(
-            FixedParametersBySession((;
+        @test_logs SAVING_WARNING @test_throws "FixedSessionParametersBySession has no parameters for the session S3." turing_full_model(
+            FixedSessionParametersBySession((;
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),
             )),
@@ -592,7 +592,7 @@ end
         by_session = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
             sessions_info;
-            environment_parameters_model=FixedParametersBySession((;
+            environment_parameters_model=FixedSessionParametersBySession((;
                 S1=(; mean_reward=0.1), S2=(; mean_reward=0.2), S3=(; mean_reward=0.3)
             )),
         )
@@ -637,7 +637,7 @@ end
         model = turing_full_model(
             IndependentSessionParameters(FULL_PRIORS),
             sessions_info;
-            environment_parameters_model=FixedParametersBySession((;
+            environment_parameters_model=FixedSessionParametersBySession((;
                 S1=(; mean_reward=0.6), S2=(; mean_reward=0.0), S3=(; mean_reward=1.0)
             )),
         )

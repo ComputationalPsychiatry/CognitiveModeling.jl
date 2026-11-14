@@ -193,7 +193,7 @@ function turing_multiple_behavioral_sessions end
 
 """
     turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
-                      environment_parameters_model=NoParameters(),
+                      environment_parameters_model=NoSessionParameters(),
                       downstream_model=NoDownstreamModel(),
                       fixed_cognitive_parameters=(;), fixed_environment_parameters=(;),
                       catch_invalid_parameters=false, parallelization=SerialSessions(),
@@ -213,7 +213,7 @@ of a measurement on a state. This needs Turing.jl to be loaded.
   with a prior for each parameter.
 - `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
   [`MultipleSessionsInfo`](@ref).
-- `environment_parameters_model=NoParameters()`: the session parameter model of the
+- `environment_parameters_model=NoSessionParameters()`: the session parameter model of the
   environment model of the sessions, when they have one. By default the environment's
   parameters take its default values, and [`FixedSessionParameters`](@ref) gives others.
   When they are estimated, every session includes its environment, also those with nothing
@@ -253,14 +253,14 @@ such as `learning_rate.session`, so the learning rate of the third session is
 a group-level distribution is a vector with a value for each group, named after its prior,
 such as `learning_rate.mean.group` and `learning_rate.sd.group`, and the values of the
 sessions before the transformation are `learning_rate.standardized`, or
-`learning_rate.session` for a parameter that is centered. With `HierarchicalRegression`,
-the intercept of a parameter is `learning_rate.intercept`, and the coefficient of a
-predictor is under its column, such as `learning_rate.age.coefficient`, or under its column
-and its level for a categorical predictor, such as
-`learning_rate.diagnosis_clinical.coefficient`. A random intercept has its variables under
-its column: its standard deviation, `learning_rate.participant.sd`, which is a vector with
-a value for each group when it is grouped, and a standardized value for each level,
-`learning_rate.participant.standardized`, or the deviation of each level,
+`learning_rate.session` for a parameter that is centered. With
+`HierarchicalRegressionSessionParameters`, the intercept of a parameter is
+`learning_rate.intercept`, and the coefficient of a predictor is under its column, such as
+`learning_rate.age.coefficient`, or under its column and its level for a categorical
+predictor, such as `learning_rate.diagnosis_clinical.coefficient`. A random intercept has
+its variables under its column: its standard deviation, `learning_rate.participant.sd`,
+which is a vector with a value for each group when it is grouped, and a standardized value
+for each level, `learning_rate.participant.standardized`, or the deviation of each level,
 `learning_rate.participant.deviation`, when it is centered. The deviations of the sessions
 have the same variables under `session_deviation`, such as
 `learning_rate.session_deviation.sd`. A part of a [`CompositeSessionParameters`](@ref) that

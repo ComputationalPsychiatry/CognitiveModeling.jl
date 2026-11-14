@@ -20,9 +20,9 @@ include("saving_histories/storage.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
 include("inference/types.jl")
-include("inference/session_parameter_models/no_parameters.jl")
+include("inference/session_parameter_models/no_session_parameters.jl")
 include("inference/session_parameter_models/fixed_session_parameters.jl")
-include("inference/session_parameter_models/fixed_parameters_by_session.jl")
+include("inference/session_parameter_models/fixed_session_parameters_by_session.jl")
 include("inference/session_parameter_models/identical_session_parameters.jl")
 include("inference/session_parameter_models/independent_session_parameters.jl")
 include("inference/session_parameter_models/grouped_hierarchical_session_parameters.jl")
@@ -62,14 +62,14 @@ export SaveHistory, SaveEverything, NameMap
 export simulate, simulate!, reset!
 export SessionInfo, MultipleSessionsInfo, NoEnvironment, prepare_for_prediction
 export AbstractSessionParametersModel,
-    NoParameters,
+    NoSessionParameters,
     FixedSessionParameters,
-    FixedParametersBySession,
+    FixedSessionParametersBySession,
     IdenticalSessionParameters,
     IndependentSessionParameters,
     GroupedHierarchicalSessionParameters,
     HierarchicalParameter,
-    HierarchicalRegression,
+    HierarchicalRegressionSessionParameters,
     RegressionParameter,
     RandomIntercept,
     CompositeSessionParameters

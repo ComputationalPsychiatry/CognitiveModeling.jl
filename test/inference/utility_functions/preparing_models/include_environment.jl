@@ -12,7 +12,7 @@
         )
         @test !sessions_info.sessions[1].includes_environment
         @test CognitiveModeling.include_environments_if_estimated(
-            NoParameters(), sessions_info
+            NoSessionParameters(), sessions_info
         ) === sessions_info
         @test CognitiveModeling.include_environments_if_estimated(
             FixedSessionParameters((; scale=2.0)), sessions_info

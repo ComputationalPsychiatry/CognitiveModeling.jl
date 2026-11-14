@@ -10,8 +10,10 @@
             sessions_info, :site, reader
         ) == [1, 1, 2, 2]
         #The error starts with what reads the column
-        @test_throws "HierarchicalRegression predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." CognitiveModeling.read_one_value_of_each_session(
-            sessions_info, :wave, "HierarchicalRegression predicts probability from"
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." CognitiveModeling.read_one_value_of_each_session(
+            sessions_info,
+            :wave,
+            "HierarchicalRegressionSessionParameters predicts probability from",
         )
     end
 

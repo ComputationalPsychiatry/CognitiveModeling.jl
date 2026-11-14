@@ -5,7 +5,7 @@ Turing.@model function CognitiveModeling.turing_session_parameters_model(
     parameters_model::CompositeSessionParameters, sessions_info::MultipleSessionsInfo
 )
     parameters ~ to_submodel(
-        turing_sample_parameters_of_parts(
+        turing_composite_parameters(
             parameters_model.parts, Val(part_names(parameters_model)), sessions_info
         ),
         false,
@@ -14,21 +14,21 @@ Turing.@model function CognitiveModeling.turing_session_parameters_model(
 end
 
 """
-    turing_sample_parameters_of_parts(parts, Val(part_names), sessions_info)
+    turing_composite_parameters(parts, Val(part_names), sessions_info)
 
 Turing.jl model which runs the session parameter models in `parts`, a tuple, one at a time,
 each with its variables under its name in `part_names`, or as it names them itself when its
 name is `nothing`, and returns the parameters they give merged into one `NamedTuple`, which
 is an error when two give the same parameter. Used by [`CompositeSessionParameters`](@ref).
 """
-Turing.@model function turing_sample_parameters_of_parts(
+Turing.@model function turing_composite_parameters(
     parts::Tuple, ::Val{Tpart_names}, sessions_info::MultipleSessionsInfo
 ) where {Tpart_names}
     parameters ~ to_submodel(
         turing_part_model(first(parts), Val(first(Tpart_names)), sessions_info), false
     )
     other_parameters ~ to_submodel(
-        turing_sample_parameters_of_parts(
+        turing_composite_parameters(
             Base.tail(parts), Val(Base.tail(Tpart_names)), sessions_info
         ),
         false,
@@ -36,7 +36,7 @@ Turing.@model function turing_sample_parameters_of_parts(
     return merge_parameters_of_parts(parameters, other_parameters)
 end
 
-Turing.@model function turing_sample_parameters_of_parts(
+Turing.@model function turing_composite_parameters(
     parts::Tuple{}, ::Val{()}, sessions_info::MultipleSessionsInfo
 )
     return (;)
@@ -47,7 +47,7 @@ end
 
 Return the Turing.jl model of `part`, a part of a [`CompositeSessionParameters`](@ref), with
 its variables under `name`, or as the part names them itself when `name` is `nothing`. Used
-by [`turing_sample_parameters_of_parts`](@ref).
+by [`turing_composite_parameters`](@ref).
 """
 function turing_part_model(part, ::Val{nothing}, sessions_info::MultipleSessionsInfo)
     return CognitiveModeling.turing_session_parameters_model(part, sessions_info)

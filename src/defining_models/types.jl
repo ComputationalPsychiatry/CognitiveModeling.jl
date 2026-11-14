@@ -437,9 +437,9 @@ end
 Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
 tuple of one. Used for the arguments that take one value or several: the names given to
 [`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref),
-[`GroupedHierarchicalSessionParameters`](@ref) and [`HierarchicalRegression`](@ref), which
-are then asserted to be `Symbol`s, and the values that stand for a missing value in
-[`SessionInfo`](@ref).
+[`GroupedHierarchicalSessionParameters`](@ref) and
+[`HierarchicalRegressionSessionParameters`](@ref), which are then asserted to be `Symbol`s,
+and the values that stand for a missing value in [`SessionInfo`](@ref).
 """
 as_tuple(values::Tuple) = values
 as_tuple(values::AbstractVector) = Tuple(values)

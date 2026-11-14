@@ -2,7 +2,7 @@
 
 """
     prepare_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
-                       environment_parameters_model=NoParameters(),
+                       environment_parameters_model=NoSessionParameters(),
                        downstream_model=NoDownstreamModel(),
                        fixed_cognitive_parameters=(;),
                        fixed_environment_parameters=(;))
@@ -31,7 +31,7 @@ estimates parameters, every session with an environment includes it in the retur
 function prepare_full_model(
     cognitive_parameters_model,
     sessions_info::MultipleSessionsInfo;
-    environment_parameters_model=NoParameters(),
+    environment_parameters_model=NoSessionParameters(),
     downstream_model=NoDownstreamModel(),
     fixed_cognitive_parameters::NamedTuple=(;),
     fixed_environment_parameters::NamedTuple=(;),
@@ -118,7 +118,8 @@ function with_fixed_parameters(
     end
 
     #Without parameters of its own, the fixed values are all there is. Otherwise they join the model, or the parts of a composite, which keep their names
-    parameters_model isa NoParameters && return FixedSessionParameters(fixed_parameters)
+    parameters_model isa NoSessionParameters &&
+        return FixedSessionParameters(fixed_parameters)
     return add_part_without_name(parameters_model, FixedSessionParameters(fixed_parameters))
 end
 

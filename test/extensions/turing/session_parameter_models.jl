@@ -3,9 +3,9 @@
 @testset "turing_session_parameters_model" begin
     sessions_info = sessions_for_test(; impute_missing_actions=false)
 
-    @testset "NoParameters gives no parameters, and samples nothing" begin
+    @testset "NoSessionParameters gives no parameters, and samples nothing" begin
         model = CognitiveModeling.turing_session_parameters_model(
-            NoParameters(), sessions_info
+            NoSessionParameters(), sessions_info
         )
         @test model() === (;)
         @test isempty(keys(rand(Xoshiro(1), model)))
@@ -21,9 +21,9 @@
         @test logjoint(model, (;)) == 0
     end
 
-    @testset "FixedParametersBySession gives each session its own values, found by its identifier, and samples nothing" begin
+    @testset "FixedSessionParametersBySession gives each session its own values, found by its identifier, and samples nothing" begin
         model = CognitiveModeling.turing_session_parameters_model(
-            FixedParametersBySession((;
+            FixedSessionParametersBySession((;
                 S3=(; learning_rate=0.4, inverse_temperature=3.0),
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),
@@ -35,7 +35,7 @@
         @test isempty(keys(rand(Xoshiro(1), model)))
         #The same from a dictionary keyed by the sessions' identifiers
         from_dictionary = CognitiveModeling.turing_session_parameters_model(
-            FixedParametersBySession(
+            FixedSessionParametersBySession(
                 Dict(
                     "S3" => (; learning_rate=0.4, inverse_temperature=3.0),
                     "S1" => (; learning_rate=0.2, inverse_temperature=1.0),
@@ -45,8 +45,8 @@
             sessions_info,
         )
         @test from_dictionary() == model()
-        @test_throws "FixedParametersBySession has no parameters for the session S3. It has parameters for (:S1, :S2)." CognitiveModeling.turing_session_parameters_model(
-            FixedParametersBySession((;
+        @test_throws "FixedSessionParametersBySession has no parameters for the session S3. It has parameters for (:S1, :S2)." CognitiveModeling.turing_session_parameters_model(
+            FixedSessionParametersBySession((;
                 S1=(; learning_rate=0.2), S2=(; learning_rate=0.3)
             )),
             sessions_info,
@@ -241,7 +241,7 @@ end
 
     @testset "Values that were looked up for every session are given as they are" begin
         looked_up = CognitiveModeling.prepare_parameters_model(
-            FixedParametersBySession(
+            FixedSessionParametersBySession(
                 Dict(
                     "S3" => (; learning_rate=0.4, inverse_temperature=3.0),
                     "S1" => (; learning_rate=0.2, inverse_temperature=1.0),
@@ -298,11 +298,11 @@ const REGRESSION_FULL_TABLE = merge(
     ),
 )
 
-@testset "HierarchicalRegression" begin
+@testset "HierarchicalRegressionSessionParameters" begin
     sessions_info = sessions_for_test(
         SessionRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
     )
-    regression = HierarchicalRegression((;
+    regression = HierarchicalRegressionSessionParameters((;
         learning_rate=RegressionParameter(;
             intercept=Normal(0, 1),
             predictors=(; age=Normal(0, 0.5)),
@@ -361,7 +361,7 @@ const REGRESSION_FULL_TABLE = merge(
     end
 
     @testset "A centered random intercept is sampled as deviation, and a grouped one has a standard deviation for each group" begin
-        centered_and_grouped = HierarchicalRegression((;
+        centered_and_grouped = HierarchicalRegressionSessionParameters((;
             learning_rate=RegressionParameter(;
                 intercept=nothing,
                 random_intercepts=(;
@@ -389,7 +389,7 @@ const REGRESSION_FULL_TABLE = merge(
               sum(logpdf.(Exponential(0.5), [0.5, 3.0])) +
               sum(logpdf.(Normal(), [0.1, 0.2, -0.3]))
         #Centered and grouped, each deviation is sampled with the standard deviation of its group
-        both = HierarchicalRegression((;
+        both = HierarchicalRegressionSessionParameters((;
             learning_rate=RegressionParameter(;
                 intercept=nothing,
                 session_deviation=RandomIntercept(
@@ -414,7 +414,7 @@ const REGRESSION_FULL_TABLE = merge(
     @testset "With an intercept and session deviations alone, it gives what GroupedHierarchicalSessionParameters gives with one group" begin
         for centered in (false, true)
             as_regression = CognitiveModeling.turing_session_parameters_model(
-                HierarchicalRegression((;
+                HierarchicalRegressionSessionParameters((;
                     learning_rate=RegressionParameter(;
                         intercept=GROUP_PRIORS.mean,
                         session_deviation=RandomIntercept(GROUP_PRIORS.sd; centered),
@@ -461,7 +461,7 @@ const REGRESSION_FULL_TABLE = merge(
     @testset "As a part of a composite it gives its parameters next to the others, with its variables under the name of the part" begin
         composite = CompositeSessionParameters(
             FixedSessionParameters((; inverse_temperature=2.0));
-            learning=HierarchicalRegression((;
+            learning=HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Normal(0, 1),
                     predictors=(; age=Normal(0, 0.5)),
@@ -493,7 +493,7 @@ const REGRESSION_FULL_TABLE = merge(
         @test size(chain, 1) == 20
         #A parameter that is fixed is given next to those of the regression
         with_fixed = turing_full_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Normal(0, 1),
                     session_deviation=nothing,
@@ -515,7 +515,7 @@ const REGRESSION_FULL_TABLE = merge(
         model = turing_full_model(
             FixedSessionParameters((; learning_rate=0.3)),
             with_environment;
-            environment_parameters_model=HierarchicalRegression((;
+            environment_parameters_model=HierarchicalRegressionSessionParameters((;
                 mean_reward=RegressionParameter(;
                     intercept=Normal(0, 1),
                     categorical_predictors=(; group=Normal(0, 2)),
@@ -542,7 +542,7 @@ const REGRESSION_FULL_TABLE = merge(
             :warn,
             r"The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its regression, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1\.",
         ) turing_full_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Normal(0, 1), session_deviation=Exponential(1)
                 ),
@@ -551,7 +551,7 @@ const REGRESSION_FULL_TABLE = merge(
             bounded_sessions,
         )
         @test_logs turing_full_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Normal(0, 1),
                     session_deviation=Exponential(1),
@@ -563,7 +563,7 @@ const REGRESSION_FULL_TABLE = merge(
         )
         #Without a normal term, what the regression can give isn't known, so nothing is warned about
         @test_logs turing_full_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Beta(2, 2), session_deviation=nothing
                 ),

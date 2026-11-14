@@ -37,7 +37,7 @@ Return the symbol name of a session, a `Symbol` made from its identifier: the va
 single session column, as in `S1`, and the name and the value of each of several columns,
 joined by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The
 chains of a fit name the entries of a session after it, such as `S1.learning_rate`, and
-[`FixedParametersBySession`](@ref) can find the values of a session by it. After
+[`FixedSessionParametersBySession`](@ref) can find the values of a session by it. After
 `using CognitiveModeling: session_id_to_symbol`, the learning rate of a session is
 `chain[@varname(\$(session_id_to_symbol(session_id)).learning_rate)]`.
 

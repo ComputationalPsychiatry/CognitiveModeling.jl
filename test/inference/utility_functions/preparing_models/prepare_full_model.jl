@@ -23,7 +23,7 @@ end
 
     @testset "It returns the parts of a full model, with each session parameter model prepared for the sessions" begin
         sessions_info = sessions_to_prepare()
-        by_session = FixedParametersBySession((;
+        by_session = FixedSessionParametersBySession((;
             S1=(; probability=0.1),
             S2=(; probability=0.2),
             S3=(; probability=0.3),
@@ -38,7 +38,7 @@ end
         )
         @test prepared.cognitive_parameters_model.parameters_by_session ==
             (; probability=[0.1, 0.2, 0.3, 0.4])
-        @test prepared.environment_parameters_model === NoParameters()
+        @test prepared.environment_parameters_model === NoSessionParameters()
         @test prepared.downstream_model === NoDownstreamModel()
         @test prepared.sessions_info === sessions_info
     end
@@ -61,8 +61,8 @@ end
         @test_throws "The session parameter model, a IndependentSessionParameters, gives the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
             IndependentSessionParameters((; probability=1, bias=2)), sessions_info
         )
-        @test_throws "The session parameter model, a NoParameters, doesn't give the parameters (:probability,) of a cognitive model of type SessionCounter, which have no default values." CognitiveModeling.prepare_full_model(
-            NoParameters(), sessions_info
+        @test_throws "The session parameter model, a NoSessionParameters, doesn't give the parameters (:probability,) of a cognitive model of type SessionCounter, which have no default values." CognitiveModeling.prepare_full_model(
+            NoSessionParameters(), sessions_info
         )
         #One of one's own doesn't tell its parameters, so nothing is checked
         @test CognitiveModeling.prepare_full_model(
@@ -80,13 +80,13 @@ end
         #No session runs the environment, since nothing is missing, so its parameter isn't needed
         not_running = sessions_to_prepare(; environment=GivesReward())
         @test CognitiveModeling.prepare_full_model(sampled, not_running).environment_parameters_model ===
-            NoParameters()
+            NoSessionParameters()
         #A session with something missing runs it, and then the parameter must be given
         running = sessions_to_prepare(;
             environment=GivesReward(),
             environment_save_history=SaveHistory(; outputs=:reward),
         )
-        @test_throws "The session parameter model, a NoParameters, doesn't give the parameters (:scale,) of an environment model of type GivesReward, which have no default values." CognitiveModeling.prepare_full_model(
+        @test_throws "The session parameter model, a NoSessionParameters, doesn't give the parameters (:scale,) of an environment model of type GivesReward, which have no default values." CognitiveModeling.prepare_full_model(
             sampled, running
         )
         with_default = sessions_to_prepare(;
@@ -94,7 +94,7 @@ end
             environment_save_history=SaveHistory(; outputs=:reward),
         )
         @test CognitiveModeling.prepare_full_model(sampled, with_default).environment_parameters_model ===
-            NoParameters()
+            NoSessionParameters()
     end
 
     @testset "The parts must be of the right kind" begin
@@ -115,7 +115,9 @@ end
         fixed = FixedSessionParameters((; probability=0.3))
         #Without parameters of its own, the fixed values are all there is
         prepared = CognitiveModeling.prepare_full_model(
-            NoParameters(), sessions_info; fixed_cognitive_parameters=(; probability=0.3)
+            NoSessionParameters(),
+            sessions_info;
+            fixed_cognitive_parameters=(; probability=0.3),
         )
         @test prepared.cognitive_parameters_model === fixed
         #A model of one's own keeps its place next to the fixed values, and the parts of a composite stay side by side

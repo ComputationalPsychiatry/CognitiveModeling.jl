@@ -74,9 +74,9 @@ include("turing_behavioral_session.jl")
 #The Turing.jl models of the session parameter models, which give or sample the parameters of every session, each
 #in a file named as the file of its type in the package. The same kinds serve the parameters of the cognitive model and
 #those of the environment model, and each returns one vector for each parameter, with a value for every session
-include("session_parameter_models/no_parameters.jl")
+include("session_parameter_models/no_session_parameters.jl")
 include("session_parameter_models/fixed_session_parameters.jl")
-include("session_parameter_models/fixed_parameters_by_session.jl")
+include("session_parameter_models/fixed_session_parameters_by_session.jl")
 include("session_parameter_models/identical_session_parameters.jl")
 include("session_parameter_models/independent_session_parameters.jl")
 include("session_parameter_models/grouped_hierarchical_session_parameters.jl")

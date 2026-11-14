@@ -28,9 +28,10 @@ const REGRESSION_TABLE = merge(
 
 @testset "Session parameter models" begin
     @testset "The models hold their values or their priors in a NamedTuple" begin
-        @test NoParameters() isa AbstractSessionParametersModel && isbitstype(NoParameters)
+        @test NoSessionParameters() isa AbstractSessionParametersModel &&
+            isbitstype(NoSessionParameters)
         @test FixedSessionParameters((; scale=2.0)).parameters === (; scale=2.0)
-        @test FixedParametersBySession((; S1=(; scale=2.0))).parameters_by_session ===
+        @test FixedSessionParametersBySession((; S1=(; scale=2.0))).parameters_by_session ===
             (; S1=(; scale=2.0))
         @test IdenticalSessionParameters((; probability=1)).priors === (; probability=1)
         @test IndependentSessionParameters((; probability=1)).priors === (; probability=1)
@@ -38,24 +39,24 @@ const REGRESSION_TABLE = merge(
             parameters_model -> parameters_model isa AbstractSessionParametersModel,
             (
                 FixedSessionParameters((;)),
-                FixedParametersBySession((;)),
+                FixedSessionParametersBySession((;)),
                 IdenticalSessionParameters((;)),
                 IndependentSessionParameters((;)),
                 GroupedHierarchicalSessionParameters((;)),
-                HierarchicalRegression((;)),
+                HierarchicalRegressionSessionParameters((;)),
                 CompositeSessionParameters(),
             ),
         )
         @test_throws MethodError FixedSessionParameters([2.0])
-        @test_throws MethodError FixedParametersBySession([(; scale=2.0)])
+        @test_throws MethodError FixedSessionParametersBySession([(; scale=2.0)])
         @test_throws MethodError IdenticalSessionParameters([1, 2])
         @test_throws MethodError IndependentSessionParameters([1, 2])
     end
 
     @testset "Whether a model samples is decided by its type, and one of one's own does" begin
-        @test !CognitiveModeling.estimates_parameters(NoParameters())
+        @test !CognitiveModeling.estimates_parameters(NoSessionParameters())
         @test !CognitiveModeling.estimates_parameters(FixedSessionParameters((; scale=2.0)))
-        @test !CognitiveModeling.estimates_parameters(FixedParametersBySession((;)))
+        @test !CognitiveModeling.estimates_parameters(FixedSessionParametersBySession((;)))
         @test CognitiveModeling.estimates_parameters(
             IdenticalSessionParameters((; probability=1))
         )
@@ -71,19 +72,19 @@ const REGRESSION_TABLE = merge(
     end
 
     @testset "Each model tells which parameters it gives, and one of one's own doesn't unless it has a method" begin
-        @test CognitiveModeling.parameter_names(NoParameters()) === ()
+        @test CognitiveModeling.parameter_names(NoSessionParameters()) === ()
         @test CognitiveModeling.parameter_names(
             FixedSessionParameters((; scale=2.0, offset=0.0))
         ) === (:scale, :offset)
         @test CognitiveModeling.parameter_names(
-            FixedParametersBySession((; S1=(; scale=2.0), S2=(; scale=3.0)))
+            FixedSessionParametersBySession((; S1=(; scale=2.0), S2=(; scale=3.0)))
         ) === (:scale,)
         @test CognitiveModeling.parameter_names(
-            FixedParametersBySession(Dict("S1" => (; scale=2.0)))
+            FixedSessionParametersBySession(Dict("S1" => (; scale=2.0)))
         ) === (:scale,)
-        @test CognitiveModeling.parameter_names(FixedParametersBySession((;))) === ()
+        @test CognitiveModeling.parameter_names(FixedSessionParametersBySession((;))) === ()
         @test CognitiveModeling.parameter_names(
-            FixedParametersBySession((; scale=[2.0, 3.0], offset=[0.0, 0.1]))
+            FixedSessionParametersBySession((; scale=[2.0, 3.0], offset=[0.0, 0.1]))
         ) === (:scale, :offset)
         @test CognitiveModeling.parameter_names(
             IdenticalSessionParameters((; probability=1))
@@ -111,10 +112,10 @@ const REGRESSION_TABLE = merge(
             (; id_S1__block_2=(; scale=3.0)), [(; id="S1", block=2)]
         ) == (; scale=[3.0])
         #A session without parameters, or with other parameters than the first, is an error
-        @test_throws "FixedParametersBySession has no parameters for the session S3. It has parameters for (:S2, :S1)." CognitiveModeling.collect_parameters_in_session_order(
+        @test_throws "FixedSessionParametersBySession has no parameters for the session S3. It has parameters for (:S2, :S1)." CognitiveModeling.collect_parameters_in_session_order(
             parameters_by_session, ["S1", "S3"]
         )
-        @test_throws "FixedParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have the same parameters." CognitiveModeling.collect_parameters_in_session_order(
+        @test_throws "FixedSessionParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have the same parameters." CognitiveModeling.collect_parameters_in_session_order(
             (; S1=(; scale=1.0), S2=(; offset=0.0)), ["S1", "S2"]
         )
         #The parameters can be in a dictionary from each session's identifier too, of one column or of several
@@ -124,7 +125,7 @@ const REGRESSION_TABLE = merge(
         @test CognitiveModeling.collect_parameters_in_session_order(
             Dict((; id="S1", block=2) => (; scale=3.0)), [(; id="S1", block=2)]
         ) == (; scale=[3.0])
-        @test_throws "FixedParametersBySession has no parameters for the session \"S3\". It has parameters for the sessions [\"S1\"]." CognitiveModeling.collect_parameters_in_session_order(
+        @test_throws "FixedSessionParametersBySession has no parameters for the session \"S3\". It has parameters for the sessions [\"S1\"]." CognitiveModeling.collect_parameters_in_session_order(
             Dict("S1" => (; scale=1.0)), ["S1", "S3"]
         )
         #Parameters that are already one vector for each parameter are kept as they are
@@ -242,9 +243,9 @@ const REGRESSION_TABLE = merge(
         @test without_priors.predictors === (; age=2, iq=2) &&
             without_priors.categorical_predictors === (; diagnosis=2)
         @test without_priors.session_deviation === nothing
-        #A HierarchicalRegression keeps one for each parameter, and has no designs until it is prepared
+        #A HierarchicalRegressionSessionParameters keeps one for each parameter, and has no designs until it is prepared
         parameters = (; probability=regression_parameter, scale=with_settings)
-        regression = HierarchicalRegression(parameters)
+        regression = HierarchicalRegressionSessionParameters(parameters)
         @test regression.parameters === parameters && regression.designs === nothing
         @test CognitiveModeling.parameter_names(regression) === (:probability, :scale)
         @test CognitiveModeling.estimates_parameters(regression)
@@ -299,15 +300,15 @@ const REGRESSION_TABLE = merge(
         @test_throws TypeError RegressionParameter(;
             intercept=1, session_deviation=nothing, random_intercepts=:participant
         )
-        @test_throws "HierarchicalRegression takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), session_deviation = Exponential(1)), but for probability it was given 1." HierarchicalRegression((;
+        @test_throws "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), session_deviation = Exponential(1)), but for probability it was given 1." HierarchicalRegressionSessionParameters((;
             probability=1
         ))
-        @test_throws MethodError HierarchicalRegression([1])
+        @test_throws MethodError HierarchicalRegressionSessionParameters([1])
     end
 
     @testset "The design of a regression has a column for each coefficient, and the level of every session for each random intercept" begin
         sessions_info = grouped_sessions(REGRESSION_TABLE)
-        regression = HierarchicalRegression((;
+        regression = HierarchicalRegressionSessionParameters((;
             probability=RegressionParameter(;
                 intercept=1,
                 predictors=(; age=2),
@@ -318,7 +319,7 @@ const REGRESSION_TABLE = merge(
             scale=RegressionParameter(; intercept=1, session_deviation=nothing),
         ))
         prepared = CognitiveModeling.prepare_parameters_model(regression, sessions_info)
-        @test prepared isa HierarchicalRegression &&
+        @test prepared isa HierarchicalRegressionSessionParameters &&
             prepared.parameters === regression.parameters
         design = prepared.designs.probability
         #A continuous predictor has its values, and a categorical one a column for each level other than the level of the first session
@@ -359,14 +360,14 @@ const REGRESSION_TABLE = merge(
             sessions_info.sessions, sessions_info.session_ids
         )
         @test CognitiveModeling.prepare_parameters_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 scale=RegressionParameter(; intercept=1, session_deviation=2)
             )),
             without_table,
         ).designs.scale.session_deviation_levels.n_levels == 4
         #A full model prepares it, and so does a composite, as one of its parts
         @test CognitiveModeling.prepare_full_model(
-            HierarchicalRegression((;
+            HierarchicalRegressionSessionParameters((;
                 probability=RegressionParameter(;
                     intercept=1, session_deviation=nothing, predictors=(; age=2)
                 ),
@@ -429,13 +430,13 @@ const REGRESSION_TABLE = merge(
                 :probability,
             )
         end
-        @test_throws "HierarchicalRegression predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." design_of(;
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." design_of(;
             predictors=(; wave=2)
         )
-        @test_throws "HierarchicalRegression has a random intercept of probability for each value of the column wave, which has the values [1, 2] in the session \"S1\"." design_of(;
+        @test_throws "HierarchicalRegressionSessionParameters has a random intercept of probability for each value of the column wave, which has the values [1, 2] in the session \"S1\"." design_of(;
             random_intercepts=(; wave=2)
         )
-        @test_throws "HierarchicalRegression predicts probability from the column diagnosis as a continuous predictor, but it has the value \"clinical\", which isn't a number. Give the column in categorical_predictors instead." design_of(;
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column diagnosis as a continuous predictor, but it has the value \"clinical\", which isn't a number. Give the column in categorical_predictors instead." design_of(;
             predictors=(; diagnosis=2)
         )
         @test_throws "The table that the sessions were split from has no column iq." design_of(;
@@ -445,14 +446,14 @@ const REGRESSION_TABLE = merge(
         one_diagnosis = grouped_sessions(
             merge(REGRESSION_TABLE, (; diagnosis=fill("clinical", 6)))
         )
-        @test_throws "HierarchicalRegression predicts probability from the column diagnosis as a categorical predictor, but every session has the value \"clinical\", so there is no difference between levels to estimate." design_of(
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column diagnosis as a categorical predictor, but every session has the value \"clinical\", so there is no difference between levels to estimate." design_of(
             one_diagnosis; categorical_predictors=(; diagnosis=2)
         )
         @test_throws "The reference level of the categorical predictor diagnosis of probability is \"healthy\", which isn't a value of the column. Its values are [\"clinical\", \"control\"]." design_of(;
             categorical_predictors=(; diagnosis=2), reference_levels=(; diagnosis="healthy")
         )
         #P1 has a clinical session and a control session, so its random intercept is in no one group
-        @test_throws "HierarchicalRegression groups the random intercepts of probability for participant by (:diagnosis,), but the sessions of P1 are in the groups clinical, control. The sessions with one value of the random intercept's column must all be in one group." design_of(;
+        @test_throws "HierarchicalRegressionSessionParameters groups the random intercepts of probability for participant by (:diagnosis,), but the sessions of P1 are in the groups clinical, control. The sessions with one value of the random intercept's column must all be in one group." design_of(;
             random_intercepts=(; participant=RandomIntercept(2; group_by=:diagnosis))
         )
         #The coefficient of a level can't take the name of another term
@@ -496,7 +497,7 @@ const REGRESSION_TABLE = merge(
         #It samples when any part does
         @test CognitiveModeling.estimates_parameters(composite)
         @test !CognitiveModeling.estimates_parameters(
-            CompositeSessionParameters(fixed, NoParameters())
+            CompositeSessionParameters(fixed, NoSessionParameters())
         )
         #Two parts can't give the same parameter, which is checked for the parts that tell their parameters
         @test_throws "Two parts of CompositeSessionParameters give the parameter probability, of the types IndependentSessionParameters and FixedSessionParameters. Each parameter must come from one part." CompositeSessionParameters(
@@ -515,7 +516,7 @@ const REGRESSION_TABLE = merge(
 
     @testset "Preparing a model for the sessions looks up values, finds groups, and prepares the parts of a composite" begin
         sessions_info = grouped_sessions()
-        by_session = FixedParametersBySession(
+        by_session = FixedSessionParametersBySession(
             Dict(
                 "S4" => (; probability=0.4),
                 "S1" => (; probability=0.1),
@@ -525,15 +526,15 @@ const REGRESSION_TABLE = merge(
         )
         #The values are then one vector for each parameter, in the order of the sessions, in the same kind of model
         looked_up = CognitiveModeling.prepare_parameters_model(by_session, sessions_info)
-        @test looked_up isa FixedParametersBySession
+        @test looked_up isa FixedSessionParametersBySession
         @test looked_up.parameters_by_session == (; probability=[0.1, 0.2, 0.3, 0.4])
         @test CognitiveModeling.parameter_names(looked_up) === (:probability,)
         @test !CognitiveModeling.estimates_parameters(looked_up)
         #Preparing it again changes nothing, and the values can be given this way from the start
         @test CognitiveModeling.prepare_parameters_model(looked_up, sessions_info).parameters_by_session ===
             looked_up.parameters_by_session
-        @test_throws "FixedParametersBySession has 2 values of probability, but there are 4 sessions. A vector must have one value for every session, in the order of the sessions." CognitiveModeling.prepare_parameters_model(
-            FixedParametersBySession((; probability=[0.1, 0.2])), sessions_info
+        @test_throws "FixedSessionParametersBySession has 2 values of probability, but there are 4 sessions. A vector must have one value for every session, in the order of the sessions." CognitiveModeling.prepare_parameters_model(
+            FixedSessionParametersBySession((; probability=[0.1, 0.2])), sessions_info
         )
 
         hierarchical = GroupedHierarchicalSessionParameters((;

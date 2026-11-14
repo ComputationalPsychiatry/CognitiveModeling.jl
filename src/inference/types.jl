@@ -416,7 +416,7 @@ estimates the environment's parameters, unless `include_environment` says otherw
 table is kept in the field `table`, without being copied, with the rows of each session in
 `session_rows`, so that a session parameter model can read the columns it needs, such as
 those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions by, and the
-predictors of a [`HierarchicalRegression`](@ref).
+predictors of a [`HierarchicalRegressionSessionParameters`](@ref).
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -725,11 +725,11 @@ end
 Supertype for session parameter models: the part of a full model, the model that an
 inference backend fits to several sessions, which gives or estimates the parameters of every
 session, for the cognitive model and for the environment model alike. The package comes with
-[`NoParameters`](@ref), [`FixedSessionParameters`](@ref),
-[`FixedParametersBySession`](@ref), [`IdenticalSessionParameters`](@ref),
+[`NoSessionParameters`](@ref), [`FixedSessionParameters`](@ref),
+[`FixedSessionParametersBySession`](@ref), [`IdenticalSessionParameters`](@ref),
 [`IndependentSessionParameters`](@ref), [`GroupedHierarchicalSessionParameters`](@ref) and
-[`HierarchicalRegression`](@ref), and [`CompositeSessionParameters`](@ref) combines
-several, each giving some of the parameters.
+[`HierarchicalRegressionSessionParameters`](@ref), and [`CompositeSessionParameters`](@ref)
+combines several, each giving some of the parameters.
 
 # Implementation
 Create a subtype, and for each inference backend it is used with, add a method of that

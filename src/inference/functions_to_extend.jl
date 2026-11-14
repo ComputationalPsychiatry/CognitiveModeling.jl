@@ -26,8 +26,8 @@ parameter_names(parameters_model::AbstractSessionParametersModel) = nothing
 
 Return whether `parameters_model`, a session parameter model, estimates the parameters it
 gives from the data, instead of being given their values: `false` for
-[`NoParameters`](@ref), [`FixedSessionParameters`](@ref) and
-[`FixedParametersBySession`](@ref), whether any part does for a
+[`NoSessionParameters`](@ref), [`FixedSessionParameters`](@ref) and
+[`FixedSessionParametersBySession`](@ref), whether any part does for a
 [`CompositeSessionParameters`](@ref), and `true` for every other kind. When the
 environment's parameters are estimated, a full model includes the environment in every
 session, so that the observations in the data inform them, and it warns when the parameters
@@ -50,11 +50,11 @@ estimates_parameters(parameters_model) = true
 
 Return `parameters_model` prepared for the sessions in `sessions_info`, with what doesn't
 change between the evaluations of an inference backend's model worked out once, before the
-model is made. A [`FixedParametersBySession`](@ref) has the values of every session looked
-up, a [`GroupedHierarchicalSessionParameters`](@ref) has the group of every session found, a
-[`HierarchicalRegression`](@ref) has the design of every regression built, and a
-[`CompositeSessionParameters`](@ref) has each of its parts prepared. Used by
-[`prepare_full_model`](@ref).
+model is made. A [`FixedSessionParametersBySession`](@ref) has the values of every session
+looked up, a [`GroupedHierarchicalSessionParameters`](@ref) has the group of every session
+found, a [`HierarchicalRegressionSessionParameters`](@ref) has the design of every
+regression built, and a [`CompositeSessionParameters`](@ref) has each of its parts prepared.
+Used by [`prepare_full_model`](@ref).
 
 # Implementation
 A session parameter model of one's own can add a method of this function, which returns a

@@ -8,7 +8,7 @@
 function CognitiveModeling.turing_full_model(
     cognitive_parameters_model,
     sessions_info::MultipleSessionsInfo;
-    environment_parameters_model=NoParameters(),
+    environment_parameters_model=NoSessionParameters(),
     downstream_model=NoDownstreamModel(),
     fixed_cognitive_parameters::NamedTuple=(;),
     fixed_environment_parameters::NamedTuple=(;),
@@ -179,7 +179,7 @@ function sampled_ranges(parameters_model::GroupedHierarchicalSessionParameters)
     end
     return ranges
 end
-function sampled_ranges(parameters_model::HierarchicalRegression)
+function sampled_ranges(parameters_model::HierarchicalRegressionSessionParameters)
     ranges = Pair{Symbol,NamedTuple}[]
     for (name, regression_parameter) in pairs(parameters_model.parameters)
 
@@ -227,7 +227,7 @@ and prepare its parts when the model is made, outside the model's body. Used by
 Turing.@model function turing_run_full_model(
     cognitive_parameters_model,
     sessions_info::MultipleSessionsInfo;
-    environment_parameters_model=NoParameters(),
+    environment_parameters_model=NoSessionParameters(),
     downstream_model=NoDownstreamModel(),
     catch_invalid_parameters::Bool=false,
     parallelization=SerialSessions(),

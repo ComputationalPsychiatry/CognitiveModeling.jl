@@ -8,7 +8,8 @@ of the sessions, from the table that the sessions were split from. A session wit
 one value in the column, or with a missing one, is an error, which starts with `reader`, a
 description of what reads the column, such as
 `"GroupedHierarchicalSessionParameters groups learning_rate by"`. Used by
-[`group_sessions`](@ref) and by the regressions of a [`HierarchicalRegression`](@ref).
+[`group_sessions`](@ref) and by the regressions of a
+[`HierarchicalRegressionSessionParameters`](@ref).
 """
 function read_one_value_of_each_session(
     sessions_info::MultipleSessionsInfo, column::Symbol, reader::String
@@ -40,7 +41,7 @@ one value, or a missing value, in one of the columns is an error, which starts w
 `reader`, as for [`read_one_value_of_each_session`](@ref). Used by
 [`prepare_parameters_model`](@ref), for the groups of a
 [`GroupedHierarchicalSessionParameters`](@ref) and for the random intercepts of a
-[`HierarchicalRegression`](@ref).
+[`HierarchicalRegressionSessionParameters`](@ref).
 """
 function group_sessions(sessions_info::MultipleSessionsInfo, ::Tuple{}, ::String)
     return (;
