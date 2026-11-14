@@ -20,7 +20,7 @@ function CognitiveModeling.attribute_names(::ScoringEnvironment)
     return ModelAttributes(; parameters=(), states=:level, inputs=:choice, outputs=:reward)
 end
 
-@testset "Running sessions" begin
+@testset "Within models" begin
     include("read_session_setup.jl")
     include("read_timestep_data.jl")
     include("to_condition_on.jl")

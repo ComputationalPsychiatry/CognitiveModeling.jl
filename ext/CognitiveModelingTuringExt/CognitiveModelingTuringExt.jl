@@ -80,7 +80,7 @@ include("session_parameter_models/fixed_parameters_by_session.jl")
 include("session_parameter_models/identical_session_parameters.jl")
 include("session_parameter_models/independent_session_parameters.jl")
 include("session_parameter_models/grouped_hierarchical_session_parameters.jl")
-include("session_parameter_models/hierarchical_regression.jl")
+include("session_parameter_models/hierarchical_regression_session_parameters.jl")
 include("session_parameter_models/composite_session_parameters.jl")
 
 include("session_trajectories_chain.jl")

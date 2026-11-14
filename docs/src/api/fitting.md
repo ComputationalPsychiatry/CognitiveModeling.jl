@@ -37,7 +37,7 @@ Pages = [
     "inference/session_parameter_models/identical_session_parameters.jl",
     "inference/session_parameter_models/independent_session_parameters.jl",
     "inference/session_parameter_models/grouped_hierarchical_session_parameters.jl",
-    "inference/session_parameter_models/hierarchical_regression.jl",
+    "inference/session_parameter_models/hierarchical_regression_session_parameters.jl",
     "inference/session_parameter_models/composite_session_parameters.jl",
 ]
 ```
@@ -61,7 +61,7 @@ not exported.
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["inference/prepare_full_model.jl"]
+Pages = ["inference/utility_functions/preparing_models/prepare_full_model.jl"]
 ```
 
 ## Reading the sessions
