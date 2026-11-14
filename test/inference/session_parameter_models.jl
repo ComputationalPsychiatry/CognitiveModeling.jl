@@ -214,12 +214,12 @@ const REGRESSION_TABLE = merge(
             [:diagnosis, :site],
             3;
             reference_level=(; diagnosis="control", site=1),
-            coding=:sum_to_zero,
+            coding=:effects,
         )
         @test cell.columns === (:diagnosis, :site) &&
             cell.name === :diagnosis__site &&
             cell.reference_level == (; diagnosis="control", site=1) &&
-            cell.coding === :sum_to_zero
+            cell.coding === :effects
         interaction = Interaction((:age, :diagnosis), 4)
         @test interaction.terms === (:age, :diagnosis) &&
             interaction.prior === 4 &&
@@ -361,8 +361,8 @@ const REGRESSION_TABLE = merge(
         @test_throws "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given (:age, :iq). The product of several predictors is an Interaction." ContinuousPredictor(
             (:age, :iq), 1
         )
-        @test_throws "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :sum_to_zero, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :effects." CategoricalPredictor(
-            :diagnosis, 1; coding=:effects
+        @test_throws "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :sum_to_zero." CategoricalPredictor(
+            :diagnosis, 1; coding=:sum_to_zero
         )
         @test_throws "A CategoricalPredictor with the coding :full_dummy has a coefficient for every level and no reference level, but it was given the reference level \"control\"." CategoricalPredictor(
             :diagnosis, 1; coding=:full_dummy, reference_level="control"
@@ -570,15 +570,15 @@ const REGRESSION_TABLE = merge(
         )
         @test with_reference.design_columns == (; diagnosis_clinical=[1.0, 0.0, 1.0, 0.0])
         @test with_reference.reference_levels == (; diagnosis="control")
-        #With coefficients that sum to zero, the sessions of the reference level have -1 in every column, and each predictor is coded as it says
-        summing_to_zero = design_of(
-            CategoricalPredictor(:diagnosis, 2; coding=:sum_to_zero),
-            CategoricalPredictor(:id, 3; coding=:sum_to_zero),
+        #With effects coding, whose coefficients sum to zero, the sessions of the reference level have -1 in every column, and each predictor is coded as it says
+        effects_coded = design_of(
+            CategoricalPredictor(:diagnosis, 2; coding=:effects),
+            CategoricalPredictor(:id, 3; coding=:effects),
             CategoricalPredictor(:site, 4),
         )
-        @test summing_to_zero.coefficient_priors ===
+        @test effects_coded.coefficient_priors ===
             (; diagnosis_control=2, id_S2=3, id_S3=3, id_S4=3, site_2=4)
-        @test summing_to_zero.design_columns == (;
+        @test effects_coded.design_columns == (;
             diagnosis_control=[-1.0, 1.0, -1.0, 1.0],
             id_S2=[-1.0, 1.0, 0.0, 0.0],
             id_S3=[-1.0, 0.0, 1.0, 0.0],
@@ -605,7 +605,7 @@ const REGRESSION_TABLE = merge(
         #A continuous and a categorical predictor give one for each coefficient of the categorical predictor, coded as the predictor is
         mixed = design_of(
             ContinuousPredictor(:age, 1),
-            CategoricalPredictor(:diagnosis, 2; coding=:sum_to_zero),
+            CategoricalPredictor(:diagnosis, 2; coding=:effects),
             Interaction((:age, :diagnosis), 3),
         )
         @test mixed.design_columns.age_by_diagnosis_control == [-30.0, 40.0, -50.0, 60.0]

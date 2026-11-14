@@ -98,9 +98,10 @@ deviations.
   it is the level of the first session. The coding `:full_dummy` has no reference level.
 - `coding=:dummy`: how the coefficients are coded. With `:dummy`, each is the difference
   between a level and the reference level, such as the difference between a clinical and a
-  non-clinical group. With `:sum_to_zero`, each is the difference between a level and the
-  mean of the levels, and the difference of the reference level is minus the sum of the
-  others. With `:full_dummy`, every level has a coefficient, which is added for the
+  non-clinical group. With `:effects`, each is the difference between a level and the mean
+  of the levels, and the difference of the reference level is minus the sum of the others,
+  which gives the reference level a wider prior than the others when there are three levels
+  or more. With `:full_dummy`, every level has a coefficient, which is added for the
   sessions of that level. Without an [`Intercept`](@ref), each is the value of its level,
   and every level has the same prior. With an `Intercept`, or another predictor coded this
   way, only the priors tell their coefficients apart.
@@ -117,7 +118,7 @@ Each argument is kept in a field of the same name, with `columns` as a tuple of 
 ```jldoctest
 julia> using Distributions: Normal
 
-julia> CategoricalPredictor((:diagnosis, :site), Normal(0, 1); coding = :sum_to_zero).name
+julia> CategoricalPredictor((:diagnosis, :site), Normal(0, 1); coding = :effects).name
 :diagnosis__site
 ```
 """
@@ -139,10 +140,10 @@ struct CategoricalPredictor{Tcolumns<:Tuple{Vararg{Symbol}},Tprior,Treference_le
     )
         columns_tuple = as_tuple(columns)::Tuple{Vararg{Symbol}}
         check_has_columns(columns_tuple, "A CategoricalPredictor")
-        if !(coding in (:dummy, :sum_to_zero, :full_dummy))
+        if !(coding in (:dummy, :effects, :full_dummy))
             throw(
                 ArgumentError(
-                    "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :sum_to_zero, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given $(repr(coding)).",
+                    "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given $(repr(coding)).",
                 ),
             )
         end
@@ -1023,7 +1024,7 @@ and a vector with 1 for the sessions of that level and 0 for the others. The lev
 values of a single column, whose coefficients are named after the predictor and the level,
 as in `diagnosis_clinical`, or the `NamedTuple`s of the values of several, whose
 coefficients are named by the symbol name of the level alone, as in
-`diagnosis_clinical__site_2`. With the coding `:sum_to_zero`, the sessions of the reference
+`diagnosis_clinical__site_2`. With the coding `:effects`, the sessions of the reference
 level have -1 in every column. The reference level is the predictor's, or the level of the
 first session, and `nothing` with the coding `:full_dummy`. It is an error when there is one
 level only, and when the reference level isn't one of them. Used by
@@ -1072,8 +1073,8 @@ function build_contrast_columns(
         filter(!isequal(reference_level), levels)
     end
 
-    #Each of these levels has a column with 1 for its sessions, and with -1 for the sessions of the reference level when the coefficients sum to zero
-    value_of_reference_level = predictor.coding === :sum_to_zero ? -1.0 : 0.0
+    #Each of these levels has a column with 1 for its sessions, and with -1 for the sessions of the reference level with effects coding, so that the coefficients sum to zero
+    value_of_reference_level = predictor.coding === :effects ? -1.0 : 0.0
     contrast_columns = map(levels_with_coefficients) do level
         return map(level_of_each_session) do level_of_session
             if isequal(level_of_session, level)
