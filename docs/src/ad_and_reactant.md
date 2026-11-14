@@ -16,7 +16,8 @@ starting, with imputed actions, with an environment filling in observations, wit
 environment which doesn't run because nothing in the data is missing, with observations
 imputed from an environment's distributions, with a reward that isn't given on every
 timestep, and with a model which samples within each timestep, and of the full model of
-several sessions, also with an environment parameter shared by the sessions. That keeps the
+several sessions, also with an environment parameter shared by the sessions, and with
+parameters from the distributions of groups and from regressions. That keeps the
 package's own code tested without Turing.jl, since the backends work without it and with
 other probabilistic programming languages. Every gradient is compared with finite
 differences. Zygote isn't supported, because the package uses for loops.
@@ -35,7 +36,7 @@ These are bugs in the backends, which the package doesn't work around. Their tes
 marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
 `test/extensions/turing/ad`, so that the suites pass while the bug is there,
 and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, ReverseDiff
-1.18.9, Enzyme 0.13.219, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
+1.18.10, Enzyme 0.13.219, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
 
 | Backend | When | What happens | Status |
 |---|---|---|---|

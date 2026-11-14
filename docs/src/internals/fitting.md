@@ -24,6 +24,7 @@ Pages = [
     "inference/session_parameter_models/identical_session_parameters.jl",
     "inference/session_parameter_models/independent_session_parameters.jl",
     "inference/session_parameter_models/grouped_hierarchical_session_parameters.jl",
+    "inference/session_parameter_models/hierarchical_regression.jl",
     "inference/session_parameter_models/composite_session_parameters.jl",
 ]
 ```
@@ -70,6 +71,14 @@ Pages = ["inference/preparing_sessions/include_environment.jl"]
 Modules = [CognitiveModeling]
 Public = false
 Pages = ["inference/preparing_sessions/check_session_identifiers.jl"]
+```
+
+### Reading the columns that a session parameter model uses
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/preparing_sessions/read_session_columns.jl"]
 ```
 
 ## Running sessions

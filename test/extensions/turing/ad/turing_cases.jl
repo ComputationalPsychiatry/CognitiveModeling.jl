@@ -291,6 +291,47 @@ const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
     TURING_GROUPED_SESSIONS,
 )
 
+# The same sessions with the columns of a regression: an age and a group for each session, and a participant with two of them
+const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
+    TuringRescorlaWagner(),
+    merge(
+        TURING_TABLE,
+        (;
+            group=repeat(["a", "b", "a"]; inner=10),
+            age=repeat([-1.0, 0.0, 1.0]; inner=10),
+            participant=repeat(["P1", "P2", "P1"]; inner=10),
+        ),
+    );
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:id,
+    who_starts=EnvironmentStarts(),
+)
+
+# Both parameters from regressions: the learning rate on the age and the group, with random intercepts of the participants and
+# session deviations whose standard deviation is one for each group, and the inverse temperature with centered random intercepts
+const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
+    HierarchicalRegression((;
+        learning_rate=RegressionParameter(;
+            intercept=Normal(0, 1),
+            predictors=(; age=Normal(0, 1)),
+            categorical_predictors=(; group=Normal(0, 1)),
+            random_intercepts=(; participant=Exponential(1)),
+            session_deviation=RandomIntercept(Exponential(1); group_by=:group),
+            transformation=turing_to_unit_interval,
+        ),
+        inverse_temperature=RegressionParameter(;
+            intercept=Normal(0, 1),
+            random_intercepts=(;
+                participant=RandomIntercept(Exponential(1); centered=true)
+            ),
+            session_deviation=nothing,
+            transformation=exp,
+        ),
+    )),
+    TURING_REGRESSION_SESSIONS,
+)
+
 #The session of each case, prepared once
 function rescorla_wagner_session(who_starts)
     return SessionInfo(TuringRescorlaWagner(), TURING_REWARDS, TURING_CHOICES; who_starts)
@@ -431,6 +472,12 @@ const TURING_CASES = [
         name="turing full model with a composite of centered group parameters and independent ones",
         f=log_density_of(TURING_FULL_MODEL_WITH_COMPOSITE),
         x=[0.2, -0.4, 0.8, 1.2, 0.3, -0.5, 0.1, 1.0, 2.0, 3.0],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with parameters from regressions",
+        f=log_density_of(TURING_FULL_MODEL_WITH_REGRESSION),
+        x=[0.2, 0.3, -0.4, 0.8, 0.3, -0.2, 0.6, 1.1, 0.1, -0.3, 0.2, 0.5, 0.7, 0.2, -0.1],
         reactant=false,
     ),
 ]

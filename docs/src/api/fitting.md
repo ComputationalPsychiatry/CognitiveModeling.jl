@@ -37,6 +37,7 @@ Pages = [
     "inference/session_parameter_models/identical_session_parameters.jl",
     "inference/session_parameter_models/independent_session_parameters.jl",
     "inference/session_parameter_models/grouped_hierarchical_session_parameters.jl",
+    "inference/session_parameter_models/hierarchical_regression.jl",
     "inference/session_parameter_models/composite_session_parameters.jl",
 ]
 ```

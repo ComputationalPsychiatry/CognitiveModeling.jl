@@ -48,6 +48,9 @@ This page lists what is planned and not written yet. The list will grow.
   several cognitive models generated its behavior, and its posterior compares the models.
 - Several sets of experimental data in one hierarchical model, such as different experiments
   or tasks done by the same participants, which share the parameters they have in common.
+- Formulas for a `HierarchicalRegression`, as an extension for StatsModels.jl, so that the
+  regression of a parameter can be written as
+  `@formula(learning_rate ~ 1 + age + diagnosis + (1 | participant))`.
 
 ## Plots
 

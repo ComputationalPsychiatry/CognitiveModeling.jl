@@ -26,6 +26,7 @@ include("inference/session_parameter_models/fixed_parameters_by_session.jl")
 include("inference/session_parameter_models/identical_session_parameters.jl")
 include("inference/session_parameter_models/independent_session_parameters.jl")
 include("inference/session_parameter_models/grouped_hierarchical_session_parameters.jl")
+include("inference/session_parameter_models/hierarchical_regression.jl")
 include("inference/session_parameter_models/composite_session_parameters.jl")
 include("inference/prepare_full_model.jl")
 include("inference/functions_to_extend.jl")
@@ -34,6 +35,7 @@ include("inference/preparing_sessions/prepare_session_data.jl")
 include("inference/preparing_sessions/split_table_into_sessions.jl")
 include("inference/preparing_sessions/include_environment.jl")
 include("inference/preparing_sessions/check_session_identifiers.jl")
+include("inference/preparing_sessions/read_session_columns.jl")
 include("inference/running_sessions/read_session_setup.jl")
 include("inference/running_sessions/read_timestep_data.jl")
 include("inference/running_sessions/to_condition_on.jl")
@@ -67,6 +69,9 @@ export AbstractSessionParametersModel,
     IndependentSessionParameters,
     GroupedHierarchicalSessionParameters,
     HierarchicalParameter,
+    HierarchicalRegression,
+    RegressionParameter,
+    RandomIntercept,
     CompositeSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions

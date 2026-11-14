@@ -48,6 +48,7 @@ const KNOWN_FAILURES = [
             "turing full model with an environment parameter shared by the sessions",
             "turing full model with parameters from the distributions of groups",
             "turing full model with a composite of centered group parameters and independent ones",
+            "turing full model with parameters from regressions",
         ],
     ),
     (;

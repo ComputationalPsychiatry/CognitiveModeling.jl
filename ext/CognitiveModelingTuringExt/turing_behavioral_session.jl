@@ -135,9 +135,10 @@ warn_if_values_outside_domains(parameters_model, ::NoEnvironment) = nothing
 Return the values that `parameters_model`, a session parameter model, can sample for each
 parameter, as a vector of pairs from the parameter's name to a `NamedTuple` with `lower`,
 `upper`, whether the values are `discrete`, and `source`, a description of where they come
-from: the support of a prior, or what the transformation of a hierarchical parameter makes
-of the two ends of the real line, for the default normal distribution. Parameters that are
-given without being sampled, or whose range isn't known, are left out. Used by
+from: the support of a prior, or what a transformation makes of the two ends of the real
+line, for a hierarchical parameter with the default normal distribution, and for a
+regression with random intercepts or session deviations, which are normal. Parameters that
+are given without being sampled, or whose range isn't known, are left out. Used by
 [`warn_if_values_outside_domains`](@ref).
 """
 sampled_ranges(parameters_model) = Pair{Symbol,NamedTuple}[]
@@ -173,6 +174,32 @@ function sampled_ranges(parameters_model::GroupedHierarchicalSessionParameters)
             upper=max(ends...),
             discrete=false,
             source="the transformation $transformation of its group-level normal distribution",
+        )
+        push!(ranges, name => range)
+    end
+    return ranges
+end
+function sampled_ranges(parameters_model::HierarchicalRegression)
+    ranges = Pair{Symbol,NamedTuple}[]
+    for (name, regression_parameter) in pairs(parameters_model.parameters)
+
+        #A normal random intercept or session deviation can give the sum any value on the real line
+        has_normal_term =
+            regression_parameter.session_deviation !== nothing ||
+            !isempty(regression_parameter.random_intercepts)
+        has_normal_term || continue
+        transformation = regression_parameter.transformation
+        ends = try
+            (transformation(-Inf), transformation(Inf))
+        catch
+            continue
+        end
+        all(value -> value isa Real, ends) || continue
+        range = (;
+            lower=min(ends...),
+            upper=max(ends...),
+            discrete=false,
+            source="the transformation $transformation of its regression",
         )
         push!(ranges, name => range)
     end

@@ -68,7 +68,8 @@ Return the values of `column` in the table that the sessions in `sessions_info` 
 from, as one vector for each session, of its rows in the table. It is an error when the
 sessions were given already prepared, without a table, and when the table has no such
 column. Useful for a session parameter model that reads a column, such as one to group the
-sessions by, or the covariate of a regression. Used by [`group_sessions`](@ref).
+sessions by, or the covariate of a regression. Used by
+[`read_one_value_of_each_session`](@ref).
 """
 function session_column_values(sessions_info::MultipleSessionsInfo, column::Symbol)
     table = sessions_info.table

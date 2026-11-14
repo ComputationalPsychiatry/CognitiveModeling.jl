@@ -20,6 +20,12 @@ function grouped_sessions(table=GROUPS_TABLE)
     )
 end
 
+#The table of GROUPS_TABLE with the age and the participant of each session: S1 and S2 are of P1, and S3 and S4 of P2
+const REGRESSION_TABLE = merge(
+    GROUPS_TABLE,
+    (; age=[30, 30, 40, 40, 50, 60], participant=["P1", "P1", "P1", "P1", "P2", "P2"]),
+)
+
 @testset "Session parameter models" begin
     @testset "The models hold their values or their priors in a NamedTuple" begin
         @test NoParameters() isa AbstractSessionParametersModel && isbitstype(NoParameters)
@@ -36,6 +42,7 @@ end
                 IdenticalSessionParameters((;)),
                 IndependentSessionParameters((;)),
                 GroupedHierarchicalSessionParameters((;)),
+                HierarchicalRegression((;)),
                 CompositeSessionParameters(),
             ),
         )
@@ -185,60 +192,284 @@ end
         ))
     end
 
-    @testset "The groups of the sessions are found from the table, in the order of their first session" begin
-        sessions_info = grouped_sessions()
-        @test CognitiveModeling.group_sessions(
-            sessions_info, (:diagnosis,), :probability
-        ) == (;
-            group_of_each_session=[1, 2, 1, 2],
+    @testset "A RegressionParameter keeps its terms, with a prior for every predictor and the settings of every random intercept" begin
+        regression_parameter = RegressionParameter(;
+            intercept=1,
+            predictors=(; age=2),
+            categorical_predictors=(; diagnosis=3),
+            random_intercepts=(; participant=4),
+            session_deviation=5,
+        )
+        @test regression_parameter.intercept === 1
+        @test regression_parameter.predictors === (; age=2)
+        @test regression_parameter.categorical_predictors === (; diagnosis=3)
+        #A random intercept that is given as a prior has the default settings
+        @test regression_parameter.random_intercepts.participant isa RandomIntercept
+        @test regression_parameter.random_intercepts.participant.sd_prior === 4 &&
+            regression_parameter.random_intercepts.participant.group_by === () &&
+            regression_parameter.random_intercepts.participant.centered === false
+        @test regression_parameter.session_deviation.sd_prior === 5
+        @test regression_parameter.transformation === identity
+        @test regression_parameter.center_predictors === false &&
+            regression_parameter.reference_levels === (;) &&
+            regression_parameter.sum_to_zero_coding === false
+        #A RandomIntercept is kept with its settings, with the columns to group by as a tuple of names
+        grouped = RandomIntercept(4; group_by=[:diagnosis, :site], centered=true)
+        @test grouped.group_by === (:diagnosis, :site) && grouped.centered === true
+        with_settings = RegressionParameter(;
+            intercept=nothing,
+            random_intercepts=(; participant=grouped),
+            session_deviation=RandomIntercept(5; group_by=:diagnosis),
+            transformation=exp,
+            reference_levels=(;),
+            center_predictors=true,
+            sum_to_zero_coding=true,
+        )
+        @test with_settings.intercept === nothing
+        @test with_settings.random_intercepts.participant === grouped
+        @test with_settings.session_deviation.group_by === (:diagnosis,)
+        @test with_settings.transformation === exp &&
+            with_settings.center_predictors === true &&
+            with_settings.sum_to_zero_coding === true
+        #Predictors that are given without priors take the prior of every such coefficient
+        without_priors = RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            predictors=(:age, :iq),
+            categorical_predictors=:diagnosis,
+            coefficient_prior=2,
+        )
+        @test without_priors.predictors === (; age=2, iq=2) &&
+            without_priors.categorical_predictors === (; diagnosis=2)
+        @test without_priors.session_deviation === nothing
+        #A HierarchicalRegression keeps one for each parameter, and has no designs until it is prepared
+        parameters = (; probability=regression_parameter, scale=with_settings)
+        regression = HierarchicalRegression(parameters)
+        @test regression.parameters === parameters && regression.designs === nothing
+        @test CognitiveModeling.parameter_names(regression) === (:probability, :scale)
+        @test CognitiveModeling.estimates_parameters(regression)
+    end
+
+    @testset "The terms of a regression are checked" begin
+        #The intercept and the session deviation have no defaults
+        @test_throws UndefKeywordError RegressionParameter(; intercept=1)
+        @test_throws UndefKeywordError RegressionParameter(; session_deviation=1)
+        @test_throws "A RegressionParameter needs an intercept, a predictor, a random intercept or a session deviation, but it was given none of them." RegressionParameter(;
+            intercept=nothing, session_deviation=nothing
+        )
+        @test_throws "predictors of a RegressionParameter gives the columns (:age,) without priors, which needs coefficient_prior, the prior of every coefficient that has none of its own." RegressionParameter(;
+            intercept=1, session_deviation=nothing, predictors=:age
+        )
+        @test_throws "A RegressionParameter was given coefficient_prior, but every predictor has a prior of its own." RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            predictors=(; age=2),
+            coefficient_prior=3,
+        )
+        @test_throws "categorical_predictors of a RegressionParameter has nothing as the prior of (:diagnosis,), but the coefficient of every predictor needs a prior." RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            categorical_predictors=(; diagnosis=nothing),
+        )
+        #Every term needs a name of its own, and intercept and session_deviation are the names of those two
+        @test_throws "The terms of a RegressionParameter must each have a name of their own, but more than one is named age." RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            predictors=(; age=2),
+            categorical_predictors=(; age=3),
+        )
+        @test_throws "more than one is named intercept." RegressionParameter(;
+            intercept=1, session_deviation=nothing, predictors=(; intercept=2)
+        )
+        @test_throws "more than one is named session_deviation." RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            random_intercepts=(; session_deviation=2),
+        )
+        @test_throws "reference_levels of a RegressionParameter gives a reference level for (:site,), but its categorical predictors are (:diagnosis,)." RegressionParameter(;
+            intercept=1,
+            session_deviation=nothing,
+            categorical_predictors=(; diagnosis=2),
+            reference_levels=(; site=1),
+        )
+        @test_throws "A RandomIntercept takes the prior of its standard deviation, such as RandomIntercept(Exponential(1)), but it was given nothing." RandomIntercept(
+            nothing
+        )
+        @test_throws TypeError RandomIntercept(1; group_by="diagnosis")
+        @test_throws TypeError RegressionParameter(;
+            intercept=1, session_deviation=nothing, random_intercepts=:participant
+        )
+        @test_throws "HierarchicalRegression takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), session_deviation = Exponential(1)), but for probability it was given 1." HierarchicalRegression((;
+            probability=1
+        ))
+        @test_throws MethodError HierarchicalRegression([1])
+    end
+
+    @testset "The design of a regression has a column for each coefficient, and the level of every session for each random intercept" begin
+        sessions_info = grouped_sessions(REGRESSION_TABLE)
+        regression = HierarchicalRegression((;
+            probability=RegressionParameter(;
+                intercept=1,
+                predictors=(; age=2),
+                categorical_predictors=(; diagnosis=3),
+                random_intercepts=(; participant=RandomIntercept(4; group_by=:site)),
+                session_deviation=5,
+            ),
+            scale=RegressionParameter(; intercept=1, session_deviation=nothing),
+        ))
+        prepared = CognitiveModeling.prepare_parameters_model(regression, sessions_info)
+        @test prepared isa HierarchicalRegression &&
+            prepared.parameters === regression.parameters
+        design = prepared.designs.probability
+        #A continuous predictor has its values, and a categorical one a column for each level other than the level of the first session
+        @test design.coefficient_priors === (; age=2, diagnosis_control=3)
+        @test design.design_columns ==
+            (; age=[30.0, 40.0, 50.0, 60.0], diagnosis_control=[0.0, 1.0, 0.0, 1.0])
+        @test design.predictor_centers === (;)
+        @test design.reference_levels == (; diagnosis="clinical")
+        #The levels of a random intercept are the values of its column, each in the group of its sessions
+        @test design.random_intercept_levels.participant == (;
+            level_of_each_session=[1, 1, 2, 2],
+            n_levels=2,
+            level_symbol_names=[:P1, :P2],
+            groups=(;
+                group_of_each_level=[1, 2],
+                n_groups=2,
+                group_symbol_names=[Symbol("1"), Symbol("2")],
+            ),
+        )
+        #Every session is a level of the session deviations
+        @test design.session_deviation_levels == (;
+            level_of_each_session=[1, 2, 3, 4],
+            n_levels=4,
+            level_symbol_names=[:S1, :S2, :S3, :S4],
+            groups=nothing,
+        )
+        #A regression with an intercept alone has no columns and no levels
+        @test prepared.designs.scale == (;
+            coefficient_priors=(;),
+            design_columns=(;),
+            predictor_centers=(;),
+            reference_levels=(;),
+            random_intercept_levels=(;),
+            session_deviation_levels=nothing,
+        )
+        #Without predictors and random intercepts, sessions that have no table can be prepared too
+        without_table = MultipleSessionsInfo(
+            sessions_info.sessions, sessions_info.session_ids
+        )
+        @test CognitiveModeling.prepare_parameters_model(
+            HierarchicalRegression((;
+                scale=RegressionParameter(; intercept=1, session_deviation=2)
+            )),
+            without_table,
+        ).designs.scale.session_deviation_levels.n_levels == 4
+        #A full model prepares it, and so does a composite, as one of its parts
+        @test CognitiveModeling.prepare_full_model(
+            HierarchicalRegression((;
+                probability=RegressionParameter(;
+                    intercept=1, session_deviation=nothing, predictors=(; age=2)
+                ),
+            )),
+            sessions_info,
+        ).cognitive_parameters_model.designs.probability.design_columns ==
+            (; age=[30.0, 40.0, 50.0, 60.0])
+        @test CognitiveModeling.prepare_parameters_model(
+            CompositeSessionParameters(regression), sessions_info
+        ).parts[1].designs == prepared.designs
+    end
+
+    @testset "Predictors can be centered, and a categorical predictor takes a reference level, or coefficients that sum to zero" begin
+        sessions_info = grouped_sessions(REGRESSION_TABLE)
+        function design_of(; terms...)
+            return CognitiveModeling.build_regression_design(
+                sessions_info,
+                RegressionParameter(; intercept=1, session_deviation=nothing, terms...),
+                :probability,
+            )
+        end
+        #The mean over the sessions is subtracted, and kept
+        centered = design_of(; predictors=(; age=2, site=2), center_predictors=true)
+        @test centered.design_columns ==
+            (; age=[-15.0, -5.0, 5.0, 15.0], site=[-0.5, -0.5, 0.5, 0.5])
+        @test centered.predictor_centers === (; age=45.0, site=1.5)
+        #The level that is given as the reference level has no coefficient
+        with_reference = design_of(;
+            categorical_predictors=(; diagnosis=2), reference_levels=(; diagnosis="control")
+        )
+        @test with_reference.design_columns == (; diagnosis_clinical=[1.0, 0.0, 1.0, 0.0])
+        @test with_reference.reference_levels == (; diagnosis="control")
+        #With coefficients that sum to zero, the sessions of the reference level have -1 in every column
+        summing_to_zero = design_of(;
+            categorical_predictors=(; diagnosis=2, id=3), sum_to_zero_coding=true
+        )
+        @test summing_to_zero.coefficient_priors ===
+            (; diagnosis_control=2, id_S2=3, id_S3=3, id_S4=3)
+        @test summing_to_zero.design_columns == (;
+            diagnosis_control=[-1.0, 1.0, -1.0, 1.0],
+            id_S2=[-1.0, 1.0, 0.0, 0.0],
+            id_S3=[-1.0, 0.0, 1.0, 0.0],
+            id_S4=[-1.0, 0.0, 0.0, 1.0],
+        )
+        #The session deviations can be grouped too, each session being a level
+        grouped = design_of(; session_deviation=RandomIntercept(5; group_by=:diagnosis))
+        @test grouped.session_deviation_levels.groups == (;
+            group_of_each_level=[1, 2, 1, 2],
             n_groups=2,
             group_symbol_names=[:clinical, :control],
         )
-        #With several columns, a group is a combination of their values
-        @test CognitiveModeling.group_sessions(
-            sessions_info, (:diagnosis, :site), :probability
-        ) == (;
-            group_of_each_session=[1, 2, 3, 4],
-            n_groups=4,
-            group_symbol_names=[
-                :diagnosis_clinical__site_1,
-                :diagnosis_control__site_1,
-                :diagnosis_clinical__site_2,
-                :diagnosis_control__site_2,
-            ],
-        )
-        #Without columns, every session is in one group, also when the sessions have no table
-        @test CognitiveModeling.group_sessions(sessions_info, (), :probability) == (;
-            group_of_each_session=[1, 1, 1, 1],
-            n_groups=1,
-            group_symbol_names=[:all_sessions],
-        )
-        without_table = MultipleSessionsInfo(
-            sessions_info.sessions, sessions_info.session_ids
-        )
-        @test CognitiveModeling.group_sessions(without_table, (), :probability).n_groups ==
-            1
     end
 
-    @testset "A session must have one value of each column it is grouped by, and the table must have the column" begin
-        sessions_info = grouped_sessions()
-        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column its parameters are grouped by." CognitiveModeling.group_sessions(
-            sessions_info, (:wave,), :probability
+    @testset "The columns of a regression must have one value for each session, of the kind its term needs" begin
+        sessions_info = grouped_sessions(REGRESSION_TABLE)
+        function design_of(sessions_info=sessions_info; terms...)
+            return CognitiveModeling.build_regression_design(
+                sessions_info,
+                RegressionParameter(; intercept=1, session_deviation=nothing, terms...),
+                :probability,
+            )
+        end
+        @test_throws "HierarchicalRegression predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." design_of(;
+            predictors=(; wave=2)
         )
-        with_missing = grouped_sessions(
-            merge(GROUPS_TABLE, (; site=[1, 1, 1, 1, missing, 2]))
+        @test_throws "HierarchicalRegression has a random intercept of probability for each value of the column wave, which has the values [1, 2] in the session \"S1\"." design_of(;
+            random_intercepts=(; wave=2)
         )
-        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column site, which has the values Union{Missing, Int64}[missing] in the session \"S3\"." CognitiveModeling.group_sessions(
-            with_missing, (:site,), :probability
+        @test_throws "HierarchicalRegression predicts probability from the column diagnosis as a continuous predictor, but it has the value \"clinical\", which isn't a number. Give the column in categorical_predictors instead." design_of(;
+            predictors=(; diagnosis=2)
         )
-        @test_throws "The table that the sessions were split from has no column age. Its columns are (:id, :diagnosis, :site, :wave, :outcome, :choice)." CognitiveModeling.group_sessions(
-            sessions_info, (:age,), :probability
+        @test_throws "The table that the sessions were split from has no column iq." design_of(;
+            predictors=(; iq=2)
         )
+        #A categorical predictor needs two levels, and its reference level must be one of them
+        one_diagnosis = grouped_sessions(
+            merge(REGRESSION_TABLE, (; diagnosis=fill("clinical", 6)))
+        )
+        @test_throws "HierarchicalRegression predicts probability from the column diagnosis as a categorical predictor, but every session has the value \"clinical\", so there is no difference between levels to estimate." design_of(
+            one_diagnosis; categorical_predictors=(; diagnosis=2)
+        )
+        @test_throws "The reference level of the categorical predictor diagnosis of probability is \"healthy\", which isn't a value of the column. Its values are [\"clinical\", \"control\"]." design_of(;
+            categorical_predictors=(; diagnosis=2), reference_levels=(; diagnosis="healthy")
+        )
+        #P1 has a clinical session and a control session, so its random intercept is in no one group
+        @test_throws "HierarchicalRegression groups the random intercepts of probability for participant by (:diagnosis,), but the sessions of P1 are in the groups clinical, control. The sessions with one value of the random intercept's column must all be in one group." design_of(;
+            random_intercepts=(; participant=RandomIntercept(2; group_by=:diagnosis))
+        )
+        #The coefficient of a level can't take the name of another term
+        with_clashing_column = grouped_sessions(
+            merge(REGRESSION_TABLE, (; diagnosis_control=[1, 1, 2, 2, 3, 4]))
+        )
+        @test_throws "The terms of a RegressionParameter must each have a name of their own, but more than one is named diagnosis_control." design_of(
+            with_clashing_column;
+            predictors=(; diagnosis_control=2),
+            categorical_predictors=(; diagnosis=3),
+        )
+        #Sessions that were given already prepared have no table to read a column from
         without_table = MultipleSessionsInfo(
             sessions_info.sessions, sessions_info.session_ids
         )
-        @test_throws "The sessions were given already prepared, without the table they came from, so they have no column diagnosis." CognitiveModeling.group_sessions(
-            without_table, (:diagnosis,), :probability
+        @test_throws "The sessions were given already prepared, without the table they came from, so they have no column age." design_of(
+            without_table; predictors=(; age=2)
         )
     end
 
