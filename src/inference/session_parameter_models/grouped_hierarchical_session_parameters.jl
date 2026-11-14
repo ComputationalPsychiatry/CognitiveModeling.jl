@@ -1,14 +1,14 @@
 ## Each parameter sampled from the distribution of a group of sessions ##
 
 """
-    ConstructsType{T}()
+    ConstructorOf{T}()
 
 A function which makes an object of the type `T` from its arguments, so that
-`ConstructsType{Normal}()(0, 1)` is `Normal(0, 1)`. Used by [`HierarchicalParameter`](@ref)
+`ConstructorOf{Normal}()(0, 1)` is `Normal(0, 1)`. Used by [`HierarchicalParameter`](@ref)
 for a group-level distribution that is given as a type.
 """
-struct ConstructsType{T} end
-(::ConstructsType{T})(arguments...) where {T} = T(arguments...)
+struct ConstructorOf{T} end
+(::ConstructorOf{T})(arguments...) where {T} = T(arguments...)
 
 """
     HierarchicalParameter(priors; distribution=nothing, transformation=identity,
@@ -114,7 +114,7 @@ struct HierarchicalParameter{
 
         #A distribution given as a type, such as Normal, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
         kept_distribution = if distribution isa Type
-            ConstructsType{distribution}()
+            ConstructorOf{distribution}()
         else
             distribution
         end

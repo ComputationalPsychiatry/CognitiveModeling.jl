@@ -36,14 +36,16 @@ Public = false
 Pages = ["inference/prepare_full_model.jl"]
 ```
 
-## Utility functions
+## Preparing sessions
+
+What runs once, when the sessions and the parts of a full model are prepared.
 
 ### Preparing the data of a session
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/prepare_session_data.jl"]
+Pages = ["inference/preparing_sessions/prepare_session_data.jl"]
 ```
 
 ### Splitting a table into sessions
@@ -51,15 +53,43 @@ Pages = ["inference/utility_functions/prepare_session_data.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/split_table_into_sessions.jl"]
+Pages = ["inference/preparing_sessions/split_table_into_sessions.jl"]
 ```
+
+### Including the environment in a session, or leaving it out
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/preparing_sessions/include_environment.jl"]
+```
+
+### Checking the identifiers of the sessions
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/preparing_sessions/check_session_identifiers.jl"]
+```
+
+## Running sessions
+
+What an inference backend's model of the sessions calls.
 
 ### Reading what a session is set up with
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/read_session_setup.jl"]
+Pages = ["inference/running_sessions/read_session_setup.jl"]
+```
+
+### Reading the data of one timestep
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/running_sessions/read_timestep_data.jl"]
 ```
 
 ### Values to condition on
@@ -67,7 +97,7 @@ Pages = ["inference/utility_functions/read_session_setup.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/to_condition_on.jl"]
+Pages = ["inference/running_sessions/to_condition_on.jl"]
 ```
 
 ### Saving what a fitted session returns
@@ -75,15 +105,15 @@ Pages = ["inference/utility_functions/to_condition_on.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/save_fitted_session_trajectories.jl"]
+Pages = ["inference/running_sessions/save_fitted_session_trajectories.jl"]
 ```
 
-### Displaying sessions
+## Displaying sessions
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/display_sessions.jl"]
+Pages = ["inference/display_sessions.jl"]
 ```
 
 ## Reading tables with Tables.jl

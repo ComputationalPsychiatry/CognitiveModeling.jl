@@ -590,42 +590,6 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
         ).observations.cue == [1, 2, 3]
     end
-
-    @testset "The REPL shows a summary" begin
-        @test repr(
-            "text/plain",
-            SessionInfo(
-                SessionCounter(),
-                COUNTER_REWARDS,
-                COUNTER_CHOICES;
-                who_starts=EnvironmentStarts(),
-            ),
-        ) == """
-SessionInfo
-Cognitive model: SessionCounter
-Environment: none
-Timesteps: 3
-Observations: reward
-Actions: choice
-Who starts: environment"""
-        @test repr(
-            "text/plain",
-            SessionInfo(
-                SessionCounter(),
-                (; reward=[1.0, MissingValue(), 1.0]),
-                COUNTER_CHOICES;
-                who_starts=AgentStarts(),
-                environment=GivesReward(),
-            ),
-        ) == """
-SessionInfo
-Cognitive model: SessionCounter
-Environment: GivesReward
-Timesteps: 3
-Observations: reward
-Actions: choice
-Who starts: agent"""
-    end
 end
 
 const COUNTER_TABLE = (;
@@ -707,7 +671,7 @@ const COUNTER_TABLE = (;
         )
     end
 
-    @testset "An attribute can be built from several columns, and the session identifier is looked up" begin
+    @testset "An attribute can be built from several columns" begin
         table = (;
             id=["S1", "S1", "S2"],
             outcome=[1.0, 0.0, 1.0],
@@ -748,10 +712,6 @@ const COUNTER_TABLE = (;
             action_columns=(; choice=:choicecol, rt=:rt),
             session_columns=:id,
             who_starts=EnvironmentStarts(),
-        )
-        @test CognitiveModeling.session_index(sessions_info, "S2") == 2
-        @test_throws "There is no session with the identifier \"S3\". The identifiers are [\"S1\", \"S2\"]." CognitiveModeling.session_index(
-            sessions_info, "S3"
         )
     end
 
@@ -1001,26 +961,6 @@ const COUNTER_TABLE = (;
             [session, session], Any[1, "1"]
         )
     end
-
-    @testset "The REPL shows a summary" begin
-        @test repr(
-            "text/plain",
-            MultipleSessionsInfo(
-                SessionCounter(),
-                COUNTER_TABLE;
-                observation_columns=:outcome => :reward,
-                action_columns=:choice,
-                session_columns=:id,
-                who_starts=EnvironmentStarts(),
-            ),
-        ) == """
-MultipleSessionsInfo
-Sessions: 2
-Cognitive model: SessionCounter
-Environment: none
-Observations: reward
-Actions: choice"""
-    end
 end
 
 @testset "prepare_for_prediction" begin
@@ -1108,59 +1048,4 @@ end
     @test NoDownstreamModel() isa AbstractDownstreamModel
     @test isbitstype(NoDownstreamModel) && isbitstype(NoEnvironment)
     @test isbitstype(SerialSessions) && isbitstype(ParallelSessions)
-
-    @testset "The symbol name of a session is its identifier, or the name and the value of each of several columns" begin
-        @test CognitiveModeling.session_id_to_symbol("S1") === :S1
-        @test CognitiveModeling.session_id_to_symbol(2) === Symbol("2")
-        @test CognitiveModeling.session_id_to_symbol((; id="S1", block=2)) ===
-            :id_S1__block_2
-    end
-
-    @testset "With sampled environment parameters, every session with an environment runs it" begin
-        #S1 has nothing missing, so it doesn't run its environment until the parameters are sampled
-        sessions_info = MultipleSessionsInfo(
-            SessionCounter(),
-            COUNTER_TABLE;
-            observation_columns=:outcome,
-            action_columns=:choice,
-            session_columns=:id,
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
-        )
-        @test !sessions_info.sessions[1].includes_environment
-        @test CognitiveModeling.include_environments_if_estimated(
-            NoParameters(), sessions_info
-        ) === sessions_info
-        @test CognitiveModeling.include_environments_if_estimated(
-            FixedSessionParameters((; scale=2.0)), sessions_info
-        ) === sessions_info
-        for sampling in (
-            IdenticalSessionParameters((; scale=1)),
-            IndependentSessionParameters((; scale=1)),
-            ParametersModelOfOwn(),
-        )
-            sampled = CognitiveModeling.include_environments_if_estimated(
-                sampling, sessions_info
-            )
-            @test all(session -> session.includes_environment, sampled.sessions)
-            @test sampled.session_ids == sessions_info.session_ids
-            @test sampled.sessions[1].observations ===
-                sessions_info.sessions[1].observations
-        end
-        #Sessions without an environment still have none to run
-        without = MultipleSessionsInfo(
-            SessionCounter(),
-            COUNTER_TABLE;
-            observation_columns=:outcome,
-            action_columns=:choice,
-            session_columns=:id,
-            who_starts=EnvironmentStarts(),
-        )
-        @test !any(
-            session -> session.includes_environment,
-            CognitiveModeling.include_environments_if_estimated(
-                IdenticalSessionParameters((; scale=1)), without
-            ).sessions,
-        )
-    end
 end

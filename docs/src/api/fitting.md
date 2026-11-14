@@ -76,3 +76,14 @@ CognitiveModeling.session_index
 CognitiveModeling.session_id_to_symbol
 CognitiveModeling.session_column_values
 ```
+
+## Workflow and postprocessing
+
+What is done with an inference backend's model after it is made. Each backend adds the
+methods for its own models, and its page describes which models they take.
+
+```@autodocs
+Modules = [CognitiveModeling]
+Private = false
+Pages = ["inference/workflow_and_postprocessing/predict_session_trajectories.jl"]
+```

@@ -24,9 +24,9 @@ the cognitive model and of the environment model: a parameter that isn't in the 
 attributes is an error, and so is one in its attributes which is neither given nor has a
 default value, unless it is a parameter of an environment that no session runs. It prepares
 each session parameter model for the sessions with
-[`CognitiveModeling.prepare_parameters_model`](@ref). When the environment's parameters are
-sampled, every session with an environment runs it, so that the observations in the data
-inform them.
+[`CognitiveModeling.prepare_parameters_model`](@ref). When `environment_parameters_model`
+estimates parameters, every session with an environment includes it in the returned
+`sessions_info`.
 """
 function prepare_full_model(
     cognitive_parameters_model,

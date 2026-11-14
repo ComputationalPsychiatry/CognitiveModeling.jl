@@ -1,6 +1,36 @@
 ## Values to condition on ##
 
 """
+    is_value_to_condition_on(value)
+
+Return whether a single action or observation in the data is a value to condition on:
+neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
+[`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by
+[`collect_values_to_condition_on`](@ref) and [`find_outputs_to_condition_on`](@ref).
+"""
+is_value_to_condition_on(value) = !(value isa MissingValue || value isa AbstractNoValue)
+
+"""
+    action_names_to_condition_on(session_info)
+    observation_names_to_condition_on(session_info)
+
+Return the names of the actions, or of the observations, that have values to condition on in
+the data of a session, which are scored against the distributions the cognitive model, or
+the environment model, gave for them, in a `Val`. A session without an environment scores no
+observations, so it has no such names. Used by fitted sessions, to select the distributions
+they score.
+"""
+function action_names_to_condition_on(session_info::SessionInfo)
+    return Val(keys(session_info.actions_to_condition_on))
+end
+observation_names_to_condition_on(::SessionInfo{<:Any,NoEnvironment}) = Val(())
+function observation_names_to_condition_on(
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel}
+)
+    return Val(keys(session_info.observations_to_condition_on))
+end
+
+"""
     find_outputs_to_condition_on(data_output, output_distribution, model)
 
 Return whether each output of `model` on one timestep has a value to condition on in the
