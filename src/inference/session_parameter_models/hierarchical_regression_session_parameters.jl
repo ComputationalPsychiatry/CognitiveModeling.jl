@@ -853,12 +853,12 @@ function build_regression_design(
 )
 
     #The coefficients of the intercept, the predictors and the interactions, with the values that each is multiplied by
-    population_level_terms = select_terms(
+    non_varying_terms = select_terms(
         term -> !(term isa VaryingEffects), regression_parameter.terms
     )
     coefficients = build_coefficients(
         sessions_info,
-        population_level_terms,
+        non_varying_terms,
         parameter_name,
         "the regression of $parameter_name",
     )

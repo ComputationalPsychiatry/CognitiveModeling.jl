@@ -76,7 +76,7 @@ sessions. Used by [`turing_regression_parameters`](@ref).
 Turing.@model function turing_regression_parameter(regression_parameter, design, n_sessions)
 
     #Sample the coefficients of the intercept, the predictors and the interactions, and add up their effects on every session
-    population_effects ~ to_submodel(
+    non_varying_effects ~ to_submodel(
         turing_regression_coefficients(
             design.coefficient_priors, design.design_columns, n_sessions
         ),
@@ -88,7 +88,7 @@ Turing.@model function turing_regression_parameter(regression_parameter, design,
     to_submodel(turing_regression_varying_effects(design.varying_effects), false)
 
     #Transform every sum to the scale of the parameter
-    return map(regression_parameter.transformation, population_effects .+ varying_effects)
+    return map(regression_parameter.transformation, non_varying_effects .+ varying_effects)
 end
 
 """
