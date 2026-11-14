@@ -428,6 +428,31 @@ end
               logpdf(MvNormal(0.8 .* last_expected_rewards, 1.0), measurements)
     end
 
+    @testset "A tuple of session parameter models gives the model of a composite of them, and a NamedTuple names their variables under its names" begin
+        sessions_info = sessions_for_test(; impute_missing_actions=false)
+        learning = IndependentSessionParameters((; learning_rate=FULL_PRIORS.learning_rate))
+        temperature = IdenticalSessionParameters((;
+            inverse_temperature=FULL_PRIORS.inverse_temperature
+        ))
+        from_tuple = turing_full_model((learning, temperature), sessions_info)
+        composite = turing_full_model(
+            CompositeSessionParameters(learning, temperature), sessions_info
+        )
+        values = Dict(
+            @varname(learning_rate.session) => [0.2, 0.5, 0.8],
+            @varname(inverse_temperature.shared) => 2.0,
+        )
+        @test Set(keys(rand(Xoshiro(1), from_tuple))) == Set(keys(values))
+        @test logjoint(from_tuple, values) ≈ logjoint(composite, values)
+        from_named_tuple = turing_full_model((; learning, temperature), sessions_info)
+        named_values = Dict(
+            @varname(learning.learning_rate.session) => [0.2, 0.5, 0.8],
+            @varname(temperature.inverse_temperature.shared) => 2.0,
+        )
+        @test Set(keys(rand(Xoshiro(1), from_named_tuple))) == Set(keys(named_values))
+        @test logjoint(from_named_tuple, named_values) ≈ logjoint(composite, values)
+    end
+
     @testset "The environment parameters and the kinds of the parts are checked" begin
         sessions_info = sessions_for_test(; impute_missing_actions=false)
         #The parts are checked when the model is made

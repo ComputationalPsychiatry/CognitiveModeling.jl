@@ -97,9 +97,31 @@ end
             NoSessionParameters()
     end
 
+    @testset "A tuple or a NamedTuple of session parameter models is made into a composite of them" begin
+        sessions_info = sessions_to_prepare()
+        from_tuple = CognitiveModeling.prepare_full_model(
+            (sampled, NoSessionParameters()), sessions_info
+        )
+        @test from_tuple.cognitive_parameters_model ===
+            CompositeSessionParameters(sampled, NoSessionParameters())
+        from_named_tuple = CognitiveModeling.prepare_full_model(
+            (; learning=sampled), sessions_info
+        )
+        @test CognitiveModeling.part_names(from_named_tuple.cognitive_parameters_model) ===
+            (:learning,)
+        #The session parameter model of the environment can be given the same way
+        @test CognitiveModeling.prepare_full_model(
+            sampled, sessions_info; environment_parameters_model=(NoSessionParameters(),)
+        ).environment_parameters_model === CompositeSessionParameters(NoSessionParameters())
+    end
+
     @testset "The parts must be of the right kind" begin
         sessions_info = sessions_to_prepare()
-        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type @NamedTuple{probability::Int64}." CognitiveModeling.prepare_full_model(
+        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type Float64." CognitiveModeling.prepare_full_model(
+            2.0, sessions_info
+        )
+        #Priors given on their own are a NamedTuple, which would be made into a composite of the session parameter models in it
+        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it was given a NamedTuple whose probability has type Int64. A NamedTuple of session parameter models is made into a CompositeSessionParameters of them, each under its name." CognitiveModeling.prepare_full_model(
             (; probability=1), sessions_info
         )
         @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel" CognitiveModeling.prepare_full_model(

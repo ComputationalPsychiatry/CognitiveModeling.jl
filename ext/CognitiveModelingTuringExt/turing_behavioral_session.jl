@@ -16,6 +16,10 @@ function CognitiveModeling.turing_full_model(
     parallelization=SerialSessions(),
     include_submodel_prefixes::Bool=false,
 )
+
+    #A tuple or a NamedTuple of session parameter models is made into a composite of them, before the warnings look at the models
+    cognitive_parameters_model = as_session_parameters_model(cognitive_parameters_model)
+    environment_parameters_model = as_session_parameters_model(environment_parameters_model)
     warn_if_parameter_names_overlap(
         cognitive_parameters_model,
         environment_parameters_model,

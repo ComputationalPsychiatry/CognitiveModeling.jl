@@ -13,7 +13,10 @@ them, and return them in a `NamedTuple` with `cognitive_parameters_model`,
 inference backend, whose full model calls it, so that what doesn't change between the
 evaluations of the model is worked out once.
 
-It checks that the two session parameter models and the downstream model are of the right
+A session parameter model can be given as a tuple of session parameter models, or a
+`NamedTuple` of them, which is made into a [`CompositeSessionParameters`](@ref) of them by
+[`as_session_parameters_model`](@ref), with each part of a `NamedTuple` under its name. It
+checks that the two session parameter models and the downstream model are of the right
 kind. The values in `fixed_cognitive_parameters` and `fixed_environment_parameters`, such as
 `(; initial_value = 0.3)`, are given to every session for the parameters they name: each
 session parameter model is combined with them in a [`CompositeSessionParameters`](@ref), so
@@ -36,6 +39,10 @@ function prepare_full_model(
     fixed_cognitive_parameters::NamedTuple=(;),
     fixed_environment_parameters::NamedTuple=(;),
 )
+
+    #A tuple or a NamedTuple of session parameter models is made into a composite of them
+    cognitive_parameters_model = as_session_parameters_model(cognitive_parameters_model)
+    environment_parameters_model = as_session_parameters_model(environment_parameters_model)
 
     #Check that each part is of the right kind
     check_is_session_parameters_model(cognitive_parameters_model)

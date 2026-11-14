@@ -801,6 +801,22 @@ const REGRESSION_TABLE = merge(
         @test_throws "Two parts of CompositeSessionParameters give the parameters (:scale,). Each parameter must come from one part." CognitiveModeling.merge_parameters_of_parts(
             (; probability=[0.2], scale=[1.0]), (; scale=[2.0])
         )
+        #A tuple of session parameter models is made into a composite of them, a NamedTuple into one with each part under its name, and anything else is left as it is
+        @test CognitiveModeling.as_session_parameters_model(sampled) === sampled
+        @test CognitiveModeling.as_session_parameters_model((sampled, fixed)) === composite
+        from_named_tuple = CognitiveModeling.as_session_parameters_model((;
+            learning=sampled, noise=fixed
+        ))
+        @test from_named_tuple ===
+            CompositeSessionParameters(; learning=sampled, noise=fixed)
+        @test CognitiveModeling.part_names(from_named_tuple) === (:learning, :noise)
+        @test CognitiveModeling.as_session_parameters_model(2.0) === 2.0
+        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it was given a tuple whose part 2 has type Float64. A tuple of session parameter models is made into a CompositeSessionParameters of them." CognitiveModeling.as_session_parameters_model((
+            sampled, 2.0
+        ))
+        @test_throws "but it was given a NamedTuple whose noise has type Float64. A NamedTuple of session parameter models is made into a CompositeSessionParameters of them, each under its name." CognitiveModeling.as_session_parameters_model((;
+            learning=sampled, noise=2.0
+        ))
     end
 
     @testset "Preparing a model for the sessions looks up values, finds groups, and prepares the parts of a composite" begin

@@ -64,6 +64,43 @@ function CompositeSessionParameters(
 end
 
 """
+    as_session_parameters_model(parameters_model)
+
+Return `parameters_model` as one session parameter model: a tuple of session parameter
+models as a [`CompositeSessionParameters`](@ref) of them, and a `NamedTuple` of them as a
+`CompositeSessionParameters` with each part under its name, which its variables are then
+named under. Anything else is returned as it is, for [`prepare_full_model`](@ref) to check.
+A tuple or a `NamedTuple` with something other than a session parameter model in it is an
+error. Used by `prepare_full_model` and by the functions of the inference backends that
+make a full model, such as `turing_full_model`.
+"""
+as_session_parameters_model(parameters_model) = parameters_model
+function as_session_parameters_model(parts::Tuple)
+    for (index, part) in enumerate(parts)
+        if !(part isa AbstractSessionParametersModel)
+            throw(
+                ArgumentError(
+                    "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it was given a tuple whose part $index has type $(typeof(part)). A tuple of session parameter models is made into a CompositeSessionParameters of them.",
+                ),
+            )
+        end
+    end
+    return CompositeSessionParameters(parts...)
+end
+function as_session_parameters_model(named_parts::NamedTuple)
+    for (name, part) in pairs(named_parts)
+        if !(part isa AbstractSessionParametersModel)
+            throw(
+                ArgumentError(
+                    "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it was given a NamedTuple whose $name has type $(typeof(part)). A NamedTuple of session parameter models is made into a CompositeSessionParameters of them, each under its name.",
+                ),
+            )
+        end
+    end
+    return CompositeSessionParameters(; named_parts...)
+end
+
+"""
     part_names(parameters_model)
 
 Return the name of each part of `parameters_model`, a [`CompositeSessionParameters`](@ref),

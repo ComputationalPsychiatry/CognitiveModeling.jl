@@ -210,7 +210,10 @@ of a measurement on a state. This needs Turing.jl to be loaded.
 - `cognitive_parameters_model`: the session parameter model of the cognitive model, which
   gives or estimates its parameters for every session: a subtype of
   [`AbstractSessionParametersModel`](@ref), such as [`IndependentSessionParameters`](@ref)
-  with a prior for each parameter.
+  with a prior for each parameter. A tuple of session parameter models, or a `NamedTuple`
+  of them, is made into a [`CompositeSessionParameters`](@ref) of them, with each part of
+  a `NamedTuple` under its name. So is a tuple or a `NamedTuple` given as
+  `environment_parameters_model`.
 - `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
   [`MultipleSessionsInfo`](@ref).
 - `environment_parameters_model=NoSessionParameters()`: the session parameter model of the
