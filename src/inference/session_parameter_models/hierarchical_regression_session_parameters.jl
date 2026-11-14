@@ -3,9 +3,10 @@
 """
     RandomIntercept(sd_prior; group_by=nothing, centered=false)
 
-A random intercept of a [`RegressionParameter`](@ref): a deviation for each value of a
-column, such as each participant, from a normal distribution around zero whose standard
-deviation is sampled from `sd_prior`.
+A random intercept of a [`RegressionParameter`](@ref): a deviation for each of its levels,
+such as each participant, from a normal distribution around zero whose standard deviation
+is sampled from `sd_prior`. Its levels are the values of the column it reads, or the
+combinations of the values of several columns, as `RegressionParameter` describes.
 
 # Arguments
 - `sd_prior`: the prior of the standard deviation of the deviations, such as
@@ -15,9 +16,8 @@ deviation is sampled from `sd_prior`.
 - `group_by=nothing`: a column of the table that the sessions were split from, or a tuple of
   columns, whose values group the deviations, so that each group has a standard deviation
   of its own, such as `:diagnosis` for a clinical and a non-clinical group of participants.
-  The sessions with one value of the random intercept's column must all be in one group.
-  Groups are numbered in the order of their first session. With `nothing`, the deviations
-  share one standard deviation.
+  The sessions of one level must all be in one group. Groups are numbered in the order of
+  their first session. With `nothing`, the deviations share one standard deviation.
 - `centered=false`: whether each deviation is sampled from the normal distribution
   directly, with `true`, or as a standardized value which the standard deviation scales,
   with `false`. The standardized form usually samples better when the data informs each
@@ -59,36 +59,45 @@ struct RandomIntercept{Tsd_prior,Tgroup_by<:Tuple{Vararg{Symbol}}}
 end
 
 """
-    RegressionParameter(; intercept, session_deviation, predictors=(;),
-                        categorical_predictors=(;), random_intercepts=(;),
-                        <keyword arguments>)
+    RegressionParameter(; intercept, predictors=(;), categorical_predictors=(;),
+                        random_intercepts=(;), <keyword arguments>)
 
 How one parameter of a [`HierarchicalRegressionSessionParameters`](@ref) is given to every
 session: by a regression on columns of the table that the sessions were split from. The
-value of a session is the sum of the intercept, the effect of each predictor, the random
-intercept of its value of each of some columns, and a deviation of its own, with
-`transformation` applied to the sum. Each session must have one value of every column that
-is used, which isn't missing.
+value of a session is the sum of the intercept, the effect of each predictor and the
+deviation of its level of each random intercept, with `transformation` applied to the sum.
+Each session must have one value of every column that is used, which isn't missing.
+
+Every predictor and random intercept has a name, which its variables are named under. It
+reads the column of its name, or the columns that are given before its prior in a pair: one
+column, as in `years = :age => Normal(0, 0.5)`, or several, as in
+`diagnosis_by_site = (:diagnosis, :site) => Normal(0, 1)`, whose combinations of values are
+then its levels.
+
+Without a random intercept whose levels are the sessions, sessions with the same values in
+every column that is used have the same value of the parameter. A random intercept over the
+columns that identify the sessions gives each session a value of its own, such as
+`session = :id => Exponential(1)` in `random_intercepts`. When every participant has one
+session, it is the same as a random intercept over the participants, and only one of the two
+can be estimated.
 
 # Keyword arguments
 - `intercept`: the prior of the intercept, such as `Normal(0, 1)`, or `nothing` for a
   regression without one.
-- `session_deviation`: the prior of the standard deviation of the deviations of the
-  sessions, such as `Exponential(1)`, or a [`RandomIntercept`](@ref) with that prior and
-  other settings. The deviations let sessions with the same value of every column differ.
-  With `nothing`, such sessions have the same value of the parameter.
-- `predictors=(;)`: the continuous predictors, as a `NamedTuple` from the column to the
-  prior of its coefficient, such as `(; age = Normal(0, 0.5))`. The values of the column
-  must be numbers. The columns can also be given without priors, as `:age` or
-  `(:age, :iq)`, and then take `coefficient_prior`.
+- `predictors=(;)`: the continuous predictors, as a `NamedTuple` from the name of each to
+  the prior of its coefficient, such as `(; age = Normal(0, 0.5))`, or to a pair of its
+  column and that prior. A continuous predictor reads one column, whose values must be
+  numbers. The columns can also be given without priors, as `:age` or `(:age, :iq)`, and
+  then take `coefficient_prior`.
 - `categorical_predictors=(;)`: the categorical predictors, in the same forms, such as
-  `(; diagnosis = Normal(0, 1))`. Each value of the column other than its reference level
-  has a coefficient with that prior, which is its difference from the reference level, such
-  as the difference between a clinical and a non-clinical group.
-- `random_intercepts=(;)`: the columns with a random intercept for each of their values, as
-  a `NamedTuple` from the column to the prior of the standard deviation of its random
-  intercepts, such as `(; participant = Exponential(1))` for participants with several
-  sessions each, or to a [`RandomIntercept`](@ref) with that prior and other settings.
+  `(; diagnosis = Normal(0, 1))`, and with one column or several in a pair. Each level other
+  than the reference level has a coefficient with that prior, which is its difference from
+  the reference level, such as the difference between a clinical and a non-clinical group.
+- `random_intercepts=(;)`: the random intercepts, with a deviation for each level, as a
+  `NamedTuple` from the name of each to the prior of the standard deviation of its
+  deviations, or to a [`RandomIntercept`](@ref) with that prior and other settings, either
+  of them alone or in a pair after one column or several, such as
+  `(; participant = Exponential(1), session = (:id, :block) => Exponential(1))`.
 - `transformation=identity`: a function applied to the sum for each session, such as `exp`
   for a parameter that must be positive or `logistic` for one between 0 and 1, as an
   inverse link function does in a regression.
@@ -97,28 +106,31 @@ is used, which isn't missing.
 - `center_predictors=false`: whether the mean over the sessions is subtracted from each
   continuous predictor, so that the intercept is the value at the mean of each.
 - `reference_levels=(;)`: the reference level of categorical predictors, as a `NamedTuple`
-  from the column to the level, such as `(; diagnosis = "control")`. Any other has the
-  value of its first session as its reference level.
+  from the name of the predictor to its level, such as `(; diagnosis = "control")`, which is
+  a `NamedTuple` of values for one with several columns, such as
+  `(; diagnosis_by_site = (; diagnosis = "control", site = 1))`. Any other has the level of
+  its first session as its reference level.
 - `sum_to_zero_coding=false`: whether the coefficients of each categorical predictor are
   differences from the mean of its levels, with `true`, instead of differences from the
   reference level. The difference of the reference level is then minus the sum of the
   others.
 
 Each argument is kept in a field of the same name, except `coefficient_prior`: `predictors`
-and `categorical_predictors` are `NamedTuple`s with the prior of each column, and each
-entry of `random_intercepts`, and `session_deviation`, is a `RandomIntercept`.
+and `categorical_predictors` are `NamedTuple`s with the prior of each predictor, and each
+entry of `random_intercepts` is a `RandomIntercept`. The field `term_columns` has the
+columns of every predictor and random intercept, as a tuple of names, under its name.
 
 # Examples
 ```jldoctest
 julia> using Distributions: Normal, Exponential
 
-julia> learning_rate = RegressionParameter(; intercept = Normal(0, 1), predictors = (; age = Normal(0, 0.5)), categorical_predictors = (; diagnosis = Normal(0, 1)), random_intercepts = (; participant = Exponential(1)), session_deviation = Exponential(1));
+julia> learning_rate = RegressionParameter(; intercept = Normal(0, 1), predictors = (; age = Normal(0, 0.5)), categorical_predictors = (; diagnosis = Normal(0, 1)), random_intercepts = (; participant = Exponential(1), session = (:id, :block) => Exponential(1)));
 
-julia> keys(learning_rate.predictors), keys(learning_rate.categorical_predictors)
-((:age,), (:diagnosis,))
+julia> keys(learning_rate.predictors), keys(learning_rate.random_intercepts)
+((:age,), (:participant, :session))
 
-julia> learning_rate.random_intercepts.participant.centered
-false
+julia> learning_rate.term_columns.session
+(:id, :block)
 ```
 """
 struct RegressionParameter{
@@ -126,7 +138,7 @@ struct RegressionParameter{
     Tpredictors<:NamedTuple,
     Tcategorical_predictors<:NamedTuple,
     Trandom_intercepts<:NamedTuple,
-    Tsession_deviation<:Union{Nothing,RandomIntercept},
+    Tterm_columns<:NamedTuple,
     Ttransformation,
     Treference_levels<:NamedTuple,
 }
@@ -134,16 +146,15 @@ struct RegressionParameter{
     predictors::Tpredictors
     categorical_predictors::Tcategorical_predictors
     random_intercepts::Trandom_intercepts
-    session_deviation::Tsession_deviation
+    term_columns::Tterm_columns
     transformation::Ttransformation
     center_predictors::Bool
     reference_levels::Treference_levels
     sum_to_zero_coding::Bool
 
-    #Checks the terms of the regression, and keeps every predictor with the prior of its coefficient and every random intercept as a RandomIntercept
+    #Checks the terms of the regression, and keeps every predictor with the prior of its coefficient, every random intercept as a RandomIntercept, and the columns of each
     function RegressionParameter(;
         intercept,
-        session_deviation,
         predictors=(;),
         categorical_predictors=(;),
         random_intercepts::NamedTuple=(;),
@@ -154,11 +165,9 @@ struct RegressionParameter{
         sum_to_zero_coding::Bool=false,
     )
 
-        #The predictors that are given without priors take the prior of every such coefficient
-        predictors_with_priors = pair_predictors_with_priors(
-            predictors, coefficient_prior, "predictors"
-        )
-        categorical_predictors_with_priors = pair_predictors_with_priors(
+        #Each predictor has the prior of its coefficient and its columns. Those that are given without priors take the prior of every such coefficient
+        continuous_terms = read_predictor_terms(predictors, coefficient_prior, "predictors")
+        categorical_terms = read_predictor_terms(
             categorical_predictors, coefficient_prior, "categorical_predictors"
         )
         if coefficient_prior !== nothing &&
@@ -171,20 +180,17 @@ struct RegressionParameter{
             )
         end
 
-        #A random intercept that is given as the prior of its standard deviation has the default settings
-        random_intercepts_with_settings = map(as_random_intercept, random_intercepts)
-        session_deviation_with_settings =
-            session_deviation === nothing ? nothing : as_random_intercept(session_deviation)
+        #Each random intercept is a RandomIntercept with its columns. One that is given as the prior of its standard deviation has the default settings
+        random_intercept_terms = read_random_intercept_terms(random_intercepts)
 
         #A regression must give the parameter some value
         if intercept === nothing &&
-            isempty(predictors_with_priors) &&
-            isempty(categorical_predictors_with_priors) &&
-            isempty(random_intercepts_with_settings) &&
-            session_deviation_with_settings === nothing
+            isempty(continuous_terms.priors) &&
+            isempty(categorical_terms.priors) &&
+            isempty(random_intercept_terms.random_intercepts)
             throw(
                 ArgumentError(
-                    "A RegressionParameter needs an intercept, a predictor, a random intercept or a session deviation, but it was given none of them.",
+                    "A RegressionParameter needs an intercept, a predictor or a random intercept, but it was given none of them.",
                 ),
             )
         end
@@ -192,42 +198,59 @@ struct RegressionParameter{
         #Every term needs a name of its own, which its variables are named under, and a prior
         term_names = (
             :intercept,
-            :session_deviation,
-            keys(predictors_with_priors)...,
-            keys(categorical_predictors_with_priors)...,
-            keys(random_intercepts_with_settings)...,
+            keys(continuous_terms.priors)...,
+            keys(categorical_terms.priors)...,
+            keys(random_intercept_terms.random_intercepts)...,
         )
         check_unique_term_names(term_names)
-        check_has_priors(predictors_with_priors, "predictors")
-        check_has_priors(categorical_predictors_with_priors, "categorical_predictors")
+        check_has_priors(continuous_terms.priors, "predictors")
+        check_has_priors(categorical_terms.priors, "categorical_predictors")
+
+        #A continuous predictor reads one column
+        for (name, columns) in pairs(continuous_terms.columns)
+            if length(columns) != 1
+                throw(
+                    ArgumentError(
+                        "The continuous predictor $name of a RegressionParameter is given the columns $columns, but a continuous predictor reads one column.",
+                    ),
+                )
+            end
+        end
 
         #A reference level can only be given for a categorical predictor
-        unknown_columns = Tuple(
-            column for column in keys(reference_levels) if
-            !(column in keys(categorical_predictors_with_priors))
+        unknown_names = Tuple(
+            name for
+            name in keys(reference_levels) if !(name in keys(categorical_terms.priors))
         )
-        if !isempty(unknown_columns)
+        if !isempty(unknown_names)
             throw(
                 ArgumentError(
-                    "reference_levels of a RegressionParameter gives a reference level for $unknown_columns, but its categorical predictors are $(keys(categorical_predictors_with_priors)).",
+                    "reference_levels of a RegressionParameter gives a reference level for $unknown_names, but its categorical predictors are $(keys(categorical_terms.priors)).",
                 ),
             )
         end
 
+        #The columns of every term, under its name
+        term_columns = merge(
+            continuous_terms.columns,
+            categorical_terms.columns,
+            random_intercept_terms.columns,
+        )
+
         return new{
             typeof(intercept),
-            typeof(predictors_with_priors),
-            typeof(categorical_predictors_with_priors),
-            typeof(random_intercepts_with_settings),
-            typeof(session_deviation_with_settings),
+            typeof(continuous_terms.priors),
+            typeof(categorical_terms.priors),
+            typeof(random_intercept_terms.random_intercepts),
+            typeof(term_columns),
             typeof(transformation),
             typeof(reference_levels),
         }(
             intercept,
-            predictors_with_priors,
-            categorical_predictors_with_priors,
-            random_intercepts_with_settings,
-            session_deviation_with_settings,
+            continuous_terms.priors,
+            categorical_terms.priors,
+            random_intercept_terms.random_intercepts,
+            term_columns,
             transformation,
             center_predictors,
             reference_levels,
@@ -249,23 +272,22 @@ difference between groups, together with the parameters of the sessions.
 
 A full model builds the design of every regression once, before it is made, from the table
 that [`MultipleSessionsInfo`](@ref) keeps, so sessions that were prepared one at a time can
-only have an intercept and a session deviation. The field `designs` is `nothing` until then,
-and afterwards has, for each parameter:
+only have an intercept. The field `designs` is `nothing` until then, and afterwards has, for
+each parameter:
 - `coefficient_priors` and `design_columns`: the prior of each coefficient, and the values
   it is multiplied by, one for every session, under the name of the coefficient. A
-  continuous predictor has one coefficient, named after its column, such as `age`. A
+  continuous predictor has one coefficient, named after the predictor, such as `age`. A
   categorical predictor has one for each level other than its reference level, named after
-  the column and the symbol name of the level, such as `diagnosis_clinical`.
+  the predictor and the symbol name of the level, such as `diagnosis_clinical`, or
+  `diagnosis_by_site_diagnosis_clinical__site_2` for a level of several columns.
 - `predictor_centers`: the mean that was subtracted from each continuous predictor, when
   they are centered.
 - `reference_levels`: the reference level of each categorical predictor.
-- `random_intercept_levels`: for the column of each random intercept, the level of every
-  session, `level_of_each_session`, the number of levels, `n_levels`, the symbol name of
-  each level, `level_symbol_names`, and `groups`, which is `nothing` without groups and
-  otherwise has the group of every level, `group_of_each_level`, the number of groups,
-  `n_groups`, and the symbol name of each group, `group_symbol_names`.
-- `session_deviation_levels`: the same for the deviations of the sessions, where every
-  session is a level, or `nothing` without them.
+- `random_intercept_levels`: for each random intercept, the level of every session,
+  `level_of_each_session`, the number of levels, `n_levels`, the symbol name of each level,
+  `level_symbol_names`, and `groups`, which is `nothing` without groups and otherwise has
+  the group of every level, `group_of_each_level`, the number of groups, `n_groups`, and the
+  symbol name of each group, `group_symbol_names`.
 
 # Examples
 ```julia
@@ -277,12 +299,16 @@ session_parameter_model = HierarchicalRegressionSessionParameters((;
         intercept = Normal(0, 1),
         predictors = (; age = Normal(0, 0.5)),
         categorical_predictors = (; diagnosis = Normal(0, 1)),
-        random_intercepts = (; participant = Exponential(1)),
-        session_deviation = RandomIntercept(Exponential(1); group_by = :diagnosis),
+        random_intercepts = (;
+            participant = Exponential(1),
+            session = (:id, :block) => RandomIntercept(Exponential(1); group_by = :diagnosis),
+        ),
         transformation = logistic,
     ),
     inverse_temperature = RegressionParameter(;
-        intercept = Normal(0, 1), session_deviation = Exponential(1), transformation = exp
+        intercept = Normal(0, 1),
+        random_intercepts = (; session = (:id, :block) => Exponential(1)),
+        transformation = exp,
     ),
 ))
 ```
@@ -341,7 +367,7 @@ check_is_regression_parameter(name::Symbol, ::RegressionParameter) = nothing
 function check_is_regression_parameter(name::Symbol, regression_parameter)
     return throw(
         ArgumentError(
-            "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), session_deviation = Exponential(1)), but for $name it was given $(repr(regression_parameter)).",
+            "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), random_intercepts = (; participant = Exponential(1))), but for $name it was given $(repr(regression_parameter)).",
         ),
     )
 end
@@ -351,48 +377,105 @@ end
 
 Return `random_intercept` as a [`RandomIntercept`](@ref): itself when it is one, and
 otherwise one with the default settings whose standard deviation has it as its prior. Used
-by the constructor of [`RegressionParameter`](@ref).
+by [`read_random_intercept_terms`](@ref).
 """
 as_random_intercept(random_intercept::RandomIntercept) = random_intercept
 as_random_intercept(sd_prior) = RandomIntercept(sd_prior)
 
 """
-    pair_predictors_with_priors(predictors, coefficient_prior, keyword)
+    split_term(name, entry, keyword)
 
-Return the predictors of a [`RegressionParameter`](@ref) as a `NamedTuple` from each column
-to the prior of its coefficient: a `NamedTuple` as it is, and columns that are given without
-priors, as one name or several in a tuple or a vector, each with `coefficient_prior`, which
-is an error when it is `nothing`. `keyword` is the name of the keyword argument they were
-given with, for the error. Used by the constructor of `RegressionParameter`.
+Return the columns of the term `name` of a [`RegressionParameter`](@ref), as a tuple of
+names, and what it was given besides them, from `entry`, what `name` has in the keyword
+argument `keyword`: a pair of one column or several and the rest, or the rest on its own,
+which reads the column of the term's name. A pair without columns is an error. Used by
+[`read_predictor_terms`](@ref) and [`read_random_intercept_terms`](@ref).
 """
-function pair_predictors_with_priors(
-    predictors::NamedTuple, coefficient_prior, keyword::String
-)
-    return predictors
-end
-function pair_predictors_with_priors(predictors, coefficient_prior, keyword::String)
-    columns = as_tuple(predictors)::Tuple{Vararg{Symbol}}
-    if coefficient_prior === nothing
+split_term(name::Symbol, entry, keyword::String) = ((name,), entry)
+function split_term(name::Symbol, entry::Pair, keyword::String)
+    columns = as_tuple(first(entry))::Tuple{Vararg{Symbol}}
+    if isempty(columns)
         throw(
             ArgumentError(
-                "$keyword of a RegressionParameter gives the columns $columns without priors, which needs coefficient_prior, the prior of every coefficient that has none of its own. Give it, or give $keyword as a NamedTuple from each column to the prior of its coefficient, such as (; age = Normal(0, 1)).",
+                "$keyword of a RegressionParameter gives $name no columns. A term reads the column of its name, or the columns that are given before its prior in a pair, such as $name = (:diagnosis, :site) => Normal(0, 1).",
             ),
         )
     end
-    return NamedTuple{columns}(map(_ -> coefficient_prior, columns))
+    return (columns, last(entry))
+end
+
+"""
+    read_predictor_terms(predictors, coefficient_prior, keyword)
+
+Return the predictors of a [`RegressionParameter`](@ref) that are given with the keyword
+argument `keyword`, as a `NamedTuple` with `priors`, from the name of each predictor to the
+prior of its coefficient, and `columns`, from the name of each predictor to its columns, as
+a tuple of names. A `NamedTuple` of predictors has a prior for each, alone or in a pair
+after its columns, see [`split_term`](@ref). Columns that are given without priors, as one
+name or several in a tuple or a vector, are predictors of the same names, which take
+`coefficient_prior`, and it is an error when that is `nothing`. Used by the constructor of
+`RegressionParameter`.
+"""
+function read_predictor_terms(
+    predictors::NamedTuple{names}, coefficient_prior, keyword::String
+) where {names}
+    terms = map(
+        (name, entry) -> split_term(name, entry, keyword), names, values(predictors)
+    )
+    return (;
+        priors=NamedTuple{names}(map(last, terms)),
+        columns=NamedTuple{names}(map(first, terms)),
+    )
+end
+function read_predictor_terms(predictors, coefficient_prior, keyword::String)
+    names = as_tuple(predictors)::Tuple{Vararg{Symbol}}
+    if coefficient_prior === nothing
+        throw(
+            ArgumentError(
+                "$keyword of a RegressionParameter gives the columns $names without priors, which needs coefficient_prior, the prior of every coefficient that has none of its own. Give it, or give $keyword as a NamedTuple from each column to the prior of its coefficient, such as (; age = Normal(0, 1)).",
+            ),
+        )
+    end
+    return (;
+        priors=NamedTuple{names}(map(_ -> coefficient_prior, names)),
+        columns=NamedTuple{names}(map(name -> (name,), names)),
+    )
+end
+
+"""
+    read_random_intercept_terms(random_intercepts)
+
+Return the random intercepts of a [`RegressionParameter`](@ref) as a `NamedTuple` with
+`random_intercepts`, from the name of each to a [`RandomIntercept`](@ref), and `columns`,
+from the name of each to its columns, as a tuple of names. A random intercept is given as
+the prior of its standard deviation, or as a `RandomIntercept`, alone or in a pair after its
+columns, see [`split_term`](@ref). Used by the constructor of `RegressionParameter`.
+"""
+function read_random_intercept_terms(random_intercepts::NamedTuple{names}) where {names}
+    terms = map(
+        (name, entry) -> split_term(name, entry, "random_intercepts"),
+        names,
+        values(random_intercepts),
+    )
+    return (;
+        random_intercepts=NamedTuple{names}(
+            map(term -> as_random_intercept(last(term)), terms)
+        ),
+        columns=NamedTuple{names}(map(first, terms)),
+    )
 end
 
 """
     check_has_priors(predictors, keyword)
 
-Throw an informative error if a column in `predictors`, a `NamedTuple` from each column to
-the prior of its coefficient, has `nothing` as its prior. `keyword` is the name of the
-keyword argument they were given with. Used by the constructor of
+Throw an informative error if a predictor in `predictors`, a `NamedTuple` from the name of
+each predictor to the prior of its coefficient, has `nothing` as its prior. `keyword` is the
+name of the keyword argument they were given with. Used by the constructor of
 [`RegressionParameter`](@ref).
 """
 function check_has_priors(predictors::NamedTuple, keyword::String)
     without_priors = Tuple(
-        column for column in keys(predictors) if getproperty(predictors, column) === nothing
+        name for name in keys(predictors) if getproperty(predictors, name) === nothing
     )
     if !isempty(without_priors)
         throw(
@@ -408,20 +491,30 @@ end
     check_unique_term_names(term_names)
 
 Throw an informative error if two terms of a regression have the same name in `term_names`,
-a tuple or a vector with `intercept`, `session_deviation`, the name of each coefficient and
-the column of each random intercept, since the variables of a term are named under its
-name. Used by the constructor of [`RegressionParameter`](@ref), for the columns, and by
-[`build_regression_design`](@ref), for the coefficients of the levels.
+a tuple or a vector with `intercept`, the name of each coefficient and the name of each
+random intercept, since the variables of a term are named under its name. Used by the
+constructor of [`RegressionParameter`](@ref), for the names of the predictors and the random
+intercepts, and by [`build_regression_design`](@ref), for the coefficients of the levels.
 """
 function check_unique_term_names(term_names)
     allunique(term_names) && return nothing
     repeated_names = unique(name for name in term_names if count(==(name), term_names) > 1)
     return throw(
         ArgumentError(
-            "The terms of a RegressionParameter must each have a name of their own, but more than one is named $(join(repeated_names, ", ")). A term is named after its column, a coefficient of a categorical predictor after its column and its level, as in diagnosis_clinical, and intercept and session_deviation are the names of those two.",
+            "The terms of a RegressionParameter must each have a name of their own, but more than one is named $(join(repeated_names, ", ")). A coefficient of a categorical predictor is named after the predictor and its level, as in diagnosis_clinical, and intercept is the name of the intercept.",
         ),
     )
 end
+
+"""
+    describe_columns(columns)
+
+Return how `columns`, a tuple of names, is named in an error message: as `the column age`
+for one, and as `the columns (:diagnosis, :site)` for several. Used by the errors of
+[`build_contrast_columns`](@ref).
+"""
+describe_columns(columns::Tuple{Symbol}) = "the column $(only(columns))"
+describe_columns(columns::Tuple{Vararg{Symbol}}) = "the columns $columns"
 
 """
     build_regression_design(sessions_info, regression_parameter, parameter_name)
@@ -429,14 +522,15 @@ end
 Return the design of the regression of the parameter `parameter_name` for the sessions in
 `sessions_info`, as [`HierarchicalRegressionSessionParameters`](@ref) keeps it in its field
 `designs`: the prior and the column of each coefficient, the means that were subtracted, the
-reference levels, and the levels of the sessions for each random intercept and for the
-deviations of the sessions. Used by [`prepare_parameters_model`](@ref).
+reference levels, and the levels of the sessions for each random intercept. Used by
+[`prepare_parameters_model`](@ref).
 """
 function build_regression_design(
     sessions_info::MultipleSessionsInfo,
     regression_parameter::RegressionParameter,
     parameter_name::Symbol,
 )
+    term_columns = regression_parameter.term_columns
     coefficient_names = Symbol[]
     coefficient_priors = Any[]
     design_columns = Vector{Float64}[]
@@ -444,10 +538,11 @@ function build_regression_design(
     #A continuous predictor has one coefficient, which is multiplied by its value in each session
     center_predictors = regression_parameter.center_predictors
     centers = Float64[]
-    for (column, prior) in pairs(regression_parameter.predictors)
+    for (name, prior) in pairs(regression_parameter.predictors)
+        column = only(getproperty(term_columns, name))
         values = read_predictor_values(sessions_info, column, parameter_name)
         center = center_predictors ? sum(values) / length(values) : 0.0
-        push!(coefficient_names, column)
+        push!(coefficient_names, name)
         push!(coefficient_priors, prior)
         push!(design_columns, values .- center)
         push!(centers, center)
@@ -460,12 +555,16 @@ function build_regression_design(
 
     #A categorical predictor has one coefficient for each level other than its reference level
     reference_levels = Any[]
-    for (column, prior) in pairs(regression_parameter.categorical_predictors)
+    for (name, prior) in pairs(regression_parameter.categorical_predictors)
         contrasts = build_contrast_columns(
-            sessions_info, column, regression_parameter, parameter_name
+            sessions_info,
+            name,
+            getproperty(term_columns, name),
+            regression_parameter,
+            parameter_name,
         )
-        for (name, contrast_column) in zip(contrasts.names, contrasts.columns)
-            push!(coefficient_names, name)
+        for (coefficient_name, contrast_column) in zip(contrasts.names, contrasts.columns)
+            push!(coefficient_names, coefficient_name)
             push!(coefficient_priors, prior)
             push!(design_columns, contrast_column)
         end
@@ -474,26 +573,24 @@ function build_regression_design(
 
     #The coefficients of the levels must not take the name of another term
     term_names = (
-        :intercept,
-        :session_deviation,
-        coefficient_names...,
-        keys(regression_parameter.random_intercepts)...,
+        :intercept, coefficient_names..., keys(regression_parameter.random_intercepts)...
     )
     check_unique_term_names(term_names)
 
-    #The level of every session for each random intercept, and for the deviations of the sessions
-    random_intercept_columns = keys(regression_parameter.random_intercepts)
-    random_intercept_levels = NamedTuple{random_intercept_columns}(
+    #The level of every session for each random intercept
+    random_intercept_names = keys(regression_parameter.random_intercepts)
+    random_intercept_levels = NamedTuple{random_intercept_names}(
         map(
-            (column, random_intercept) -> find_random_intercept_levels(
-                sessions_info, column, random_intercept, parameter_name
+            (name, random_intercept) -> find_random_intercept_levels(
+                sessions_info,
+                name,
+                getproperty(term_columns, name),
+                random_intercept,
+                parameter_name,
             ),
-            random_intercept_columns,
+            random_intercept_names,
             values(regression_parameter.random_intercepts),
         ),
-    )
-    session_deviation_levels = find_session_deviation_levels(
-        sessions_info, regression_parameter.session_deviation, parameter_name
     )
 
     names = Tuple(coefficient_names)
@@ -505,16 +602,15 @@ function build_regression_design(
             Tuple(reference_levels)
         ),
         random_intercept_levels,
-        session_deviation_levels,
     )
 end
 
 """
     read_predictor_values(sessions_info, column, parameter_name)
 
-Return the value of the continuous predictor `column` in every session, as a vector of
-`Float64`, for the regression of the parameter `parameter_name`. A value that isn't a number
-is an error. Used by [`build_regression_design`](@ref).
+Return the value of the column `column` of a continuous predictor in every session, as a
+vector of `Float64`, for the regression of the parameter `parameter_name`. A value that
+isn't a number is an error. Used by [`build_regression_design`](@ref).
 """
 function read_predictor_values(
     sessions_info::MultipleSessionsInfo, column::Symbol, parameter_name::Symbol
@@ -537,51 +633,55 @@ function read_predictor_values(
 end
 
 """
-    build_contrast_columns(sessions_info, column, regression_parameter, parameter_name)
+    build_contrast_columns(sessions_info, name, columns, regression_parameter,
+                           parameter_name)
 
-Return the columns of the categorical predictor `column` in the regression of the parameter
-`parameter_name`, in a `NamedTuple` with `names`, `columns` and `reference_level`: for each
-level other than the reference level, in the order of their first session, the name of its
-coefficient, made from the column and the symbol name of the level, as in
-`diagnosis_clinical`, and a vector with 1 for the sessions of that level and 0 for the
-others. With `sum_to_zero_coding`, the sessions of the reference level have -1 in every
-column. The reference level is the one in `reference_levels` of `regression_parameter`, or
-the level of the first session. It is an error when the column has one level only, and when
-the reference level isn't a value of the column. Used by [`build_regression_design`](@ref).
+Return the columns of the categorical predictor `name`, which reads the columns in
+`columns`, in the regression of the parameter `parameter_name`, in a `NamedTuple` with
+`names`, `columns` and `reference_level`: for each level other than the reference level, in
+the order of their first session, the name of its coefficient, made from the name of the
+predictor and the symbol name of the level, as in `diagnosis_clinical`, and a vector with 1
+for the sessions of that level and 0 for the others. The levels are the values of a single
+column, or the `NamedTuple`s of the values of several. With `sum_to_zero_coding`, the
+sessions of the reference level have -1 in every column. The reference level is the one in
+`reference_levels` of `regression_parameter`, or the level of the first session. It is an
+error when there is one level only, and when the reference level isn't one of them. Used by
+[`build_regression_design`](@ref).
 """
 function build_contrast_columns(
     sessions_info::MultipleSessionsInfo,
-    column::Symbol,
+    name::Symbol,
+    columns::Tuple{Vararg{Symbol}},
     regression_parameter::RegressionParameter,
     parameter_name::Symbol,
 )
-    values = read_one_value_of_each_session(
+    level_of_each_session = read_level_of_each_session(
         sessions_info,
-        column,
+        columns,
         "HierarchicalRegressionSessionParameters predicts $parameter_name from",
     )
 
-    #The levels are the values of the column, in the order of their first session
-    levels = unique(values)
+    #The levels are the values of the columns, in the order of their first session
+    levels = unique(level_of_each_session)
     if length(levels) < 2
         throw(
             ArgumentError(
-                "HierarchicalRegressionSessionParameters predicts $parameter_name from the column $column as a categorical predictor, but every session has the value $(repr(only(levels))), so there is no difference between levels to estimate.",
+                "HierarchicalRegressionSessionParameters predicts $parameter_name from $(describe_columns(columns)) as a categorical predictor, but every session has the value $(repr(only(levels))), so there is no difference between levels to estimate.",
             ),
         )
     end
 
     #The reference level is the one that is given, or the level of the first session
     given_reference_levels = regression_parameter.reference_levels
-    reference_level = if haskey(given_reference_levels, column)
-        getproperty(given_reference_levels, column)
+    reference_level = if haskey(given_reference_levels, name)
+        getproperty(given_reference_levels, name)
     else
         first(levels)
     end
     if !any(isequal(reference_level), levels)
         throw(
             ArgumentError(
-                "The reference level of the categorical predictor $column of $parameter_name is $(repr(reference_level)), which isn't a value of the column. Its values are $levels.",
+                "The reference level of the categorical predictor $name of $parameter_name is $(repr(reference_level)), which isn't a value of $(describe_columns(columns)). Its values are $levels.",
             ),
         )
     end
@@ -589,40 +689,42 @@ function build_contrast_columns(
     #Each other level has a column with 1 for its sessions, and with -1 for the sessions of the reference level when the coefficients sum to zero
     value_of_reference_level = regression_parameter.sum_to_zero_coding ? -1.0 : 0.0
     other_levels = filter(!isequal(reference_level), levels)
-    columns = map(other_levels) do level
-        return map(values) do value
-            if isequal(value, level)
+    contrast_columns = map(other_levels) do level
+        return map(level_of_each_session) do level_of_session
+            if isequal(level_of_session, level)
                 1.0
-            elseif isequal(value, reference_level)
+            elseif isequal(level_of_session, reference_level)
                 value_of_reference_level
             else
                 0.0
             end
         end
     end
-    names = [Symbol(column, "_", session_id_to_symbol(level)) for level in other_levels]
-    return (; names, columns, reference_level)
+    names = [Symbol(name, "_", session_id_to_symbol(level)) for level in other_levels]
+    return (; names, columns=contrast_columns, reference_level)
 end
 
 """
-    find_random_intercept_levels(sessions_info, column, random_intercept, parameter_name)
+    find_random_intercept_levels(sessions_info, name, columns, random_intercept,
+                                 parameter_name)
 
-Return the levels of the random intercept for `column` in the regression of the parameter
-`parameter_name`, as a `NamedTuple` with the level of every session,
-`level_of_each_session`, the number of levels, `n_levels`, the symbol name of each level,
-`level_symbol_names`, and `groups`, from [`find_groups_of_levels`](@ref). The levels are the
-values of the column, numbered in the order of their first session. Used by
-[`build_regression_design`](@ref).
+Return the levels of the random intercept `name`, which reads the columns in `columns`, in
+the regression of the parameter `parameter_name`, as a `NamedTuple` with the level of every
+session, `level_of_each_session`, the number of levels, `n_levels`, the symbol name of each
+level, `level_symbol_names`, and `groups`, from [`find_groups_of_levels`](@ref). The levels
+are the values of a single column, or the combinations of the values of several, numbered in
+the order of their first session. Used by [`build_regression_design`](@ref).
 """
 function find_random_intercept_levels(
     sessions_info::MultipleSessionsInfo,
-    column::Symbol,
+    name::Symbol,
+    columns::Tuple{Vararg{Symbol}},
     random_intercept::RandomIntercept,
     parameter_name::Symbol,
 )
     levels = group_sessions(
         sessions_info,
-        (column,),
+        columns,
         "HierarchicalRegressionSessionParameters has a random intercept of $parameter_name for each value of",
     )
     groups = find_groups_of_levels(
@@ -630,47 +732,12 @@ function find_random_intercept_levels(
         random_intercept.group_by,
         levels.group_of_each_session,
         levels.group_symbol_names,
-        "the random intercepts of $parameter_name for $column",
+        "the random intercepts of $parameter_name for $name",
     )
     return (;
         level_of_each_session=levels.group_of_each_session,
         n_levels=levels.n_groups,
         level_symbol_names=levels.group_symbol_names,
-        groups,
-    )
-end
-
-"""
-    find_session_deviation_levels(sessions_info, session_deviation, parameter_name)
-
-Return the levels of the deviations of the sessions in the regression of the parameter
-`parameter_name`, in the form of [`find_random_intercept_levels`](@ref), where every
-session is a level of its own, named by its symbol name, or `nothing` when
-`session_deviation` is `nothing`. Used by [`build_regression_design`](@ref).
-"""
-function find_session_deviation_levels(
-    sessions_info::MultipleSessionsInfo, ::Nothing, parameter_name::Symbol
-)
-    return nothing
-end
-function find_session_deviation_levels(
-    sessions_info::MultipleSessionsInfo,
-    session_deviation::RandomIntercept,
-    parameter_name::Symbol,
-)
-    level_of_each_session = collect(1:n_sessions(sessions_info))
-    level_symbol_names = map(session_id_to_symbol, sessions_info.session_ids)
-    groups = find_groups_of_levels(
-        sessions_info,
-        session_deviation.group_by,
-        level_of_each_session,
-        level_symbol_names,
-        "the session deviations of $parameter_name",
-    )
-    return (;
-        level_of_each_session,
-        n_levels=n_sessions(sessions_info),
-        level_symbol_names,
         groups,
     )
 end
@@ -687,7 +754,7 @@ Return the groups of the levels of a random intercept by the values of the colum
 for one standard deviation. A level whose sessions are in more than one group is an error.
 `description` says what is grouped, for the errors, such as
 `"the random intercepts of learning_rate for participant"`. Used by
-[`find_random_intercept_levels`](@ref) and [`find_session_deviation_levels`](@ref).
+[`find_random_intercept_levels`](@ref).
 """
 function find_groups_of_levels(
     sessions_info::MultipleSessionsInfo,
@@ -719,7 +786,7 @@ function find_groups_of_levels(
         if length(groups_of_level) != 1
             throw(
                 ArgumentError(
-                    "HierarchicalRegressionSessionParameters groups $description by $group_by, but the sessions of $(level_symbol_names[level]) are in the groups $(join(groups.group_symbol_names[groups_of_level], ", ")). The sessions with one value of the random intercept's column must all be in one group.",
+                    "HierarchicalRegressionSessionParameters groups $description by $group_by, but the sessions of $(level_symbol_names[level]) are in the groups $(join(groups.group_symbol_names[groups_of_level], ", ")). The sessions of one level of a random intercept must all be in one group.",
                 ),
             )
         end

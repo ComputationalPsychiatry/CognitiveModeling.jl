@@ -68,10 +68,9 @@ end
 Turing.jl model which gives one parameter to every session, as `regression_parameter`, a
 [`RegressionParameter`](@ref), says. It samples the intercept with
 [`turing_regression_intercept`](@ref), the coefficients of the predictors with
-[`turing_regression_predictor_effects`](@ref), the random intercepts with
-[`turing_regression_random_intercepts`](@ref) and the deviations of the sessions with
-[`turing_regression_session_deviations`](@ref), and returns their sum for every session,
-with the transformation applied to each. `design` has the columns and the levels of the
+[`turing_regression_predictor_effects`](@ref) and the random intercepts with
+[`turing_regression_random_intercepts`](@ref), and returns their sum for every session, with
+the transformation applied to each. `design` has the columns and the levels of the
 regression. Used by [`turing_regression_parameters`](@ref).
 """
 Turing.@model function turing_regression_parameter(regression_parameter, design, n_sessions)
@@ -88,7 +87,7 @@ Turing.@model function turing_regression_parameter(regression_parameter, design,
         false,
     )
 
-    #Sample the random intercepts of each column, and add up those of the levels of every session
+    #Sample the deviations of the levels of each random intercept, and add up those of the levels of every session
     random_intercepts ~ to_submodel(
         turing_regression_random_intercepts(
             regression_parameter.random_intercepts, design.random_intercept_levels
@@ -96,18 +95,8 @@ Turing.@model function turing_regression_parameter(regression_parameter, design,
         false,
     )
 
-    #Sample the deviation of every session
-    session_deviations ~ to_submodel(
-        turing_regression_session_deviations(
-            regression_parameter.session_deviation, design.session_deviation_levels
-        ),
-        false,
-    )
-
     #Add them up for every session, and transform every sum to the scale of the parameter
-    sums =
-        fill(intercept, n_sessions) .+ predictor_effects .+ random_intercepts .+
-        session_deviations
+    sums = fill(intercept, n_sessions) .+ predictor_effects .+ random_intercepts
     return map(regression_parameter.transformation, sums)
 end
 
@@ -163,9 +152,9 @@ end
 """
     turing_regression_coefficient(prior)
 
-Turing.jl model which samples the coefficient of one column of a regression from `prior`, as
-the variable `coefficient`, so that under the prefixes of the parameter and of the
-coefficient's name it is named like `learning_rate.age.coefficient`. Used by
+Turing.jl model which samples one coefficient of a regression from `prior`, as the variable
+`coefficient`, so that under the prefixes of the parameter and of the coefficient's name it
+is named like `learning_rate.age.coefficient`. Used by
 [`turing_regression_predictor_effects`](@ref).
 """
 Turing.@model function turing_regression_coefficient(prior)
@@ -176,21 +165,23 @@ end
 """
     turing_regression_random_intercepts(random_intercepts, levels)
 
-Turing.jl model which samples the random intercepts of one column at a time from
-`random_intercepts`, the [`RandomIntercept`](@ref) of each column, with
-[`turing_regression_deviations`](@ref) under the column's name, and returns the sum over the
-columns of the random intercept of every session's level, as a vector with a value for every
-session, or zero without random intercepts. `levels` has the levels of the sessions for each
-column. Used by [`turing_regression_parameter`](@ref).
+Turing.jl model which samples one random intercept at a time from `random_intercepts`, the
+[`RandomIntercept`](@ref) of each, with [`turing_regression_deviations`](@ref) under its
+name, and returns the sum over the random intercepts of the deviation of every session's
+level, as a vector with a value for every session, or zero without random intercepts.
+`levels` has the levels of the sessions for each random intercept. Used by
+[`turing_regression_parameter`](@ref).
 """
 Turing.@model function turing_regression_random_intercepts(
     random_intercepts::NamedTuple{names}, levels::NamedTuple
 ) where {names}
     name = first(names)
-    levels_of_column = first(levels)
+    levels_of_random_intercept = first(levels)
     deviations ~ to_submodel(
         prefix(
-            turing_regression_deviations(first(random_intercepts), levels_of_column),
+            turing_regression_deviations(
+                first(random_intercepts), levels_of_random_intercept
+            ),
             VarName{name}(),
         ),
         false,
@@ -201,38 +192,13 @@ Turing.@model function turing_regression_random_intercepts(
         ),
         false,
     )
-    return deviations[levels_of_column.level_of_each_session] .+ other_random_intercepts
+    return deviations[levels_of_random_intercept.level_of_each_session] .+
+           other_random_intercepts
 end
 
 Turing.@model function turing_regression_random_intercepts(
     random_intercepts::NamedTuple{()}, levels::NamedTuple
 )
-    return 0.0
-end
-
-"""
-    turing_regression_session_deviations(session_deviation, levels)
-
-Turing.jl model which samples the deviation of every session from `session_deviation`, a
-[`RandomIntercept`](@ref) with every session as a level, with
-[`turing_regression_deviations`](@ref) under `session_deviation`, and returns them as a
-vector with a value for every session. With `nothing`, for a regression without them, it
-samples nothing and returns zero. Used by [`turing_regression_parameter`](@ref).
-"""
-Turing.@model function turing_regression_session_deviations(
-    session_deviation::RandomIntercept, levels::NamedTuple
-)
-    deviations ~ to_submodel(
-        prefix(
-            turing_regression_deviations(session_deviation, levels),
-            @varname(session_deviation),
-        ),
-        false,
-    )
-    return deviations
-end
-
-Turing.@model function turing_regression_session_deviations(::Nothing, ::Nothing)
     return 0.0
 end
 
@@ -245,8 +211,7 @@ then every deviation from a normal distribution around zero, with
 [`turing_regression_centered_deviations`](@ref), or as a standardized value which the
 standard deviation scales, with [`turing_regression_standardized_deviations`](@ref), as
 `centered` of `random_intercept` says. It returns the deviation of every level. Used by
-[`turing_regression_random_intercepts`](@ref) and
-[`turing_regression_session_deviations`](@ref).
+[`turing_regression_random_intercepts`](@ref).
 """
 Turing.@model function turing_regression_deviations(random_intercept, levels)
 
@@ -273,11 +238,11 @@ end
     turing_regression_standard_deviation(sd_prior, groups)
 
 Turing.jl model which samples the standard deviation of a random intercept from `sd_prior`,
-as the variable `sd`, so that under the prefixes of the parameter and of the column it is
-named like `learning_rate.participant.sd`. Without groups, where `groups` is `nothing`, it
-is one value, which is returned. With groups it is a vector with a value for each group, and
-the standard deviation of every level is returned, which is the one of its group. Used by
-[`turing_regression_deviations`](@ref).
+as the variable `sd`, so that under the prefixes of the parameter and of the random
+intercept it is named like `learning_rate.participant.sd`. Without groups, where `groups` is
+`nothing`, it is one value, which is returned. With groups it is a vector with a value for
+each group, and the standard deviation of every level is returned, which is the one of its
+group. Used by [`turing_regression_deviations`](@ref).
 """
 Turing.@model function turing_regression_standard_deviation(sd_prior, ::Nothing)
     sd ~ sd_prior
@@ -294,7 +259,7 @@ end
 
 Turing.jl model which samples the deviation of each of `n_levels` levels of a random
 intercept from a normal distribution around zero, as the variable `deviation`, so that
-under the prefixes of the parameter and of the column it is named like
+under the prefixes of the parameter and of the random intercept it is named like
 `learning_rate.participant.deviation`. `sd_of_levels` is the standard deviation, as one
 value or with a value for every level. Used by [`turing_regression_deviations`](@ref).
 """
@@ -308,7 +273,8 @@ end
 
 Turing.jl model which samples a standardized value for each of `n_levels` levels of a random
 intercept, as the variable `standardized`, so that under the prefixes of the parameter and
-of the column it is named like `learning_rate.participant.standardized`, and returns the
+of the random intercept it is named like `learning_rate.participant.standardized`, and
+returns the
 deviation of every level: its standardized value times `sd_of_levels`, the standard
 deviation, as one value or with a value for every level. This is the non-centered form of
 a normal distribution. Used by [`turing_regression_deviations`](@ref).

@@ -17,6 +17,24 @@
         )
     end
 
+    @testset "The level of a session is its value of one column, or a NamedTuple of its values of several" begin
+        sessions_info = grouped_sessions()
+        @test CognitiveModeling.read_level_of_each_session(
+            sessions_info, (:diagnosis,), reader
+        ) == ["clinical", "control", "clinical", "control"]
+        @test CognitiveModeling.read_level_of_each_session(
+            sessions_info, (:diagnosis, :site), reader
+        ) == [
+            (; diagnosis="clinical", site=1),
+            (; diagnosis="control", site=1),
+            (; diagnosis="clinical", site=2),
+            (; diagnosis="control", site=2),
+        ]
+        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\"." CognitiveModeling.read_level_of_each_session(
+            sessions_info, (:diagnosis, :wave), reader
+        )
+    end
+
     @testset "The groups of the sessions are found from the table, in the order of their first session" begin
         sessions_info = grouped_sessions()
         @test CognitiveModeling.group_sessions(sessions_info, (:diagnosis,), reader) == (;

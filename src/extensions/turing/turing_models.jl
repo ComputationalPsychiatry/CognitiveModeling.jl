@@ -255,18 +255,17 @@ such as `learning_rate.mean.group` and `learning_rate.sd.group`, and the values 
 sessions before the transformation are `learning_rate.standardized`, or
 `learning_rate.session` for a parameter that is centered. With
 `HierarchicalRegressionSessionParameters`, the intercept of a parameter is
-`learning_rate.intercept`, and the coefficient of a predictor is under its column, such as
-`learning_rate.age.coefficient`, or under its column and its level for a categorical
+`learning_rate.intercept`, and the coefficient of a predictor is under its name, such as
+`learning_rate.age.coefficient`, or under its name and its level for a categorical
 predictor, such as `learning_rate.diagnosis_clinical.coefficient`. A random intercept has
-its variables under its column: its standard deviation, `learning_rate.participant.sd`,
-which is a vector with a value for each group when it is grouped, and a standardized value
-for each level, `learning_rate.participant.standardized`, or the deviation of each level,
-`learning_rate.participant.deviation`, when it is centered. The deviations of the sessions
-have the same variables under `session_deviation`, such as
-`learning_rate.session_deviation.sd`. A part of a [`CompositeSessionParameters`](@ref) that
-is given with a name has its variables under that name, such as `noise.bias.session`. The
-variables of the sessions are under `session[i]`, and those of the downstream model as it
-names them, or under `downstream_model` with the prefixes.
+its variables under its name: its standard deviation, `learning_rate.participant.sd`, which
+is a vector with a value for each group when it is grouped, and a standardized value for
+each level, `learning_rate.participant.standardized`, or the deviation of each level,
+`learning_rate.participant.deviation`, when it is centered. A part of a
+[`CompositeSessionParameters`](@ref) that is given with a name has its variables under that
+name, such as `noise.bias.session`. The variables of the sessions are under `session[i]`,
+and those of the downstream model as it names them, or under `downstream_model` with the
+prefixes.
 
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,
 `saved_behavioral_trajectories` and `downstream_values`: the cognitive parameters and the

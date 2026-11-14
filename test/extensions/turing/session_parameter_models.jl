@@ -307,12 +307,13 @@ const REGRESSION_FULL_TABLE = merge(
             intercept=Normal(0, 1),
             predictors=(; age=Normal(0, 0.5)),
             categorical_predictors=(; group=Normal(0, 2)),
-            random_intercepts=(; participant=Exponential(1)),
-            session_deviation=Exponential(0.5),
+            random_intercepts=(;
+                participant=Exponential(1), session=:id => Exponential(0.5)
+            ),
             transformation=to_unit_interval,
         ),
         inverse_temperature=RegressionParameter(;
-            intercept=Normal(0, 1), session_deviation=nothing, transformation=exp
+            intercept=Normal(0, 1), transformation=exp
         ),
     ))
     values = Dict(
@@ -321,11 +322,11 @@ const REGRESSION_FULL_TABLE = merge(
         @varname(learning_rate.group_b.coefficient) => -1.0,
         @varname(learning_rate.participant.sd) => 2.0,
         @varname(learning_rate.participant.standardized) => [0.3, -0.4],
-        @varname(learning_rate.session_deviation.sd) => 0.5,
-        @varname(learning_rate.session_deviation.standardized) => [0.1, 0.2, -0.3],
+        @varname(learning_rate.session.sd) => 0.5,
+        @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3],
         @varname(inverse_temperature.intercept) => 0.7,
     )
-    #The sum of each session by hand: its intercept, the effect of its age and of its group, the random intercept of its participant and its own deviation
+    #The sum of each session by hand: its intercept, the effect of its age and of its group, and the deviations of its participant and of the session itself
     learning_rates = to_unit_interval.([
         0.5 + 0.01 * 20 + 2.0 * 0.3 + 0.5 * 0.1,
         0.5 + 0.01 * 30 - 1.0 + 2.0 * -0.4 + 0.5 * 0.2,
@@ -341,12 +342,12 @@ const REGRESSION_FULL_TABLE = merge(
         sum(logpdf.(Normal(), [0.1, 0.2, -0.3])) +
         logpdf(Normal(0, 1), 0.7)
 
-    @testset "Each session's value is the sum of the intercept, the effects of its predictors, the random intercepts of its levels and its own deviation, transformed" begin
+    @testset "Each session's value is the sum of the intercept, the effects of its predictors and the deviations of its levels of the random intercepts, transformed" begin
         model = CognitiveModeling.turing_session_parameters_model(
             CognitiveModeling.prepare_parameters_model(regression, sessions_info),
             sessions_info,
         )
-        #The intercept is named under the parameter, a coefficient under its column, or its column and level, and the variables of a random intercept under its column
+        #The intercept is named under the parameter, a coefficient under the name of its predictor, or that name and its level, and the variables of a random intercept under its name
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
         parameters = returned(model, values)
         @test parameters.learning_rate ≈ learning_rates
@@ -365,9 +366,9 @@ const REGRESSION_FULL_TABLE = merge(
             learning_rate=RegressionParameter(;
                 intercept=nothing,
                 random_intercepts=(;
-                    participant=RandomIntercept(Exponential(1); centered=true)
+                    participant=RandomIntercept(Exponential(1); centered=true),
+                    session=:id => RandomIntercept(Exponential(0.5); group_by=:group),
                 ),
-                session_deviation=RandomIntercept(Exponential(0.5); group_by=:group),
             ),
         ))
         model = CognitiveModeling.turing_session_parameters_model(
@@ -376,8 +377,8 @@ const REGRESSION_FULL_TABLE = merge(
         given = Dict(
             @varname(learning_rate.participant.sd) => 2.0,
             @varname(learning_rate.participant.deviation) => [0.6, -0.8],
-            @varname(learning_rate.session_deviation.sd) => [0.5, 3.0],
-            @varname(learning_rate.session_deviation.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session.sd) => [0.5, 3.0],
+            @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         #S1 and S3 are in the first group and S2 in the second, which scales its standardized value by its own standard deviation
@@ -392,15 +393,16 @@ const REGRESSION_FULL_TABLE = merge(
         both = HierarchicalRegressionSessionParameters((;
             learning_rate=RegressionParameter(;
                 intercept=nothing,
-                session_deviation=RandomIntercept(
-                    Exponential(0.5); group_by=:group, centered=true
+                random_intercepts=(;
+                    session=:id =>
+                        RandomIntercept(Exponential(0.5); group_by=:group, centered=true),
                 ),
             ),
         ))
         model = CognitiveModeling.turing_session_parameters_model(both, sessions_info)
         given = Dict(
-            @varname(learning_rate.session_deviation.sd) => [0.5, 3.0],
-            @varname(learning_rate.session_deviation.deviation) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session.sd) => [0.5, 3.0],
+            @varname(learning_rate.session.deviation) => [0.1, 0.2, -0.3],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given).learning_rate ≈ [0.1, 0.2, -0.3]
@@ -411,13 +413,15 @@ const REGRESSION_FULL_TABLE = merge(
               logpdf(Normal(0, 0.5), -0.3)
     end
 
-    @testset "With an intercept and session deviations alone, it gives what GroupedHierarchicalSessionParameters gives with one group" begin
+    @testset "With an intercept and a random intercept over the sessions alone, it gives what GroupedHierarchicalSessionParameters gives with one group" begin
         for centered in (false, true)
             as_regression = CognitiveModeling.turing_session_parameters_model(
                 HierarchicalRegressionSessionParameters((;
                     learning_rate=RegressionParameter(;
                         intercept=GROUP_PRIORS.mean,
-                        session_deviation=RandomIntercept(GROUP_PRIORS.sd; centered),
+                        random_intercepts=(;
+                            session=:id => RandomIntercept(GROUP_PRIORS.sd; centered)
+                        ),
                         transformation=to_unit_interval,
                     ),
                 )),
@@ -434,12 +438,11 @@ const REGRESSION_FULL_TABLE = merge(
             #The same values of the mean, the standard deviation and the sessions, as each model names them. A centered regression samples the deviations from the mean, and the groups the values themselves
             regression_values = Dict(
                 @varname(learning_rate.intercept) => 0.5,
-                @varname(learning_rate.session_deviation.sd) => 2.0,
+                @varname(learning_rate.session.sd) => 2.0,
                 if centered
-                    @varname(learning_rate.session_deviation.deviation) => [0.2, 0.4, -0.6]
+                    @varname(learning_rate.session.deviation) => [0.2, 0.4, -0.6]
                 else
-                    @varname(learning_rate.session_deviation.standardized) =>
-                        [0.1, 0.2, -0.3]
+                    @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3]
                 end,
             )
             group_values = Dict(
@@ -463,9 +466,7 @@ const REGRESSION_FULL_TABLE = merge(
             FixedSessionParameters((; inverse_temperature=2.0));
             learning=HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1),
-                    predictors=(; age=Normal(0, 0.5)),
-                    session_deviation=nothing,
+                    intercept=Normal(0, 1), predictors=(; age=Normal(0, 0.5))
                 ),
             )),
         )
@@ -495,9 +496,7 @@ const REGRESSION_FULL_TABLE = merge(
         with_fixed = turing_full_model(
             HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1),
-                    session_deviation=nothing,
-                    transformation=to_unit_interval,
+                    intercept=Normal(0, 1), transformation=to_unit_interval
                 ),
             )),
             sessions_info;
@@ -517,9 +516,7 @@ const REGRESSION_FULL_TABLE = merge(
             with_environment;
             environment_parameters_model=HierarchicalRegressionSessionParameters((;
                 mean_reward=RegressionParameter(;
-                    intercept=Normal(0, 1),
-                    categorical_predictors=(; group=Normal(0, 2)),
-                    session_deviation=nothing,
+                    intercept=Normal(0, 1), categorical_predictors=(; group=Normal(0, 2))
                 ),
             )),
         )
@@ -536,7 +533,9 @@ const REGRESSION_FULL_TABLE = merge(
             BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
         )
         within_domain = RegressionParameter(;
-            intercept=Normal(0, 1), session_deviation=Exponential(1), transformation=exp
+            intercept=Normal(0, 1),
+            random_intercepts=(; session=:id => Exponential(1)),
+            transformation=exp,
         )
         @test_logs (
             :warn,
@@ -544,7 +543,8 @@ const REGRESSION_FULL_TABLE = merge(
         ) turing_full_model(
             HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1), session_deviation=Exponential(1)
+                    intercept=Normal(0, 1),
+                    random_intercepts=(; session=:id => Exponential(1)),
                 ),
                 inverse_temperature=within_domain,
             )),
@@ -554,19 +554,17 @@ const REGRESSION_FULL_TABLE = merge(
             HierarchicalRegressionSessionParameters((;
                 learning_rate=RegressionParameter(;
                     intercept=Normal(0, 1),
-                    session_deviation=Exponential(1),
+                    random_intercepts=(; session=:id => Exponential(1)),
                     transformation=to_unit_interval,
                 ),
                 inverse_temperature=within_domain,
             )),
             bounded_sessions,
         )
-        #Without a normal term, what the regression can give isn't known, so nothing is warned about
+        #Without a random intercept, what the regression can give isn't known, so nothing is warned about
         @test_logs turing_full_model(
             HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(;
-                    intercept=Beta(2, 2), session_deviation=nothing
-                ),
+                learning_rate=RegressionParameter(; intercept=Beta(2, 2)),
                 inverse_temperature=within_domain,
             )),
             bounded_sessions,

@@ -309,15 +309,17 @@ const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
 )
 
 # Both parameters from regressions: the learning rate on the age and the group, with random intercepts of the participants and
-# session deviations whose standard deviation is one for each group, and the inverse temperature with centered random intercepts
+# of the sessions, whose standard deviation is one for each group, and the inverse temperature with centered random intercepts
 const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
     HierarchicalRegressionSessionParameters((;
         learning_rate=RegressionParameter(;
             intercept=Normal(0, 1),
             predictors=(; age=Normal(0, 1)),
             categorical_predictors=(; group=Normal(0, 1)),
-            random_intercepts=(; participant=Exponential(1)),
-            session_deviation=RandomIntercept(Exponential(1); group_by=:group),
+            random_intercepts=(;
+                participant=Exponential(1),
+                session=:id => RandomIntercept(Exponential(1); group_by=:group),
+            ),
             transformation=turing_to_unit_interval,
         ),
         inverse_temperature=RegressionParameter(;
@@ -325,7 +327,6 @@ const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
             random_intercepts=(;
                 participant=RandomIntercept(Exponential(1); centered=true)
             ),
-            session_deviation=nothing,
             transformation=exp,
         ),
     )),

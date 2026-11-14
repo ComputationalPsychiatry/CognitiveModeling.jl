@@ -137,7 +137,7 @@ parameter, as a vector of pairs from the parameter's name to a `NamedTuple` with
 `upper`, whether the values are `discrete`, and `source`, a description of where they come
 from: the support of a prior, or what a transformation makes of the two ends of the real
 line, for a hierarchical parameter with the default normal distribution, and for a
-regression with random intercepts or session deviations, which are normal. Parameters that
+regression with random intercepts, which are normal. Parameters that
 are given without being sampled, or whose range isn't known, are left out. Used by
 [`warn_if_values_outside_domains`](@ref).
 """
@@ -183,11 +183,8 @@ function sampled_ranges(parameters_model::HierarchicalRegressionSessionParameter
     ranges = Pair{Symbol,NamedTuple}[]
     for (name, regression_parameter) in pairs(parameters_model.parameters)
 
-        #A normal random intercept or session deviation can give the sum any value on the real line
-        has_normal_term =
-            regression_parameter.session_deviation !== nothing ||
-            !isempty(regression_parameter.random_intercepts)
-        has_normal_term || continue
+        #A normal random intercept can give the sum any value on the real line
+        isempty(regression_parameter.random_intercepts) && continue
         transformation = regression_parameter.transformation
         ends = try
             (transformation(-Inf), transformation(Inf))
