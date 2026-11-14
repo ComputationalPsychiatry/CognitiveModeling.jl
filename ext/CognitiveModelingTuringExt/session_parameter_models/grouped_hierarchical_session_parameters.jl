@@ -65,21 +65,17 @@ end
 
 Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
 a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
-each group, with
-[`turing_hierarchical_group_parameters`](@ref), then the value of every session from the
-distribution of its group, with [`turing_hierarchical_centered_values`](@ref) or
+each group, with [`turing_hierarchical_group_parameters`](@ref) from the priors in
+`groups`, then the value of every session from the distribution of its group, with
+[`turing_hierarchical_centered_values`](@ref) or
 [`turing_hierarchical_standardized_values`](@ref), and returns the values with the
 transformation applied to each. Used by [`turing_hierarchical_parameters`](@ref).
 """
 Turing.@model function turing_hierarchical_parameter(hierarchical_parameter, groups)
 
-    #Sample the parameters of the group-level distribution, each as a vector with a value for every group
-    group_parameters ~ to_submodel(
-        turing_hierarchical_group_parameters(
-            hierarchical_parameter.priors, groups.n_groups
-        ),
-        false,
-    )
+    #Sample the parameters of the group-level distribution, each with a value for every group, or one value without groups
+    group_parameters ~
+    to_submodel(turing_hierarchical_group_parameters(groups.group_priors), false)
 
     #Sample the value of every session, from the distribution of its group or as a standardized value
     if hierarchical_parameter.centered
@@ -105,46 +101,52 @@ Turing.@model function turing_hierarchical_parameter(hierarchical_parameter, gro
 end
 
 """
-    turing_hierarchical_group_parameters(priors, n_groups)
+    turing_hierarchical_group_parameters(group_priors)
 
 Turing.jl model which samples one parameter of a group-level distribution at a time from
-`priors`, each for every group with [`turing_hierarchical_group_parameter`](@ref) under the
-name of its prior, and returns them in a `NamedTuple`, each as a vector with a value for
-every group. Used by [`turing_hierarchical_parameter`](@ref).
+`group_priors`, the priors of the parameters under their names, each for every group with
+[`turing_hierarchical_group_parameter`](@ref) under the name of its prior, and returns them
+in a `NamedTuple`, each as a vector with a value for every group, or as one value without
+groups. Used by [`turing_hierarchical_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_group_parameters(
-    priors::NamedTuple{names}, n_groups
+    group_priors::NamedTuple{names}
 ) where {names}
     name = first(names)
     values ~ to_submodel(
-        prefix(
-            turing_hierarchical_group_parameter(filldist(first(priors), n_groups)),
-            VarName{name}(),
-        ),
+        prefix(turing_hierarchical_group_parameter(first(group_priors)), VarName{name}()),
         false,
     )
     other_values ~
-    to_submodel(turing_hierarchical_group_parameters(Base.tail(priors), n_groups), false)
+    to_submodel(turing_hierarchical_group_parameters(Base.tail(group_priors)), false)
     return merge(NamedTuple{(name,)}((values,)), other_values)
 end
 
-Turing.@model function turing_hierarchical_group_parameters(
-    priors::NamedTuple{()}, n_groups
-)
+Turing.@model function turing_hierarchical_group_parameters(group_priors::NamedTuple{()})
     return (;)
 end
 
 """
-    turing_hierarchical_group_parameter(distribution)
+    turing_hierarchical_group_parameter(prior)
 
-Turing.jl model which samples the values of one parameter of a group-level distribution for
-every group from `distribution`, a distribution over a vector, as the variable `group`, so
-that under the prefixes of the parameter and of the prior it is named like
-`learning_rate.mean.group`. Used by [`turing_hierarchical_group_parameters`](@ref).
+Turing.jl model which samples the value of one parameter of a group-level distribution, as
+the variable `group`, so that under the prefixes of the parameter and of the prior it is
+named like `learning_rate.mean.group`. Without groups, `prior` is its prior, and the one
+value is returned. With groups, `prior` is a `NamedTuple` with the prior of each group under
+its symbol name, `group` has the value of each group under the same name, such as
+`learning_rate.mean.group.clinical`, and the values are returned as a vector with a value
+for every group. Used by [`turing_hierarchical_group_parameters`](@ref).
 """
-Turing.@model function turing_hierarchical_group_parameter(distribution)
-    group ~ distribution
+Turing.@model function turing_hierarchical_group_parameter(prior)
+    group ~ prior
     return group
+end
+
+Turing.@model function turing_hierarchical_group_parameter(priors_of_groups::NamedTuple)
+    group ~ product_distribution(priors_of_groups)
+
+    #The value of each group as a vector, to look up the group of every session
+    return collect(values(group))
 end
 
 """
@@ -183,22 +185,36 @@ Turing.@model function turing_hierarchical_standardized_values(
 )
     standardized ~ filldist(Normal(), length(group_of_each_session))
     means, standard_deviations = values(group_parameters)
-    return means[group_of_each_session] .+
-           standard_deviations[group_of_each_session] .* standardized
+    return select_by_group(means, group_of_each_session) .+
+           select_by_group(standard_deviations, group_of_each_session) .* standardized
 end
 
 """
     group_level_distribution(distribution, group_parameters, group)
 
 Return the distribution of the group numbered `group`, made by `distribution` from the
-values that the group has in `group_parameters`, a `NamedTuple` with one vector over the
-groups for each parameter of the distribution, in the order the distribution takes them.
-`nothing` makes a normal distribution. Used by
+values that the group has in `group_parameters`, a `NamedTuple` with a vector over the
+groups, or one value without groups, for each parameter of the distribution, in the order
+the distribution takes them. `nothing` makes a normal distribution. Used by
 [`turing_hierarchical_centered_values`](@ref).
 """
 function group_level_distribution(distribution, group_parameters::NamedTuple, group)
-    return distribution(map(values -> values[group], Tuple(group_parameters))...)
+    return distribution(
+        map(values -> select_by_group(values, group), Tuple(group_parameters))...
+    )
 end
 function group_level_distribution(::Nothing, group_parameters::NamedTuple, group)
     return group_level_distribution(Normal, group_parameters, group)
 end
+
+"""
+    select_by_group(values, groups)
+
+Return the values in `values`, a vector with a value for every group, of the groups
+numbered in `groups`, which is one group number or a vector of them, as `values[groups]`
+does. Without groups, `values` is one value that every group has, and is returned as it is.
+Used by [`turing_hierarchical_standardized_values`](@ref) and
+[`group_level_distribution`](@ref).
+"""
+select_by_group(values::AbstractVector, groups) = values[groups]
+select_by_group(value::Real, _) = value

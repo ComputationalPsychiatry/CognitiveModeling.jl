@@ -13,6 +13,7 @@ This page lists what is planned and not written yet. The list will grow.
 - Active inference models, which a separate package is being made for.
 - An example of a cognitive model which uses Turing.jl to select its actions.
 - Models with discrete parameters, to show how they are fitted.
+- Examples with models from control theory as cognitive models.
 
 ## Interfaces
 
@@ -32,6 +33,9 @@ This page lists what is planned and not written yet. The list will grow.
 - A macro that defines a cognitive model or an environment in one command, and writes the
   methods of the functions to extend where it can deduce them, such as `attribute_names`
   from the names the model uses.
+- Whether a trial needs to be distinguished from a timestep, and whether a model can have
+  nested time scales, such as evidence that accumulates over several timesteps within each
+  trial and learning between the trials.
 
 ## Fitting
 

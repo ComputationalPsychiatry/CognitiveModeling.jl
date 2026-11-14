@@ -34,8 +34,10 @@ once for each group of sessions.
 - `group_by=nothing`: a column of the table that the sessions were split from, or a tuple of
   columns, whose values group the sessions, so that each group has a group-level
   distribution of its own, such as `:diagnosis` for a clinical and a non-clinical group.
-  Each session must have one value of each of the columns. Groups are numbered in the order
-  of their first session. With `nothing`, every session is in one group.
+  Each session must have one value of each of the columns. The group-level parameters then
+  have a value for each group under the group's symbol name, made from its values as
+  [`session_id_to_symbol`](@ref) makes that of a session. With `nothing`, every session is
+  in one group, and each group-level parameter is one value.
 - `centered=nothing`: for the default normal distribution, whether the value of each
   session is sampled from the distribution of its group, with `true`, or as a standardized
   value which the group's mean shifts and its standard deviation scales, with `false`,
@@ -144,7 +146,9 @@ A full model finds the group of every session once, before it is made, from the 
 [`MultipleSessionsInfo`](@ref) keeps, so sessions that were prepared one at a time can only
 be in one group. The field `groups` is `nothing` until then, and afterwards has, for each
 parameter, the group of every session, `group_of_each_session`, the number of groups,
-`n_groups`, and the symbol name of each group, `group_symbol_names`.
+`n_groups`, the symbol name of each group, `group_symbol_names`, and the priors of the
+group-level parameters, `group_priors`, each a `NamedTuple` with the prior under the symbol
+name of each group when the sessions are grouped, and the prior itself when they aren't.
 
 # Examples
 ```julia
@@ -189,22 +193,29 @@ function parameter_names(parameters_model::GroupedHierarchicalSessionParameters)
     return keys(parameters_model.parameters)
 end
 
-#The group of every session is found once for each parameter, when a full model is prepared, and kept in the field for the groups
+#The group of every session is found once for each parameter, when a full model is prepared, and kept in the field for the groups, with the priors of the group-level parameters under the symbol name of each group
 function prepare_parameters_model(
     parameters_model::GroupedHierarchicalSessionParameters,
     sessions_info::MultipleSessionsInfo,
 )
     names = keys(parameters_model.parameters)
     groups = NamedTuple{names}(
-        map(
-            (name, hierarchical_parameter) -> group_sessions(
+        map(names, values(parameters_model.parameters)) do name, hierarchical_parameter
+            groups_of_parameter = group_sessions(
                 sessions_info,
                 hierarchical_parameter.group_by,
                 "GroupedHierarchicalSessionParameters groups $name by",
-            ),
-            names,
-            values(parameters_model.parameters),
-        ),
+            )
+
+            #Without columns to group by, each group-level parameter is one value with its prior
+            named_groups =
+                isempty(hierarchical_parameter.group_by) ? nothing : groups_of_parameter
+            group_priors = map(
+                prior -> priors_of_groups(prior, named_groups),
+                hierarchical_parameter.priors,
+            )
+            return merge(groups_of_parameter, (; group_priors))
+        end,
     )
     return GroupedHierarchicalSessionParameters(parameters_model, groups)
 end

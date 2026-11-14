@@ -118,7 +118,7 @@ end
             CognitiveModeling.prepare_parameters_model(hierarchical, sessions_info),
             sessions_info,
         )
-        #The learning rate has two groups and the inverse temperature one, each with the parameters of its distribution, and every session has a standardized value
+        #The learning rate has two groups, with the values of each parameter of its distribution under their names, the inverse temperature one value of each, and every session has a standardized value
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
             @varname(learning_rate.mean.group),
             @varname(learning_rate.sd.group),
@@ -127,12 +127,14 @@ end
             @varname(inverse_temperature.sd.group),
             @varname(inverse_temperature.standardized),
         ])
+        @test keys(rand(Xoshiro(1), model)[@varname(learning_rate.mean.group)]) == (:a, :b)
+        @test rand(Xoshiro(1), model)[@varname(inverse_temperature.mean.group)] isa Real
         values = Dict(
-            @varname(learning_rate.mean.group) => [0.5, -1.0],
-            @varname(learning_rate.sd.group) => [1.0, 2.0],
+            @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
+            @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
             @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
-            @varname(inverse_temperature.mean.group) => [0.3],
-            @varname(inverse_temperature.sd.group) => [0.5],
+            @varname(inverse_temperature.mean.group) => 0.3,
+            @varname(inverse_temperature.sd.group) => 0.5,
             @varname(inverse_temperature.standardized) => [1.0, 0.0, -1.0],
         )
         parameters = returned(model, values)
@@ -170,8 +172,8 @@ end
             @varname(learning_rate.session),
         ])
         values = Dict(
-            @varname(learning_rate.mean.group) => [0.5, -1.0],
-            @varname(learning_rate.sd.group) => [1.0, 2.0],
+            @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
+            @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
             @varname(learning_rate.session) => [0.6, -0.6, 0.2],
         )
         @test returned(model, values).learning_rate ≈ to_unit_interval.([0.6, -0.6, 0.2])
@@ -196,8 +198,8 @@ end
             sessions_info,
         )
         values = Dict(
-            @varname(learning_rate.location.group) => [0.5],
-            @varname(learning_rate.spread.group) => [2.0],
+            @varname(learning_rate.location.group) => 0.5,
+            @varname(learning_rate.spread.group) => 2.0,
             @varname(learning_rate.session) => [0.6, -0.6, 0.2],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
@@ -221,8 +223,8 @@ end
             sessions_info,
         )
         values = Dict(
-            @varname(learning_rate.mean.group) => [0.5],
-            @varname(learning_rate.sd.group) => [1.0],
+            @varname(learning_rate.mean.group) => 0.5,
+            @varname(learning_rate.sd.group) => 1.0,
             @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
             @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
         )
@@ -265,11 +267,11 @@ end
         ))
         model = turing_full_model(hierarchical, sessions_info)
         values = Dict(
-            @varname(learning_rate.mean.group) => [0.5, -1.0],
-            @varname(learning_rate.sd.group) => [1.0, 2.0],
+            @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
+            @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
             @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
-            @varname(inverse_temperature.mean.group) => [0.3],
-            @varname(inverse_temperature.sd.group) => [0.5],
+            @varname(inverse_temperature.mean.group) => 0.3,
+            @varname(inverse_temperature.sd.group) => 0.5,
             @varname(inverse_temperature.standardized) => [1.0, 0.0, -1.0],
         )
         learning_rates = to_unit_interval.([
@@ -303,51 +305,59 @@ const REGRESSION_FULL_TABLE = merge(
         SessionRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
     )
     regression = HierarchicalRegressionSessionParameters((;
-        learning_rate=RegressionParameter(;
-            intercept=Normal(0, 1),
-            predictors=(; age=Normal(0, 0.5)),
-            categorical_predictors=(; group=Normal(0, 2)),
-            random_intercepts=(;
-                participant=Exponential(1), session=:id => Exponential(0.5)
+        learning_rate=RegressionParameter(
+            Intercept(Normal(0, 1)),
+            ContinuousPredictor(:age, Normal(0, 0.5)),
+            CategoricalPredictor(:group, Normal(0, 2)),
+            Interaction((:age, :group), Normal(0, 0.3)),
+            VaryingEffects(
+                :participant,
+                Intercept(Exponential(1)),
+                ContinuousPredictor(:age, Exponential(0.2)),
             ),
+            VaryingEffects(:id, Intercept(Exponential(0.5)); name=:session);
             transformation=to_unit_interval,
         ),
-        inverse_temperature=RegressionParameter(;
-            intercept=Normal(0, 1), transformation=exp
+        inverse_temperature=RegressionParameter(
+            Intercept(Normal(0, 1)); transformation=exp
         ),
     ))
     values = Dict(
-        @varname(learning_rate.intercept) => 0.5,
-        @varname(learning_rate.age.coefficient) => 0.01,
-        @varname(learning_rate.group_b.coefficient) => -1.0,
-        @varname(learning_rate.participant.sd) => 2.0,
-        @varname(learning_rate.participant.standardized) => [0.3, -0.4],
-        @varname(learning_rate.session.sd) => 0.5,
-        @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3],
-        @varname(inverse_temperature.intercept) => 0.7,
+        @varname(learning_rate.coef) =>
+            (; intercept=0.5, age=0.01, group_b=-1.0, age_by_group_b=0.02),
+        @varname(learning_rate.participant.intercept.sd) => 2.0,
+        @varname(learning_rate.participant.intercept.standardized) => [0.3, -0.4],
+        @varname(learning_rate.participant.age.sd) => 0.1,
+        @varname(learning_rate.participant.age.standardized) => [0.5, -1.0],
+        @varname(learning_rate.session.intercept.sd) => 0.5,
+        @varname(learning_rate.session.intercept.standardized) => [0.1, 0.2, -0.3],
+        @varname(inverse_temperature.coef) => (; intercept=0.7),
     )
-    #The sum of each session by hand: its intercept, the effect of its age and of its group, and the deviations of its participant and of the session itself
+    #The sum of each session by hand: the intercept, the effects of its age, its group and their product, the deviations of its participant's intercept and of its participant's slope of the age times its age, and the deviation of the session itself
     learning_rates = to_unit_interval.([
-        0.5 + 0.01 * 20 + 2.0 * 0.3 + 0.5 * 0.1,
-        0.5 + 0.01 * 30 - 1.0 + 2.0 * -0.4 + 0.5 * 0.2,
-        0.5 + 0.01 * 40 + 2.0 * 0.3 + 0.5 * -0.3,
+        0.5 + 0.01 * 20 + 2.0 * 0.3 + 0.1 * 0.5 * 20 + 0.5 * 0.1,
+        0.5 + 0.01 * 30 - 1.0 + 0.02 * 30 + 2.0 * -0.4 + 0.1 * -1.0 * 30 + 0.5 * 0.2,
+        0.5 + 0.01 * 40 + 2.0 * 0.3 + 0.1 * 0.5 * 40 + 0.5 * -0.3,
     ])
     log_prior =
         logpdf(Normal(0, 1), 0.5) +
         logpdf(Normal(0, 0.5), 0.01) +
         logpdf(Normal(0, 2), -1.0) +
+        logpdf(Normal(0, 0.3), 0.02) +
         logpdf(Exponential(1), 2.0) +
         sum(logpdf.(Normal(), [0.3, -0.4])) +
+        logpdf(Exponential(0.2), 0.1) +
+        sum(logpdf.(Normal(), [0.5, -1.0])) +
         logpdf(Exponential(0.5), 0.5) +
         sum(logpdf.(Normal(), [0.1, 0.2, -0.3])) +
         logpdf(Normal(0, 1), 0.7)
 
-    @testset "Each session's value is the sum of the intercept, the effects of its predictors and the deviations of its levels of the random intercepts, transformed" begin
+    @testset "Each session's value is the sum of the effects of the coefficients and of the deviations of its levels of the varying effects, transformed" begin
         model = CognitiveModeling.turing_session_parameters_model(
             CognitiveModeling.prepare_parameters_model(regression, sessions_info),
             sessions_info,
         )
-        #The intercept is named under the parameter, a coefficient under the name of its predictor, or that name and its level, and the variables of a random intercept under its name
+        #The coefficients are one variable under the parameter, and the variables of varying effects are under their name and the name of each coefficient
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
         parameters = returned(model, values)
         @test parameters.learning_rate ≈ learning_rates
@@ -361,13 +371,12 @@ const REGRESSION_FULL_TABLE = merge(
         @test logjoint(unprepared, values) ≈ log_prior
     end
 
-    @testset "A centered random intercept is sampled as deviation, and a grouped one has a standard deviation for each group" begin
+    @testset "Centered varying effects are sampled as deviation, and grouped ones have a standard deviation for each group, under the group's name" begin
         centered_and_grouped = HierarchicalRegressionSessionParameters((;
-            learning_rate=RegressionParameter(;
-                intercept=nothing,
-                random_intercepts=(;
-                    participant=RandomIntercept(Exponential(1); centered=true),
-                    session=:id => RandomIntercept(Exponential(0.5); group_by=:group),
+            learning_rate=RegressionParameter(
+                VaryingEffects(:participant, Intercept(Exponential(1)); centered=true),
+                VaryingEffects(
+                    :id, Intercept(Exponential(0.5)); group_by=:group, name=:session
                 ),
             ),
         ))
@@ -375,13 +384,13 @@ const REGRESSION_FULL_TABLE = merge(
             centered_and_grouped, sessions_info
         )
         given = Dict(
-            @varname(learning_rate.participant.sd) => 2.0,
-            @varname(learning_rate.participant.deviation) => [0.6, -0.8],
-            @varname(learning_rate.session.sd) => [0.5, 3.0],
-            @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.participant.intercept.sd) => 2.0,
+            @varname(learning_rate.participant.intercept.deviation) => [0.6, -0.8],
+            @varname(learning_rate.session.intercept.sd) => (; a=0.5, b=3.0),
+            @varname(learning_rate.session.intercept.standardized) => [0.1, 0.2, -0.3],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
-        #S1 and S3 are in the first group and S2 in the second, which scales its standardized value by its own standard deviation
+        #S1 and S3 are in group a and S2 in group b, which scales its standardized value by its own standard deviation
         @test returned(model, given).learning_rate ≈
             [0.6 + 0.5 * 0.1, -0.8 + 3.0 * 0.2, 0.6 + 0.5 * -0.3]
         @test logjoint(model, given) ≈
@@ -391,18 +400,20 @@ const REGRESSION_FULL_TABLE = merge(
               sum(logpdf.(Normal(), [0.1, 0.2, -0.3]))
         #Centered and grouped, each deviation is sampled with the standard deviation of its group
         both = HierarchicalRegressionSessionParameters((;
-            learning_rate=RegressionParameter(;
-                intercept=nothing,
-                random_intercepts=(;
-                    session=:id =>
-                        RandomIntercept(Exponential(0.5); group_by=:group, centered=true),
+            learning_rate=RegressionParameter(
+                VaryingEffects(
+                    :id,
+                    Intercept(Exponential(0.5));
+                    group_by=:group,
+                    centered=true,
+                    name=:session,
                 ),
             ),
         ))
         model = CognitiveModeling.turing_session_parameters_model(both, sessions_info)
         given = Dict(
-            @varname(learning_rate.session.sd) => [0.5, 3.0],
-            @varname(learning_rate.session.deviation) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session.intercept.sd) => (; a=0.5, b=3.0),
+            @varname(learning_rate.session.intercept.deviation) => [0.1, 0.2, -0.3],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given).learning_rate ≈ [0.1, 0.2, -0.3]
@@ -413,15 +424,15 @@ const REGRESSION_FULL_TABLE = merge(
               logpdf(Normal(0, 0.5), -0.3)
     end
 
-    @testset "With an intercept and a random intercept over the sessions alone, it gives what GroupedHierarchicalSessionParameters gives with one group" begin
+    @testset "With an intercept and a varying intercept over the sessions alone, it gives what GroupedHierarchicalSessionParameters gives without groups" begin
         for centered in (false, true)
             as_regression = CognitiveModeling.turing_session_parameters_model(
                 HierarchicalRegressionSessionParameters((;
-                    learning_rate=RegressionParameter(;
-                        intercept=GROUP_PRIORS.mean,
-                        random_intercepts=(;
-                            session=:id => RandomIntercept(GROUP_PRIORS.sd; centered)
-                        ),
+                    learning_rate=RegressionParameter(
+                        Intercept(GROUP_PRIORS.mean),
+                        VaryingEffects(
+                            :id, Intercept(GROUP_PRIORS.sd); centered, name=:session
+                        );
                         transformation=to_unit_interval,
                     ),
                 )),
@@ -437,17 +448,18 @@ const REGRESSION_FULL_TABLE = merge(
             )
             #The same values of the mean, the standard deviation and the sessions, as each model names them. A centered regression samples the deviations from the mean, and the groups the values themselves
             regression_values = Dict(
-                @varname(learning_rate.intercept) => 0.5,
-                @varname(learning_rate.session.sd) => 2.0,
+                @varname(learning_rate.coef) => (; intercept=0.5),
+                @varname(learning_rate.session.intercept.sd) => 2.0,
                 if centered
-                    @varname(learning_rate.session.deviation) => [0.2, 0.4, -0.6]
+                    @varname(learning_rate.session.intercept.deviation) => [0.2, 0.4, -0.6]
                 else
-                    @varname(learning_rate.session.standardized) => [0.1, 0.2, -0.3]
+                    @varname(learning_rate.session.intercept.standardized) =>
+                        [0.1, 0.2, -0.3]
                 end,
             )
             group_values = Dict(
-                @varname(learning_rate.mean.group) => [0.5],
-                @varname(learning_rate.sd.group) => [2.0],
+                @varname(learning_rate.mean.group) => 0.5,
+                @varname(learning_rate.sd.group) => 2.0,
                 if centered
                     @varname(learning_rate.session) => [0.7, 0.9, -0.1]
                 else
@@ -461,12 +473,31 @@ const REGRESSION_FULL_TABLE = merge(
         end
     end
 
+    @testset "With a coefficient for every level of a categorical predictor and no intercept, the coefficient of each level is its value" begin
+        every_level = CognitiveModeling.turing_session_parameters_model(
+            HierarchicalRegressionSessionParameters((;
+                learning_rate=RegressionParameter(
+                    CategoricalPredictor(:group, Normal(0, 1); coding=:full_dummy);
+                    transformation=to_unit_interval,
+                ),
+            )),
+            sessions_info,
+        )
+        given = Dict(@varname(learning_rate.coef) => (; group_a=0.2, group_b=-0.3))
+        @test Set(keys(rand(Xoshiro(1), every_level))) == Set(keys(given))
+        #S1 and S3 are in group a, and S2 in group b
+        @test returned(every_level, given).learning_rate ≈
+            to_unit_interval.([0.2, -0.3, 0.2])
+        @test logjoint(every_level, given) ≈
+            logpdf(Normal(0, 1), 0.2) + logpdf(Normal(0, 1), -0.3)
+    end
+
     @testset "As a part of a composite it gives its parameters next to the others, with its variables under the name of the part" begin
         composite = CompositeSessionParameters(
             FixedSessionParameters((; inverse_temperature=2.0));
             learning=HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1), predictors=(; age=Normal(0, 0.5))
+                learning_rate=RegressionParameter(
+                    Intercept(Normal(0, 1)), ContinuousPredictor(:age, Normal(0, 0.5))
                 ),
             )),
         )
@@ -474,10 +505,7 @@ const REGRESSION_FULL_TABLE = merge(
             CognitiveModeling.prepare_parameters_model(composite, sessions_info),
             sessions_info,
         )
-        given = Dict(
-            @varname(learning.learning_rate.intercept) => 0.1,
-            @varname(learning.learning_rate.age.coefficient) => 0.01,
-        )
+        given = Dict(@varname(learning.learning_rate.coef) => (; intercept=0.1, age=0.01))
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given) == (;
             inverse_temperature=fill(2.0, 3),
@@ -495,14 +523,16 @@ const REGRESSION_FULL_TABLE = merge(
         #A parameter that is fixed is given next to those of the regression
         with_fixed = turing_full_model(
             HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1), transformation=to_unit_interval
+                learning_rate=RegressionParameter(
+                    Intercept(Normal(0, 1)); transformation=to_unit_interval
                 ),
             )),
             sessions_info;
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
-        @test returned(with_fixed, Dict(@varname(learning_rate.intercept) => 0.0)).cognitive_parameters ==
+        @test returned(
+            with_fixed, Dict(@varname(learning_rate.coef) => (; intercept=0.0))
+        ).cognitive_parameters ==
             (; learning_rate=fill(0.5, 3), inverse_temperature=fill(3.0, 3))
         #The mean reward of the environment of each session, by its group
         with_environment = sessions_for_test(
@@ -515,26 +545,23 @@ const REGRESSION_FULL_TABLE = merge(
             FixedSessionParameters((; learning_rate=0.3)),
             with_environment;
             environment_parameters_model=HierarchicalRegressionSessionParameters((;
-                mean_reward=RegressionParameter(;
-                    intercept=Normal(0, 1), categorical_predictors=(; group=Normal(0, 2))
+                mean_reward=RegressionParameter(
+                    Intercept(Normal(0, 1)), CategoricalPredictor(:group, Normal(0, 2))
                 ),
             )),
         )
-        given = Dict(
-            @varname(mean_reward.intercept) => 0.6,
-            @varname(mean_reward.group_b.coefficient) => -0.2,
-        )
+        given = Dict(@varname(mean_reward.coef) => (; intercept=0.6, group_b=-0.2))
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given).environment_parameters.mean_reward ≈ [0.6, 0.4, 0.6]
     end
 
-    @testset "A transformation that reaches outside a domain gives a warning when the model is made, for a regression with a normal term" begin
+    @testset "A transformation that reaches outside a domain gives a warning when the model is made, for a regression with varying effects" begin
         bounded_sessions = sessions_for_test(
             BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
         )
-        within_domain = RegressionParameter(;
-            intercept=Normal(0, 1),
-            random_intercepts=(; session=:id => Exponential(1)),
+        within_domain = RegressionParameter(
+            Intercept(Normal(0, 1)),
+            VaryingEffects(:id, Intercept(Exponential(1)));
             transformation=exp,
         )
         @test_logs (
@@ -542,9 +569,8 @@ const REGRESSION_FULL_TABLE = merge(
             r"The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its regression, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1\.",
         ) turing_full_model(
             HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1),
-                    random_intercepts=(; session=:id => Exponential(1)),
+                learning_rate=RegressionParameter(
+                    Intercept(Normal(0, 1)), VaryingEffects(:id, Intercept(Exponential(1)))
                 ),
                 inverse_temperature=within_domain,
             )),
@@ -552,19 +578,19 @@ const REGRESSION_FULL_TABLE = merge(
         )
         @test_logs turing_full_model(
             HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(;
-                    intercept=Normal(0, 1),
-                    random_intercepts=(; session=:id => Exponential(1)),
+                learning_rate=RegressionParameter(
+                    Intercept(Normal(0, 1)),
+                    VaryingEffects(:id, Intercept(Exponential(1)));
                     transformation=to_unit_interval,
                 ),
                 inverse_temperature=within_domain,
             )),
             bounded_sessions,
         )
-        #Without a random intercept, what the regression can give isn't known, so nothing is warned about
+        #Without varying effects, what the regression can give isn't known, so nothing is warned about
         @test_logs turing_full_model(
             HierarchicalRegressionSessionParameters((;
-                learning_rate=RegressionParameter(; intercept=Beta(2, 2)),
+                learning_rate=RegressionParameter(Intercept(Beta(2, 2))),
                 inverse_temperature=within_domain,
             )),
             bounded_sessions,

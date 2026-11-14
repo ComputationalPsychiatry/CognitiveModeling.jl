@@ -250,18 +250,22 @@ session parameter model's name with `include_submodel_prefixes = true`. With
 `IndependentSessionParameters`, each parameter is a vector with a value for each session,
 such as `learning_rate.session`, so the learning rate of the third session is
 `learning_rate.session[3]`. With `GroupedHierarchicalSessionParameters`, each parameter of
-a group-level distribution is a vector with a value for each group, named after its prior,
-such as `learning_rate.mean.group` and `learning_rate.sd.group`, and the values of the
-sessions before the transformation are `learning_rate.standardized`, or
+a group-level distribution is named after its prior, such as `learning_rate.mean.group` and
+`learning_rate.sd.group`, which is one value without groups, and otherwise has the value of
+each group under the group's symbol name, such as `learning_rate.mean.group.clinical`. The
+values of the sessions before the transformation are `learning_rate.standardized`, or
 `learning_rate.session` for a parameter that is centered. With
-`HierarchicalRegressionSessionParameters`, the intercept of a parameter is
-`learning_rate.intercept`, and the coefficient of a predictor is under its name, such as
-`learning_rate.age.coefficient`, or under its name and its level for a categorical
-predictor, such as `learning_rate.diagnosis_clinical.coefficient`. A random intercept has
-its variables under its name: its standard deviation, `learning_rate.participant.sd`, which
-is a vector with a value for each group when it is grouped, and a standardized value for
-each level, `learning_rate.participant.standardized`, or the deviation of each level,
-`learning_rate.participant.deviation`, when it is centered. A part of a
+`HierarchicalRegressionSessionParameters`, the coefficients of the intercept, the predictors
+and the interactions of a parameter are one variable, `learning_rate.coef`, with each under
+its name, such as `learning_rate.coef.intercept`, `learning_rate.coef.age`,
+`learning_rate.coef.diagnosis_clinical` for a level of a categorical predictor, and
+`learning_rate.coef.age_by_diagnosis_clinical` for an interaction. Varying effects have the
+variables of each of their coefficients under their name and the coefficient's: the
+standard deviation, `learning_rate.participant.intercept.sd`, which has the value of each
+group under the group's symbol name when the levels are grouped, such as
+`learning_rate.participant.intercept.sd.clinical`, and a standardized value for each level,
+`learning_rate.participant.intercept.standardized`, or the deviation of each level,
+`learning_rate.participant.intercept.deviation`, when they are centered. A part of a
 [`CompositeSessionParameters`](@ref) that is given with a name has its variables under that
 name, such as `noise.bias.session`. The variables of the sessions are under `session[i]`,
 and those of the downstream model as it names them, or under `downstream_model` with the

@@ -193,68 +193,116 @@ const REGRESSION_TABLE = merge(
         ))
     end
 
-    @testset "A RegressionParameter keeps its terms, with a prior for every predictor, the settings of every random intercept and the columns of each" begin
-        regression_parameter = RegressionParameter(;
-            intercept=1,
-            predictors=(; age=2),
-            categorical_predictors=(; diagnosis=3),
-            random_intercepts=(; participant=4),
+    @testset "The terms of a regression keep their priors and settings, and are named after their columns, or an interaction after its predictors, unless given a name" begin
+        #An intercept and predictors, with the default settings or others
+        @test Intercept(1).prior === 1 && Intercept(1).name === :intercept
+        @test Intercept().prior === nothing &&
+            Intercept(; name=:baseline).name === :baseline
+        age = ContinuousPredictor(:age, 2)
+        @test age.column === :age && age.prior === 2 && age.name === :age
+        years = ContinuousPredictor(:age; name=:years)
+        @test years.column === :age && years.prior === nothing && years.name === :years
+        diagnosis = CategoricalPredictor(:diagnosis, 3)
+        @test diagnosis.columns === (:diagnosis,) &&
+            diagnosis.prior === 3 &&
+            diagnosis.reference_level === nothing &&
+            diagnosis.coding === :dummy &&
+            diagnosis.name === :diagnosis
+        @test CategoricalPredictor(:diagnosis, 3; coding=:full_dummy).coding === :full_dummy
+        #Several columns give a name like the symbol name of a session, and an interaction is named after its predictors
+        cell = CategoricalPredictor(
+            [:diagnosis, :site],
+            3;
+            reference_level=(; diagnosis="control", site=1),
+            coding=:sum_to_zero,
         )
-        @test regression_parameter.intercept === 1
-        @test regression_parameter.predictors === (; age=2)
-        @test regression_parameter.categorical_predictors === (; diagnosis=3)
-        #A random intercept that is given as a prior has the default settings
-        @test regression_parameter.random_intercepts.participant isa RandomIntercept
-        @test regression_parameter.random_intercepts.participant.sd_prior === 4 &&
-            regression_parameter.random_intercepts.participant.group_by === () &&
-            regression_parameter.random_intercepts.participant.centered === false
-        #Each term reads the column of its name
-        @test regression_parameter.term_columns ===
-            (; age=(:age,), diagnosis=(:diagnosis,), participant=(:participant,))
-        @test regression_parameter.transformation === identity
-        @test regression_parameter.center_predictors === false &&
-            regression_parameter.reference_levels === (;) &&
-            regression_parameter.sum_to_zero_coding === false
-        #A RandomIntercept is kept with its settings, with the columns to group by as a tuple of names
-        grouped = RandomIntercept(4; group_by=[:diagnosis, :site], centered=true)
-        @test grouped.group_by === (:diagnosis, :site) && grouped.centered === true
-        #A term reads the columns that are given before its prior in a pair, one or several, also before a RandomIntercept
-        with_columns = RegressionParameter(;
-            intercept=nothing,
-            predictors=(; years=:age => 2),
-            categorical_predictors=(; cell=(:diagnosis, :site) => 3),
-            random_intercepts=(; participant=grouped, session=[:id, :block] => 5),
+        @test cell.columns === (:diagnosis, :site) &&
+            cell.name === :diagnosis__site &&
+            cell.reference_level == (; diagnosis="control", site=1) &&
+            cell.coding === :sum_to_zero
+        interaction = Interaction((:age, :diagnosis), 4)
+        @test interaction.terms === (:age, :diagnosis) &&
+            interaction.prior === 4 &&
+            interaction.name === :age_by_diagnosis
+        @test Interaction([:age, :diagnosis, :site]; name=:three_way).name === :three_way
+        #Varying effects keep their terms under their names, and their columns and their groups as tuples
+        by_participant = VaryingEffects(
+            :participant,
+            Intercept(5),
+            ContinuousPredictor(:age, 6);
+            group_by=[:diagnosis, :site],
+            centered=true,
+        )
+        @test by_participant.columns === (:participant,) &&
+            by_participant.name === :participant
+        @test by_participant.terms ===
+            (; intercept=Intercept(5), age=ContinuousPredictor(:age, 6))
+        @test by_participant.group_by === (:diagnosis, :site) &&
+            by_participant.centered === true
+        by_session = VaryingEffects((:id, :block), Intercept(5))
+        @test by_session.columns === (:id, :block) &&
+            by_session.name === :id__block &&
+            by_session.group_by === () &&
+            by_session.centered === false
+        @test VaryingEffects(:id, Intercept(5); name=:session).name === :session
+        @test VaryingEffects(:id, Intercept()).terms.intercept.prior === nothing
+        #A regression keeps its terms under their names, and gives those without a prior the default prior of their kind
+        regression_parameter = RegressionParameter(
+            Intercept(),
+            years,
+            diagnosis,
+            Interaction((:years, :diagnosis)),
+            by_participant;
             transformation=exp,
-            center_predictors=true,
-            sum_to_zero_coding=true,
+            default_priors=DefaultRegressionPriors(;
+                intercept=7, continuous_predictor=8, interaction=9
+            ),
         )
-        @test with_columns.intercept === nothing
-        @test with_columns.predictors === (; years=2) &&
-            with_columns.categorical_predictors === (; cell=3)
-        @test with_columns.random_intercepts.participant === grouped &&
-            with_columns.random_intercepts.session.sd_prior === 5
-        @test with_columns.term_columns === (;
-            years=(:age,),
-            cell=(:diagnosis, :site),
-            participant=(:participant,),
-            session=(:id, :block),
+        terms = regression_parameter.terms
+        @test keys(terms) ===
+            (:intercept, :years, :diagnosis, :years_by_diagnosis, :participant)
+        @test terms.intercept === Intercept(7)
+        @test terms.years === ContinuousPredictor(:age, 8; name=:years)
+        @test terms.diagnosis === diagnosis && terms.years_by_diagnosis.prior === 9
+        @test terms.participant === by_participant
+        @test regression_parameter.transformation === exp
+        @test RegressionParameter(Intercept(1)).transformation === identity
+        #The terms of varying effects without a prior get the default prior of the standard deviation of their kind, and keep their settings
+        with_varying_defaults = RegressionParameter(
+            VaryingEffects(
+                :participant,
+                Intercept(),
+                ContinuousPredictor(:age),
+                CategoricalPredictor(:diagnosis, 3),
+                Interaction((:age, :diagnosis));
+                group_by=:site,
+                centered=true,
+            );
+            default_priors=DefaultRegressionPriors(; varying_intercept=5, varying_slope=6),
         )
-        @test with_columns.transformation === exp &&
-            with_columns.center_predictors === true &&
-            with_columns.sum_to_zero_coding === true
-        #Predictors that are given without priors take the prior of every such coefficient
-        without_priors = RegressionParameter(;
-            intercept=1,
-            predictors=(:age, :iq),
-            categorical_predictors=:diagnosis,
-            coefficient_prior=2,
+        participant = with_varying_defaults.terms.participant
+        @test map(term -> term.prior, participant.terms) ===
+            (; intercept=5, age=6, diagnosis=3, age_by_diagnosis=6)
+        @test participant.group_by === (:site,) &&
+            participant.centered === true &&
+            participant.name === :participant
+        #Default priors that aren't given are nothing
+        no_defaults = DefaultRegressionPriors()
+        @test all(
+            isnothing,
+            (
+                no_defaults.intercept,
+                no_defaults.continuous_predictor,
+                no_defaults.categorical_predictor,
+                no_defaults.interaction,
+                no_defaults.varying_intercept,
+                no_defaults.varying_slope,
+            ),
         )
-        @test without_priors.predictors === (; age=2, iq=2) &&
-            without_priors.categorical_predictors === (; diagnosis=2)
-        @test without_priors.term_columns ===
-            (; age=(:age,), iq=(:iq,), diagnosis=(:diagnosis,))
         #A HierarchicalRegressionSessionParameters keeps one for each parameter, and has no designs until it is prepared
-        parameters = (; probability=regression_parameter, scale=with_columns)
+        parameters = (;
+            probability=regression_parameter, scale=RegressionParameter(Intercept(1))
+        )
         regression = HierarchicalRegressionSessionParameters(parameters)
         @test regression.parameters === parameters && regression.designs === nothing
         @test CognitiveModeling.parameter_names(regression) === (:probability, :scale)
@@ -262,89 +310,128 @@ const REGRESSION_TABLE = merge(
     end
 
     @testset "The terms of a regression are checked" begin
-        #The intercept has no default
-        @test_throws UndefKeywordError RegressionParameter()
-        @test_throws "A RegressionParameter needs an intercept, a predictor or a random intercept, but it was given none of them." RegressionParameter(;
-            intercept=nothing
+        #A regression needs terms, and only terms
+        @test_throws "A RegressionParameter takes the terms of the regression, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but it was given none." RegressionParameter()
+        @test_throws "The terms given to a RegressionParameter include (intercept = 1,), which isn't a term of a regression. The terms are an Intercept, ContinuousPredictors, CategoricalPredictors, Interactions and VaryingEffects, such as ContinuousPredictor(:age, Normal(0, 1))." RegressionParameter((;
+            intercept=1
+        ))
+        @test_throws "The terms given to a RegressionParameter include 2, which isn't a term of a regression." RegressionParameter(
+            Intercept(1), 2
         )
-        @test_throws "predictors of a RegressionParameter gives the columns (:age,) without priors, which needs coefficient_prior, the prior of every coefficient that has none of its own." RegressionParameter(;
-            intercept=1, predictors=:age
+        #Every coefficient needs a prior, of its own or the default prior of its kind, which the error names
+        @test_throws "The term age of a RegressionParameter has no prior. Give it one, as in ContinuousPredictor(:age, Normal(0, 1)), or give the RegressionParameter default_priors = DefaultRegressionPriors(; continuous_predictor = Normal(0, 1)) for every term of its kind without one." RegressionParameter(
+            Intercept(1), ContinuousPredictor(:age)
         )
-        @test_throws "A RegressionParameter was given coefficient_prior, but every predictor has a prior of its own." RegressionParameter(;
-            intercept=1, predictors=(; age=2), coefficient_prior=3
+        @test_throws "default_priors = DefaultRegressionPriors(; interaction = Normal(0, 1))" RegressionParameter(
+            ContinuousPredictor(:age, 1),
+            ContinuousPredictor(:site, 1),
+            Interaction((:age, :site));
+            default_priors=DefaultRegressionPriors(; continuous_predictor=2),
         )
-        @test_throws "categorical_predictors of a RegressionParameter has nothing as the prior of (:diagnosis,), but the coefficient of every predictor needs a prior." RegressionParameter(;
-            intercept=1, categorical_predictors=(; diagnosis=nothing)
+        @test_throws "The term intercept of the varying effects participant has no prior. Give it the prior of the standard deviation of its deviations, as in Intercept(Exponential(1)), or give the RegressionParameter default_priors = DefaultRegressionPriors(; varying_intercept = Exponential(1)) for every term of its kind without one." RegressionParameter(
+            VaryingEffects(:participant, Intercept())
         )
-        @test_throws "categorical_predictors of a RegressionParameter has nothing as the prior of (:cell,)" RegressionParameter(;
-            intercept=1, categorical_predictors=(; cell=(:diagnosis, :site) => nothing)
+        @test_throws "DefaultRegressionPriors(; varying_slope = Exponential(1))" RegressionParameter(
+            VaryingEffects(:participant, Intercept(1), ContinuousPredictor(:age));
+            default_priors=DefaultRegressionPriors(; varying_intercept=2),
         )
-        #Every term needs a name of its own, and intercept is the name of the intercept
-        @test_throws "The terms of a RegressionParameter must each have a name of their own, but more than one is named age." RegressionParameter(;
-            intercept=1, predictors=(; age=2), categorical_predictors=(; age=3)
+        #Every term needs a name of its own, and there is one intercept at most
+        @test_throws "The terms of a RegressionParameter must each have a name of their own, but more than one is named age. A term is named after its column or columns, and an interaction after its predictors, unless it is given another name, as in ContinuousPredictor(:age; name = :years)." RegressionParameter(
+            ContinuousPredictor(:age, 1), CategoricalPredictor(:age, 2)
         )
-        @test_throws "more than one is named intercept." RegressionParameter(;
-            intercept=1, predictors=(; intercept=2)
+        @test_throws "more than one is named participant." RegressionParameter(
+            ContinuousPredictor(:age, 1; name=:participant),
+            VaryingEffects(:participant, Intercept(2)),
         )
-        @test_throws "more than one is named participant." RegressionParameter(;
-            intercept=1,
-            predictors=(; participant=:age => 2),
-            random_intercepts=(; participant=3),
+        @test_throws "The terms of a RegressionParameter include more than one Intercept, but a regression has one intercept at most." RegressionParameter(
+            Intercept(1), Intercept(2; name=:baseline)
         )
-        #A pair must give columns, and a continuous predictor reads one column
-        @test_throws "random_intercepts of a RegressionParameter gives session no columns. A term reads the column of its name, or the columns that are given before its prior in a pair, such as session = (:diagnosis, :site) => Normal(0, 1)." RegressionParameter(;
-            intercept=1, random_intercepts=(; session=() => 2)
+        #An interaction multiplies two or more different predictors of the same regression
+        @test_throws "An Interaction multiplies two or more different predictors, given by their names, such as Interaction((:diagnosis, :condition), Normal(0, 0.5)), but it was given :age." Interaction(
+            :age, 1
         )
-        @test_throws "The continuous predictor age_by_iq of a RegressionParameter is given the columns (:age, :iq), but a continuous predictor reads one column." RegressionParameter(;
-            intercept=1, predictors=(; age_by_iq=(:age, :iq) => 2)
+        @test_throws "but it was given (:age, :age)." Interaction((:age, :age), 1)
+        @test_throws "The interaction age_by_iq of a RegressionParameter multiplies iq, which isn't one of its terms. Its terms are (:age, :age_by_iq)." RegressionParameter(
+            ContinuousPredictor(:age, 1), Interaction((:age, :iq), 2)
         )
-        @test_throws TypeError RegressionParameter(;
-            intercept=1, predictors=(; years="age" => 2)
+        @test_throws "The interaction intercept_by_age of a RegressionParameter multiplies intercept, which is of type Intercept, but an interaction multiplies ContinuousPredictors and CategoricalPredictors." RegressionParameter(
+            Intercept(1), ContinuousPredictor(:age, 1), Interaction((:intercept, :age), 2)
         )
-        @test_throws "reference_levels of a RegressionParameter gives a reference level for (:site,), but its categorical predictors are (:diagnosis,)." RegressionParameter(;
-            intercept=1, categorical_predictors=(; diagnosis=2), reference_levels=(; site=1)
+        #A continuous predictor reads one column, and a categorical one reads one or several and is coded in one of three ways, of which one has no reference level
+        @test_throws "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given (:age, :iq). The product of several predictors is an Interaction." ContinuousPredictor(
+            (:age, :iq), 1
         )
-        @test_throws "A RandomIntercept takes the prior of its standard deviation, such as RandomIntercept(Exponential(1)), but it was given nothing." RandomIntercept(
-            nothing
+        @test_throws "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :sum_to_zero, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :effects." CategoricalPredictor(
+            :diagnosis, 1; coding=:effects
         )
-        @test_throws "A RandomIntercept takes the prior of its standard deviation" RegressionParameter(;
-            intercept=1, random_intercepts=(; participant=nothing)
+        @test_throws "A CategoricalPredictor with the coding :full_dummy has a coefficient for every level and no reference level, but it was given the reference level \"control\"." CategoricalPredictor(
+            :diagnosis, 1; coding=:full_dummy, reference_level="control"
         )
-        @test_throws TypeError RandomIntercept(1; group_by="diagnosis")
-        @test_throws TypeError RegressionParameter(;
-            intercept=1, random_intercepts=:participant
+        @test_throws "A CategoricalPredictor reads one column or several, such as :diagnosis or (:diagnosis, :site), but it was given none." CategoricalPredictor(
+            (), 1
         )
-        @test_throws "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(; intercept = Normal(0, 1), random_intercepts = (; participant = Exponential(1))), but for probability it was given 1." HierarchicalRegressionSessionParameters((;
+        @test_throws TypeError CategoricalPredictor("diagnosis", 1)
+        #Varying effects need terms, which aren't varying effects themselves
+        @test_throws "The varying effects participant have no terms. VaryingEffects takes the terms whose coefficients deviate for each level, such as VaryingEffects(:participant, Intercept(Exponential(1)))." VaryingEffects(
+            :participant
+        )
+        @test_throws "The varying effects participant have VaryingEffects among their terms, but the terms of varying effects are an Intercept, ContinuousPredictors, CategoricalPredictors and Interactions." VaryingEffects(
+            :participant, VaryingEffects(:site, Intercept(1))
+        )
+        @test_throws "The terms given to the varying effects participant include 1, which isn't a term of a regression." VaryingEffects(
+            :participant, 1
+        )
+        @test_throws "The interaction age_by_diagnosis of the varying effects participant multiplies diagnosis, which isn't one of its terms. Its terms are (:age, :age_by_diagnosis)." VaryingEffects(
+            :participant, ContinuousPredictor(:age, 1), Interaction((:age, :diagnosis), 2)
+        )
+        @test_throws "VaryingEffects reads one column or several" VaryingEffects(
+            (), Intercept(1)
+        )
+        @test_throws TypeError VaryingEffects(
+            :participant, Intercept(1); group_by="diagnosis"
+        )
+        #The coefficients of a regression are named coef, which varying effects can't be named
+        @test_throws "VaryingEffects of a RegressionParameter can't be named coef, which is the name of the coefficients of the regression." RegressionParameter(
+            VaryingEffects(:coef, Intercept(1))
+        )
+        @test_throws "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but for probability it was given 1." HierarchicalRegressionSessionParameters((;
             probability=1
         ))
         @test_throws MethodError HierarchicalRegressionSessionParameters([1])
     end
 
-    @testset "The design of a regression has a column for each coefficient, and the level of every session for each random intercept" begin
+    @testset "The design of a regression has the prior and the values of each coefficient, and the levels and the values of the varying effects of each column" begin
         sessions_info = grouped_sessions(REGRESSION_TABLE)
         regression = HierarchicalRegressionSessionParameters((;
-            probability=RegressionParameter(;
-                intercept=1,
-                predictors=(; age=2),
-                categorical_predictors=(; diagnosis=3),
-                random_intercepts=(;
-                    participant=RandomIntercept(4; group_by=:site), session=:id => 5
+            probability=RegressionParameter(
+                Intercept(1),
+                ContinuousPredictor(:age, 2),
+                CategoricalPredictor(:diagnosis, 3),
+                VaryingEffects(
+                    :participant,
+                    Intercept(4),
+                    CategoricalPredictor(:diagnosis, 5);
+                    group_by=:site,
                 ),
+                VaryingEffects(:id, Intercept(6); name=:session),
             ),
-            scale=RegressionParameter(; intercept=1),
+            scale=RegressionParameter(Intercept(1)),
         ))
         prepared = CognitiveModeling.prepare_parameters_model(regression, sessions_info)
         @test prepared isa HierarchicalRegressionSessionParameters &&
             prepared.parameters === regression.parameters
         design = prepared.designs.probability
-        #A continuous predictor has its values, and a categorical one a column for each level other than the level of the first session
-        @test design.coefficient_priors === (; age=2, diagnosis_control=3)
-        @test design.design_columns ==
-            (; age=[30.0, 40.0, 50.0, 60.0], diagnosis_control=[0.0, 1.0, 0.0, 1.0])
-        @test design.predictor_centers === (;)
+        #The intercept has 1 for every session, a continuous predictor its values, and a categorical one a column for each level other than the level of the first session
+        @test design.coefficient_priors === (; intercept=1, age=2, diagnosis_control=3)
+        @test design.design_columns == (;
+            intercept=[1.0, 1.0, 1.0, 1.0],
+            age=[30.0, 40.0, 50.0, 60.0],
+            diagnosis_control=[0.0, 1.0, 0.0, 1.0],
+        )
         @test design.reference_levels == (; diagnosis="clinical")
-        #The levels of a random intercept are the values of its column, each in the group of its sessions
-        @test design.random_intercept_levels.participant == (;
+        #Varying effects have the levels of their column, each in the group of its sessions, and the prior of the standard deviation of each coefficient under the name of each group
+        participant = design.varying_effects.participant
+        @test participant.levels == (;
             level_of_each_session=[1, 1, 2, 2],
             n_levels=2,
             level_symbol_names=[:P1, :P2],
@@ -354,20 +441,29 @@ const REGRESSION_TABLE = merge(
                 group_symbol_names=[Symbol("1"), Symbol("2")],
             ),
         )
-        #A random intercept over the column that identifies the sessions has every session as a level of its own
-        @test design.random_intercept_levels.session == (;
+        @test participant.coefficient_sd_priors === (;
+            intercept=NamedTuple{(Symbol("1"), Symbol("2"))}((4, 4)),
+            diagnosis_control=NamedTuple{(Symbol("1"), Symbol("2"))}((5, 5)),
+        )
+        @test participant.design_columns ==
+            (; intercept=[1.0, 1.0, 1.0, 1.0], diagnosis_control=[0.0, 1.0, 0.0, 1.0])
+        @test participant.reference_levels == (; diagnosis="clinical") &&
+            participant.centered === false
+        #Varying effects over the column that identifies the sessions have every session as a level of its own
+        session = design.varying_effects.session
+        @test session.levels == (;
             level_of_each_session=[1, 2, 3, 4],
             n_levels=4,
             level_symbol_names=[:S1, :S2, :S3, :S4],
             groups=nothing,
         )
-        #A regression with an intercept alone has no columns and no levels
+        @test session.coefficient_sd_priors === (; intercept=6)
+        #A regression with an intercept alone has one column and no varying effects
         @test prepared.designs.scale == (;
-            coefficient_priors=(;),
-            design_columns=(;),
-            predictor_centers=(;),
+            coefficient_priors=(; intercept=1),
+            design_columns=(; intercept=[1.0, 1.0, 1.0, 1.0]),
             reference_levels=(;),
-            random_intercept_levels=(;),
+            varying_effects=(;),
         )
         #With an intercept alone, sessions that have no table can be prepared too
         without_table = MultipleSessionsInfo(
@@ -375,14 +471,14 @@ const REGRESSION_TABLE = merge(
         )
         @test CognitiveModeling.prepare_parameters_model(
             HierarchicalRegressionSessionParameters((;
-                scale=RegressionParameter(; intercept=1)
+                scale=RegressionParameter(Intercept(1))
             )),
             without_table,
-        ).designs.scale.random_intercept_levels === (;)
+        ).designs.scale.design_columns == (; intercept=[1.0, 1.0, 1.0, 1.0])
         #A full model prepares it, and so does a composite, as one of its parts
         @test CognitiveModeling.prepare_full_model(
             HierarchicalRegressionSessionParameters((;
-                probability=RegressionParameter(; intercept=1, predictors=(; age=2))
+                probability=RegressionParameter(ContinuousPredictor(:age, 2))
             )),
             sessions_info,
         ).cognitive_parameters_model.designs.probability.design_columns ==
@@ -392,149 +488,278 @@ const REGRESSION_TABLE = merge(
         ).parts[1].designs == prepared.designs
     end
 
-    @testset "Terms can read several columns, predictors can be centered, and a categorical predictor takes a reference level, or coefficients that sum to zero" begin
+    @testset "A categorical predictor takes a reference level, coefficients that sum to zero or a coefficient for every level, and terms can read several columns" begin
         sessions_info = grouped_sessions(REGRESSION_TABLE)
-        function design_of(; terms...)
+        function design_of(terms...)
             return CognitiveModeling.build_regression_design(
-                sessions_info, RegressionParameter(; intercept=1, terms...), :probability
+                sessions_info, RegressionParameter(terms...), :probability
             )
         end
-        #The mean over the sessions is subtracted, and kept
-        centered = design_of(; predictors=(; age=2, site=2), center_predictors=true)
-        @test centered.design_columns ==
-            (; age=[-15.0, -5.0, 5.0, 15.0], site=[-0.5, -0.5, 0.5, 0.5])
-        @test centered.predictor_centers === (; age=45.0, site=1.5)
-        #A predictor named otherwise than its column reads the column that is given before its prior
-        renamed = design_of(; predictors=(; years=:age => 2))
+        #A predictor that is given a name reads its column, and its coefficient takes the name
+        renamed = design_of(ContinuousPredictor(:age, 2; name=:years))
         @test renamed.coefficient_priors === (; years=2) &&
             renamed.design_columns == (; years=[30.0, 40.0, 50.0, 60.0])
-        #A categorical predictor of several columns has the combinations of their values as its levels, named after the predictor and each value
-        by_cell = design_of(; categorical_predictors=(; cell=(:diagnosis, :site) => 2))
+        #A categorical predictor of several columns has the combinations of their values as its levels, whose coefficients are named by their symbol names
+        by_cell = design_of(CategoricalPredictor((:diagnosis, :site), 2))
         @test by_cell.coefficient_priors === (;
-            cell_diagnosis_control__site_1=2,
-            cell_diagnosis_clinical__site_2=2,
-            cell_diagnosis_control__site_2=2,
+            diagnosis_control__site_1=2,
+            diagnosis_clinical__site_2=2,
+            diagnosis_control__site_2=2,
         )
         @test by_cell.design_columns == (;
-            cell_diagnosis_control__site_1=[0.0, 1.0, 0.0, 0.0],
-            cell_diagnosis_clinical__site_2=[0.0, 0.0, 1.0, 0.0],
-            cell_diagnosis_control__site_2=[0.0, 0.0, 0.0, 1.0],
+            diagnosis_control__site_1=[0.0, 1.0, 0.0, 0.0],
+            diagnosis_clinical__site_2=[0.0, 0.0, 1.0, 0.0],
+            diagnosis_control__site_2=[0.0, 0.0, 0.0, 1.0],
         )
-        @test by_cell.reference_levels == (; cell=(; diagnosis="clinical", site=1))
-        #Its reference level is given as a NamedTuple of values
-        with_cell_reference = design_of(;
-            categorical_predictors=(; cell=(:diagnosis, :site) => 2),
-            reference_levels=(; cell=(; diagnosis="control", site=2)),
+        @test by_cell.reference_levels ==
+            (; diagnosis__site=(; diagnosis="clinical", site=1))
+        #Its reference level is given as a NamedTuple of values, and a name of its own names the predictor but not its coefficients
+        with_cell_reference = design_of(
+            CategoricalPredictor(
+                (:diagnosis, :site),
+                2;
+                reference_level=(; diagnosis="control", site=2),
+                name=:cell,
+            ),
         )
         @test keys(with_cell_reference.design_columns) == (
-            :cell_diagnosis_clinical__site_1,
-            :cell_diagnosis_control__site_1,
-            :cell_diagnosis_clinical__site_2,
+            :diagnosis_clinical__site_1,
+            :diagnosis_control__site_1,
+            :diagnosis_clinical__site_2,
         )
-        #A random intercept of several columns has the combinations of their values as its levels
-        by_visit = design_of(; random_intercepts=(; visit=(:participant, :site) => 2))
-        @test by_visit.random_intercept_levels.visit == (;
+        @test with_cell_reference.reference_levels ==
+            (; cell=(; diagnosis="control", site=2))
+        #With a coefficient for every level there is no reference level, and of several columns this gives a coefficient for every combination of their values
+        every_level = design_of(CategoricalPredictor(:diagnosis, 2; coding=:full_dummy))
+        @test every_level.coefficient_priors ===
+            (; diagnosis_clinical=2, diagnosis_control=2)
+        @test every_level.design_columns == (;
+            diagnosis_clinical=[1.0, 0.0, 1.0, 0.0], diagnosis_control=[0.0, 1.0, 0.0, 1.0]
+        )
+        @test every_level.reference_levels == (; diagnosis=nothing)
+        every_cell = design_of(
+            CategoricalPredictor((:diagnosis, :site), 3; coding=:full_dummy)
+        )
+        @test every_cell.coefficient_priors === (;
+            diagnosis_clinical__site_1=3,
+            diagnosis_control__site_1=3,
+            diagnosis_clinical__site_2=3,
+            diagnosis_control__site_2=3,
+        )
+        @test every_cell.design_columns.diagnosis_clinical__site_2 == [0.0, 0.0, 1.0, 0.0]
+        #Varying effects of several columns have the combinations of their values as their levels, and are named after them
+        by_visit = design_of(VaryingEffects((:participant, :site), Intercept(2)))
+        @test by_visit.varying_effects.participant__site.levels == (;
             level_of_each_session=[1, 1, 2, 2],
             n_levels=2,
             level_symbol_names=[:participant_P1__site_1, :participant_P2__site_2],
             groups=nothing,
         )
-        #A random intercept over the sessions can be grouped too, each session being a level
-        grouped = design_of(;
-            random_intercepts=(; session=:id => RandomIntercept(5; group_by=:diagnosis))
-        )
-        @test grouped.random_intercept_levels.session.groups == (;
+        #Varying effects over the sessions can be grouped too, each session being a level
+        grouped = design_of(VaryingEffects(:id, Intercept(5); group_by=:diagnosis))
+        @test grouped.varying_effects.id.levels.groups == (;
             group_of_each_level=[1, 2, 1, 2],
             n_groups=2,
             group_symbol_names=[:clinical, :control],
         )
+        @test grouped.varying_effects.id.coefficient_sd_priors ===
+            (; intercept=(; clinical=5, control=5))
         #The level that is given as the reference level has no coefficient
-        with_reference = design_of(;
-            categorical_predictors=(; diagnosis=2), reference_levels=(; diagnosis="control")
+        with_reference = design_of(
+            CategoricalPredictor(:diagnosis, 2; reference_level="control")
         )
         @test with_reference.design_columns == (; diagnosis_clinical=[1.0, 0.0, 1.0, 0.0])
         @test with_reference.reference_levels == (; diagnosis="control")
-        #With coefficients that sum to zero, the sessions of the reference level have -1 in every column
-        summing_to_zero = design_of(;
-            categorical_predictors=(; diagnosis=2, id=3), sum_to_zero_coding=true
+        #With coefficients that sum to zero, the sessions of the reference level have -1 in every column, and each predictor is coded as it says
+        summing_to_zero = design_of(
+            CategoricalPredictor(:diagnosis, 2; coding=:sum_to_zero),
+            CategoricalPredictor(:id, 3; coding=:sum_to_zero),
+            CategoricalPredictor(:site, 4),
         )
         @test summing_to_zero.coefficient_priors ===
-            (; diagnosis_control=2, id_S2=3, id_S3=3, id_S4=3)
+            (; diagnosis_control=2, id_S2=3, id_S3=3, id_S4=3, site_2=4)
         @test summing_to_zero.design_columns == (;
             diagnosis_control=[-1.0, 1.0, -1.0, 1.0],
             id_S2=[-1.0, 1.0, 0.0, 0.0],
             id_S3=[-1.0, 0.0, 1.0, 0.0],
             id_S4=[-1.0, 0.0, 0.0, 1.0],
+            site_2=[0.0, 0.0, 1.0, 1.0],
         )
     end
 
-    @testset "The columns of a regression must have one value for each session, of the kind its term needs" begin
+    @testset "An interaction has a coefficient for each combination of its predictors' coefficients, multiplied by their values after the levels are coded" begin
         sessions_info = grouped_sessions(REGRESSION_TABLE)
-        function design_of(sessions_info=sessions_info; terms...)
+        function design_of(terms...)
             return CognitiveModeling.build_regression_design(
-                sessions_info, RegressionParameter(; intercept=1, terms...), :probability
+                sessions_info, RegressionParameter(terms...), :probability
             )
         end
-        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." design_of(;
-            predictors=(; wave=2)
+        #Two continuous predictors give one coefficient, multiplied by the product of their values
+        continuous = design_of(
+            ContinuousPredictor(:age, 1),
+            ContinuousPredictor(:site, 2),
+            Interaction((:age, :site), 3),
         )
-        @test_throws "HierarchicalRegressionSessionParameters has a random intercept of probability for each value of the column wave, which has the values [1, 2] in the session \"S1\"." design_of(;
-            random_intercepts=(; wave=2)
+        @test continuous.coefficient_priors === (; age=1, site=2, age_by_site=3)
+        @test continuous.design_columns.age_by_site == [30.0, 40.0, 100.0, 120.0]
+        #A continuous and a categorical predictor give one for each coefficient of the categorical predictor, coded as the predictor is
+        mixed = design_of(
+            ContinuousPredictor(:age, 1),
+            CategoricalPredictor(:diagnosis, 2; coding=:sum_to_zero),
+            Interaction((:age, :diagnosis), 3),
         )
-        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\"." design_of(;
-            categorical_predictors=(; cell=(:diagnosis, :wave) => 2)
+        @test mixed.design_columns.age_by_diagnosis_control == [-30.0, 40.0, -50.0, 60.0]
+        every_level = design_of(
+            ContinuousPredictor(:age, 1),
+            CategoricalPredictor(:diagnosis, 2; coding=:full_dummy),
+            Interaction((:age, :diagnosis), 3),
         )
-        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column diagnosis as a continuous predictor, but it has the value \"clinical\", which isn't a number. Give the column in categorical_predictors instead." design_of(;
-            predictors=(; diagnosis=2)
+        @test every_level.design_columns.age_by_diagnosis_clinical ==
+              [30.0, 0.0, 50.0, 0.0] &&
+            every_level.design_columns.age_by_diagnosis_control == [0.0, 40.0, 0.0, 60.0]
+        #Three predictors are multiplied together
+        three_way = design_of(
+            ContinuousPredictor(:age, 1),
+            ContinuousPredictor(:site, 1),
+            CategoricalPredictor(:diagnosis, 1),
+            Interaction((:age, :site, :diagnosis), 4),
         )
-        @test_throws "The table that the sessions were split from has no column iq." design_of(;
-            predictors=(; iq=2)
+        @test three_way.design_columns.age_by_site_by_diagnosis_control ==
+            [0.0, 40.0, 0.0, 120.0]
+        #Two categorical predictors give one for each combination of levels, with the levels of the first predictor changing slowest, whatever the interaction is named
+        crossed_sessions = grouped_sessions((;
+            id=["S$i" for i in 1:9],
+            condition=repeat(["a", "b", "c"]; inner=3),
+            group=repeat(["x", "y", "z"], 3),
+            outcome=fill(1.0, 9),
+            choice=fill(true, 9),
+        ))
+        crossed = CognitiveModeling.build_regression_design(
+            crossed_sessions,
+            RegressionParameter(
+                CategoricalPredictor(:condition, 1),
+                CategoricalPredictor(:group, 2),
+                Interaction((:condition, :group), 3; name=:cell),
+            ),
+            :probability,
         )
-        @test_throws "The table that the sessions were split from has no column block." design_of(;
-            random_intercepts=(; session=(:id, :block) => 2)
+        @test keys(crossed.coefficient_priors) == (
+            :condition_b,
+            :condition_c,
+            :group_y,
+            :group_z,
+            :condition_b_by_group_y,
+            :condition_b_by_group_z,
+            :condition_c_by_group_y,
+            :condition_c_by_group_z,
+        )
+        @test crossed.design_columns.condition_c_by_group_y ==
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        #In varying effects, an interaction multiplies predictors of the same varying effects, and gives varying slopes
+        in_varying_effects = design_of(
+            VaryingEffects(
+                :participant,
+                Intercept(1),
+                ContinuousPredictor(:age, 2),
+                CategoricalPredictor(:diagnosis, 3),
+                Interaction((:age, :diagnosis), 4),
+            ),
+        )
+        @test in_varying_effects.varying_effects.participant.coefficient_sd_priors ===
+            (; intercept=1, age=2, diagnosis_control=3, age_by_diagnosis_control=4)
+        @test in_varying_effects.varying_effects.participant.design_columns.age_by_diagnosis_control ==
+            [0.0, 40.0, 0.0, 60.0]
+    end
+
+    @testset "The columns of a regression must have one value for each session, of the kind its term needs, and inform every coefficient" begin
+        sessions_info = grouped_sessions(REGRESSION_TABLE)
+        function design_of(terms...; sessions=sessions_info)
+            return CognitiveModeling.build_regression_design(
+                sessions, RegressionParameter(terms...), :probability
+            )
+        end
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." design_of(
+            ContinuousPredictor(:wave, 2)
+        )
+        @test_throws "HierarchicalRegressionSessionParameters has varying effects of probability for each value of the column wave, which has the values [1, 2] in the session \"S1\"." design_of(
+            VaryingEffects(:wave, Intercept(2))
+        )
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\"." design_of(
+            CategoricalPredictor((:diagnosis, :wave), 2)
+        )
+        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column diagnosis as a continuous predictor, but it has the value \"clinical\", which isn't a number. Give it as a CategoricalPredictor instead." design_of(
+            ContinuousPredictor(:diagnosis, 2)
+        )
+        @test_throws "The table that the sessions were split from has no column iq." design_of(
+            ContinuousPredictor(:iq, 2)
+        )
+        @test_throws "The table that the sessions were split from has no column block." design_of(
+            VaryingEffects((:id, :block), Intercept(2))
         )
         #A categorical predictor needs two levels, and its reference level must be one of them
         one_diagnosis = grouped_sessions(
             merge(REGRESSION_TABLE, (; diagnosis=fill("clinical", 6)))
         )
         @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column diagnosis as a categorical predictor, but every session has the value \"clinical\", so there is no difference between levels to estimate." design_of(
-            one_diagnosis; categorical_predictors=(; diagnosis=2)
+            CategoricalPredictor(:diagnosis, 2); sessions=one_diagnosis
         )
         @test_throws "HierarchicalRegressionSessionParameters predicts probability from the columns (:diagnosis, :participant) as a categorical predictor, but every session has the value" design_of(
-            grouped_sessions(
+            CategoricalPredictor((:diagnosis, :participant), 2);
+            sessions=grouped_sessions(
                 merge(
                     REGRESSION_TABLE,
                     (; diagnosis=fill("clinical", 6), participant=fill("P1", 6)),
                 ),
-            );
-            categorical_predictors=(; cell=(:diagnosis, :participant) => 2),
+            ),
         )
-        @test_throws "The reference level of the categorical predictor diagnosis of probability is \"healthy\", which isn't a value of the column diagnosis. Its values are [\"clinical\", \"control\"]." design_of(;
-            categorical_predictors=(; diagnosis=2), reference_levels=(; diagnosis="healthy")
+        @test_throws "The reference level of the categorical predictor diagnosis of probability is \"healthy\", which isn't a value of the column diagnosis. Its values are [\"clinical\", \"control\"]." design_of(
+            CategoricalPredictor(:diagnosis, 2; reference_level="healthy")
         )
-        @test_throws "The reference level of the categorical predictor cell of probability is (diagnosis = \"healthy\", site = 1), which isn't a value of the columns (:diagnosis, :site)." design_of(;
-            categorical_predictors=(; cell=(:diagnosis, :site) => 2),
-            reference_levels=(; cell=(; diagnosis="healthy", site=1)),
+        @test_throws "The reference level of the categorical predictor diagnosis__site of probability is (diagnosis = \"healthy\", site = 1), which isn't a value of the columns (:diagnosis, :site)." design_of(
+            CategoricalPredictor(
+                (:diagnosis, :site), 2; reference_level=(; diagnosis="healthy", site=1)
+            ),
         )
-        #P1 has a clinical session and a control session, so its random intercept is in no one group
-        @test_throws "HierarchicalRegressionSessionParameters groups the random intercepts of probability for participant by (:diagnosis,), but the sessions of P1 are in the groups clinical, control. The sessions of one level of a random intercept must all be in one group." design_of(;
-            random_intercepts=(; participant=RandomIntercept(2; group_by=:diagnosis))
+        #P1 has a clinical session and a control session, so its level of the varying effects is in no one group
+        @test_throws "HierarchicalRegressionSessionParameters groups the varying effects participant of probability by (:diagnosis,), but the sessions of P1 are in the groups clinical, control. The sessions of one level of varying effects must all be in one group." design_of(
+            VaryingEffects(:participant, Intercept(2); group_by=:diagnosis)
         )
-        #The coefficient of a level can't take the name of another term
+        #No session is a control at the second site, so nothing informs the coefficient of that combination
+        no_control_at_site_2 = grouped_sessions(
+            merge(
+                REGRESSION_TABLE,
+                (;
+                    diagnosis=[
+                        "clinical", "clinical", "control", "control", "clinical", "clinical"
+                    ]
+                ),
+            ),
+        )
+        @test_throws "The coefficient diagnosis_control_by_site_2 of the interaction diagnosis_by_site of the regression of probability is multiplied by zero in every session, such as when no session has that combination of levels, so it can't be estimated." design_of(
+            CategoricalPredictor(:diagnosis, 2),
+            CategoricalPredictor(:site, 3),
+            Interaction((:diagnosis, :site), 4);
+            sessions=no_control_at_site_2,
+        )
+        #Each participant has one site, so a varying slope of the site can't be told apart from the varying intercept
+        @test_throws "The varying slope site of the varying effects participant of probability has one value in all the sessions of each level, so it can't be told apart from a varying intercept. A varying slope needs values that differ between the sessions of a level, such as a condition that changes between the blocks of a participant." design_of(
+            VaryingEffects(:participant, Intercept(2), ContinuousPredictor(:site, 3))
+        )
+        #The coefficient of a level can't take the name of another coefficient
         with_clashing_column = grouped_sessions(
             merge(REGRESSION_TABLE, (; diagnosis_control=[1, 1, 2, 2, 3, 4]))
         )
-        @test_throws "The terms of a RegressionParameter must each have a name of their own, but more than one is named diagnosis_control." design_of(
-            with_clashing_column;
-            predictors=(; diagnosis_control=2),
-            categorical_predictors=(; diagnosis=3),
+        @test_throws "The coefficients of the regression of probability must each have a name of their own, but more than one is named diagnosis_control. The coefficient of a level of a categorical predictor is named after the predictor and the level, as in diagnosis_clinical." design_of(
+            ContinuousPredictor(:diagnosis_control, 2),
+            CategoricalPredictor(:diagnosis, 3);
+            sessions=with_clashing_column,
         )
         #Sessions that were given already prepared have no table to read a column from
         without_table = MultipleSessionsInfo(
             sessions_info.sessions, sessions_info.session_ids
         )
         @test_throws "The sessions were given already prepared, without the table they came from, so they have no column age." design_of(
-            without_table; predictors=(; age=2)
+            ContinuousPredictor(:age, 2); sessions=without_table
         )
     end
 
@@ -612,6 +837,10 @@ const REGRESSION_TABLE = merge(
         @test grouped.parameters === hierarchical.parameters
         @test grouped.groups.probability.group_of_each_session == [1, 2, 1, 2]
         @test grouped.groups.scale.n_groups == 1
+        #The priors of the group-level parameters are under the symbol name of each group, and are the priors themselves without groups
+        @test grouped.groups.probability.group_priors ===
+            (; mean=(; clinical=1, control=1), sd=(; clinical=2, control=2))
+        @test grouped.groups.scale.group_priors === (; mean=1, sd=2)
         @test CognitiveModeling.parameter_names(grouped) === (:probability, :scale)
 
         #A model with nothing to prepare is returned as it is, and so is one of one's own

@@ -71,7 +71,12 @@ export AbstractSessionParametersModel,
     HierarchicalParameter,
     HierarchicalRegressionSessionParameters,
     RegressionParameter,
-    RandomIntercept,
+    Intercept,
+    ContinuousPredictor,
+    CategoricalPredictor,
+    Interaction,
+    VaryingEffects,
+    DefaultRegressionPriors,
     CompositeSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions

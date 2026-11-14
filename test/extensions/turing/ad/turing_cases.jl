@@ -298,7 +298,7 @@ const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
         TURING_TABLE,
         (;
             group=repeat(["a", "b", "a"]; inner=10),
-            age=repeat([-1.0, 0.0, 1.0]; inner=10),
+            age=repeat([-1.0, 0.5, 1.0]; inner=10),
             participant=repeat(["P1", "P2", "P1"]; inner=10),
         ),
     );
@@ -308,25 +308,27 @@ const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
 )
 
-# Both parameters from regressions: the learning rate on the age and the group, with random intercepts of the participants and
-# of the sessions, whose standard deviation is one for each group, and the inverse temperature with centered random intercepts
+# Both parameters from regressions: the learning rate on the age, the group and their interaction, with a varying intercept
+# and a varying slope of the age for each participant, and a varying intercept for each session, whose standard deviation
+# is one for each group, and the inverse temperature with centered varying intercepts of the participants
 const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
     HierarchicalRegressionSessionParameters((;
-        learning_rate=RegressionParameter(;
-            intercept=Normal(0, 1),
-            predictors=(; age=Normal(0, 1)),
-            categorical_predictors=(; group=Normal(0, 1)),
-            random_intercepts=(;
-                participant=Exponential(1),
-                session=:id => RandomIntercept(Exponential(1); group_by=:group),
+        learning_rate=RegressionParameter(
+            Intercept(Normal(0, 1)),
+            ContinuousPredictor(:age, Normal(0, 1)),
+            CategoricalPredictor(:group, Normal(0, 1)),
+            Interaction((:age, :group), Normal(0, 1)),
+            VaryingEffects(
+                :participant,
+                Intercept(Exponential(1)),
+                ContinuousPredictor(:age, Exponential(1)),
             ),
+            VaryingEffects(:id, Intercept(Exponential(1)); group_by=:group, name=:session);
             transformation=turing_to_unit_interval,
         ),
-        inverse_temperature=RegressionParameter(;
-            intercept=Normal(0, 1),
-            random_intercepts=(;
-                participant=RandomIntercept(Exponential(1); centered=true)
-            ),
+        inverse_temperature=RegressionParameter(
+            Intercept(Normal(0, 1)),
+            VaryingEffects(:participant, Intercept(Exponential(1)); centered=true);
             transformation=exp,
         ),
     )),
@@ -478,7 +480,27 @@ const TURING_CASES = [
     (;
         name="turing full model with parameters from regressions",
         f=log_density_of(TURING_FULL_MODEL_WITH_REGRESSION),
-        x=[0.2, 0.3, -0.4, 0.8, 0.3, -0.2, 0.6, 1.1, 0.1, -0.3, 0.2, 0.5, 0.7, 0.2, -0.1],
+        x=[
+            0.2,
+            0.3,
+            -0.4,
+            0.1,
+            0.8,
+            0.3,
+            -0.2,
+            0.5,
+            0.4,
+            -0.6,
+            0.6,
+            1.1,
+            0.1,
+            -0.3,
+            0.2,
+            0.5,
+            0.7,
+            0.2,
+            -0.1,
+        ],
         reactant=false,
     ),
 ]

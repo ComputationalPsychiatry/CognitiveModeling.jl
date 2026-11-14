@@ -66,7 +66,7 @@ first session, and with no columns every session is in one group. A session with
 one value, or a missing value, in one of the columns is an error, which starts with
 `reader`, as for [`read_level_of_each_session`](@ref). Used by
 [`prepare_parameters_model`](@ref), for the groups of a
-[`GroupedHierarchicalSessionParameters`](@ref) and for the random intercepts of a
+[`GroupedHierarchicalSessionParameters`](@ref) and for the varying effects of a
 [`HierarchicalRegressionSessionParameters`](@ref).
 """
 function group_sessions(sessions_info::MultipleSessionsInfo, ::Tuple{}, ::String)
