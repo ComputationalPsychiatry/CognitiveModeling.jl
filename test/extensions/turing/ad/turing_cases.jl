@@ -59,6 +59,33 @@ function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithInitia
     )
 end
 
+# Three observations, so that a row of the data has three columns, of which the bonus can be NoValue
+struct TuringThreeObservations <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::TuringThreeObservations, parameters)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.apply_timestep_model(
+    model::TuringThreeObservations, context::ModelContext
+)
+    #The reward updates the expected reward, and the cue and the bonus, when it is given, shift the choice
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
+    bonus = context.input.bonus isa NoValue ? 0.0 : context.input.bonus
+    logit =
+        context.parameters.inverse_temperature * (Vₜ - 0.5) +
+        0.5 * context.input.cue +
+        bonus
+    return ModelOutput((; choice=BernoulliLogit(logit)), (; expected_reward=Vₜ))
+end
+function CognitiveModeling.attribute_names(model::TuringThreeObservations)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        inputs=(:reward, :cue, :bonus),
+        outputs=:choice,
+    )
+end
+
 # A continuous action, so that missing ones can be imputed
 struct TuringContinuousAction <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringContinuousAction, parameters)
@@ -146,6 +173,17 @@ const TURING_CONTINUOUS_CHOICES = (;
 )
 const TURING_REWARDS_NOT_ALWAYS_GIVEN = (;
     reward=[1.0, 0.0, NoValue(), 1.0, 0.0, NoValue(), 0.0, 0.0, NoValue(), 1.0]
+)
+const TURING_THREE_OBSERVATIONS = (;
+    TURING_REWARDS...,
+    cue=[1.0, -1.0, 0.0, 1.0, 1.0, -1.0, 0.0, 1.0, -1.0, 0.0],
+    bonus=[0.2, 0.0, 0.1, 0.3, 0.0, 0.2, 0.1, 0.0, 0.3, 0.1],
+)
+const TURING_THREE_OBSERVATIONS_BONUS_NOT_ALWAYS_GIVEN = (;
+    TURING_THREE_OBSERVATIONS...,
+    bonus=Union{NoValue,Float64}[
+        0.2, NoValue(), 0.1, 0.3, NoValue(), 0.2, 0.1, NoValue(), 0.3, 0.1
+    ],
 )
 const TURING_MISSING_REWARDS = (;
     reward=[
@@ -388,6 +426,14 @@ function rewards_not_always_given_session(who_starts)
         TuringRescorlaWagner(), TURING_REWARDS_NOT_ALWAYS_GIVEN, TURING_CHOICES; who_starts
     )
 end
+function three_observations_session(observations)
+    return SessionInfo(
+        TuringThreeObservations(),
+        observations,
+        TURING_CHOICES;
+        who_starts=EnvironmentStarts(),
+    )
+end
 function imputed_actions_session()
     return SessionInfo(
         TuringContinuousAction(),
@@ -487,6 +533,24 @@ const TURING_CASES = [
         name="turing session with a reward that isn't always given, agent starts",
         f=log_density_of(
             fit_rescorla_wagner(rewards_not_always_given_session(AgentStarts()))
+        ),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="turing session with three observations",
+        f=log_density_of(
+            fit_rescorla_wagner(three_observations_session(TURING_THREE_OBSERVATIONS))
+        ),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="turing session with three observations, of which the third isn't always given",
+        f=log_density_of(
+            fit_rescorla_wagner(
+                three_observations_session(TURING_THREE_OBSERVATIONS_BONUS_NOT_ALWAYS_GIVEN)
+            ),
         ),
         x=[0.3, 2.0],
         reactant=false,

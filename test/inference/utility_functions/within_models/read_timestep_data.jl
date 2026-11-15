@@ -21,6 +21,20 @@
         three_columns = (; reward=[1.0, 0.0], cue=[1, 2], bet=view([0.5, 0.25, 0.75], 2:3))
         @test @inferred(CognitiveModeling.select_row(three_columns, 2)) ===
             (; reward=0.0, cue=2, bet=0.75)
+        five_columns = (; a=[1.0], b=[2], c=[3.0], d=[true], e=view([0.0, 5.0], 2:2))
+        @test @inferred(CognitiveModeling.select_row(five_columns, 1)) ===
+            (; a=1.0, b=2, c=3.0, d=true, e=5.0)
+        #A column that holds two types gives one of two NamedTuples also when it comes after two columns or more, and reading it allocates nothing
+        four_columns = (; reward=[1.0, 0.0], cue=[1, 2], choice=column, bet=[0.5, 0.25])
+        third_of_four(t) = CognitiveModeling.select_row(four_columns, t)
+        @test Base.return_types(third_of_four, Tuple{Int})[1] === Union{
+            NamedTuple{
+                (:reward, :cue, :choice, :bet),Tuple{Float64,Int,MissingValue,Float64}
+            },
+            NamedTuple{(:reward, :cue, :choice, :bet),Tuple{Float64,Int,Float64,Float64}},
+        }
+        @test third_of_four(2) === (; reward=0.0, cue=2, choice=MissingValue(), bet=0.25)
+        @test (@allocated third_of_four(2)) == 0
         #Arguments of types that aren't known give a NamedTuple
         @test all(
             type -> type <: NamedTuple,
@@ -28,17 +42,11 @@
         )
     end
 
-    @testset "has_concrete_element_types is decided from the types of the columns" begin
-        @test CognitiveModeling.has_concrete_element_types(
-            Tuple{Vector{Float64},Vector{Int}}
-        )
-        @test !CognitiveModeling.has_concrete_element_types(
-            Tuple{Vector{Float64},Vector{Union{MissingValue,Float64}}}
-        )
-        @test CognitiveModeling.has_concrete_element_types(Tuple{})
-        @test Base.return_types(
-            CognitiveModeling.has_concrete_element_types, Tuple{Type{<:Tuple}}
-        )[1] === Bool
+    @testset "The values of a row are read as a tuple, one value in front of the next" begin
+        @test CognitiveModeling.read_row_values(([1.0, 0.0], [1, 2]), 2) === (0.0, 2)
+        @test CognitiveModeling.read_row_values((), 1) === ()
+        @test CognitiveModeling.prepend_value(1.0, (2, true)) === (1.0, 2, true)
+        @test CognitiveModeling.prepend_value(MissingValue(), ()) === (MissingValue(),)
     end
 
     @testset "An entry is one of two NamedTuples when its value can have two types" begin
