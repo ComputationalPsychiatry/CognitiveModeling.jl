@@ -2,5 +2,6 @@
 @testset "Extensions" begin
     include("common_rl_interface/runtests.jl")
     include("flexichains/runtests.jl")
+    include("statsmodels/runtests.jl")
     include("tables/runtests.jl")
 end

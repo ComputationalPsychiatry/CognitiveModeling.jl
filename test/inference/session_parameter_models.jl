@@ -202,11 +202,12 @@ const REGRESSION_TABLE = merge(
         @test age.column === :age && age.prior === 2 && age.name === :age
         years = ContinuousPredictor(:age; name=:years)
         @test years.column === :age && years.prior === nothing && years.name === :years
+        #Without a coding, a categorical predictor takes the regression's default coding
         diagnosis = CategoricalPredictor(:diagnosis, 3)
         @test diagnosis.columns === (:diagnosis,) &&
             diagnosis.prior === 3 &&
             diagnosis.reference_level === nothing &&
-            diagnosis.coding === :dummy &&
+            diagnosis.coding === nothing &&
             diagnosis.name === :diagnosis
         @test CategoricalPredictor(:diagnosis, 3; coding=:full_dummy).coding === :full_dummy
         #Several columns give a name like the symbol name of a session, and an interaction is named after its predictors
@@ -243,10 +244,10 @@ const REGRESSION_TABLE = merge(
         @test by_session.columns === (:id, :block) &&
             by_session.name === :id__block &&
             by_session.group_by === () &&
-            by_session.centered === false
+            by_session.centered === nothing
         @test VaryingEffects(:id, Intercept(5); name=:session).name === :session
         @test VaryingEffects(:id, Intercept()).terms.intercept.prior === nothing
-        #A regression keeps its terms under their names, and gives those without a prior the default prior of their kind
+        #A regression keeps its terms under their names, and gives those without a prior the default prior of their kind, and those without settings the default settings
         regression_parameter = RegressionParameter(
             Intercept(),
             years,
@@ -263,10 +264,13 @@ const REGRESSION_TABLE = merge(
             (:intercept, :years, :diagnosis, :years_by_diagnosis, :participant)
         @test terms.intercept === Intercept(7)
         @test terms.years === ContinuousPredictor(:age, 8; name=:years)
-        @test terms.diagnosis === diagnosis && terms.years_by_diagnosis.prior === 9
+        @test terms.diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:dummy) &&
+            terms.years_by_diagnosis.prior === 9
         @test terms.participant === by_participant
-        @test regression_parameter.transformation === exp
+        @test regression_parameter.transformation === exp &&
+            regression_parameter.name === nothing
         @test RegressionParameter(Intercept(1)).transformation === identity
+        @test RegressionParameter(Intercept(1); name=:probability).name === :probability
         #The terms of varying effects without a prior get the default prior of the standard deviation of their kind, and keep their settings
         with_varying_defaults = RegressionParameter(
             VaryingEffects(
@@ -307,6 +311,59 @@ const REGRESSION_TABLE = merge(
         @test regression.parameters === parameters && regression.designs === nothing
         @test CognitiveModeling.parameter_names(regression) === (:probability, :scale)
         @test CognitiveModeling.estimates_parameters(regression)
+    end
+
+    @testset "DefaultRegressionSettings give the terms without them a coding and a choice of centering, and a term's own settings win" begin
+        #The defaults are dummy coding and standardized deviations, as without DefaultRegressionSettings
+        defaults = DefaultRegressionSettings()
+        @test defaults.coding === :dummy && defaults.centered === false
+        without_settings = RegressionParameter(
+            CategoricalPredictor(:diagnosis, 1),
+            VaryingEffects(:participant, Intercept(2), CategoricalPredictor(:condition, 3)),
+        )
+        @test without_settings.terms.diagnosis.coding === :dummy &&
+            without_settings.terms.participant.centered === false &&
+            without_settings.terms.participant.terms.condition.coding === :dummy
+        #Others are given to every term without them, also within varying effects
+        settings = DefaultRegressionSettings(; coding=:effects, centered=true)
+        with_settings = RegressionParameter(
+            CategoricalPredictor(:diagnosis, 1),
+            CategoricalPredictor(:site, 1; coding=:dummy),
+            VaryingEffects(:participant, Intercept(2), CategoricalPredictor(:condition, 3)),
+            VaryingEffects(:id, Intercept(2); centered=false);
+            default_settings=settings,
+        )
+        terms = with_settings.terms
+        @test terms.diagnosis.coding === :effects && terms.site.coding === :dummy
+        @test terms.participant.centered === true &&
+            terms.participant.terms.condition.coding === :effects
+        @test terms.id.centered === false
+        #The coding without a reference level can be the default, and a predictor with a reference level then needs a coding of its own
+        @test RegressionParameter(
+            CategoricalPredictor(:diagnosis, 1);
+            default_settings=DefaultRegressionSettings(; coding=:full_dummy),
+        ).terms.diagnosis.coding === :full_dummy
+        @test_throws "The categorical predictor diagnosis has the reference level \"control\", but it takes the coding :full_dummy from the DefaultRegressionSettings, which has a coefficient for every level and no reference level. Give the predictor a coding of its own, such as coding = :dummy." RegressionParameter(
+            CategoricalPredictor(:diagnosis, 1; reference_level="control");
+            default_settings=DefaultRegressionSettings(; coding=:full_dummy),
+        )
+        @test RegressionParameter(
+            CategoricalPredictor(:diagnosis, 1; reference_level="control", coding=:dummy);
+            default_settings=DefaultRegressionSettings(; coding=:full_dummy),
+        ).terms.diagnosis.coding === :dummy
+        #The coding is checked
+        @test_throws "The coding of a DefaultRegressionSettings is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :sum_to_zero." DefaultRegressionSettings(;
+            coding=:sum_to_zero
+        )
+    end
+
+    @testset "A regression with a name must be given for the parameter of that name" begin
+        named = RegressionParameter(Intercept(1); name=:probability)
+        @test HierarchicalRegressionSessionParameters((; probability=named)).parameters.probability ===
+            named
+        @test_throws "HierarchicalRegressionSessionParameters was given the regression of probability for the parameter scale. The name of a RegressionParameter, which the left-hand side of its formula gives, must be the name it is given under." HierarchicalRegressionSessionParameters((;
+            scale=named
+        ))
     end
 
     @testset "The terms of a regression are checked" begin

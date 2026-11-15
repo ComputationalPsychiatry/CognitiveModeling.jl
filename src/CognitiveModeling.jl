@@ -77,6 +77,7 @@ export AbstractSessionParametersModel,
     Interaction,
     VaryingEffects,
     DefaultRegressionPriors,
+    DefaultRegressionSettings,
     CompositeSessionParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions

@@ -79,7 +79,7 @@ function ContinuousPredictor(columns, prior=nothing; keyword_arguments...)
 end
 
 """
-    CategoricalPredictor(columns, prior=nothing; reference_level=nothing, coding=:dummy,
+    CategoricalPredictor(columns, prior=nothing; reference_level=nothing, coding=nothing,
                          name)
 
 A categorical predictor of a [`RegressionParameter`](@ref): a coefficient for each level
@@ -96,7 +96,10 @@ deviations.
 - `reference_level=nothing`: the reference level, such as `"control"`, or a `NamedTuple` of
   values for several columns, such as `(; diagnosis = "control", site = 1)`. With `nothing`,
   it is the level of the first session. The coding `:full_dummy` has no reference level.
-- `coding=:dummy`: how the coefficients are coded. With `:dummy`, each is the difference
+- `coding=nothing`: how the coefficients are coded, `:dummy`, `:effects` or `:full_dummy`,
+  or with `nothing` the regression's default coding, from its
+  [`DefaultRegressionSettings`](@ref), which is `:dummy` unless another is given. With
+  `:dummy`, each is the difference
   between a level and the reference level, such as the difference between a clinical and a
   non-clinical group. With `:effects`, each is the difference between a level and the mean
   of the levels, and the difference of the reference level is minus the sum of the others,
@@ -127,26 +130,20 @@ struct CategoricalPredictor{Tcolumns<:Tuple{Vararg{Symbol}},Tprior,Treference_le
     columns::Tcolumns
     prior::Tprior
     reference_level::Treference_level
-    coding::Symbol
+    coding::Union{Nothing,Symbol}
     name::Symbol
 
-    #Takes one column or several, the prior and the settings, checks the coding, and is named after the columns unless another name is given
+    #Takes one column or several, the prior and the settings, checks the coding when it is given, and is named after the columns unless another name is given
     function CategoricalPredictor(
         columns,
         prior=nothing;
         reference_level=nothing,
-        coding::Symbol=:dummy,
+        coding::Union{Nothing,Symbol}=nothing,
         name::Union{Nothing,Symbol}=nothing,
     )
         columns_tuple = as_tuple(columns)::Tuple{Vararg{Symbol}}
         check_has_columns(columns_tuple, "A CategoricalPredictor")
-        if !(coding in (:dummy, :effects, :full_dummy))
-            throw(
-                ArgumentError(
-                    "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given $(repr(coding)).",
-                ),
-            )
-        end
+        coding === nothing || check_coding(coding, "a CategoricalPredictor")
 
         #With a coefficient for every level, there is no reference level
         if coding === :full_dummy && reference_level !== nothing
@@ -161,6 +158,23 @@ struct CategoricalPredictor{Tcolumns<:Tuple{Vararg{Symbol}},Tprior,Treference_le
             columns_tuple, prior, reference_level, coding, predictor_name
         )
     end
+end
+
+"""
+    check_coding(coding, description)
+
+Throw an informative error if `coding`, the coding of the levels of a categorical predictor
+given to `description`, such as `"a CategoricalPredictor"`, isn't `:dummy`, `:effects` or
+`:full_dummy`. Used by the constructors of [`CategoricalPredictor`](@ref) and
+[`DefaultRegressionSettings`](@ref).
+"""
+function check_coding(coding::Symbol, description::String)
+    coding in (:dummy, :effects, :full_dummy) && return nothing
+    return throw(
+        ArgumentError(
+            "The coding of $description is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given $(repr(coding)).",
+        ),
+    )
 end
 
 """
@@ -212,7 +226,7 @@ struct Interaction{Tterms<:Tuple{Vararg{Symbol}},Tprior} <: AbstractRegressionTe
 end
 
 """
-    VaryingEffects(columns, terms...; group_by=nothing, centered=false, name)
+    VaryingEffects(columns, terms...; group_by=nothing, centered=nothing, name)
 
 Effects of a [`RegressionParameter`](@ref) that vary between the levels of `columns`, such
 as between participants: for each level, a deviation of each coefficient of its `terms`,
@@ -234,10 +248,11 @@ multiplies predictors of the same varying effects.
   its own, such as `:diagnosis` for a clinical and a non-clinical group of participants. The
   sessions of one level must all be in one group. With `nothing`, the levels share one
   standard deviation.
-- `centered=false`: whether each deviation is sampled from the normal distribution
+- `centered=nothing`: whether each deviation is sampled from the normal distribution
   directly, with `true`, or as a standardized value which the standard deviation scales,
-  with `false`. The standardized form usually samples better when the data informs each
-  deviation little.
+  with `false`, or with `nothing` as the regression's [`DefaultRegressionSettings`](@ref)
+  say, which is `false` unless they say otherwise. The standardized form usually samples
+  better when the data informs each deviation little.
 - `name`: the name of the varying effects, which their variables are named under: the name
   of their column, or the names of their columns joined by two underscores, as in
   `id__block`.
@@ -265,7 +280,7 @@ struct VaryingEffects{
     columns::Tcolumns
     terms::Tterms
     group_by::Tgroup_by
-    centered::Bool
+    centered::Union{Nothing,Bool}
     name::Symbol
 
     #Checks its terms, which take the priors of their standard deviations, keeps them under their names, and is named after its columns unless another name is given
@@ -273,7 +288,7 @@ struct VaryingEffects{
         columns,
         terms...;
         group_by=nothing,
-        centered::Bool=false,
+        centered::Union{Nothing,Bool}=nothing,
         name::Union{Nothing,Symbol}=nothing,
     )
         columns_tuple = as_tuple(columns)::Tuple{Vararg{Symbol}}
@@ -378,8 +393,45 @@ struct DefaultRegressionPriors{
 end
 
 """
+    DefaultRegressionSettings(; coding=:dummy, centered=false)
+
+The settings that a [`RegressionParameter`](@ref) gives to the terms that are given without
+them: `coding`, the coding of the levels of a [`CategoricalPredictor`](@ref), which is
+`:dummy`, `:effects` or `:full_dummy`, and `centered`, whether the deviations of
+[`VaryingEffects`](@ref) are sampled from their normal distribution directly. A term's own
+setting is used when it has one. Each setting is kept in a field of the same name.
+
+# Examples
+```jldoctest
+julia> using Distributions: Normal, Exponential
+
+julia> default_settings = DefaultRegressionSettings(; coding = :effects, centered = true);
+
+julia> learning_rate = RegressionParameter(Intercept(Normal(0, 1)), CategoricalPredictor(:diagnosis, Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1))); default_settings);
+
+julia> learning_rate.terms.diagnosis.coding, learning_rate.terms.participant.centered
+(:effects, true)
+```
+"""
+struct DefaultRegressionSettings
+    coding::Symbol
+    centered::Bool
+
+    #Takes the coding of categorical predictors and whether varying effects are centered, and checks the coding
+    function DefaultRegressionSettings(; coding::Symbol=:dummy, centered::Bool=false)
+        check_coding(coding, "a DefaultRegressionSettings")
+        return new(coding, centered)
+    end
+end
+
+"""
     RegressionParameter(terms...; transformation=identity,
-                        default_priors=DefaultRegressionPriors())
+                        default_priors=DefaultRegressionPriors(),
+                        default_settings=DefaultRegressionSettings(), name=nothing)
+    RegressionParameter(formula, terms...; contrasts=Dict{Symbol,Any}(), priors=(;),
+                        transformation=identity,
+                        default_priors=DefaultRegressionPriors(),
+                        default_settings=DefaultRegressionSettings())
 
 How one parameter of a [`HierarchicalRegressionSessionParameters`](@ref) is given to every
 session: by a regression on columns of the table that the sessions were split from, whose
@@ -389,7 +441,7 @@ value of a session is the sum of each coefficient of the intercept, the predicto
 interactions times its value in the session, and of the deviations of the session's levels
 of the varying effects, each times its value in the session, with `transformation` applied
 to the sum. Each session must have one value of every column that is used, which isn't
-missing.
+missing. The second form writes the terms as a formula, see below.
 
 Every term has a name of its own, which its coefficients or its variables are named after.
 A term is named after its column or columns, and an interaction after its predictors, unless
@@ -406,10 +458,38 @@ one of the two can be estimated.
   inverse link function does in a regression.
 - `default_priors=DefaultRegressionPriors()`: the priors of the terms that are given
   without one, by their kind, as a [`DefaultRegressionPriors`](@ref).
+- `default_settings=DefaultRegressionSettings()`: the coding of the categorical predictors
+  and whether varying effects are centered, for the terms that are given without them, as a
+  [`DefaultRegressionSettings`](@ref).
+- `name=nothing`: the name of the parameter, which a
+  [`HierarchicalRegressionSessionParameters`](@ref) checks against the name the regression
+  is given under, or `nothing` for no check. A formula gives it.
 
 The terms are kept in the field `terms`, as a `NamedTuple` with each term under its name,
-those without a prior with the one from `default_priors`, and the transformation in a field
-of the same name.
+those without a prior with the one from `default_priors`, and those without a coding or a
+choice of centering with the ones from `default_settings`, and the transformation and the
+name in fields of the same name.
+
+# Formulas
+With StatsModels.jl loaded, the terms can be written as a `@formula`, in the syntax of
+MixedModels.jl, such as
+`@formula(learning_rate ~ 1 + age + diagnosis + (1 + condition | participant))`. Its
+left-hand side is the name of the parameter. An intercept is included unless the formula has
+`0 +`, and the same holds within varying effects. A column is a `ContinuousPredictor`, or a
+`CategoricalPredictor` when `contrasts`, a `Dict` from the names of columns to codings,
+gives it one: `DummyCoding()`, `EffectsCoding()` or `StatsModels.FullDummyCoding()`, whose
+`base` is the reference level, or `CategoricalTerm` for the coding of `default_settings`.
+Without a `base`, the reference level is the level of the first session, where
+StatsModels.jl takes the first level in sorted order. Columns joined by `&` are an
+`Interaction`, and `a * b` gives `a`, `b` and their interaction. `(terms | columns)` are
+`VaryingEffects` over `columns`, or over the combinations of the values of several columns
+joined by `&`, as in `(1 | participant & block)`, and their deviations are independent,
+where MixedModels.jl correlates those within one bar. Each term is named as the term of its
+kind is named, and `priors` gives the priors of terms by those names, such as
+`(; age = Normal(0, 0.05), participant = (; intercept = Exponential(0.5)))`, with a
+`NamedTuple` for the terms of varying effects, while the other terms have the default
+priors. Terms that a formula can't express, such as `VaryingEffects` with `group_by`, are
+given after the formula.
 
 # Examples
 ```jldoctest
@@ -422,16 +502,33 @@ julia> learning_rate = RegressionParameter(Intercept(), ContinuousPredictor(:age
 julia> keys(learning_rate.terms)
 (:intercept, :age, :diagnosis, :age_by_diagnosis, :participant)
 ```
+
+A regression written as a formula, with varying intercepts of the participants whose
+standard deviations differ between diagnoses, which a formula can't express, after it:
+```julia
+using StatsModels
+
+learning_rate = RegressionParameter(
+    @formula(learning_rate ~ 1 + age + diagnosis + age & diagnosis),
+    VaryingEffects(:participant, Intercept(); group_by = :diagnosis);
+    contrasts = Dict(:diagnosis => DummyCoding(; base = "control")),
+    priors = (; age = Normal(0, 0.05)),
+    default_priors,
+)
+```
 """
 struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
     terms::Tterms
     transformation::Ttransformation
+    name::Union{Nothing,Symbol}
 
-    #Gives the default priors to the terms without a prior, checks the terms and keeps them under their names
+    #Gives the default priors and settings to the terms without them, checks the terms and keeps them under their names
     function RegressionParameter(
         terms...;
         transformation=identity,
         default_priors::DefaultRegressionPriors=DefaultRegressionPriors(),
+        default_settings::DefaultRegressionSettings=DefaultRegressionSettings(),
+        name::Union{Nothing,Symbol}=nothing,
     )
 
         #A regression needs terms
@@ -443,10 +540,15 @@ struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
             )
         end
 
-        #The terms without a prior take the default prior of their kind, and every coefficient needs a prior
+        #The terms without a prior take the default prior of their kind, and those without a coding or a choice of centering the default ones
         terms_with_priors = map(term -> with_default_prior(term, default_priors), terms)
-        terms_by_name = collect_terms_by_name(terms_with_priors, "a RegressionParameter")
-        foreach(check_has_prior, terms_with_priors)
+        terms_with_settings = map(
+            term -> with_default_settings(term, default_settings), terms_with_priors
+        )
+
+        #Every term needs a name of its own, and every coefficient a prior
+        terms_by_name = collect_terms_by_name(terms_with_settings, "a RegressionParameter")
+        foreach(check_has_prior, terms_with_settings)
 
         #The coefficients are named coef under the parameter's name, so varying effects can't take that name
         if haskey(terms_by_name, :coef) && terms_by_name.coef isa VaryingEffects
@@ -457,7 +559,7 @@ struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
             )
         end
         return new{typeof(terms_by_name),typeof(transformation)}(
-            terms_by_name, transformation
+            terms_by_name, transformation, name
         )
     end
 end
@@ -571,10 +673,21 @@ end
     check_is_regression_parameter(name, regression_parameter)
 
 Throw an informative error if what a [`HierarchicalRegressionSessionParameters`](@ref) was
-given for the parameter `name` isn't a [`RegressionParameter`](@ref). Used by the
-constructor of `HierarchicalRegressionSessionParameters`.
+given for the parameter `name` isn't a [`RegressionParameter`](@ref), or is one named after
+another parameter, as by the left-hand side of its formula. Used by the constructor of
+`HierarchicalRegressionSessionParameters`.
 """
-check_is_regression_parameter(name::Symbol, ::RegressionParameter) = nothing
+function check_is_regression_parameter(
+    name::Symbol, regression_parameter::RegressionParameter
+)
+    regression_parameter.name === nothing && return nothing
+    regression_parameter.name === name && return nothing
+    return throw(
+        ArgumentError(
+            "HierarchicalRegressionSessionParameters was given the regression of $(regression_parameter.name) for the parameter $name. The name of a RegressionParameter, which the left-hand side of its formula gives, must be the name it is given under.",
+        ),
+    )
+end
 function check_is_regression_parameter(name::Symbol, regression_parameter)
     return throw(
         ArgumentError(
@@ -639,6 +752,54 @@ function with_default_prior(
         terms...;
         group_by=varying_effects.group_by,
         centered=varying_effects.centered,
+        name=varying_effects.name,
+    )
+end
+
+"""
+    with_default_settings(term, default_settings)
+
+Return `term`, a term given to a [`RegressionParameter`](@ref), with the settings in
+`default_settings`, a [`DefaultRegressionSettings`](@ref), that it was given without: the
+coding of a [`CategoricalPredictor`](@ref), and for [`VaryingEffects`](@ref) whether they
+are centered and the coding of their categorical predictors. A term's own settings are
+kept, and anything else is returned as it is. A reference level is an error when the
+default coding is `:full_dummy`, which has none. Used by the constructor of
+`RegressionParameter`.
+"""
+with_default_settings(term, ::DefaultRegressionSettings) = term
+function with_default_settings(
+    predictor::CategoricalPredictor, default_settings::DefaultRegressionSettings
+)
+    predictor.coding === nothing || return predictor
+
+    #The coding with a coefficient for every level has no reference level
+    if default_settings.coding === :full_dummy && predictor.reference_level !== nothing
+        throw(
+            ArgumentError(
+                "The categorical predictor $(predictor.name) has the reference level $(repr(predictor.reference_level)), but it takes the coding :full_dummy from the DefaultRegressionSettings, which has a coefficient for every level and no reference level. Give the predictor a coding of its own, such as coding = :dummy.",
+            ),
+        )
+    end
+    return CategoricalPredictor(
+        predictor.columns,
+        predictor.prior;
+        reference_level=predictor.reference_level,
+        coding=default_settings.coding,
+        name=predictor.name,
+    )
+end
+function with_default_settings(
+    varying_effects::VaryingEffects, default_settings::DefaultRegressionSettings
+)
+    terms = map(
+        term -> with_default_settings(term, default_settings), values(varying_effects.terms)
+    )
+    return VaryingEffects(
+        varying_effects.columns,
+        terms...;
+        group_by=varying_effects.group_by,
+        centered=something(varying_effects.centered, default_settings.centered),
         name=varying_effects.name,
     )
 end
