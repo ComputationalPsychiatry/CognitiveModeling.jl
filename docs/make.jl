@@ -39,6 +39,7 @@ makedocs(;
         "Home" => "index.md",
         "Tutorials" => [
             "generated/getting_started.md",
+            "generated/custom_turing_models.md",
             "generated/cognitive_abm_with_agents.md",
             "generated/interfacing_with_common_rl.md",
             "generated/interfacing_with_reinforcement_learning.md",
