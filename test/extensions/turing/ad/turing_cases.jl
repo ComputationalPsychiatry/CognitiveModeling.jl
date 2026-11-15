@@ -33,6 +33,32 @@ function CognitiveModeling.attribute_names(model::TuringRescorlaWagner)
     )
 end
 
+# The same model with the expected reward it starts from as a third parameter
+struct TuringRescorlaWagnerWithInitialValue <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::TuringRescorlaWagnerWithInitialValue, parameters
+)
+    return (; expected_reward=parameters.initial_value)
+end
+function CognitiveModeling.apply_timestep_model(
+    model::TuringRescorlaWagnerWithInitialValue, context::ModelContext
+)
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
+    return ModelOutput(
+        (; choice=BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))),
+        (; expected_reward=Vₜ),
+    )
+end
+function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithInitialValue)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature, :initial_value),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end
+
 # A continuous action, so that missing ones can be imputed
 struct TuringContinuousAction <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringContinuousAction, parameters)
@@ -232,6 +258,24 @@ const TURING_FULL_MODEL = turing_full_model(
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
     TURING_SESSIONS,
+)
+
+# The same sessions with the model of three parameters. Each session's parameters are read from a NamedTuple with a vector for
+# each parameter, and from three on, Enzyme stopped the process on a row read with a recursive merge, which select_row avoids
+const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
+    IndependentSessionParameters((;
+        learning_rate=Turing.Flat(),
+        inverse_temperature=Turing.Flat(),
+        initial_value=Turing.Flat(),
+    )),
+    MultipleSessionsInfo(
+        TuringRescorlaWagnerWithInitialValue(),
+        TURING_TABLE;
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
 )
 
 # The same sessions with an environment whose parameter is sampled once for all of them, so that every session scores its rewards
@@ -457,6 +501,12 @@ const TURING_CASES = [
         name="turing full model with three sessions and independent priors",
         f=log_density_of(TURING_FULL_MODEL),
         x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with three parameters",
+        f=log_density_of(TURING_FULL_MODEL_WITH_THREE_PARAMETERS),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.4, 0.5, 0.6],
         reactant=false,
     ),
     (;

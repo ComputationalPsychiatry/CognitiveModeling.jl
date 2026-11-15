@@ -16,8 +16,8 @@ starting, with imputed actions, with an environment filling in observations, wit
 environment which doesn't run because nothing in the data is missing, with observations
 imputed from an environment's distributions, with a reward that isn't given on every
 timestep, and with a model which samples within each timestep, and of the full model of
-several sessions, also with an environment parameter shared by the sessions, and with
-parameters from the distributions of groups and from regressions. That keeps the
+several sessions, also with three parameters, with an environment parameter shared by the
+sessions, and with parameters from the distributions of groups and from regressions. That keeps the
 package's own code tested without Turing.jl, since the backends work without it and with
 other probabilistic programming languages. Every gradient is compared with finite
 differences. Zygote isn't supported, because the package uses for loops.
@@ -46,14 +46,17 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, Revers
 | Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoValue` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reported as Enzyme.jl issue 4032; with a single timestep size, or `save_initial_timestep_values = false`, the sizes are right |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
 | Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session whose observations are `NoValue` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine |
+| Enzyme forward, with and without runtime activity | a Turing.jl session whose data has three observation columns or more | stops the Julia process with runtime activity, in Enzyme's type analysis ("illegal insertion" at `TypeTree.h:364`), and throws an `EnzymeRuntimeActivityError` without it | to be reported; Enzyme reverse is right |
 
-A state which depends on the parameters from the start isn't affected, and neither is
-`simulate!` on single observations. A simulation where an observation isn't made on every
-timestep is right on every backend when the observations aren't saved, and on Enzyme's
-forward mode when they are. The other forms of
-Enzyme, and the other backends, are right on all of these cases. ForwardDiff, ReverseDiff
-and Mooncake are right on every Turing.jl case, and so are both forms of Enzyme with runtime
-activity on a session where every column of the data has one type.
+A failure that stops the Julia process can't be marked broken, since the suite would stop
+with it, so it has no test. A state which depends on the parameters from the start isn't
+affected, and neither is `simulate!` on single observations. A simulation where an
+observation isn't made on every timestep is right on every backend when the observations
+aren't saved, and on Enzyme's forward mode when they are. The other forms of Enzyme, and the
+other backends, are right on all of these cases. ForwardDiff, ReverseDiff and Mooncake are
+right on every Turing.jl case, and so are both forms of Enzyme with runtime activity on a
+session where every column of the data has one type, but for Enzyme forward with three
+observation columns or more.
 
 ## Pitfalls
 

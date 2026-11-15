@@ -14,18 +14,44 @@ build_named_entry(::Val{name}, value) where {name} = NamedTuple{(name,)}((value,
     select_row(columns, t)
 
 Return the `NamedTuple` of the values at timestep `t` of `columns`, a `NamedTuple` of
-vectors with one entry for each timestep, built with [`build_named_entry`](@ref) so that a
-column which holds two types, such as an action that is [`MissingValue`](@ref) on some
-timesteps, gives one of two `NamedTuple`s with concrete fields rather than one without a
-definite type. Used by the timesteps of fitted sessions, and by the models of several
-sessions, which read the parameters of one session with it.
+vectors with one entry for each timestep. When the values of every column have one concrete
+type, as [`has_concrete_element_types`](@ref) decides, it is read with `map`. Otherwise it
+is built with [`build_named_entry`](@ref) so that a column which holds two types, such as
+an action that is [`MissingValue`](@ref) on some timesteps, gives one of two `NamedTuple`s
+with concrete fields rather than one without a definite type. Used by the timesteps of
+fitted sessions, and by the models of several sessions, which read the parameters of one
+session with it.
 """
 select_row(columns::NamedTuple{()}, t) = (;)
-function select_row(columns::NamedTuple{names}, t) where {names}
+function select_row(columns::NamedTuple{names,Tcolumns}, t) where {names,Tcolumns}
+
+    #Columns whose values have one concrete type give the same NamedTuple with map. The recursive merge below isn't inferred with three columns or more, so that every read allocates, and Enzyme can't differentiate it inside the sessions of a Turing.jl model, where it aborts the process, so it is kept for columns which hold two types, which need it
+    if has_concrete_element_types(Tcolumns)
+        return NamedTuple{names}(map(column -> column[t], Tuple(columns)))
+    end
     return merge(
         build_named_entry(Val(first(names)), first(columns)[t]),
         select_row(Base.tail(columns), t),
     )
+end
+
+"""
+    has_concrete_element_types(column_types)
+
+Return whether the values of every column in `column_types`, the type of a tuple of
+vectors, have one concrete type, which is decided from the types alone, when the code is
+compiled. Used by [`select_row`](@ref).
+"""
+function has_concrete_element_types end
+
+#Marked as foldable so that the compiler computes it from the types, instead of looping over them on every call
+Base.@assume_effects :foldable function has_concrete_element_types(
+    column_types::Type{<:Tuple}
+)
+    for column_type in fieldtypes(column_types)
+        isconcretetype(eltype(column_type)) || return false
+    end
+    return true
 end
 
 """

@@ -17,6 +17,28 @@
         }
         #Written out, such a NamedTuple has no definite type
         @test !isconcretetype(Base.return_types(t -> (; choice=column[t]), Tuple{Int})[1])
+        #Three columns of one type each, also views such as DynamicPPL gives the parameters as, give a NamedTuple of a definite type
+        three_columns = (; reward=[1.0, 0.0], cue=[1, 2], bet=view([0.5, 0.25, 0.75], 2:3))
+        @test @inferred(CognitiveModeling.select_row(three_columns, 2)) ===
+            (; reward=0.0, cue=2, bet=0.75)
+        #Arguments of types that aren't known give a NamedTuple
+        @test all(
+            type -> type <: NamedTuple,
+            Base.return_types(CognitiveModeling.select_row, Tuple{Any,Any}),
+        )
+    end
+
+    @testset "has_concrete_element_types is decided from the types of the columns" begin
+        @test CognitiveModeling.has_concrete_element_types(
+            Tuple{Vector{Float64},Vector{Int}}
+        )
+        @test !CognitiveModeling.has_concrete_element_types(
+            Tuple{Vector{Float64},Vector{Union{MissingValue,Float64}}}
+        )
+        @test CognitiveModeling.has_concrete_element_types(Tuple{})
+        @test Base.return_types(
+            CognitiveModeling.has_concrete_element_types, Tuple{Type{<:Tuple}}
+        )[1] === Bool
     end
 
     @testset "An entry is one of two NamedTuples when its value can have two types" begin
