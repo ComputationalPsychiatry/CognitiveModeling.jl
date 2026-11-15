@@ -52,7 +52,7 @@ Automatic differentiation of the Turing.jl extension is tested in another enviro
 julia --project=test/extensions/turing/ad -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/ad/runtests.jl")'
 ```
 
-The two tutorials that the documentation shows without running are run by tests of their own, each in an environment with the packages it uses:
+The tutorials that the documentation shows without running are run by tests of their own, each in an environment with the packages it uses:
 
 ```bash
 julia --project=test/tutorials/reinforcement_learning -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/reinforcement_learning/runtests.jl")'
@@ -60,6 +60,10 @@ julia --project=test/tutorials/reinforcement_learning -e 'using Pkg; Pkg.instant
 
 ```bash
 julia --project=test/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/pomdps/runtests.jl")'
+```
+
+```bash
+julia --project=test/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/juliacontrol/runtests.jl")'
 ```
 
 Build the documentation:
