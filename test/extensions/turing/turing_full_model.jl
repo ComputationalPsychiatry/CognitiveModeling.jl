@@ -132,8 +132,12 @@ end
         @test logjoint(model, (;)) ≈
             sessions_by_hand(FULL_TABLE, learning_rates, inverse_temperatures)
         @test isempty(keys(rand(Xoshiro(1), model)))
-        #It returns what each session returns, in order
-        saved = returned(model, (;))
+        #It returns the parameters it was given, and what each session saved, in order
+        result = returned(model, (;))
+        @test result.cognitive_parameters ==
+              (; learning_rate=learning_rates, inverse_temperature=inverse_temperatures) &&
+            result.environment_parameters == (;)
+        saved = result.saved_behavioral_trajectories
         @test saved isa Vector && length(saved) == 3
         @test [length(session.states) for session in saved] == [4, 3, 5]
         @test saved[2].states[2].expected_reward ≈ 0.5 + 0.3 * (0.0 - 0.5)
@@ -181,7 +185,7 @@ end
             sessions_info,
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0]),
         )
-        saved = returned(model, (;))
+        saved = returned(model, (;)).saved_behavioral_trajectories
         @test saved[1].actions == [
             (; choice=BeforeFirstTimestep()),
             (; choice=true),
@@ -219,19 +223,24 @@ end
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         parameters = (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
-        saved = returned(
+        result = returned(
             turing_multiple_behavioral_sessions(
                 sessions_info, parameters, (; scale=[2.0, 1.0, 3.0])
             ),
             (;),
         )
         #RewardsPreviousChoice gives the previous choice scaled, so the second reward of S1 is 2.0 after a choice of true, and S3's is 3.0
+        saved = result.saved_behavioral_trajectories
         @test saved[1].observations[3] == (; reward=2.0) &&
             saved[3].observations[3] == (; reward=3.0)
-        #Without environment parameters, its defaults are used
-        @test returned(
+        #The environment parameters are returned as they were given
+        @test result.environment_parameters == (; scale=[2.0, 1.0, 3.0])
+        #Without environment parameters, its defaults are used, and none are returned
+        result = returned(
             turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
-        )[1].observations[3] == (; reward=1.0)
+        )
+        @test result.saved_behavioral_trajectories[1].observations[3] == (; reward=1.0) &&
+            result.environment_parameters == (;)
         @test_throws "Environment parameters were given, (scale = [2.0, 2.0, 2.0],), but the session has no environment." logjoint(
             turing_multiple_behavioral_sessions(
                 sessions_for_test(; impute_missing_actions=false),
@@ -849,7 +858,8 @@ end
         )
         threadsafe = Turing.DynamicPPL.setthreadsafe(in_parallel, true)
         @test logjoint(threadsafe, (;)) ≈ logjoint(in_sequence, (;))
-        @test returned(threadsafe, (;))[2].states == returned(in_sequence, (;))[2].states
+        @test returned(threadsafe, (;)).saved_behavioral_trajectories[2].states ==
+            returned(in_sequence, (;)).saved_behavioral_trajectories[2].states
         #Sessions whose saved trajectories have different types give what they give in sequence, since S3 saves UnimputedMissingValue() for its missing choice
         saving_actions = sessions_for_test(;
             impute_missing_actions=false,

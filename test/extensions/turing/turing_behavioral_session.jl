@@ -442,7 +442,7 @@ end
             @test loglikelihood(model, (;)) ≈ expected
             #There are no latents, and what is returned is what happened, after timestep 0 with where the session started
             @test isempty(keys(rand(Xoshiro(1), model)))
-            history = returned(model, (;))
+            history = returned(model, (;)).saved_behavioral_trajectories
             @test [state.expected_reward for state in history.states] ≈ [0.5; states]
             @test history.actions == [
                 (; choice=BeforeFirstTimestep()),
@@ -517,7 +517,8 @@ end
                 who_starts,
                 cognitive_save_history=SaveHistory(; states=:who_starts),
             )
-            @test returned(model, (;)).states[end] === (; who_starts)
+            @test returned(model, (;)).saved_behavioral_trajectories.states[end] ===
+                (; who_starts)
         end
     end
 
@@ -534,8 +535,10 @@ end
         _, states = session_by_hand(
             SESSION_REWARDS.reward, SESSION_CHOICES.choice, 0.3, 2.0, EnvironmentStarts()
         )
-        @test returned(model, (;)).states[1] == (; expected_reward=0.2)
-        @test returned(model, (;)).states[2].expected_reward ≈ 0.2 + 0.3 * (1.0 - 0.2)
+        @test returned(model, (;)).saved_behavioral_trajectories.states[1] ==
+            (; expected_reward=0.2)
+        @test returned(model, (;)).saved_behavioral_trajectories.states[2].expected_reward ≈
+            0.2 + 0.3 * (1.0 - 0.2)
         #A model which samples its start in turing_initialize_state has the variable under initial_cognitive_state
         model = session_for_test(
             SamplesItsStart(),
@@ -547,7 +550,8 @@ end
         @test collect(keys(rand(Xoshiro(1), model))) ==
             [@varname(initial_cognitive_state.start_noise)]
         given = (; initial_cognitive_state=(; start_noise=0.1))
-        @test returned(model, given).states[1] == (; expected_reward=0.6)
+        @test returned(model, given).saved_behavioral_trajectories.states[1] ==
+            (; expected_reward=0.6)
         V₁ = 0.6 + 0.3 * (1.0 - 0.6)
         V₂ = V₁ + 0.3 * (0.0 - V₁)
         @test logjoint(model, given) ≈
@@ -607,14 +611,14 @@ end
         @test unimputed.observations.reward[2] === UnimputedMissingValue()
         unimputed_model = turing_behavioral_session(unimputed, SESSION_PARAMETERS)
         @test isempty(keys(rand(Xoshiro(1), unimputed_model)))
-        saved = returned(unimputed_model, (;))
+        saved = returned(unimputed_model, (;)).saved_behavioral_trajectories
         @test saved.observations[3] == (; reward=UnimputedMissingValue())
         @test saved.states[3] == saved.states[2]
     end
 
     @testset "cognitive_save_history selects what is returned, in the model's own names, and nothing by default" begin
         #Timestep 0 and the five timesteps
-        history = returned(session_for_test(), (;))
+        history = returned(session_for_test(), (;)).saved_behavioral_trajectories
         @test history.observations == fill((;), 6) &&
             history.actions == fill((;), 6) &&
             history.states == fill((;), 6)
@@ -626,7 +630,7 @@ end
                 ),
             ),
             (;),
-        )
+        ).saved_behavioral_trajectories
         @test history.observations == fill((;), 6)
         @test history.actions == [
             (; choice=BeforeFirstTimestep()),
@@ -643,7 +647,7 @@ end
                 ),
             ),
             (;),
-        )
+        ).saved_behavioral_trajectories
         @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
         @test history.states[1] == (; expected_reward=0.65) && length(history.states) == 5
         #An input that isn't in the model's attributes can't be selected, which the session checks when it is prepared
@@ -667,7 +671,7 @@ end
                     cognitive_save_history=SaveHistory(; states=:expected_reward)
                 ),
                 (;),
-            ).timestep_sizes,
+            ).saved_behavioral_trajectories.timestep_sizes,
             [BeforeFirstTimestep(); fill(1, 5)],
         )
         @test isequal(
@@ -677,7 +681,7 @@ end
                     cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
                 ),
                 (;),
-            ).timestep_sizes,
+            ).saved_behavioral_trajectories.timestep_sizes,
             [BeforeFirstTimestep(); fill(0.5, 5)],
         )
         sizes = [0.5, 1.0, 1.5, 2.0, 2.5]
@@ -688,7 +692,7 @@ end
                     cognitive_save_history=SaveHistory(SaveEverything()),
                 ),
                 (;),
-            ).timestep_sizes,
+            ).saved_behavioral_trajectories.timestep_sizes,
             [BeforeFirstTimestep(); sizes],
         )
         @test returned(
@@ -699,12 +703,13 @@ end
                 ),
             ),
             (;),
-        ).timestep_sizes == sizes
+        ).saved_behavioral_trajectories.timestep_sizes == sizes
         #Nothing is saved by default
-        @test returned(session_for_test(), (;)).timestep_sizes == Int[]
-        @test returned(session_for_test(; timestep_sizes=sizes), (;)).timestep_sizes ==
+        @test returned(session_for_test(), (;)).saved_behavioral_trajectories.timestep_sizes ==
+            Int[]
+        @test returned(session_for_test(; timestep_sizes=sizes), (;)).saved_behavioral_trajectories.timestep_sizes ==
             Float64[]
-        @test keys(returned(session_for_test(), (;))) ==
+        @test keys(returned(session_for_test(), (;)).saved_behavioral_trajectories) ==
             (:states, :observations, :actions, :action_distributions, :timestep_sizes)
         #The action distributions are saved when the model's output distributions are selected, with BeforeFirstTimestep at timestep 0
         distributions = returned(
@@ -712,11 +717,12 @@ end
                 cognitive_save_history=SaveHistory(; output_distributions=:choice)
             ),
             (;),
-        ).action_distributions
+        ).saved_behavioral_trajectories.action_distributions
         @test distributions[1] === (; choice=BeforeFirstTimestep()) &&
             length(distributions) == 6
         @test distributions[2].choice ≈ BernoulliLogit(2.0 * (0.65 - 0.5))
-        @test returned(session_for_test(), (;)).action_distributions == fill((;), 6)
+        @test returned(session_for_test(), (;)).saved_behavioral_trajectories.action_distributions ==
+            fill((;), 6)
     end
 
     @testset "Missing actions are latents named after their timestep, with the model's distributions" begin
@@ -775,7 +781,7 @@ end
         @test (@test_logs match_mode = :any loglikelihood(model, given)) ≈
             expected_likelihood
         #The returned actions have the imputed values, after timestep 0
-        @test (@test_logs match_mode = :any returned(model, given)).actions ==
+        @test (@test_logs match_mode = :any returned(model, given)).saved_behavioral_trajectories.actions ==
             [(; choice=BeforeFirstTimestep(), bet=BeforeFirstTimestep()); filled]
         #A single missing action keeps the types of the rest known
         single = session_for_test(
@@ -826,7 +832,7 @@ end
             (;),
         )
         #The returned actions have the marker for them
-        @test returned(model, (;)).actions[2:end] == [
+        @test returned(model, (;)).saved_behavioral_trajectories.actions[2:end] == [
             (; choice=0.2, bet=1.0),
             (; choice=UnimputedMissingValue(), bet=1.5),
             (; choice=0.4, bet=UnimputedMissingValue()),
@@ -857,7 +863,7 @@ end
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
-        @test returned(model, (;)).observations[2:end] ==
+        @test returned(model, (;)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward=0.5), (; reward=1.0), (; reward=0.5)]
     end
 
@@ -877,7 +883,7 @@ end
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         @test logjoint(model, (;)) ≈ logjoint(reference, (;))
-        @test returned(model, (;)).observations[2:end] ==
+        @test returned(model, (;)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward) for reward in full.reward]
         #The environment's defaults are filled in and its names checked when the model is evaluated
         @test_throws "the parameters in the attributes of an environment model of type RewardsPreviousChoice" logjoint(
@@ -901,7 +907,7 @@ end
             environment_parameters=(; scale=2.0),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
-        @test returned(scaled, (;)).observations[2:end] == [
+        @test returned(scaled, (;)).saved_behavioral_trajectories.observations[2:end] == [
             (; reward=0.5), (; reward=2.0), (; reward=0.0), (; reward=2.0), (; reward=1.0)
         ]
         @test_throws "The attributes of a cognitive model of type SessionRescorlaWagner have the observations (:reward,) as inputs, but an environment model of type GivesNothing gives (). Without a map, the two must have the same observations in their attributes." session_for_test(
@@ -921,7 +927,7 @@ end
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
-        @test returned(model, (;)).observations[2:end] ==
+        @test returned(model, (;)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
@@ -936,7 +942,7 @@ end
             environment=RewardsAfterFirstChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
-        @test returned(model, (;)).observations[2:end] ==
+        @test returned(model, (;)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward=NoValue()), (; reward=1.0), (; reward=0.0)]
     end
 
@@ -986,7 +992,7 @@ end
             @test logjoint(with_maps, mapped_values) ≈
                 logjoint(without_maps, unmapped_values)
             #Each model's history is in its own names
-            saved = @test_logs match_mode = :any returned(with_maps, mapped_values)
+            saved = @test_logs match_mode = :any returned(with_maps, mapped_values).saved_behavioral_trajectories
             @test saved.observations[2:end] ==
                 [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
             @test saved.environment.observations[2:end] == [
@@ -1018,7 +1024,7 @@ end
             @varname(timestep[1].environment.reward.imputed) => 0.7,
             @varname(timestep[3].environment.reward.imputed) => -0.4,
         )
-        @test (@test_logs match_mode = :any returned(model, rewards)).observations[2:end] ==
+        @test (@test_logs match_mode = :any returned(model, rewards)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
         #They count in the log density with the environment's distribution, beside the choices given those rewards, and so does the reward in the data
         nothing_imputed = session_for_test(
@@ -1140,7 +1146,7 @@ end
                 states=:n_timesteps, outputs=:reward, output_distributions=:reward
             ),
         )
-        saved = returned(model, (;))
+        saved = returned(model, (;)).saved_behavioral_trajectories
         @test keys(saved) == (
             :states,
             :observations,
@@ -1173,7 +1179,7 @@ end
             environment=RewardsPreviousChoice(),
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
-        @test returned(not_running, (;)).environment == (;
+        @test returned(not_running, (;)).saved_behavioral_trajectories.environment == (;
             states=fill((;), 4),
             observations=fill((;), 4),
             actions=fill((;), 4),
@@ -1185,7 +1191,7 @@ end
                     SessionRescorlaWagner(), SESSION_PARAMETERS, rewards, choices
                 ),
                 (;),
-            ),
+            ).saved_behavioral_trajectories,
             :environment,
         )
         #With timestep 0 left out, the environment's record has one element per timestep too
@@ -1200,7 +1206,7 @@ end
             ),
             environment_save_history=SaveHistory(; states=:n_timesteps),
         )
-        @test returned(from_first, (;)).environment.states ==
+        @test returned(from_first, (;)).saved_behavioral_trajectories.environment.states ==
             [(; n_timesteps=t) for t in 1:3]
     end
 
@@ -1220,7 +1226,7 @@ end
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), predictive)
         @test Set(keys(values)) == Set([@varname(timestep[t].choice.imputed) for t in 1:3])
-        saved = @test_logs match_mode = :any returned(predictive, values)
+        saved = @test_logs match_mode = :any returned(predictive, values).saved_behavioral_trajectories
         @test length(saved.states) == 4 && length(saved.actions) == 4
         @test saved.environment.states == [(; pulls=t) for t in 0:3]
         @test isequal(saved.timestep_sizes, [BeforeFirstTimestep(), 1, 1, 1])
@@ -1234,7 +1240,7 @@ end
             environment_parameters=(; last_pull=10),
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
-        saved_sure = @test_logs match_mode = :any returned(sure, rand(Xoshiro(1), sure))
+        saved_sure = @test_logs match_mode = :any returned(sure, rand(Xoshiro(1), sure)).saved_behavioral_trajectories
         @test [state.expected_reward for state in saved_sure.states] == [0.5, 0.75, 0.875]
         #With a fit, the criterion is never checked by default, so every timestep runs
         fitted = session_for_test(
@@ -1246,7 +1252,7 @@ end
             environment_parameters=(; last_pull=3),
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
-        @test length(returned(fitted, (;)).states) == 6
+        @test length(returned(fitted, (;)).saved_behavioral_trajectories.states) == 6
         #Checked on every timestep, a criterion met while the data continues is an error, and one met before the first timestep too
         @test_throws "A stopping criterion is met before timestep 4, but the data of the session has values until timestep 5. A session can't end while its data continues." logjoint(
             session_for_test(
@@ -1286,7 +1292,7 @@ end
                     cognitive_save_history=SaveHistory(; states=:expected_reward),
                 ),
                 (;),
-            ).states,
+            ).saved_behavioral_trajectories.states,
         ) == 4
         never = session_for_test(
             SessionRescorlaWagner(),
@@ -1299,7 +1305,7 @@ end
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         @test length(
-            (@test_logs match_mode = :any returned(never, rand(Xoshiro(1), never))).states
+            (@test_logs match_mode = :any returned(never, rand(Xoshiro(1), never))).saved_behavioral_trajectories.states,
         ) == 6
     end
 
@@ -1321,7 +1327,7 @@ end
             @varname(timestep[1].environment.drift) => 0.25,
             @varname(timestep[2].environment.drift) => -0.5,
         )
-        @test (@test_logs match_mode = :any returned(model, drifts)).observations[2:end] ==
+        @test (@test_logs match_mode = :any returned(model, drifts)).saved_behavioral_trajectories.observations[2:end] ==
             [(; reward=0.75), (; reward=0.25)]
         #With every reward in the data, it doesn't run, so there are no drifts, and the session is the same as one without it
         complete = session_for_test(
@@ -1366,7 +1372,7 @@ end
                 logpdf(Normal(0, 1), 0.1 * t) + logpdf(Normal(V, 1.0), [0.2, 0.4, 0.6][t])
         end
         @test (@test_logs match_mode = :any logjoint(model, noises)) ≈ expected
-        @test (@test_logs match_mode = :any returned(model, noises)).states[end].expected_reward ≈
+        @test (@test_logs match_mode = :any returned(model, noises)).saved_behavioral_trajectories.states[end].expected_reward ≈
             V
     end
 
@@ -1383,7 +1389,7 @@ end
         )
         @test logjoint(model, (;)) ≈
             logpdf(Bernoulli(0.7), true) + logpdf(Bernoulli(0.7), false)
-        history = returned(model, (;))
+        history = returned(model, (;)).saved_behavioral_trajectories
         @test history.actions[2:end] == [
             (; choice=NoValue()), (; choice=true), (; choice=NoValue()), (; choice=false)
         ]
@@ -1439,7 +1445,7 @@ end
                     cognitive_save_history=SaveHistory(; states=:timestep_size),
                 ),
                 (;),
-            ).states[2:end]
+            ).saved_behavioral_trajectories.states[2:end]
         ] == fill(0.25, 4)
     end
 
@@ -1475,7 +1481,8 @@ end
             ),
             (;),
         )
-        @test returned(valid, (;)).states[2] == (; expected_reward=0.65)
+        @test returned(valid, (;)).saved_behavioral_trajectories.states[2] ==
+            (; expected_reward=0.65)
         #Other errors still get through
         @test_throws "gave no output" logjoint(
             session_for_test(
@@ -1553,10 +1560,11 @@ end
         trajectories = returned(model, chain)
         @test length(trajectories) == 100
         #Timestep 0 has the initial state of each sample
-        @test length(trajectories[1].states) == 6
+        @test length(trajectories[1].saved_behavioral_trajectories.states) == 6
         initial_value = chain[@varname(initial_value)][1]
-        @test trajectories[1].states[1] == (; expected_reward=initial_value)
-        @test trajectories[1].states[2].expected_reward ≈
+        @test trajectories[1].saved_behavioral_trajectories.states[1] ==
+            (; expected_reward=initial_value)
+        @test trajectories[1].saved_behavioral_trajectories.states[2].expected_reward ≈
             initial_value + chain[@varname(learning_rate)][1] * (1.0 - initial_value)
     end
 end

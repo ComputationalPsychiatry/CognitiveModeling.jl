@@ -22,19 +22,40 @@ function CognitiveModeling.session_trajectories_chain(
     end
 end
 
-#Reruns a full model on every sample of the chain, and makes a chain of the parameters it gave each session
+#Reruns a full model, several sessions or a single session on every sample of the chain, and makes a chain of the parameters each session was given
 function CognitiveModeling.session_parameters_chain(model::DynamicPPL.Model, chain)
-    if model.f !== turing_run_full_model
+    #A model of one's own has no session info to name the parameters by, so its results are given instead
+    if !is_session_model(model)
         throw(
             ArgumentError(
-                "session_parameters_chain(model, chain) takes a model made by turing_full_model, which gives every session its parameters, but this one is made by $(model.f).",
+                "session_parameters_chain(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_parameters_chain the results of returned(model, chain) instead.",
             ),
         )
     end
     results = returned(model, chain)
-    return session_parameters_chain(
-        results, model.args.sessions_info; sample_numbering(chain)...
-    )
+    numbering = sample_numbering(chain)
+    session_info = info_of(model)
+    if session_info isa SessionInfo
+        return session_parameters_chain(results; numbering...)
+    else
+        return session_parameters_chain(results, session_info; numbering...)
+    end
+end
+
+"""
+    is_session_model(model)
+
+Return whether `model` is a Turing.jl model made by `turing_full_model`,
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or one of them inside
+`turing_catch_invalid_parameters`. Used by `session_parameters_chain`.
+"""
+function is_session_model(model::DynamicPPL.Model)
+    if model.f === CognitiveModeling.turing_catch_invalid_parameters
+        return is_session_model(model.args.model)
+    end
+    return model.f === turing_run_full_model ||
+           model.f === CognitiveModeling.turing_multiple_behavioral_sessions ||
+           model.f === CognitiveModeling.turing_behavioral_session
 end
 
 #Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them with predict for every sample of the chain, and makes a chain of the trajectories they saved
@@ -190,9 +211,10 @@ end
 """
     info_of(model)
 
-Return the session info a model made by `with_session_info` runs: the `SessionInfo` of a
-single session, or the `MultipleSessionsInfo` of several. Used by
-`session_trajectories_chain`.
+Return the session info that `model` runs, a model made by `turing_full_model`,
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or by
+`with_session_info`: the `SessionInfo` of a single session, or the `MultipleSessionsInfo`
+of several. Used by `session_trajectories_chain` and `session_parameters_chain`.
 """
 function info_of(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_behavioral_session
@@ -208,8 +230,9 @@ end
     sample_numbering(chain)
 
 Return the numbers of the iterations and the chains of `chain` as keyword arguments, so that
-the chain of the trajectories is numbered the same way, or none for a chain that isn't a
-`FlexiChain`. Used by `session_trajectories_chain`.
+the chain of the trajectories or the parameters is numbered the same way, or none for a
+chain that isn't a `FlexiChain`. Used by `session_trajectories_chain` and
+`session_parameters_chain`.
 """
 function sample_numbering(chain::Turing.FlexiChains.FlexiChain)
     return (;

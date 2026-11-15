@@ -61,14 +61,17 @@ end
         merged = merge(session_trajectories, parameters)
         @test @varname(S1.choice) in Turing.FlexiChains.parameters(merged) &&
             @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
-        #A model that isn't a full model gives no parameters
-        @test_throws "session_parameters_chain(model, chain) takes a model made by turing_full_model" session_parameters_chain(
+        #A model of several sessions gives the parameters it was given, the same for every sample
+        given = session_parameters_chain(
             turing_multiple_behavioral_sessions(
                 sessions_info,
                 (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[2.0, 2.0, 2.0]),
             ),
             chain,
         )
+        @test Turing.FlexiChains.get_name.(keys(given)) ==
+            Turing.FlexiChains.get_name.(keys(parameters))
+        @test all(==(0.3), vec(given[@varname(S2.learning_rate)]))
     end
 
     @testset "The same works for several sessions and a single session, also inside the wrapper for invalid parameters" begin
@@ -94,6 +97,116 @@ end
         @test session_trajectories[@varname(expected_reward)][1] ≈ expected_rewards_by_hand(
             SESSION_REWARDS.reward, SESSION_PARAMETERS.learning_rate
         )
+        #A single session gives its parameters without a session in their names
+        @test Turing.FlexiChains.get_name.(
+            keys(session_parameters_chain(session_for_test(), chain))
+        ) == [@varname(learning_rate), @varname(inverse_temperature)]
+    end
+
+    @testset "A model of one's own around the sessions gives the parameters it passes to them, and what they saved, to both chains" begin
+        #A hierarchical model written by hand: the learning rates of the sessions come from a population on the logit scale, and the sessions share one inverse temperature
+        Turing.@model function own_hierarchical_model(sessions_info)
+            n = CognitiveModeling.n_sessions(sessions_info)
+            mean_logit ~ Normal(0, 1)
+            sd_logit ~ Exponential(0.5)
+            standardized ~ filldist(Normal(), n)
+            learning_rate = to_unit_interval.(mean_logit .+ sd_logit .* standardized)
+            inverse_temperature ~ LogNormal(0, 0.5)
+            sessions ~ to_submodel(
+                turing_multiple_behavioral_sessions(
+                    sessions_info,
+                    (; learning_rate, inverse_temperature=fill(inverse_temperature, n)),
+                ),
+                false,
+            )
+            return sessions
+        end
+        hierarchical_model = own_hierarchical_model(sessions_info)
+        own_chain = sample(Xoshiro(8), hierarchical_model, Prior(), 10; progress=false)
+        parameters = session_parameters_chain(
+            returned(hierarchical_model, own_chain), sessions_info
+        )
+        @test Turing.FlexiChains.get_name.(keys(parameters)) == [
+            @varname(S1.learning_rate),
+            @varname(S1.inverse_temperature),
+            @varname(S2.learning_rate),
+            @varname(S2.inverse_temperature),
+            @varname(S3.learning_rate),
+            @varname(S3.inverse_temperature),
+        ]
+        #The learning rates are the transformed values, which the chain itself doesn't have
+        @test parameters[@varname(S2.learning_rate)][4] ≈ to_unit_interval(
+            own_chain[@varname(mean_logit)][4] +
+            own_chain[@varname(sd_logit)][4] * own_chain[@varname(standardized)][4][2],
+        )
+        @test vec(parameters[@varname(S3.inverse_temperature)]) ==
+            vec(own_chain[@varname(inverse_temperature)])
+        #The trajectories come from the same model with sessions that save them, and merge with the parameters
+        saving_model = own_hierarchical_model(
+            MultipleSessionsInfo(
+                sessions_info; cognitive_save_history=SaveHistory(; states=:expected_reward)
+            ),
+        )
+        trajectories = session_trajectories_chain(
+            returned(saving_model, own_chain), sessions_info
+        )
+        rows = findall(==("S1"), FULL_TABLE.id)
+        @test trajectories[@varname(S1.expected_reward)][4] ≈ expected_rewards_by_hand(
+            FULL_TABLE.reward[rows], parameters[@varname(S1.learning_rate)][4]
+        )
+        merged = merge(trajectories, parameters)
+        @test @varname(S1.expected_reward) in Turing.FlexiChains.parameters(merged) &&
+            @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
+        #The form with a model takes only the package's models, which have the session info to name the parameters by
+        @test_throws "session_parameters_chain(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session" session_parameters_chain(
+            hierarchical_model, own_chain
+        )
+
+        #A single session in a model of one's own, whose learning rate is sampled on the logit scale
+        Turing.@model function own_single_session_model(session_info)
+            learning_rate_logit ~ Normal(0, 1)
+            session ~ to_submodel(
+                prefix(
+                    turing_behavioral_session(
+                        session_info,
+                        (;
+                            learning_rate=to_unit_interval(learning_rate_logit),
+                            inverse_temperature=2.0,
+                        ),
+                    ),
+                    @varname(session),
+                ),
+                false,
+            )
+            return session
+        end
+        single_model = own_single_session_model(
+            SessionInfo(
+                SessionRescorlaWagner(),
+                SESSION_REWARDS,
+                SESSION_CHOICES;
+                who_starts=EnvironmentStarts(),
+                cognitive_save_history=SaveHistory(; states=:expected_reward),
+            ),
+        )
+        single_chain = sample(Xoshiro(9), single_model, Prior(), 10; progress=false)
+        results = returned(single_model, single_chain)
+        single_parameters = session_parameters_chain(results)
+        @test Turing.FlexiChains.get_name.(keys(single_parameters)) ==
+            [@varname(learning_rate), @varname(inverse_temperature)]
+        @test vec(single_parameters[@varname(learning_rate)]) ≈
+            to_unit_interval.(vec(single_chain[@varname(learning_rate_logit)]))
+        single_trajectories = session_trajectories_chain(results)
+        @test single_trajectories[@varname(expected_reward)][3] ≈ expected_rewards_by_hand(
+            SESSION_REWARDS.reward, single_parameters[@varname(learning_rate)][3]
+        )
+        @test Turing.FlexiChains.get_name.(
+            keys(merge(single_trajectories, single_parameters))
+        ) == [
+            @varname(expected_reward),
+            @varname(learning_rate),
+            @varname(inverse_temperature),
+        ]
     end
 
     @testset "A fit with values imputed in several sessions, at different timesteps, can be read" begin

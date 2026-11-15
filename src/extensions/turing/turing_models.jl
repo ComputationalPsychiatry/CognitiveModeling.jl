@@ -45,8 +45,8 @@ end
 #The actions in the data are scored once, against the distributions of their timesteps
 actions_to_condition_on ~ product_distribution(action_distributions)
 
-#The trajectories over the timesteps that the save histories select
-return saved_trajectories
+#The parameters as they were given, and the trajectories over the timesteps that the save histories select
+return (; cognitive_parameters, environment_parameters, saved_behavioral_trajectories)
 ```
 
 A session which includes its environment runs the environment model in the same way on each
@@ -84,13 +84,20 @@ only after the last timestep with data, so that a fit runs every timestep and a 
 [`prepare_for_prediction`](@ref) can end early.
 
 # What it returns
-The trajectories that the save histories of `session_info` select, in a `NamedTuple` with
-the same entries as [`simulate`](@ref) returns: `states`, `observations`, `actions` and
-`action_distributions` of the cognitive model, `environment` with the `states`,
-`observations`, `actions` and `observation_distributions` of the environment when the
-session has one, which are empty when it didn't run, and `timestep_sizes`. Each is a vector
-with one element for timestep 0, before the first timestep, and one for each timestep that
-ran, which `returned(model, chain)` gives for each sample. Timestep 0 has the previous
+A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as
+they were given, without the default values of the models, and
+`saved_behavioral_trajectories`, the trajectories that the save histories of `session_info`
+select, which `returned(model, chain)` gives for each sample. A model around the session
+which returns what it returns has its results read with [`session_trajectories_chain`](@ref)
+and [`session_parameters_chain`](@ref), also when it transforms its variables into the
+parameters.
+
+The trajectories are a `NamedTuple` with the same entries as [`simulate`](@ref) returns:
+`states`, `observations`, `actions` and `action_distributions` of the cognitive model,
+`environment` with the `states`, `observations`, `actions` and `observation_distributions`
+of the environment when the session has one, which are empty when it didn't run, and
+`timestep_sizes`. Each is a vector with one element for timestep 0, before the first
+timestep, and one for each timestep that ran. Timestep 0 has the previous
 observation and action, which are [`BeforeFirstTimestep`](@ref) unless others are given,
 `BeforeFirstTimestep()` for every distribution, and the initial states, which can depend on
 the parameters. Element `t + 1` is then timestep `t`, and a [`SaveHistory`](@ref) with
@@ -156,8 +163,14 @@ end
 
 chain = sample(fit_one_session(session_info), NUTS(), 1000)
 
-#The expected rewards on each timestep, for each sample
-trajectories = returned(fit_one_session(session_info), chain)
+#The parameters and the expected rewards on each timestep, for each sample
+results = returned(fit_one_session(session_info), chain)
+results[1].saved_behavioral_trajectories.states
+
+#The same as chains, which merge into one
+parameters = session_parameters_chain(results)
+trajectories = session_trajectories_chain(results)
+merge(parameters, trajectories)
 ```
 """
 function turing_behavioral_session end
@@ -183,11 +196,17 @@ loaded.
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
 for every session in the order of `sessions_info`, which is what a session parameter model
 returns, see [`turing_session_parameters_model`](@ref), and `environment_parameters` is in
-the same form. It returns a vector with what each session returns, in the same order. The
-model is a building block for a Turing.jl model which samples the parameters of the sessions
-in some way of its own, as a submodel without a prefix:
+the same form. It returns a `NamedTuple` with `cognitive_parameters` and
+`environment_parameters` as they were given, and `saved_behavioral_trajectories`, a vector
+with the trajectories each session saved, in the same order, as
+[`turing_behavioral_session`](@ref) returns them. The model is a building block for a
+Turing.jl model which samples the parameters of the sessions in some way of its own, as a
+submodel without a prefix:
 `to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
-[`turing_full_model`](@ref) does this with session parameter models.
+[`turing_full_model`](@ref) does this with session parameter models. A model of one's own
+which returns what it returns has its results read with
+[`session_trajectories_chain`](@ref) and [`session_parameters_chain`](@ref), also when it
+transforms its variables into the parameters.
 """
 function turing_multiple_behavioral_sessions end
 
@@ -277,8 +296,8 @@ prefixes.
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,
 `saved_behavioral_trajectories` and `downstream_values`: the cognitive parameters and the
 environment parameters of every session as the session parameter models gave them, the
-trajectories each session saved, as a vector of what [`turing_behavioral_session`](@ref)
-returns, and what the downstream model returned.
+trajectories each session saved, as [`turing_multiple_behavioral_sessions`](@ref) returns
+them, and what the downstream model returned.
 `returned(model, chain)` gives them for each sample, so a fitted state is read from the
 chain without simulating again.
 

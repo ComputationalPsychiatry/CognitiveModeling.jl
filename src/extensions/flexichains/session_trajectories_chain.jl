@@ -29,8 +29,9 @@ returns:
   named in the same way.
 - [`turing_behavioral_session`](@ref), given without a session info, with no symbol name
   of a session in the names, such as `expected_value`.
-In a model of one's own around these, that model must return what they return, for
-`returned` to give it.
+A model of one's own around [`turing_multiple_behavioral_sessions`](@ref) or
+[`turing_behavioral_session`](@ref) gives its results in the same way when it returns what
+they return.
 
 The trajectories each session saved, as its [`SaveHistory`](@ref)s selected, are one entry
 for each name, with the session's symbol name first. The cognitive model's values are named
@@ -75,6 +76,8 @@ function session_trajectories_chain end
     session_parameters_chain(results, sessions_info::MultipleSessionsInfo;
                              iter_indices=1:size(results, 1),
                              chain_indices=1:size(results, 2))
+    session_parameters_chain(results; iter_indices=1:size(results, 1),
+                             chain_indices=1:size(results, 2))
     session_parameters_chain(model, chain)
 
 Return the parameters of every fitted session, for every sample, as a `FlexiChain` with the
@@ -82,15 +85,24 @@ same samples as the fit, named after the session: `P1.learning_rate` for a param
 cognitive model, and `P1.environment.mean_reward` for one of the environment model. This
 needs FlexiChains.jl to be loaded, which Turing.jl loads.
 
-`results` is a matrix with what [`turing_full_model`](@ref) returns for each sample, as
-`returned(model, chain)` gives it, with the `MultipleSessionsInfo` of the model. The
-parameters are those the session parameter models gave each session, so a session parameter
-model other than [`IndependentSessionParameters`](@ref) gives parameters that aren't in the
-chain itself, such as one value for every session from [`IdenticalSessionParameters`](@ref),
-and values from [`FixedSessionParameters`](@ref) that were never sampled. The second form,
-in the Turing extension, takes a model made by `turing_full_model` and a chain sampled from
-it, and numbers the samples as the chain does. The result merges with the chain of
-[`session_trajectories_chain`](@ref), which has the same samples, with `merge`.
+`results` is a matrix with one element for each sample, as `returned(model, chain)` gives
+it, which is what one of three models returns, as for [`session_trajectories_chain`](@ref):
+[`turing_full_model`](@ref) or [`turing_multiple_behavioral_sessions`](@ref), given with
+their `MultipleSessionsInfo`, or [`turing_behavioral_session`](@ref), given without a
+session info, whose parameters are named without a session, as `learning_rate` and
+`environment.mean_reward`. The parameters are those each session was given, without the
+default values of its models. With a full model, they are those the session parameter
+models gave each session, so a session parameter model other than
+[`IndependentSessionParameters`](@ref) gives parameters that aren't in the chain itself,
+such as one value for every session from [`IdenticalSessionParameters`](@ref), and values
+from [`FixedSessionParameters`](@ref) that were never sampled. A model of one's own around
+[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref) gives
+the parameters it passed to the sessions, such as transformations of its variables, when it
+returns what they return. The third form, in the Turing extension, takes a model made by one
+of the three functions, or such a model inside [`turing_catch_invalid_parameters`](@ref),
+and a chain sampled from it, and numbers the samples as the chain does. The result merges
+with the chain of [`session_trajectories_chain`](@ref), which has the same samples, with
+`merge`.
 
 # Examples
 ```julia
@@ -99,6 +111,9 @@ parameters = session_parameters_chain(model, chain)
 
 #The learning rate of participant P1, for every sample
 parameters[@varname(P1.learning_rate)]
+
+#The same from a model of one's own around the sessions, which returns what they return
+parameters = session_parameters_chain(returned(own_model, chain), sessions_info)
 ```
 """
 function session_parameters_chain end
