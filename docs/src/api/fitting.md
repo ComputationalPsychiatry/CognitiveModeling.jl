@@ -1,12 +1,13 @@
 # Fitting
 
-The sessions to fit, with their data, models and settings, how the parameters of several
-sessions are given, and what runs after them, which are the same for every inference
-backend. A backend fits several sessions with a full model in three parts: a session parameter
-model gives or samples the parameters of every session, for the cognitive model and for the
-environment model, the sessions run with them, and a downstream model can use the
-trajectories the sessions saved. Each backend has a page of its own, with the models it makes and what a
-model can add for it: [Fitting with Turing.jl](fitting_with_turing.md).
+The sessions to fit, with their data, models and settings, and what runs after them, which
+are the same for every inference backend. A backend fits several sessions with a full model
+in three parts: a session parameter model gives or samples the parameters of every session,
+for the cognitive model and for the environment model, as on the page
+[Session parameter models](session_parameter_models.md), the sessions run with them, and a
+downstream model can use the trajectories the sessions saved. Each backend has a page of its
+own, with the models it makes and what a model can add for it:
+[Fitting with Turing.jl](fitting_with_turing.md).
 
 ```@index
 Pages = ["fitting.md"]
@@ -19,38 +20,6 @@ Modules = [CognitiveModeling]
 Private = false
 Pages = ["inference/types.jl"]
 Filter = t -> t !== AbstractSessionParametersModel
-```
-
-## Session parameter models
-
-```@docs
-AbstractSessionParametersModel
-```
-
-```@autodocs
-Modules = [CognitiveModeling]
-Private = false
-Pages = [
-    "inference/session_parameter_models/no_session_parameters.jl",
-    "inference/session_parameter_models/fixed_session_parameters.jl",
-    "inference/session_parameter_models/fixed_session_parameters_by_session.jl",
-    "inference/session_parameter_models/identical_session_parameters.jl",
-    "inference/session_parameter_models/independent_session_parameters.jl",
-    "inference/session_parameter_models/grouped_hierarchical_session_parameters.jl",
-    "inference/session_parameter_models/hierarchical_regression_session_parameters.jl",
-    "inference/session_parameter_models/composite_session_parameters.jl",
-]
-```
-
-## Functions that a session parameter model can implement
-
-A session parameter model of one's own can add methods of these. They are public, but not
-exported.
-
-```@docs
-CognitiveModeling.parameter_names
-CognitiveModeling.estimates_parameters
-CognitiveModeling.prepare_parameters_model
 ```
 
 ## Preparing a full model

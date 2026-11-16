@@ -57,6 +57,7 @@ makedocs(;
             "api/simulation.md",
             "api/saving_histories.md",
             "api/fitting.md",
+            "api/session_parameter_models.md",
             "api/fitting_with_turing.md",
         ],
         "Internals" => [
@@ -64,7 +65,12 @@ makedocs(;
             "Defining models" => "internals/defining_models.md",
             "Simulation" => "internals/simulation.md",
             "Saving histories" => "internals/saving_histories.md",
-            "Fitting" => "internals/fitting.md",
+            "Fitting" => [
+                "Sessions" => "internals/fitting.md",
+                "Session parameter models" => "internals/session_parameter_models.md",
+                "Preparing models" => "internals/preparing_models.md",
+                "Within models" => "internals/within_models.md",
+            ],
         ],
     ],
 )

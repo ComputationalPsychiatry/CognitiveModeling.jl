@@ -55,8 +55,9 @@ CognitiveModeling.turing_initialize_state
 ## Fitting several sessions
 
 These are what the parts of [`turing_full_model`](@ref) are written with, beside the types
-and functions on the page [Fitting](fitting.md). They are public, but not exported. In a
-Turing.jl model of several sessions, session `i` of
+and functions on the pages [Fitting](fitting.md) and
+[Session parameter models](session_parameter_models.md). They are public, but not exported.
+In a Turing.jl model of several sessions, session `i` of
 [`CognitiveModeling.session_index`](@ref) has its variables under `session[i]`.
 
 ```@docs
