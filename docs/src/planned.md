@@ -53,6 +53,11 @@ This page lists what is planned and not written yet. The list will grow.
 - Several sets of experimental data in one hierarchical model, such as different experiments
   or tasks done by the same participants, which share the parameters they have in common.
 
+## Performance
+
+- Benchmarks which compare the speed of simulating and fitting with other inference
+  backends and packages, such as Stan.
+
 ## Plots
 
 - A plot of the parameters of every fitted session, with the averages of their groups.

@@ -204,9 +204,9 @@ continuous, and so is a parameter without a domain.
 The parameters of a simulation and of a fitted session are checked against their domains
 before anything runs, and a value outside its domain throws an
 [`InvalidParametersError`](@ref). An inference backend can also warn before a fit when a
-prior gives values outside a domain, and
-[`CognitiveModeling.discrete_parameter_names`](@ref) gives the discrete parameters, which
-are sampled in another way than the continuous ones.
+prior gives values outside a domain. [`CognitiveModeling.discrete_parameter_names`](@ref)
+gives the discrete parameters, and [`CognitiveModeling.continuous_parameter_names`](@ref)
+the continuous ones, which are sampled in different ways.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so

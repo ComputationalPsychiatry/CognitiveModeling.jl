@@ -39,6 +39,7 @@ CognitiveModeling.stopping_criterion
 
 ```@docs
 CognitiveModeling.discrete_parameter_names
+CognitiveModeling.continuous_parameter_names
 ```
 
 ## Environments from other packages

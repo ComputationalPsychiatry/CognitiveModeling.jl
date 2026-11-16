@@ -279,17 +279,17 @@ function check_selection_names(selection::Tuple, names, kind, model)
 end
 
 """
-    save_state(model, state, selection::Val)
+    select_state_to_save(model, state, selection::Val)
 
 Return what is saved of `state`: what `selection` selects of the output of
 [`prepare_state_for_saving`](@ref). When nothing is selected, the state isn't prepared at
 all, so that no copy is made of a state which isn't saved. Used wherever a state is saved,
 by simulations, instantiated models and fitted sessions.
 """
-function save_state(model, state, selection::Val)
+function select_state_to_save(model, state, selection::Val)
     return select_names(prepare_state_for_saving(model, state), selection)
 end
-save_state(model, state, ::Val{()}) = (;)
+select_state_to_save(model, state, ::Val{()}) = (;)
 
 """
     saves_nothing(save_history)

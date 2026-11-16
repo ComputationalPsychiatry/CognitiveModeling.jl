@@ -257,7 +257,7 @@ function starting_history(
         return ModelHistory(Any[], Any[], Any[], Any[], Any[])
     end
     return ModelHistory(
-        Any[save_state(model, state, state_selection(save_history))],
+        Any[select_state_to_save(model, state, state_selection(save_history))],
         Any[select_names(
             input_before_first_timestep(model), input_selection(save_history)
         )],

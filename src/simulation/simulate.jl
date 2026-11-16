@@ -246,7 +246,7 @@ function collect_timestep_values(
             environment_output.new_state, environment_observation
         ),
         saved=(;
-            states=save_state(
+            states=select_state_to_save(
                 cognitive_model,
                 cognitive_output.new_state,
                 state_selection(cognitive_save_history),
@@ -258,7 +258,7 @@ function collect_timestep_values(
                 output_distribution_selection(cognitive_save_history),
             ),
             environment=(;
-                states=save_state(
+                states=select_state_to_save(
                     environment,
                     environment_output.new_state,
                     state_selection(environment_save_history),
@@ -327,7 +327,7 @@ function collect_initial_timestep_values(
     environment_save_history,
 )
     return (;
-        states=save_state(
+        states=select_state_to_save(
             cognitive_model,
             previous_timestep_values.state,
             state_selection(cognitive_save_history),
@@ -344,7 +344,7 @@ function collect_initial_timestep_values(
             output_distribution_selection(cognitive_save_history),
         ),
         environment=(;
-            states=save_state(
+            states=select_state_to_save(
                 environment,
                 previous_timestep_values.environment.state,
                 state_selection(environment_save_history),
@@ -1329,7 +1329,9 @@ function simulate_timestep(
         output,
         state=model_output.new_state,
         saved=(;
-            states=save_state(model, model_output.new_state, state_selection(save_history)),
+            states=select_state_to_save(
+                model, model_output.new_state, state_selection(save_history)
+            ),
             inputs=select_names(input, input_selection(save_history)),
             outputs=select_names(output, output_selection(save_history)),
             output_distributions=select_names(

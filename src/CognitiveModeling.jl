@@ -28,7 +28,7 @@ include("inference/session_parameter_models/independent_session_parameters.jl")
 include("inference/session_parameter_models/grouped_hierarchical_session_parameters.jl")
 include("inference/session_parameter_models/hierarchical_regression_session_parameters.jl")
 include("inference/session_parameter_models/composite_session_parameters.jl")
-include("inference/functions_to_extend.jl")
+include("inference/functions_to_extend_for_session_parameter_models.jl")
 include("inference/functions_to_call.jl")
 include("inference/utility_functions/preparing_models/prepare_full_model.jl")
 include("inference/utility_functions/preparing_models/prepare_session_data.jl")
@@ -41,6 +41,7 @@ include("inference/utility_functions/within_models/read_session_setup.jl")
 include("inference/utility_functions/within_models/read_timestep_data.jl")
 include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
+include("inference/workflow_and_postprocessing/prepare_for_prediction.jl")
 include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
@@ -88,7 +89,7 @@ export session_trajectories_chain, session_parameters_chain, predict_session_tra
 #What users call with the package's name, as in CognitiveModeling.apply_timestep_model
 public apply_timestep_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
-public parameter_domains, discrete_parameter_names
+public parameter_domains, discrete_parameter_names, continuous_parameter_names
 public turing_apply_timestep_model,
     turing_initialize_state, turing_session_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values

@@ -3,4 +3,5 @@
     include("functions_to_call.jl")
     include("session_parameter_models.jl")
     include("utility_functions/runtests.jl")
+    include("workflow_and_postprocessing/runtests.jl")
 end

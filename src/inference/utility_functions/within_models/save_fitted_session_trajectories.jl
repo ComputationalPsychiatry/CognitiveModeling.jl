@@ -57,7 +57,7 @@ function select_cognitive_timestep_values_to_save(
 )
     return merge(
         (;
-            states=save_state(
+            states=select_state_to_save(
                 cognitive_model, timestep_values.state, state_selection(save_history)
             ),
         ),
@@ -83,7 +83,7 @@ function select_environment_timestep_values_to_save(
 )
     return merge(
         (;
-            states=save_state(
+            states=select_state_to_save(
                 environment,
                 environment_timestep_values.state,
                 state_selection(save_history),

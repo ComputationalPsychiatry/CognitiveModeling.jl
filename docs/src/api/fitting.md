@@ -49,11 +49,16 @@ CognitiveModeling.session_column_values
 
 ## Workflow and postprocessing
 
-What is done with an inference backend's model after it is made. Each backend adds the
-methods for its own models, and its page describes which models they take.
+What is done with the sessions and with an inference backend's model around a fit.
+[`prepare_for_prediction`](@ref) is the same for every backend, while each backend adds the
+methods of [`predict_session_trajectories`](@ref) for its own models, and its page describes
+which models they take.
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["inference/workflow_and_postprocessing/predict_session_trajectories.jl"]
+Pages = [
+    "inference/workflow_and_postprocessing/prepare_for_prediction.jl",
+    "inference/workflow_and_postprocessing/predict_session_trajectories.jl",
+]
 ```
