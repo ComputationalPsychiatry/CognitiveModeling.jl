@@ -36,15 +36,14 @@ differences. Zygote isn't supported, because the package uses for loops.
 These are bugs in the backends, which the package doesn't work around. Their tests are
 marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
 `test/extensions/turing/ad`, so that the suites pass while the bug is there,
-and a fix shows up as an unexpected pass. Last checked with Julia 1.13.3, ReverseDiff
-1.18.10, Enzyme 0.13.219, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
+and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, ReverseDiff
+1.18.10, Enzyme 0.13.220, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
 
 | Backend | When | What happens | Status |
 |---|---|---|---|
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reported as Enzyme.jl issue 3912 |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reported as Enzyme.jl issue 3911 |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reported as Enzyme.jl issue 3911 |
-| Enzyme reverse, with and without runtime activity | numbers copied into a vector whose element type is a `Union`: in `simulate` when an observation is `NoValue` on some timesteps and a number on the others, and the observations are saved, and when a vector of timestep sizes is returned after `BeforeFirstTimestep()` for timestep 0, which it is by default | throws an `EnzymeNoTypeError` | reported as Enzyme.jl issue 4032; with a single timestep size, or `save_initial_timestep_values = false`, the sizes are right |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
 | Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session with one observation, which is `NoValue` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine, and so is a session with three observations of which one is `NoValue` on some timesteps |
 

@@ -49,18 +49,6 @@ const KNOWN_FAILURES = [
             "reading the history of an agent, agent starts",
         ],
     ),
-    (;
-        bug="Enzyme reverse throws an EnzymeNoTypeError when numbers are copied into a vector whose element type is a Union: here when an observation is NoValue on some timesteps and the vector of saved observations is widened to hold it, and when a vector of timestep sizes is copied into the one simulate returns, which starts with BeforeFirstTimestep for timestep 0",
-        backends=["Enzyme reverse", "Enzyme reverse, runtime activity"],
-        cases=[
-            "simulate with a reward that isn't always given, environment starts",
-            "simulate with a reward that isn't always given, agent starts",
-            "simulate with timestep sizes, environment starts",
-            "simulate with timestep sizes, agent starts",
-            "gradient of the timestep sizes, environment starts",
-            "gradient of the timestep sizes, agent starts",
-        ],
-    ),
 ]
 
 function is_known_failure(case_name, backend_name)
