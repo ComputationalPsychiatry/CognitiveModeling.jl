@@ -4,20 +4,38 @@
     data_names(cognitive_model, kind)
 
 Return the names in the attributes of `cognitive_model`, from [`attribute_names`](@ref), for
-the data of `kind`, `:observations` or `:actions`: its inputs for the observations and its
+the data of `kind`, an [`AbstractDataKind`](@ref): its inputs for the observations and its
 outputs for the actions. Used by [`column_map`](@ref) and [`named_data`](@ref).
 """
-function data_names(cognitive_model, kind::Symbol)
-    attributes = check_type_attribute_names(
-        attribute_names(cognitive_model), cognitive_model
-    )
-    return kind === :observations ? attributes.inputs : attributes.outputs
+function data_names(cognitive_model, ::ObservationKind)
+    return check_type_attribute_names(attribute_names(cognitive_model), cognitive_model).inputs
 end
+function data_names(cognitive_model, ::ActionKind)
+    return check_type_attribute_names(attribute_names(cognitive_model), cognitive_model).outputs
+end
+
+"""
+    other_kind(kind)
+    describe_kind(kind)
+    columns_keyword(kind)
+
+Return what the messages about the data of `kind`, an [`AbstractDataKind`](@ref), need: the
+other of the two kinds, how the kind is named in a message, `"observations"` or
+`"actions"`, and the keyword argument of [`MultipleSessionsInfo`](@ref) that gives its
+columns, `"observation_columns"` or `"action_columns"`. Used by [`column_map`](@ref),
+[`only_attribute_name`](@ref) and [`named_data`](@ref).
+"""
+other_kind(::ObservationKind) = ActionKind()
+other_kind(::ActionKind) = ObservationKind()
+describe_kind(::ObservationKind) = "observations"
+describe_kind(::ActionKind) = "actions"
+columns_keyword(::ObservationKind) = "observation_columns"
+columns_keyword(::ActionKind) = "action_columns"
 
 """
     column_map(columns, cognitive_model, kind)
 
-Return the columns of `kind`, `:observations` or `:actions`, as a `NamedTuple` from the name
+Return the columns of `kind`, an [`AbstractDataKind`](@ref), as a `NamedTuple` from the name
 the model uses to the specification of the column, from what `observation_columns` or
 `action_columns` of [`MultipleSessionsInfo`](@ref) was given:
 - a tuple or a vector with an entry for each attribute, see [`column_entry`](@ref): a name,
@@ -35,7 +53,9 @@ the model uses to the specification of the column, from what `observation_column
 A specification is the name of a column, or how to build one from several, see
 [`columns_used`](@ref). Used by [`MultipleSessionsInfo`](@ref) when it splits a table.
 """
-function column_map(columns::Union{Tuple,AbstractVector}, cognitive_model, kind::Symbol)
+function column_map(
+    columns::Union{Tuple,AbstractVector}, cognitive_model, kind::AbstractDataKind
+)
 
     #Each entry gives the name the model uses and the specification of its column
     entries = map(column_entry, Tuple(columns))
@@ -43,7 +63,7 @@ function column_map(columns::Union{Tuple,AbstractVector}, cognitive_model, kind:
     if !allunique(names)
         throw(
             ArgumentError(
-                "The columns of the $kind give the names $names, but each name can only be given once.",
+                "The columns of the $(describe_kind(kind)) give the names $names, but each name can only be given once.",
             ),
         )
     end
@@ -51,7 +71,7 @@ function column_map(columns::Union{Tuple,AbstractVector}, cognitive_model, kind:
 end
 
 #A pair is one entry when it ends in the model's name. Otherwise it is a tuple of names and a function, which build the value of the model's only attribute of that kind
-function column_map(column::Pair, cognitive_model, kind::Symbol)
+function column_map(column::Pair, cognitive_model, kind::AbstractDataKind)
     if names_its_attribute(column)
         return column_map((column,), cognitive_model, kind)
     end
@@ -60,21 +80,20 @@ function column_map(column::Pair, cognitive_model, kind::Symbol)
 end
 
 #A NamedTuple of names builds a NamedTuple in each row, as the value of the model's only attribute of that kind
-function column_map(columns::NamedTuple, cognitive_model, kind::Symbol)
+function column_map(columns::NamedTuple, cognitive_model, kind::AbstractDataKind)
     name = only_attribute_name(cognitive_model, kind, columns)
     return NamedTuple{(name,)}((columns,))
 end
 
-function column_map(column::Symbol, cognitive_model, kind::Symbol)
+function column_map(column::Symbol, cognitive_model, kind::AbstractDataKind)
     names = data_names(cognitive_model, kind)
-    other_kind = kind === :observations ? :actions : :observations
-    keyword = kind === :observations ? "observation_columns" : "action_columns"
+    keyword = columns_keyword(kind)
 
     #A name of the other kind only, in the model's attributes, may mean that the two keyword arguments are swapped
-    if column in data_names(cognitive_model, other_kind) && !(column in names)
+    if column in data_names(cognitive_model, other_kind(kind)) && !(column in names)
         throw(
             ArgumentError(
-                "$keyword is $(repr(column)), which is among the $other_kind in the attributes of $(describe_model(cognitive_model)), not its $kind. Check that observation_columns and action_columns aren't swapped.",
+                "$keyword is $(repr(column)), which is among the $(describe_kind(other_kind(kind))) in the attributes of $(describe_model(cognitive_model)), not its $(describe_kind(kind)). Check that observation_columns and action_columns aren't swapped.",
             ),
         )
     end
@@ -85,7 +104,7 @@ function column_map(column::Symbol, cognitive_model, kind::Symbol)
     elseif length(names) > 1
         throw(
             ArgumentError(
-                "The attributes of $(describe_model(cognitive_model)) have the $kind $names, so $keyword must give the column of each, such as $names when the columns have those names, or with a pair for a column of another name, as in :outcome => $(repr(first(names))), and not the single name $(repr(column)).",
+                "The attributes of $(describe_model(cognitive_model)) have the $(describe_kind(kind)) $names, so $keyword must give the column of each, such as $names when the columns have those names, or with a pair for a column of another name, as in :outcome => $(repr(first(names))), and not the single name $(repr(column)).",
             ),
         )
     end
@@ -147,18 +166,18 @@ end
 """
     only_attribute_name(cognitive_model, kind, columns)
 
-Return the name of the attribute of `kind`, `:observations` or `:actions`, when the model
+Return the name of the attribute of `kind`, an [`AbstractDataKind`](@ref), when the model
 has only one in its attributes, for `columns`, which build its value from several columns
 without naming it. It is an error when the model has another number of them, since the
 value then needs the model's name. Used by [`column_map`](@ref).
 """
-function only_attribute_name(cognitive_model, kind::Symbol, columns)
+function only_attribute_name(cognitive_model, kind::AbstractDataKind, columns)
     names = data_names(cognitive_model, kind)
-    keyword = kind === :observations ? "observation_columns" : "action_columns"
+    keyword = columns_keyword(kind)
     if length(names) != 1
         throw(
             ArgumentError(
-                "$keyword is $(repr(columns)), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but the attributes of $(describe_model(cognitive_model)) have the $kind $names. Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action.",
+                "$keyword is $(repr(columns)), which builds one value from several columns without the name the model uses for it. That is only possible when the model has only one kind of them in its attributes, but the attributes of $(describe_model(cognitive_model)) have the $(describe_kind(kind)) $names. Give the name after the columns, such as (:choicecol, :rtcol) => :ssm_action.",
             ),
         )
     end
@@ -168,15 +187,15 @@ end
 """
     named_data(data, cognitive_model, kind)
 
-Return the data of `kind`, `:observations` or `:actions`, as a `NamedTuple` of vectors: a
+Return the data of `kind`, an [`AbstractDataKind`](@ref), as a `NamedTuple` of vectors: a
 single vector as the data of the attribute of that kind when the model has only one in its
 attributes, which is an error when it has another number of them, and anything else as it
 is, for [`check_data_fits`](@ref) to check. A vector of `NamedTuple`s with the model's names
 is the data written as one row for each timestep, which is returned as it is, for
 `check_data_fits` to report. Used by [`SessionInfo`](@ref).
 """
-named_data(data, cognitive_model, kind::Symbol) = data
-function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
+named_data(data, cognitive_model, kind::AbstractDataKind) = data
+function named_data(data::AbstractVector, cognitive_model, kind::AbstractDataKind)
     names = data_names(cognitive_model, kind)
 
     #NamedTuples with the model's names are the data written as one row for each timestep, which check_data_fits reports
@@ -186,7 +205,7 @@ function named_data(data::AbstractVector, cognitive_model, kind::Symbol)
     if length(names) != 1
         throw(
             ArgumentError(
-                "The $kind are a single vector, which can only be their data when the model has only one kind of them in its attributes, but a cognitive model of type $(typeof(cognitive_model)) has the $kind $names. Give them as a NamedTuple with one vector for each name.",
+                "The $(describe_kind(kind)) are a single vector, which can only be their data when the model has only one kind of them in its attributes, but a cognitive model of type $(typeof(cognitive_model)) has the $(describe_kind(kind)) $names. Give them as a NamedTuple with one vector for each name.",
             ),
         )
     end
@@ -319,11 +338,11 @@ end
 """
     rows_per_session(table, id_columns)
 
-Return a vector with one pair for each session in `table`: its identifier, and the indices
-of its rows. A session is every row with one combination of the values in `id_columns`, in
-the order of the first row of each. The identifier is the value itself for a single column,
-and a `NamedTuple` of the values for several. Used by [`MultipleSessionsInfo`](@ref) when it
-splits a table.
+Return a vector with one pair for each session in `table`: its data identifier, and the
+indices of its rows. A session is every row with one combination of the values in
+`id_columns`, in the order of the first row of each. The data identifier is the value itself
+for a single column, and a `NamedTuple` of the values for several. Used by
+[`MultipleSessionsInfo`](@ref) when it splits a table.
 """
 function rows_per_session(table::NamedTuple, id_columns::Tuple{Vararg{Symbol}})
     n_rows = length(first(table))
@@ -334,7 +353,7 @@ end
 """
     session_id(table, id_columns, i)
 
-Return the identifier of the session that row `i` of `table` belongs to. Used by
+Return the data identifier of the session that row `i` of `table` belongs to. Used by
 [`rows_per_session`](@ref).
 """
 function session_id(table::NamedTuple, id_columns::Tuple{Symbol}, i)

@@ -8,15 +8,15 @@
         who_starts=EnvironmentStarts(),
     )
 
-    @testset "The sessions are counted, and the index of a session is found by its identifier" begin
+    @testset "The sessions are counted, and the index of a session is found by its data identifier" begin
         @test CognitiveModeling.n_sessions(sessions_info) == 2
         @test CognitiveModeling.session_index(sessions_info, "S2") == 2
-        @test_throws "There is no session with the identifier \"S3\". The identifiers are [\"S1\", \"S2\"]." CognitiveModeling.session_index(
+        @test_throws "There is no session with the data identifier \"S3\". The data identifiers are [\"S1\", \"S2\"]." CognitiveModeling.session_index(
             sessions_info, "S3"
         )
     end
 
-    @testset "The symbol name of a session is its identifier, or the name and the value of each of several columns" begin
+    @testset "The symbol name of a session is its data identifier, or the name and the value of each of several columns" begin
         @test CognitiveModeling.session_id_to_symbol("S1") === :S1
         @test CognitiveModeling.session_id_to_symbol(2) === Symbol("2")
         @test CognitiveModeling.session_id_to_symbol((; id="S1", block=2)) ===

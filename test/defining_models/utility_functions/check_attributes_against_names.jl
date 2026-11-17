@@ -1,4 +1,4 @@
-@testset "Checking values against a model's names" begin
+@testset "Checking attributes against a model's names" begin
     model = ModelWithAttributes()
     parameters = (; learning_rate=0.1, action_noise=1.0)
     state = (; expected_reward=0.5)

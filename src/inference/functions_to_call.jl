@@ -12,19 +12,18 @@ n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 """
     session_index(sessions_info, session_id)
 
-Return the index `i` of the session with the identifier `session_id` in a
+Return the index `i` of the session with the data identifier `session_id` in a
 [`MultipleSessionsInfo`](@ref), which is how the models of several sessions number it: its
 parameters are element `i` of each vector a session parameter model gives, and its saved
-trajectories are element `i` of what the sessions return. The identifier is the value in the
-session column, or a `NamedTuple` of the values when there are several, as in
-`sessions_info.session_ids`. Used by users reading the results of a fit, not by the
-models.
+trajectories are element `i` of what the sessions return. The data identifier is the value
+in the session column, or a `NamedTuple` of the values when there are several, as in
+`sessions_info.session_ids`. Used by users reading the results of a fit, not by the models.
 """
 function session_index(sessions_info::MultipleSessionsInfo, session_id)
     i = findfirst(==(session_id), sessions_info.session_ids)
     i === nothing && throw(
         ArgumentError(
-            "There is no session with the identifier $(repr(session_id)). The identifiers are $(sessions_info.session_ids).",
+            "There is no session with the data identifier $(repr(session_id)). The data identifiers are $(sessions_info.session_ids).",
         ),
     )
     return i
@@ -33,8 +32,8 @@ end
 """
     session_id_to_symbol(session_id)
 
-Return the symbol name of a session, a `Symbol` made from its identifier: the value of a
-single session column, as in `S1`, and the name and the value of each of several columns,
+Return the symbol name of a session, a `Symbol` made from its data identifier: the value of
+a single session column, as in `S1`, and the name and the value of each of several columns,
 joined by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The
 chains of a fit name the entries of a session after it, such as `S1.learning_rate`, and
 [`FixedSessionParametersBySession`](@ref) can find the values of a session by it. After
@@ -52,7 +51,7 @@ julia> CognitiveModeling.session_id_to_symbol((; id = "S1", block = 2))
 """
 function session_id_to_symbol(session_id)
 
-    #Asserted, since the compiler can't infer that Symbol gives a Symbol for an identifier of any type
+    #Asserted, since the compiler can't infer that Symbol gives a Symbol for a data identifier of any type
     return Symbol(session_id)::Symbol
 end
 function session_id_to_symbol(session_id::NamedTuple)

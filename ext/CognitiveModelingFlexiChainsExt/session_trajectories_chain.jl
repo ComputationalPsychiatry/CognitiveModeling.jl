@@ -23,7 +23,7 @@ function CognitiveModeling.session_trajectories_chain(
     return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
 end
 
-#The results of a single session, with every entry named without a session identifier
+#The results of a single session, with every entry named without the symbol name of a session
 function CognitiveModeling.session_trajectories_chain(
     results::AbstractMatrix;
     iter_indices::AbstractVector{<:Integer}=1:size(results, 1),

@@ -10,5 +10,5 @@ Pages = ["saving_histories.md"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["saving_histories/save_history.jl"]
+Pages = ["model_history/types.jl"]
 ```

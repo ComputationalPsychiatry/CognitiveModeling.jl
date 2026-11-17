@@ -61,9 +61,9 @@ Return the groups of the sessions in `sessions_info` by the values of the column
 `group_by`, a tuple of names: a `NamedTuple` with the group of every session,
 `group_of_each_session`, the number of groups, `n_groups`, and the symbol name of each
 group, `group_symbol_names`, made from its values as [`session_id_to_symbol`](@ref) makes
-the symbol name of a session from its identifier. Groups are numbered in the order of their
-first session, and with no columns every session is in one group. A session with more than
-one value, or a missing value, in one of the columns is an error, which starts with
+the symbol name of a session from its data identifier. Groups are numbered in the order of
+their first session, and with no columns every session is in one group. A session with more
+than one value, or a missing value, in one of the columns is an error, which starts with
 `reader`, as for [`read_level_of_each_session`](@ref). Used by
 [`prepare_parameters_model`](@ref), for the groups of a
 [`GroupedHierarchicalSessionParameters`](@ref) and for the varying effects of a

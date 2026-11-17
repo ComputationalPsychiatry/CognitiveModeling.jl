@@ -1,6 +1,6 @@
 ### GIVEN VALUES FOR EACH SESSION ###
 
-#Given values for each session, found by the session's symbol name or identifier, unless they were looked up when the full model was prepared
+#Given values for each session, found by the session's symbol name or data identifier, unless they were looked up when the full model was prepared
 Turing.@model function CognitiveModeling.turing_session_parameters_model(
     parameters_model::FixedSessionParametersBySession, sessions_info::MultipleSessionsInfo
 )

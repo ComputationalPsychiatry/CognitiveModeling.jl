@@ -57,62 +57,7 @@ given_name(names::Pair{Symbol,Symbol}) = first(names)
 received_name(name::Symbol) = name
 received_name(names::Pair{Symbol,Symbol}) = last(names)
 
-#Shows the map as it is written
-function Base.show(io::IO, ::NameMap{Tgiven,Treceived}) where {Tgiven,Treceived}
-    print(io, "NameMap(")
-    join(
-        io,
-        (
-            given === received ? repr(given) : string(repr(given), " => ", repr(received))
-            for (given, received) in zip(Tgiven, Treceived)
-        ),
-        ", ",
-    )
-    print(io, ")")
-    return nothing
-end
-
 ## Instantiated models ##
-
-"""
-    ModelHistory(states, inputs, outputs, output_distributions, timestep_sizes)
-
-What has happened to an [`InstantiatedModel`](@ref), which [`simulate!`](@ref) adds to.
-
-Each argument is kept in a field of the same name, such as `history.states`. The names are
-the model's own: for a cognitive model the inputs are its observations and the outputs its
-actions, and for an environment model the inputs are the actions it received and the outputs
-the observations it gave. The model's [`SaveHistory`](@ref) selects what is kept of each
-kind, and when it selects nothing at all, the vectors stay empty. Each vector starts with
-timestep 0, where the model started, when the `SaveHistory` saves the initial timestep
-values, which it does by default, so that element `t + 1` is timestep `t`.
-
-The vectors hold values of any type, since what is saved can change type from one timestep
-to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a value.
-
-# Arguments
-- `states::Vector{Any}`: the states of the model, starting at timestep 0 with its initial
-  state. Later states are those after each timestep. All of them are as returned by
-  [`prepare_state_for_saving`](@ref).
-- `inputs::Vector{Any}`: what the model received on each timestep, starting at timestep 0
-  with every input in the model's attributes as [`BeforeFirstTimestep`](@ref), since it has
-  received nothing before the simulation.
-- `outputs::Vector{Any}`: what the model gave on each timestep, starting at timestep 0 with
-  its previous output, which by default has every output as `BeforeFirstTimestep()`.
-- `output_distributions::Vector{Any}`: what the model gave each output to be sampled from,
-  starting at timestep 0 with `BeforeFirstTimestep()` for every output, since nothing was
-  given yet.
-- `timestep_sizes::Vector{Any}`: how much time each timestep covered, starting with
-  `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
-  other vectors.
-"""
-struct ModelHistory
-    states::Vector{Any}
-    inputs::Vector{Any}
-    outputs::Vector{Any}
-    output_distributions::Vector{Any}
-    timestep_sizes::Vector{Any}
-end
 
 """
     InstantiatedModel(model, parameters; save_history=SaveHistory())
@@ -333,42 +278,4 @@ function reset!(instantiated_model::InstantiatedModel)
     )
     instantiated_model.n_timesteps = 0
     return instantiated_model
-end
-
-## Displaying instantiated models ##
-
-#Shows the kind and the type of the model in the REPL and notebooks, how many timesteps it has simulated, its parameters and its state, and whether its stopping criterion is met
-function Base.show(io::IO, ::MIME"text/plain", instantiated_model::InstantiatedModel)
-    model = instantiated_model.model
-
-    #Print the kind and the type of the model, and how many timesteps it has simulated
-    print(io, "-- Instantiated ", model_kind(model), " --\nType: ", nameof(typeof(model)))
-    print(io, "\nTimesteps simulated: ", instantiated_model.n_timesteps)
-
-    #Print the values of the parameters and of the state
-    print_current_values(io, "Parameters", instantiated_model.parameters, ".parameters")
-    print_current_values(io, "State", instantiated_model.state, ".state")
-
-    #Say that the model's stopping criterion is met, if it is
-    if stopping_criterion(model, instantiated_model.state, instantiated_model.parameters)
-        print(io, "\nStopping criterion met: reset! to simulate it again")
-    end
-
-    return nothing
-end
-
-#Shows the type and the kind of the model on one line, as inside a vector, and how many timesteps it has simulated
-function Base.show(io::IO, instantiated_model::InstantiatedModel)
-    model = instantiated_model.model
-    n_timesteps = instantiated_model.n_timesteps
-    print(
-        io,
-        nameof(typeof(model)),
-        " (instantiated ",
-        model_kind(model),
-        ", ",
-        n_timesteps,
-        n_timesteps == 1 ? " timestep simulated)" : " timesteps simulated)",
-    )
-    return nothing
 end

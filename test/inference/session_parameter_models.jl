@@ -100,7 +100,7 @@ const REGRESSION_TABLE = merge(
         @test CognitiveModeling.parameter_names(ParametersModelOfOwn()) === nothing
     end
 
-    @testset "The parameters of each session are found by its symbol name or its identifier, and become one vector for each parameter in the order of the sessions" begin
+    @testset "The parameters of each session are found by its symbol name or its data identifier, and become one vector for each parameter in the order of the sessions" begin
         parameters_by_session = (;
             S2=(; scale=2.0, offset=0.1), S1=(; scale=1.0, offset=0.0)
         )
@@ -118,7 +118,7 @@ const REGRESSION_TABLE = merge(
         @test_throws "FixedSessionParametersBySession gives the session \"S2\" the parameters (:offset,), and the first session the parameters (:scale,). Every session must have the same parameters." CognitiveModeling.collect_parameters_in_session_order(
             (; S1=(; scale=1.0), S2=(; offset=0.0)), ["S1", "S2"]
         )
-        #The parameters can be in a dictionary from each session's identifier too, of one column or of several
+        #The parameters can be in a dictionary from each session's data identifier too, of one column or of several
         @test CognitiveModeling.collect_parameters_in_session_order(
             Dict("S2" => (; scale=2.0), "S1" => (; scale=1.0)), ["S1", "S2"]
         ) == (; scale=[1.0, 2.0])

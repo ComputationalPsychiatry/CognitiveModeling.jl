@@ -553,7 +553,7 @@ end
         @test logjoint(same, (;)) ≈ sessions_by_hand(FULL_TABLE, fill(0.3, 3), fill(2.0, 3))
         @test returned(same, (;)).cognitive_parameters ==
             (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
-        #By session, the values are found by the session's identifier, in any order
+        #By session, the values are found by the session's data identifier, in any order
         by_session = saving_full_model(
             FixedSessionParametersBySession((;
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),

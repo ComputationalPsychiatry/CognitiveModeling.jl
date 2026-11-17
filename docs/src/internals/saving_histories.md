@@ -4,18 +4,52 @@
 Pages = ["saving_histories.md"]
 ```
 
-## Selecting what is saved
+## Types
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["saving_histories/save_history.jl"]
+Pages = ["model_history/types.jl"]
 ```
 
-## Storing what is saved
+## Utility functions
+
+### Reading the selection of a save history
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["saving_histories/storage.jl"]
+Pages = ["model_history/utility_functions/read_selection.jl"]
+```
+
+### Selecting the values to save
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["model_history/utility_functions/select_values_to_save.jl"]
+```
+
+### Checking the names a save history selects
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["model_history/utility_functions/check_selection_names.jl"]
+```
+
+### The sizes of the timesteps that are saved
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["model_history/utility_functions/timestep_sizes.jl"]
+```
+
+### Storing what is saved
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["model_history/utility_functions/storage.jl"]
 ```

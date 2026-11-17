@@ -14,14 +14,6 @@ Pages = ["defining_models/types.jl"]
 
 ## Utility functions
 
-### Describing a model in messages
-
-```@autodocs
-Modules = [CognitiveModeling]
-Public = false
-Pages = ["defining_models/utility_functions/describe_model.jl"]
-```
-
 ### Checking a model's own methods
 
 ```@autodocs
@@ -38,12 +30,12 @@ Public = false
 Pages = ["defining_models/utility_functions/compare_names.jl"]
 ```
 
-### Checking values against a model's names
+### Checking attributes against a model's names
 
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["defining_models/utility_functions/check_values_against_names.jl"]
+Pages = ["defining_models/utility_functions/check_attributes_against_names.jl"]
 ```
 
 ### Checking parameters against their domains
@@ -62,7 +54,7 @@ Public = false
 Pages = ["defining_models/utility_functions/outputs_and_inputs_before_first_timestep.jl"]
 ```
 
-### Displaying models
+### Displaying models, and describing them in messages
 
 ```@autodocs
 Modules = [CognitiveModeling]

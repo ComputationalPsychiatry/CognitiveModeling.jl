@@ -339,7 +339,7 @@ end
         ) == ["expected_value"]
     end
 
-    @testset "The results of several sessions have the same names, and those of a single session no identifier" begin
+    @testset "The results of several sessions have the same names, and those of a single session no symbol name of a session" begin
         sessions = [
             saves_everything([1.0, 0.0], [0.0, 0.3], [0.0, 0.0, 0.5]),
             saves_expected_values([0.0, 0.0]),

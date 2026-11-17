@@ -35,10 +35,10 @@ Pages = ["inference/utility_functions/preparing_models/prepare_full_model.jl"]
 
 ## Reading the sessions
 
-A session is identified in three ways: by its order among the sessions, by its identifier,
-which is the value of its session column, or a `NamedTuple` of the values of several, and
-by its symbol name, a `Symbol` made from the identifier, which the chains of a fit name its
-entries after. These functions are public, but not exported.
+A session is identified in three ways: by its order among the sessions, by its data
+identifier, which is the value of its session column, or a `NamedTuple` of the values of
+several, and by its symbol name, a `Symbol` made from the data identifier, which the chains
+of a fit name its entries after. These functions are public, but not exported.
 
 ```@docs
 CognitiveModeling.n_sessions

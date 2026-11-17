@@ -29,7 +29,10 @@ function CognitiveModeling.attribute_names(model::ModelWithManyParameters)
     )
 end
 
-@testset "Displaying models" begin
+#A model which is neither a cognitive model nor an environment model
+struct NeitherKindOfModel <: CognitiveModeling.AbstractTimestepModel end
+
+@testset "Displaying models, and describing them in messages" begin
     @testset "The REPL shows a summary of the model with its names" begin
         @test repr("text/plain", ModelWithAttributes()) == """
             -- Cognitive model --
@@ -122,5 +125,14 @@ end
         @test sprint(show, ModelWithAttributes()) == "ModelWithAttributes (cognitive model)"
         @test sprint(show, EnvironmentWithAttributes()) ==
             "EnvironmentWithAttributes (environment model)"
+    end
+
+    @testset "In a message a model is named by its kind and its type" begin
+        @test CognitiveModeling.describe_model(ModelWithAttributes()) ==
+            "a cognitive model of type ModelWithAttributes"
+        @test CognitiveModeling.describe_model(EnvironmentWithAttributes()) ==
+            "an environment model of type EnvironmentWithAttributes"
+        @test CognitiveModeling.describe_model(NeitherKindOfModel()) ==
+            "a model of type NeitherKindOfModel"
     end
 end

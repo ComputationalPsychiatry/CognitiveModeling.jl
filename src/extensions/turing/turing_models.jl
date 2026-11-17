@@ -184,7 +184,7 @@ Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for ever
 in `sessions_info`, each with its own cognitive parameters, as a submodel with the prefix
 `session[i]`, so that a latent variable of the third session is named like
 `session[3].timestep[2].choice.imputed`. Which session `i` is stands in
-`sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for an identifier.
+`sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for a data identifier.
 Environment parameters can only be given when the sessions have an environment model. With
 `parallelization = ParallelSessions()`, the sessions run over the threads Julia was
 started with. **The model that is evaluated, which is the outermost one, must then be

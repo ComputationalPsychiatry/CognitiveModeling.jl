@@ -10,7 +10,7 @@ using Tables: Tables
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")
     include("defining_models/runtests.jl")
-    include("saving_histories/runtests.jl")
+    include("model_history/runtests.jl")
     include("simulation/runtests.jl")
     include("inference/runtests.jl")
     include("extensions/runtests.jl")

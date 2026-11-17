@@ -1,4 +1,4 @@
-## Checking values against a model's names ##
+## Checking attributes against a model's names ##
 """
     check_match_attribute_names(model, parameters, state, previous_output)
 

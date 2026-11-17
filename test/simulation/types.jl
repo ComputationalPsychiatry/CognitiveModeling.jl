@@ -30,11 +30,6 @@
             NameMap{(:payoff, :cue),(:reward, :cue)}
     end
 
-    @testset "It shows as it is written" begin
-        @test repr(NameMap(:payoff => :reward, :cue)) == "NameMap(:payoff => :reward, :cue)"
-        @test repr(NameMap()) == "NameMap()"
-    end
-
     @testset "map_names selects the outputs the map takes, and gives them their new names" begin
         outputs = (; payoff=1.0, cue=2, block=3)
         @test CognitiveModeling.map_names(outputs, nothing) === outputs

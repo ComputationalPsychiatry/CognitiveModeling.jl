@@ -103,8 +103,8 @@ CognitiveModeling.jl has a method.
 # Implementation
 A session parameter model of another kind, such as a regression, is a subtype of
 `AbstractSessionParametersModel` with a method of this function. It can read
-[`n_sessions`](@ref) and the identifiers of the sessions from `sessions_info`, the columns
-of the table that the sessions were split from, when there is one, with
+[`n_sessions`](@ref) and the data identifiers of the sessions from `sessions_info`, the
+columns of the table that the sessions were split from, when there is one, with
 [`CognitiveModeling.session_column_values`](@ref), such as the covariates of a regression,
 and anything else from its own fields. What it reads from the table is best read once, in a
 method of [`CognitiveModeling.prepare_parameters_model`](@ref). The full model treats it as

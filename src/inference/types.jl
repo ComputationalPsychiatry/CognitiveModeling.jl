@@ -37,6 +37,33 @@ observations with `impute_missing_observations = false`, and of the missing acti
 """
 struct UnimputedMissingValue <: AbstractNoValue end
 
+## Types for which of its two kinds of data a session is given ##
+
+"""
+    AbstractDataKind
+
+Supertype of the two kinds of data a session has: [`ObservationKind`](@ref) for the
+observations, which are the inputs in the attributes of its cognitive model, and
+[`ActionKind`](@ref) for the actions, which are its outputs. Used when a table is split
+into sessions and when the data of a session is named, to say which of the two a column or
+a vector of data is.
+"""
+abstract type AbstractDataKind end
+
+"""
+    ObservationKind()
+
+The kind of data that the observations of a session are, see [`AbstractDataKind`](@ref).
+"""
+struct ObservationKind <: AbstractDataKind end
+
+"""
+    ActionKind()
+
+The kind of data that the actions of a session are, see [`AbstractDataKind`](@ref).
+"""
+struct ActionKind <: AbstractDataKind end
+
 ## Types for how a session is set up, which are the same whatever it is fitted with ##
 
 """
@@ -311,8 +338,8 @@ function prepare_session(
 )
 
     #A single vector is the data of the observation or the action, when the model has only one kind of them in its attributes
-    observations = named_data(observations, cognitive_model, :observations)
-    actions = named_data(actions, cognitive_model, :actions)
+    observations = named_data(observations, cognitive_model, ObservationKind())
+    actions = named_data(actions, cognitive_model, ActionKind())
 
     #Replace the values in the data which stand for a missing value by the marker for one, which is the marker for a missing value that isn't imputed when imputation isn't asked for
     observations = mark_missing_values(
@@ -401,8 +428,8 @@ end
     MultipleSessionsInfo(sessions, session_ids; table=nothing, session_rows=nothing)
 
 Multiple behavioral sessions in a generative model that are fitted together, as a vector of
-[`SessionInfo`](@ref) with an identifier for each, which an inference backend's models of
-several sessions take.
+[`SessionInfo`](@ref) with a data identifier for each, which an inference backend's models
+of several sessions take.
 
 The first form splits a table into sessions. `table` is a `NamedTuple` with one vector for
 each column, or any other table that Tables.jl can read, such as a `DataFrame` or a
@@ -450,7 +477,7 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
 - `action_columns`: the columns with the actions, in the same forms.
 - `session_columns`: the column or columns which separate sessions, such as `:id` or
   `(:id, :block)`. A session is every row with one combination of their values, in the
-  order of the first row of each. The identifier of a session is its value in a single
+  order of the first row of each. The data identifier of a session is its value in a single
   column, or a `NamedTuple` of its values in several.
 - `timestep_sizes=1`: how much time each timestep covers, as one size for all, or the name
   of a column with the size of each timestep.
@@ -466,10 +493,10 @@ given as `table`, with the rows of each session in it as `session_rows`, a vecto
 vectors of row numbers. Each argument is kept in a field of the same name.
 
 Each session is identified in three ways: by its order, its index in `sessions`, which the
-models of several sessions number it by and [`CognitiveModeling.session_index`](@ref)
-finds; by its identifier, the value of its session column, or a `NamedTuple` of the values
+models of several sessions number it by and [`CognitiveModeling.session_index`](@ref) finds;
+by its data identifier, the value of its session column, or a `NamedTuple` of the values
 when there are several, as in `session_ids`; and by its symbol name, a `Symbol` made from
-the identifier by [`CognitiveModeling.session_id_to_symbol`](@ref), such as `S1` or
+the data identifier by [`CognitiveModeling.session_id_to_symbol`](@ref), such as `S1` or
 `id_S1__block_2`, which the chains of a fit name its entries after.
 
 In the REPL, the sessions show a summary on one line each: how many there are, and the
@@ -521,7 +548,7 @@ struct MultipleSessionsInfo{
     table::Union{Nothing,NamedTuple}
     session_rows::Union{Nothing,Vector{Vector{Int}}}
 
-    #Only takes sessions of one type, with an identifier for each, and the rows of each in the table when there is one
+    #Only takes sessions of one type, with a data identifier for each, and the rows of each in the table when there is one
     function MultipleSessionsInfo(
         sessions::AbstractVector{<:SessionInfo},
         session_ids::AbstractVector;
@@ -532,7 +559,7 @@ struct MultipleSessionsInfo{
         if length(sessions) != length(session_ids)
             throw(
                 DimensionMismatch(
-                    "There are $(length(sessions)) sessions and $(length(session_ids)) session identifiers, but there must be one identifier for each session.",
+                    "There are $(length(sessions)) sessions and $(length(session_ids)) data identifiers, but there must be one data identifier for each session.",
                 ),
             )
         end
@@ -584,8 +611,10 @@ function MultipleSessionsInfo(
     table = column_table(table)
 
     #The columns of each kind, from the names the model uses to the names in the table
-    observation_column_map = column_map(observation_columns, cognitive_model, :observations)
-    action_column_map = column_map(action_columns, cognitive_model, :actions)
+    observation_column_map = column_map(
+        observation_columns, cognitive_model, ObservationKind()
+    )
+    action_column_map = column_map(action_columns, cognitive_model, ActionKind())
     id_columns = as_tuple(session_columns)::Tuple{Vararg{Symbol}}
     check_table(
         table,
@@ -597,7 +626,7 @@ function MultipleSessionsInfo(
         ),
     )
 
-    #The rows of each session, and its identifier
+    #The rows of each session, and its data identifier
     sessions_rows = rows_per_session(table, id_columns)
 
     #The columns of the observations and of the actions are built once for the whole table, with the missing values replaced by their marker, so that every session gets the same element types

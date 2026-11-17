@@ -622,7 +622,7 @@ const COUNTER_TABLE = (;
         @test sessions_info.sessions[1].actions.choice isa Vector{Union{MissingValue,Bool}}
         @test isconcretetype(eltype(sessions_info.sessions))
         @test !CognitiveModeling.has_environment(sessions_info)
-        #Several session columns give a NamedTuple as the identifier
+        #Several session columns give a NamedTuple as the data identifier
         by_block = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;
@@ -947,17 +947,17 @@ const COUNTER_TABLE = (;
         @test_throws "The sessions must all have the same type" MultipleSessionsInfo(
             [session, other_type], ["A", "B"]
         )
-        @test_throws "There are 2 sessions and 1 session identifiers" MultipleSessionsInfo(
+        @test_throws "There are 2 sessions and 1 data identifiers" MultipleSessionsInfo(
             [session, session], ["A"]
         )
         @test_throws "There must be at least one session." MultipleSessionsInfo(
             typeof(session)[], String[]
         )
-        #Every session needs a name of its own, which its identifier gives
-        @test_throws "The session identifier \"A\" is given for more than one session." MultipleSessionsInfo(
+        #Every session needs a name of its own, which its data identifier gives
+        @test_throws "The data identifier \"A\" is given for more than one session." MultipleSessionsInfo(
             [session, session], ["A", "A"]
         )
-        @test_throws "The session identifiers 1 and \"1\" both give the symbol name 1," MultipleSessionsInfo(
+        @test_throws "The data identifiers 1 and \"1\" both give the symbol name 1," MultipleSessionsInfo(
             [session, session], Any[1, "1"]
         )
     end

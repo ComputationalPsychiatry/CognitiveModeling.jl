@@ -17,10 +17,9 @@ function CognitiveModeling.attribute_names(environment::EnvironmentWithAttribute
 end
 
 @testset "Utility functions" begin
-    include("describe_model.jl")
     include("check_model_methods.jl")
     include("compare_names.jl")
-    include("check_values_against_names.jl")
+    include("check_attributes_against_names.jl")
     include("check_parameter_domains.jl")
     include("outputs_and_inputs_before_first_timestep.jl")
     include("display_models.jl")

@@ -4,12 +4,12 @@
     FixedSessionParametersBySession(parameters_by_session)
 
 The session parameter model of a full model which gives each session parameters of its own,
-with nothing sampled. `parameters_by_session` holds the parameters of each session in one
-of three forms: by the session's symbol name, in a `NamedTuple` with an entry for each
-session, such as `(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`; by its identifier, in a
+with nothing sampled. `parameters_by_session` holds the parameters of each session in one of
+three forms: by the session's symbol name, in a `NamedTuple` with an entry for each session,
+such as `(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`; by its data identifier, in a
 dictionary, such as `Dict("S1" => (; scale = 2.0), "S2" => (; scale = 3.0))`; or in the
 order of the sessions, as a `NamedTuple` with one vector for each parameter, such as
-`(; scale = [2.0, 3.0])`. A session with several session columns has an identifier like
+`(; scale = [2.0, 3.0])`. A session with several session columns has a data identifier like
 `(; id = "S1", block = 2)` and a symbol name like `id_S1__block_2`, as
 [`CognitiveModeling.session_id_to_symbol`](@ref) gives it. Every session must have the same
 parameters. A full model makes the first two forms into the third once, before it is made.
@@ -47,7 +47,7 @@ end
 
 Return whether `parameters_by_session`, as a [`FixedSessionParametersBySession`](@ref) holds
 it, gives the parameters in the order of the sessions, as a `NamedTuple` with one vector for
-each parameter, and not by the sessions' symbol names or identifiers. Used by
+each parameter, and not by the sessions' symbol names or data identifiers. Used by
 [`parameter_names`](@ref) and [`collect_parameters_in_session_order`](@ref).
 """
 has_vector_for_each_parameter(parameters_by_session) = false
@@ -83,7 +83,7 @@ function collect_parameters_in_session_order(parameters_by_session, session_ids)
         return parameters_by_session
     end
 
-    #Otherwise the parameters of each session are found by its symbol name or its identifier
+    #Otherwise the parameters of each session are found by its symbol name or its data identifier
     parameters_of_each = map(
         session_id -> parameters_of_session(parameters_by_session, session_id), session_ids
     )
@@ -108,10 +108,10 @@ end
 """
     parameters_of_session(parameters_by_session, session_id)
 
-Return the parameters of the session with the identifier `session_id` in
+Return the parameters of the session with the data identifier `session_id` in
 `parameters_by_session`: the entry under the session's symbol name, as
 [`session_id_to_symbol`](@ref) gives it, in a `NamedTuple`, and the entry under the
-identifier itself in a dictionary. A session without parameters is an error. Used by
+data identifier itself in a dictionary. A session without parameters is an error. Used by
 [`collect_parameters_in_session_order`](@ref).
 """
 function parameters_of_session(parameters_by_session::NamedTuple, session_id)

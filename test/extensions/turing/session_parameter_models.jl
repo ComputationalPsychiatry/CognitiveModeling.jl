@@ -21,7 +21,7 @@
         @test logjoint(model, (;)) == 0
     end
 
-    @testset "FixedSessionParametersBySession gives each session its own values, found by its identifier, and samples nothing" begin
+    @testset "FixedSessionParametersBySession gives each session its own values, found by its data identifier, and samples nothing" begin
         model = CognitiveModeling.turing_session_parameters_model(
             FixedSessionParametersBySession((;
                 S3=(; learning_rate=0.4, inverse_temperature=3.0),
@@ -33,7 +33,7 @@
         @test model() ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         @test isempty(keys(rand(Xoshiro(1), model)))
-        #The same from a dictionary keyed by the sessions' identifiers
+        #The same from a dictionary keyed by the sessions' data identifiers
         from_dictionary = CognitiveModeling.turing_session_parameters_model(
             FixedSessionParametersBySession(
                 Dict(

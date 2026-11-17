@@ -56,7 +56,7 @@
             4
     end
 
-    @testset "Several sessions are each copied, with their identifiers" begin
+    @testset "Several sessions are each copied, with their data identifiers" begin
         sessions_info = MultipleSessionsInfo(
             SessionCounter(),
             COUNTER_TABLE;

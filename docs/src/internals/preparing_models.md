@@ -36,10 +36,10 @@ Pages = ["inference/utility_functions/preparing_models/split_table_into_sessions
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/preparing_models/include_environment.jl"]
+Pages = ["inference/utility_functions/preparing_models/include_environment_in_session.jl"]
 ```
 
-## Checking the identifiers of the sessions
+## Checking the data identifiers of the sessions
 
 ```@autodocs
 Modules = [CognitiveModeling]
