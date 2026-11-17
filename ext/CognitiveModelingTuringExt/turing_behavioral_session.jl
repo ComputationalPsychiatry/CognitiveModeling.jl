@@ -23,7 +23,7 @@ function CognitiveModeling.turing_full_model(
     )
     warn_if_saving_without_downstream_model(sessions_info, downstream_model)
 
-    #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled. What the parameter models can give is checked against the domains of the parameters there
+    #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled
     prepared = prepare_full_model(
         cognitive_parameters_model,
         sessions_info;

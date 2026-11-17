@@ -29,6 +29,9 @@ This page lists what is planned and not written yet. The list will grow.
   parameter, alone and together with the others, changes what a model does.
 - Cognitive models in continuous time, probably with DifferentialEquations.jl, whose states
   change between the timesteps as well as on them.
+- An MCMCChains.jl extension, so that [`get_session_trajectories`](@ref),
+  [`get_session_parameters`](@ref) and [`predict_session_trajectories`](@ref) also take and
+  return its chains, beside the `FlexiChain`s of FlexiChains.jl that they take now.
 
 ## Defining models
 
