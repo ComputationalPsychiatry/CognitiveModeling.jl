@@ -1,8 +1,3 @@
-### MODEL WHICH HAS ONE COMPONENT FOR THE PARAMETERS OF THE SESSIONS (e.g. a regression), AND THEN THE BEHAVIORAL SESSIONS ###
-# The parameters of the cognitive model and those of the environment model each come from a parameter model. There is also
-# an optional third component which can do something with the outcomes of the behavioral sessions, such as a regression
-# predicting something (e.g. physiological data) from the cognitive states.
-
 #Creates the Turing model for fitting a cognitive model to several sessions, after warning when both parameter models can sample variables of the same name, and when the sessions save trajectories no downstream model uses, and after preparing its parts once
 #The warnings and the preparation are done here, when the model is made, and not in the model, whose body is differentiated and runs on every evaluation: a warning holds a try block, which Mooncake can't differentiate
 function CognitiveModeling.turing_full_model(

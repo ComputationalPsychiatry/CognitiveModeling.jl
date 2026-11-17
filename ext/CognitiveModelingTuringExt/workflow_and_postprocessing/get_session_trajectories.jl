@@ -1,4 +1,4 @@
-### THE TRAJECTORIES OF FITTED SESSIONS, READ FROM A CHAIN WITH A MODEL THAT SAVES THEM ###
+### THE TRAJECTORIES AND THE PARAMETERS OF FITTED SESSIONS, READ FROM A CHAIN ###
 
 #Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of the trajectories the sessions saved
 function CognitiveModeling.get_session_trajectories(
@@ -58,90 +58,7 @@ function is_session_model(model::DynamicPPL.Model)
            model.f === CognitiveModeling.turing_behavioral_session
 end
 
-#Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them with predict for every sample of the chain, and makes a chain of the trajectories they saved
-function CognitiveModeling.predict_session_trajectories(
-    rng::AbstractRNG,
-    model::DynamicPPL.Model,
-    chain;
-    cognitive_save_history::SaveHistory=SaveHistory(),
-    environment_save_history::SaveHistory=SaveHistory(),
-)
-    predictive_model = with_session_info(
-        model,
-        info -> prepare_for_prediction(
-            with_save_history(info, cognitive_save_history, environment_save_history)
-        ),
-        "predict_session_trajectories",
-    )
-    #Everything within the timesteps is simulated again, with the parameters of each sample
-    returned_values = returned_with_simulation(
-        rng, predictive_model, without_timestep_variables(chain)
-    )
-    numbering = sample_numbering(chain)
-    session_info = info_of(predictive_model)
-    if session_info isa SessionInfo
-        return get_session_trajectories(returned_values; numbering...)
-    else
-        return get_session_trajectories(returned_values, session_info; numbering...)
-    end
-end
-
-function CognitiveModeling.predict_session_trajectories(
-    model::DynamicPPL.Model, chain; keywords...
-)
-    return predict_session_trajectories(default_rng(), model, chain; keywords...)
-end
-
-"""
-    without_timestep_variables(chain)
-
-Return `chain` without the variables within the timesteps of a session, such as imputed
-actions and observations and what a model samples within a timestep, named like
-`session[2].timestep[3].choice.imputed`, or `timestep[3].choice.imputed` for a single
-session. The parameters, and any start that a model samples, are kept. Used by
-`predict_session_trajectories`, so that everything within the timesteps is simulated again,
-as the data is in a predictive check, which also keeps FlexiChains.jl from rebuilding the
-variables of sessions of different lengths, which it can't do.
-"""
-function without_timestep_variables(chain::Turing.FlexiChains.FlexiChain)
-    kept = filter(!is_within_timestep, Turing.FlexiChains.parameters(chain))
-    return chain[[Turing.FlexiChains.Parameter(name) for name in kept]]
-end
-
-"""
-    is_within_timestep(name)
-
-Return whether the variable `name` is within a timestep of a session, which its name says:
-`timestep[t]` at its start, or after `session[i]`. Used by `without_timestep_variables`.
-"""
-is_within_timestep(name) = occursin(r"^(session\[[^\]]*\]\.)?timestep\[", string(name))
-
-"""
-    returned_with_simulation(rng, model, chain)
-
-Return a matrix with what `model` returns for every sample of `chain`, iterations down and
-chains across, with the values of the sample for the variables in the chain, and every other
-variable drawn from its prior, as Turing.jl's `predict` draws them. Used by
-`predict_session_trajectories`, which needs only what the sessions return, so that the
-simulated values are never read back from a chain, which FlexiChains.jl can't do for
-sessions of different lengths.
-"""
-function returned_with_simulation(
-    rng::AbstractRNG, model::DynamicPPL.Model, chain::Turing.FlexiChains.FlexiChain
-)
-    n_iterations, n_chains = size(chain)
-    return [
-        first(
-            DynamicPPL.init!!(
-                rng,
-                model,
-                DynamicPPL.OnlyAccsVarInfo(),
-                DynamicPPL.InitFromParams(chain, i, j, DynamicPPL.InitFromPrior()),
-                DynamicPPL.UnlinkAll(),
-            ),
-        ) for i in 1:n_iterations, j in 1:n_chains
-    ]
-end
+### HELPERS FOR READING AND SIMULATING FITTED SESSIONS ###
 
 """
     with_save_history(info, cognitive_save_history, environment_save_history)

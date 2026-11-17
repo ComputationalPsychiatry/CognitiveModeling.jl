@@ -35,5 +35,6 @@ end
     include("turing_full_model.jl")
     include("parameter_models.jl")
     include("get_session_trajectories.jl")
+    include("predict_session_trajectories.jl")
     include("discrete_and_continuous_variables.jl")
 end

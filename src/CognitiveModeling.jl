@@ -47,12 +47,12 @@ include("inference/utility_functions/within_models/read_session_setup.jl")
 include("inference/utility_functions/within_models/read_timestep_data.jl")
 include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
+include("inference/workflow_and_postprocessing/get_session_trajectories.jl")
 include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
 #the package, with their docstrings, and the helpers that call an extension
 include("extensions/common_rl_interface/common_rl_environment.jl")
-include("extensions/flexichains/get_session_trajectories.jl")
 include("extensions/tables/column_table.jl")
 include("extensions/turing/functions_to_extend.jl")
 include("extensions/turing/turing_models.jl")

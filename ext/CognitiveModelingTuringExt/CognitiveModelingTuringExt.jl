@@ -83,6 +83,8 @@ include("parameter_models/hierarchical_grouped_parameters.jl")
 include("parameter_models/hierarchical_regression_parameters.jl")
 include("parameter_models/composite_parameters.jl")
 
-include("get_session_trajectories.jl")
+#Reading the trajectories and the parameters of fitted sessions from a chain, and simulating the sessions again
+include("workflow_and_postprocessing/get_session_trajectories.jl")
+include("workflow_and_postprocessing/predict_session_trajectories.jl")
 
 end

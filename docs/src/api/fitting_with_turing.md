@@ -17,10 +17,20 @@ Pages = ["extensions/turing/turing_models.jl"]
 
 ## Postprocessing
 
-```@autodocs
-Modules = [CognitiveModeling]
-Private = false
-Pages = ["extensions/flexichains/get_session_trajectories.jl"]
+With Turing.jl loaded, which loads FlexiChains.jl, [`get_session_trajectories`](@ref) and
+[`get_session_parameters`](@ref) take a model made by [`turing_full_model`](@ref),
+[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
+such a model inside [`turing_catch_invalid_parameters`](@ref), and the `FlexiChain` that
+`sample` gives for it. A model of one's own around the sessions gives them the values that
+`returned(model, chain)` gives instead, with the `MultipleSessionsInfo` of several sessions.
+
+```julia
+chain = sample(model, NUTS(), 1000)
+session_trajectories = get_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
+parameters = get_session_parameters(model, chain)
+
+#The same from a model of one's own around the sessions, which returns what they return
+parameters = get_session_parameters(returned(own_model, chain), sessions_info)
 ```
 
 ### Predictive checks

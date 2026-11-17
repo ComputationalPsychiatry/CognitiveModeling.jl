@@ -226,25 +226,6 @@ end
             imputing, prior_chain; cognitive_save_history=SaveHistory(; outputs=:choice)
         )
         @test length(session_trajectories[@varname(S3.choice)][1]) == 5
-        #predict_session_trajectories simulates the imputed choices again, like the others, from the parameters of each sample
-        simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(7),
-            imputing,
-            prior_chain;
-            cognitive_save_history=SaveHistory(; outputs=:choice),
-        )
-        @test all(
-            choices -> all(choice -> choice isa Bool, choices[2:end]),
-            vec(simulated[@varname(S3.choice)]),
-        )
-        #The variables it leaves out of the chain are those within the timesteps
-        extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
-        @test extension.is_within_timestep(@varname(session[3].timestep[4].choice.imputed))
-        @test extension.is_within_timestep(@varname(timestep[2].environment.reward.imputed))
-        @test !extension.is_within_timestep(@varname(learning_rate.session))
-        @test !extension.is_within_timestep(
-            @varname(session[1].initial_cognitive_state.offset)
-        )
     end
 
     @testset "A model of one's own is an error" begin
@@ -252,58 +233,5 @@ end
         @test_throws "get_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" get_session_trajectories(
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
-        @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" predict_session_trajectories(
-            own_model(), chain; cognitive_save_history=SaveHistory()
-        )
-    end
-
-    @testset "predict_session_trajectories simulates every action again with the parameters of each sample" begin
-        cognitive_save_history = SaveHistory(; inputs=:reward, outputs=:choice)
-        simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(2), model, chain; cognitive_save_history
-        )
-        @test Turing.FlexiChains.iter_indices(simulated) ==
-            Turing.FlexiChains.iter_indices(chain)
-        #Without an environment, the rewards are those in the data, and the choices are simulated, every one of them
-        @test all(
-            ==([BeforeFirstTimestep(), 1.0, 1.0, 0.0, 1.0]),
-            vec(simulated[@varname(S3.reward)]),
-        )
-        simulated_choices = vec(simulated[@varname(S3.choice)])
-        @test all(
-            choices -> all(choice -> choice isa Bool, choices[2:end]), simulated_choices
-        )
-        @test length(unique(simulated_choices)) > 1
-    end
-
-    @testset "With an environment, the observations are simulated too, in response to the simulated actions" begin
-        #RewardsPreviousChoice gives the previous choice as the reward, and 0.5 before the first
-        with_environment = turing_full_model(
-            IndependentParameters(FULL_PRIORS),
-            sessions_for_test(; environment=RewardsPreviousChoice()),
-        )
-        simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(3),
-            with_environment,
-            chain;
-            cognitive_save_history=SaveHistory(; inputs=:reward, outputs=:choice),
-            environment_save_history=SaveHistory(; states=:n_timesteps, outputs=:reward),
-        )
-        rewards = vec(simulated[@varname(S1.reward)])
-        choices = vec(simulated[@varname(S1.choice)])
-        @test all(
-            sample -> rewards[sample][2:end] == [0.5; float.(choices[sample][2:(end - 1)])],
-            eachindex(rewards),
-        )
-        #The environment's record is under environment: the rewards it gave are the same, and its state counts the timesteps
-        @test vec(simulated[@varname(S1.environment.reward)]) == rewards
-        @test all(==([(0); 1:3]), vec(simulated[@varname(S1.environment.n_timesteps)]))
-        #A chain from the prior gives a prior predictive check
-        prior_chain = sample(Xoshiro(4), with_environment, Prior(), 10; progress=false)
-        prior_simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(5), with_environment, prior_chain; cognitive_save_history=SaveHistory()
-        )
-        @test Turing.FlexiChains.iter_indices(prior_simulated) ==
-            Turing.FlexiChains.iter_indices(prior_chain)
     end
 end
