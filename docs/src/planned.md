@@ -12,12 +12,14 @@ This page lists what is planned and not written yet. The list will grow.
 - Bayesian models made with RxInfer.jl.
 - Active inference models, which a separate package is being made for.
 - An example of a cognitive model which uses Turing.jl to select its actions.
-- Models with discrete parameters, to show how they are fitted.
+- Models with discrete parameters, to show how they are fitted. The page
+  [Discrete parameters](generated/discrete_parameters.md) is a sketch of it.
 - Examples with models from control theory as cognitive models.
 
 ## Interfaces
 
-- BayesianRegressionModels.jl.
+- BayesianRegressionModels.jl, which could also give regressions on a parameter with
+  unordered categories, with a regression for each category but one.
 - Simulation-based inference, where a neural network is trained on simulations to estimate
   the parameters: NeuralEstimators.jl, to test or to make an interface with, and perhaps the
   Python package sbi too. A simulation of a cognitive model is what both need.
@@ -47,6 +49,9 @@ This page lists what is planned and not written yet. The list will grow.
   `session[i]`, if a way is found that doesn't compile the session once per identifier.
 - A convenient way to fit a single session, with the full model or a variant of it.
 - Choosing a sampler for each parameter from whether it is discrete or continuous.
+- Summing out a discrete parameter with few values instead of sampling it, so that a sampler
+  which uses gradients can fit the whole model, perhaps with one of the Julia packages for
+  marginalizing discrete variables.
 - Mixture models and model selection within the fitted model, in the style of
   Michael D. Lee: a latent variable for each session, or each group, chooses which of
   several cognitive models generated its behavior, and its posterior compares the models.

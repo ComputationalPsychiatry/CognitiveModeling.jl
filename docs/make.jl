@@ -4,11 +4,13 @@ using Literate
 
 # Tutorials whose code is shown without being run when the documentation is built, because
 # the packages they use are too large for the documentation's environment. The tests in
-# test/tutorials run them instead, each in an environment of its own
+# test/tutorials run them instead, each in an environment of its own. The sketch of the
+# tutorial on discrete parameters isn't run either, since parts of it aren't built yet
 const NOT_RUN = [
     "interfacing_with_reinforcement_learning.jl",
     "interfacing_with_pomdps.jl",
     "interfacing_with_juliacontrol.jl",
+    "discrete_parameters.jl",
 ]
 
 # Turn the scripts in docs/literate/ into markdown pages in docs/src/generated/
@@ -40,6 +42,7 @@ makedocs(;
         "Tutorials" => [
             "generated/getting_started.md",
             "generated/custom_turing_models.md",
+            "generated/discrete_parameters.md",
             "generated/cognitive_abm_with_agents.md",
             "generated/interfacing_with_common_rl.md",
             "generated/interfacing_with_reinforcement_learning.md",
