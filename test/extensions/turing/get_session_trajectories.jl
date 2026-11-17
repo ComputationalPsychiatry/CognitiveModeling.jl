@@ -234,4 +234,16 @@ end
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
     end
+
+    @testset "A chain that isn't a FlexiChain is an error" begin
+        not_a_chain = (; learning_rate=[0.3])
+        @test_throws "get_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." get_session_trajectories(
+            model,
+            not_a_chain;
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
+        )
+        @test_throws "get_session_parameters(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." get_session_parameters(
+            model, not_a_chain
+        )
+    end
 end

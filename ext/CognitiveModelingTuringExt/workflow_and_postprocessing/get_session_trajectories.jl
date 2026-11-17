@@ -3,7 +3,7 @@
 #Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of the trajectories the sessions saved
 function CognitiveModeling.get_session_trajectories(
     model::DynamicPPL.Model,
-    chain;
+    chain::Turing.FlexiChains.FlexiChain;
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
 )
@@ -23,7 +23,9 @@ function CognitiveModeling.get_session_trajectories(
 end
 
 #Reruns a full model, several sessions or a single session on every sample of the chain, and makes a chain of the parameters each session was given
-function CognitiveModeling.get_session_parameters(model::DynamicPPL.Model, chain)
+function CognitiveModeling.get_session_parameters(
+    model::DynamicPPL.Model, chain::Turing.FlexiChains.FlexiChain
+)
     #A model of one's own has no session info to name the parameters by, so what it returns is given instead
     if !is_session_model(model)
         throw(
@@ -40,6 +42,31 @@ function CognitiveModeling.get_session_parameters(model::DynamicPPL.Model, chain
     else
         return get_session_parameters(returned_values, session_info; numbering...)
     end
+end
+
+#A chain of another kind is an error, which says what the functions take
+function CognitiveModeling.get_session_trajectories(
+    model::DynamicPPL.Model, chain; keywords...
+)
+    return throw_not_flexichain("get_session_trajectories(model, chain)", chain)
+end
+function CognitiveModeling.get_session_parameters(model::DynamicPPL.Model, chain)
+    return throw_not_flexichain("get_session_parameters(model, chain)", chain)
+end
+
+"""
+    throw_not_flexichain(call, chain)
+
+Throw an `ArgumentError` which says that `call`, a function of a model and a chain, takes a
+`FlexiChain`, and the type of `chain`, which isn't one. Used by
+`get_session_trajectories`, `get_session_parameters` and `predict_session_trajectories`.
+"""
+function throw_not_flexichain(call::AbstractString, chain)
+    return throw(
+        ArgumentError(
+            "$call takes a FlexiChain, but the chain is of type $(nameof(typeof(chain)))."
+        ),
+    )
 end
 
 """
@@ -146,10 +173,10 @@ end
 """
     sample_numbering(chain)
 
-Return the numbers of the iterations and the chains of `chain` as keyword arguments, so that
-the chain of the trajectories or the parameters is numbered the same way, or none for a
-chain that isn't a `FlexiChain`. Used by `get_session_trajectories` and
-`get_session_parameters`.
+Return the numbers of the iterations and the chains of `chain`, a `FlexiChain`, as keyword
+arguments, so that the chain of the trajectories or the parameters is numbered the same way.
+Used by `get_session_trajectories`, `get_session_parameters` and
+`predict_session_trajectories`.
 """
 function sample_numbering(chain::Turing.FlexiChains.FlexiChain)
     return (;
@@ -157,4 +184,3 @@ function sample_numbering(chain::Turing.FlexiChains.FlexiChain)
         chain_indices=Turing.FlexiChains.chain_indices(chain),
     )
 end
-sample_numbering(chain) = (;)

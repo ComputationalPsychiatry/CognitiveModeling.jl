@@ -87,6 +87,16 @@
         )
     end
 
+    @testset "A chain that isn't a FlexiChain is an error, with or without a random number generator" begin
+        not_a_chain = (; learning_rate=[0.3])
+        @test_throws "predict_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." predict_session_trajectories(
+            model, not_a_chain
+        )
+        @test_throws "predict_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." predict_session_trajectories(
+            Xoshiro(1), model, not_a_chain
+        )
+    end
+
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
         @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" predict_session_trajectories(

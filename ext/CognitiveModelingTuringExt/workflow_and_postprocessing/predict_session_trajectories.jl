@@ -6,7 +6,7 @@
 function CognitiveModeling.predict_session_trajectories(
     rng::AbstractRNG,
     model::DynamicPPL.Model,
-    chain;
+    chain::Turing.FlexiChains.FlexiChain;
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
 )
@@ -28,6 +28,13 @@ function CognitiveModeling.predict_session_trajectories(
     else
         return get_session_trajectories(returned_values, session_info; numbering...)
     end
+end
+
+#A chain of another kind is an error, which says what the function takes
+function CognitiveModeling.predict_session_trajectories(
+    rng::AbstractRNG, model::DynamicPPL.Model, chain; keywords...
+)
+    return throw_not_flexichain("predict_session_trajectories(model, chain)", chain)
 end
 
 function CognitiveModeling.predict_session_trajectories(
