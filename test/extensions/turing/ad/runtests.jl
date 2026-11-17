@@ -52,6 +52,7 @@ const KNOWN_FAILURES = [
             "turing full model with parameters from the distributions of groups",
             "turing full model with a composite of centered group parameters and independent ones",
             "turing full model with parameters from regressions",
+            "turing full model with a regression with a family distribution",
         ],
     ),
     (;

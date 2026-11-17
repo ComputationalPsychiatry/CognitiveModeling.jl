@@ -281,6 +281,21 @@ const REGRESSION_TABLE = merge(
             regression_parameter.name === nothing
         @test RegressionParameter(Intercept(1)).transformation === identity
         @test RegressionParameter(Intercept(1); name=:probability).name === :probability
+        #Without a family distribution, the value of a session is its transformed sum
+        @test regression_parameter.family_distribution === nothing &&
+            regression_parameter.family_distribution_priors === (;)
+        #A family distribution is kept with the priors of its other parameters, and one that is given as a type inside a function which makes it
+        value_and_spread(value, spread) = (value, spread)
+        with_family = RegressionParameter(
+            Intercept(1);
+            family_distribution=value_and_spread,
+            family_distribution_priors=(; spread=2),
+        )
+        @test with_family.family_distribution === value_and_spread &&
+            with_family.family_distribution_priors === (; spread=2)
+        from_type = RegressionParameter(Intercept(1); family_distribution=Pair)
+        @test from_type.family_distribution === CognitiveModeling.ConstructorOf{Pair}()
+        @test from_type.family_distribution(1, 2) === (1 => 2)
         #The terms of varying effects without a prior get the default prior of the standard deviation of their kind, and keep their settings
         with_varying_defaults = RegressionParameter(
             VaryingEffects(
@@ -481,6 +496,24 @@ const REGRESSION_TABLE = merge(
         #The coefficients of a regression are named coef, which varying effects can't be named
         @test_throws "VaryingEffects of a RegressionParameter can't be named coef, which is the name of the coefficients of the regression." RegressionParameter(
             VaryingEffects(:coef, Intercept(1))
+        )
+        #With a family distribution, the values of the sessions and its other parameters have names that varying effects can't take, while a predictor can, whose coefficient is under coef
+        @test_throws "VaryingEffects of a RegressionParameter with a family distribution can't be named session, which is the name of the values of the sessions. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session)." RegressionParameter(
+            Intercept(1),
+            VaryingEffects(:id, Intercept(2); name=:session);
+            family_distribution=Pair,
+        )
+        @test_throws "VaryingEffects of a RegressionParameter with a family distribution can't be named family, which is the name of the other parameters of the family distribution." RegressionParameter(
+            VaryingEffects(:family, Intercept(2)); family_distribution=Pair
+        )
+        @test RegressionParameter(VaryingEffects(:id, Intercept(2); name=:session)) isa
+            RegressionParameter
+        @test RegressionParameter(
+            ContinuousPredictor(:session, 1); family_distribution=Pair
+        ) isa RegressionParameter
+        #The priors of the other parameters of a family distribution need the distribution
+        @test_throws "A RegressionParameter was given family_distribution_priors, with the priors of (:sd,), but no family_distribution, whose other parameters they are the priors of." RegressionParameter(
+            Intercept(1); family_distribution_priors=(; sd=2)
         )
         @test_throws "HierarchicalRegressionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but for probability it was given 1." HierarchicalRegressionParameters((;
             probability=1

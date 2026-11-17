@@ -471,6 +471,24 @@ const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
     TURING_REGRESSION_SESSIONS,
 )
 
+# The inverse temperature of each session sampled from a family distribution around its regression, a log-normal one
+# whose standard deviation has a prior, next to a learning rate from a regression without one
+const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
+    HierarchicalRegressionParameters((;
+        learning_rate=RegressionParameter(
+            Intercept(Normal(0, 1)),
+            ContinuousPredictor(:age, Normal(0, 1));
+            transformation=turing_to_unit_interval,
+        ),
+        inverse_temperature=RegressionParameter(
+            Intercept(Normal(0, 1));
+            family_distribution=LogNormal,
+            family_distribution_priors=(; sd=Exponential(1)),
+        ),
+    )),
+    TURING_REGRESSION_SESSIONS,
+)
+
 #The session of each case, prepared once
 function rescorla_wagner_session(who_starts)
     return SessionInfo(TuringRescorlaWagner(), TURING_REWARDS, TURING_CHOICES; who_starts)
@@ -680,6 +698,12 @@ const TURING_CASES = [
         name="turing full model with a composite of centered group parameters and independent ones",
         f=log_density_of(TURING_FULL_MODEL_WITH_COMPOSITE),
         x=[0.2, -0.4, 0.8, 1.2, 0.3, -0.5, 0.1, 1.0, 2.0, 3.0],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with a regression with a family distribution",
+        f=log_density_of(TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION),
+        x=[0.2, 0.3, 0.5, 0.4, 0.6, 0.9, 1.3],
         reactant=false,
     ),
     (;

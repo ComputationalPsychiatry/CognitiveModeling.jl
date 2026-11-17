@@ -1,4 +1,6 @@
-#A stand-in for a prior whose values are known: from lower to upper, discrete or not
+using Random: AbstractRNG
+
+#A stand-in for a prior whose values are known: from lower to upper, discrete or not. A draw from it is its lowest value
 struct PriorBetween
     lower::Float64
     upper::Float64
@@ -8,6 +10,7 @@ PriorBetween(lower, upper) = PriorBetween(lower, upper, false)
 function CognitiveModeling.distribution_support(prior::PriorBetween)
     return (; lower=prior.lower, upper=prior.upper, discrete=prior.discrete)
 end
+Base.rand(rng::AbstractRNG, prior::PriorBetween) = prior.lower
 
 #A model with a domain for a probability, a count, a choice between two and a name, and with a parameter without one. All but the probability have default values
 struct CountsWithDomains <: AbstractCognitiveModel end
@@ -188,6 +191,37 @@ end
         @test bounds_of(
             ranges_of(VaryingEffects(:id, Intercept(2)); transformation=squash).probability
         ) == (0.0, 1.0)
+        #With a family distribution, the values are those of the distribution of a transformed sum, also when the sum has varying effects
+        @test ranges_of(
+            Intercept(PriorBetween(-1, 1)),
+            VaryingEffects(:id, Intercept(2));
+            family_distribution=value -> PriorBetween(0, 1, true),
+        ).probability == (;
+            lower=0.0,
+            upper=1.0,
+            discrete=true,
+            source="its family distribution, such as PriorBetween(0.0, 1.0, true)",
+        )
+        #The sum is one between the lowest and the highest, transformed, and the other parameters are drawn from their priors
+        around_sum = ranges_of(
+            Intercept(PriorBetween(2, 5));
+            transformation=sum -> 10 * sum,
+            family_distribution=PriorBetween,
+            family_distribution_priors=(; upper=PriorBetween(30, 40)),
+        ).probability
+        @test bounds_of(around_sum) == (20.0, 30.0)
+        @test around_sum.source ==
+            "its family distribution, such as PriorBetween(20.0, 30.0, false)"
+        #A family distribution whose values aren't known, or which can't be made, leaves the parameter out
+        @test ranges_of(Intercept(1); family_distribution=value -> :unknown) === (;)
+        @test ranges_of(
+            Intercept(1); family_distribution=value -> error("not for $value")
+        ) === (;)
+        @test ranges_of(
+            Intercept(1);
+            family_distribution=PriorBetween,
+            family_distribution_priors=(; upper=:not_a_prior),
+        ) === (;)
         #A transformation that throws leaves the parameter out, and so does a regression whose design isn't built
         @test ranges_of(Intercept(1); transformation=value -> error("not for $value")) ===
             (;)
@@ -259,6 +293,25 @@ end
         @test check(
             prepared_regression(RegressionParameter(Intercept(PriorBetween(0, 1)))), model
         ) === nothing
+        #With a family distribution, by the values of the distribution
+        @test_throws "The parameter probability can be given values from 0.0 to 3.0, by its family distribution, such as PriorBetween(0.0, 3.0, false), but its domain in a cognitive model of type CountsWithDomains is from 0 to 1." check(
+            prepared_regression(
+                RegressionParameter(
+                    Intercept(1);
+                    transformation=squash,
+                    family_distribution=value -> PriorBetween(0, 3),
+                ),
+            ),
+            model,
+        )
+        @test check(
+            prepared_regression(
+                RegressionParameter(
+                    Intercept(1); family_distribution=value -> PriorBetween(0, 1)
+                ),
+            ),
+            model,
+        ) === nothing
     end
 
     @testset "Continuous values for a discrete parameter are an error, and so are numbers for a parameter whose values aren't numbers" begin
@@ -275,6 +328,27 @@ end
         @test_throws ArgumentError(
             "The parameter strategy has values of type Symbol in a cognitive model of type CountsWithDomains, but it is given numbers by its prior, PriorBetween(1.0, 3.0, true).",
         ) check(IndependentParameters((; strategy=PriorBetween(1, 3, true))), model)
+        #A regression gives a discrete parameter its values through a family distribution
+        sessions_info = grouped_sessions()
+        uses_rewards_from(regression_parameter) =
+            CognitiveModeling.prepare_parameters_model(
+                HierarchicalRegressionParameters((; uses_rewards=regression_parameter)),
+                sessions_info,
+            )
+        @test_throws "The parameter uses_rewards is discrete in a cognitive model of type CountsWithDomains, with values of type Bool, but it is given continuous values by the transformation squash of its regression." check(
+            uses_rewards_from(RegressionParameter(Intercept(1); transformation=squash)),
+            model,
+        )
+        @test check(
+            uses_rewards_from(
+                RegressionParameter(
+                    Intercept(1);
+                    transformation=squash,
+                    family_distribution=value -> PriorBetween(0, 1, true),
+                ),
+            ),
+            model,
+        ) === nothing
     end
 
     @testset "Fixed values are checked as those of a session are when it runs" begin

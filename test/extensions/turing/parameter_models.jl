@@ -293,6 +293,35 @@ const REGRESSION_FULL_TABLE = merge(
     ),
 )
 
+#A Rescorla-Wagner model which only learns from its rewards when uses_rewards is true, a discrete parameter, with an inverse temperature of 5
+struct LearnsOrNot <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::LearnsOrNot, parameters)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.run_timestep(model::LearnsOrNot, context::ModelContext)
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = if context.parameters.uses_rewards
+        V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
+    else
+        V₋₁
+    end
+    return ModelOutput((; choice=BernoulliLogit(5 * (Vₜ - 0.5))), (; expected_reward=Vₜ))
+end
+function CognitiveModeling.attribute_names(model::LearnsOrNot)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :uses_rewards),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end
+function CognitiveModeling.parameter_domains(model::LearnsOrNot)
+    return (;
+        learning_rate=ParameterDomain(; lower=0, upper=1),
+        uses_rewards=ParameterDomain(; type=Bool),
+    )
+end
+
 @testset "HierarchicalRegressionParameters" begin
     sessions_info = sessions_for_test(
         SessionRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
@@ -544,6 +573,156 @@ const REGRESSION_FULL_TABLE = merge(
         given = Dict(@varname(mean_reward.coef) => (; intercept=0.6, group_b=-0.2))
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given).environment_parameters.mean_reward ≈ [0.6, 0.4, 0.6]
+    end
+
+    @testset "With a family distribution, the value of every session is sampled around its transformed sum, as name.session" begin
+        with_family = HierarchicalRegressionParameters((;
+            uses_rewards=RegressionParameter(
+                Intercept(Normal(0, 1)),
+                ContinuousPredictor(:age, Normal(0, 0.05));
+                transformation=to_unit_interval,
+                family_distribution=Bernoulli,
+            ),
+            inverse_temperature=RegressionParameter(
+                Intercept(Normal(0, 1));
+                family_distribution=LogNormal,
+                family_distribution_priors=(; sd=Exponential(1)),
+            ),
+        ))
+        model = CognitiveModeling.turing_parameters_model(
+            CognitiveModeling.prepare_parameters_model(with_family, sessions_info),
+            sessions_info,
+        )
+        given = Dict(
+            @varname(uses_rewards.coef) => (; intercept=0.5, age=-0.01),
+            @varname(uses_rewards.session) => [true, false, true],
+            @varname(inverse_temperature.coef) => (; intercept=0.7),
+            @varname(inverse_temperature.family) => (; sd=0.4),
+            @varname(inverse_temperature.session) => [1.5, 2.0, 2.5],
+        )
+        #The values of the sessions are a variable of their own, and the other parameters of the distribution are one variable, under family
+        @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
+        #The model gives the sampled values, which are of the type that the distribution gives
+        parameters = returned(model, given)
+        @test parameters ==
+            (; uses_rewards=[true, false, true], inverse_temperature=[1.5, 2.0, 2.5])
+        @test rand(Xoshiro(1), model)[@varname(uses_rewards.session)] isa Vector{Bool}
+        #Each is scored against the distribution of its transformed sum: the ages of the sessions are 20, 30 and 40
+        probabilities = to_unit_interval.(0.5 .- 0.01 .* [20, 30, 40])
+        @test logjoint(model, given) ≈
+            logpdf(Normal(0, 1), 0.5) +
+              logpdf(Normal(0, 0.05), -0.01) +
+              sum(logpdf.(Bernoulli.(probabilities), [true, false, true])) +
+              logpdf(Normal(0, 1), 0.7) +
+              logpdf(Exponential(1), 0.4) +
+              sum(logpdf.(LogNormal(0.7, 0.4), [1.5, 2.0, 2.5]))
+    end
+
+    @testset "The other parameters of a family distribution can be of any kind, such as the cutpoints between ordered levels" begin
+        ordered_levels = HierarchicalRegressionParameters((;
+            planning_steps=RegressionParameter(
+                ContinuousPredictor(:age, Normal(0, 0.05));
+                family_distribution=OrderedLogistic,
+                family_distribution_priors=(;
+                    cutpoints=Turing.Bijectors.ordered(filldist(Normal(0, 2), 3))
+                ),
+            ),
+        ))
+        model = CognitiveModeling.turing_parameters_model(
+            CognitiveModeling.prepare_parameters_model(ordered_levels, sessions_info),
+            sessions_info,
+        )
+        given = Dict(
+            @varname(planning_steps.coef) => (; age=0.02),
+            @varname(planning_steps.family) => (; cutpoints=[-1.0, 0.5, 1.5]),
+            @varname(planning_steps.session) => [1, 3, 4],
+        )
+        @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
+        @test returned(model, given) == (; planning_steps=[1, 3, 4])
+        @test logjoint(model, given) ≈
+            logpdf(Normal(0, 0.05), 0.02) +
+              logpdf(
+                  Turing.Bijectors.ordered(filldist(Normal(0, 2), 3)), [-1.0, 0.5, 1.5]
+              ) +
+              sum(
+                  logpdf.(
+                      OrderedLogistic.(0.02 .* [20, 30, 40], Ref([-1.0, 0.5, 1.5])),
+                      [1, 3, 4],
+                  ),
+              )
+    end
+
+    @testset "The full model fits a discrete parameter of the sessions, with a sampler for each kind of variable" begin
+        discrete_sessions = sessions_for_test(
+            LearnsOrNot(), REGRESSION_FULL_TABLE; impute_missing_actions=false
+        )
+        learning_rate = RegressionParameter(
+            Intercept(Normal(0, 1)); transformation=to_unit_interval
+        )
+        uses_rewards = RegressionParameter(
+            Intercept(Normal(0, 1)),
+            ContinuousPredictor(:age, Normal(0, 0.05));
+            transformation=to_unit_interval,
+            family_distribution=Bernoulli,
+        )
+        model = turing_full_model(
+            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
+            discrete_sessions,
+        )
+        given = Dict(
+            @varname(learning_rate.coef) => (; intercept=0.2),
+            @varname(uses_rewards.coef) => (; intercept=0.5, age=-0.01),
+            @varname(uses_rewards.session) => [true, false, true],
+        )
+        @test returned(model, given).cognitive_parameters.uses_rewards ==
+            [true, false, true]
+        #A session that doesn't use its rewards is one with a learning rate of 0
+        probabilities = to_unit_interval.(0.5 .- 0.01 .* [20, 30, 40])
+        log_prior =
+            logpdf(Normal(0, 1), 0.2) +
+            logpdf(Normal(0, 1), 0.5) +
+            logpdf(Normal(0, 0.05), -0.01) +
+            sum(logpdf.(Bernoulli.(probabilities), [true, false, true]))
+        learning_rates = [to_unit_interval(0.2), 0.0, to_unit_interval(0.2)]
+        @test logjoint(model, given) ≈
+            log_prior + sessions_by_hand(FULL_TABLE, learning_rates, fill(5.0, 3))
+
+        #The coefficients are sampled with gradients, and the values of the sessions without
+        sampler = Gibbs(
+            (@varname(learning_rate.coef), @varname(uses_rewards.coef)) => NUTS(),
+            @varname(uses_rewards.session) => MH(),
+        )
+        chain = sample(Xoshiro(1), model, sampler, 20; progress=false)
+        @test size(chain, 1) == 20
+        @test all(
+            sampled -> sampled.cognitive_parameters.uses_rewards isa Vector{Bool},
+            returned(model, chain),
+        )
+        #The values of the sessions after the fit, under each session's symbol name
+        parameters_chain = session_parameters_chain(model, chain)
+        @test Turing.FlexiChains.get_name.(keys(parameters_chain)) == [
+            @varname(S1.learning_rate),
+            @varname(S1.uses_rewards),
+            @varname(S2.learning_rate),
+            @varname(S2.uses_rewards),
+            @varname(S3.learning_rate),
+            @varname(S3.uses_rewards),
+        ]
+        @test all(value -> value isa Bool, parameters_chain[@varname(S2.uses_rewards)])
+
+        #A discrete parameter needs a family distribution, whose values must be within its domain
+        full_model_with(uses_rewards) = turing_full_model(
+            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
+            discrete_sessions,
+        )
+        @test_throws "The parameter uses_rewards is discrete in a cognitive model of type LearnsOrNot, with values of type Bool, but it is given continuous values by the transformation to_unit_interval of its regression." full_model_with(
+            RegressionParameter(Intercept(Normal(0, 1)); transformation=to_unit_interval)
+        )
+        @test_throws "The parameter uses_rewards can be given values from 0 to Inf, by its family distribution, such as $(Poisson(1.0)), but its domain in a cognitive model of type LearnsOrNot is from 0 to 1." full_model_with(
+            RegressionParameter(
+                Intercept(Normal(0, 1)); transformation=exp, family_distribution=Poisson
+            ),
+        )
     end
 
     @testset "A regression whose transformation reaches outside a domain is an error when the model is made" begin

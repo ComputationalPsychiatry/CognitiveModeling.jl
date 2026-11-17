@@ -288,7 +288,11 @@ standard deviation, `learning_rate.participant.intercept.sd`, which has the valu
 group under the group's symbol name when the levels are grouped, such as
 `learning_rate.participant.intercept.sd.clinical`, and a standardized value for each level,
 `learning_rate.participant.intercept.standardized`, or the deviation of each level,
-`learning_rate.participant.intercept.deviation`, when they are centered. A part of a
+`learning_rate.participant.intercept.deviation`, when they are centered. A regression with
+a family distribution also has the value of every session as a vector,
+`learning_rate.session`, and the other parameters of the distribution as one variable,
+`learning_rate.family`, with each under its name, such as `learning_rate.family.sd`. A
+part of a
 [`CompositeParameters`](@ref) that is given with a name has its variables under that
 name, such as `noise.bias.session`. The variables of the sessions are under `session[i]`,
 and those of the downstream model as it names them, or under `downstream_model` with the

@@ -485,12 +485,14 @@ struct DefaultRegressionSettings
 end
 
 """
-    RegressionParameter(terms...; transformation=identity,
+    RegressionParameter(terms...; transformation=identity, family_distribution=nothing,
+                        family_distribution_priors=(;),
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings(), name=nothing)
     RegressionParameter(formula, terms...; categorical_coding=(;),
                         categorical_reference_levels=(;), priors=(;),
-                        transformation=identity,
+                        transformation=identity, family_distribution=nothing,
+                        family_distribution_priors=(;),
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings())
 
@@ -509,6 +511,13 @@ columns that identify them, such as `VaryingEffects(:id, Intercept(Exponential(1
 give each session a value of its own. Without them, sessions with the same values in every
 column that is used have the same value of the parameter.
 
+With a `family_distribution`, the value of a session is sampled from a distribution around
+its transformed sum instead, as the outcome is in a generalized linear model. A discrete
+parameter needs one, since a sum is never discrete: with `transformation = logistic` and
+`family_distribution = Bernoulli`, the transformed sum is the probability that the
+parameter is `true` in a session. The values of the sessions are then variables of their
+own.
+
 Every term has a name of its own, which its coefficients or its variables are named after.
 A term is named after its column or columns, and an interaction after its predictors, unless
 it is given another name.
@@ -517,6 +526,15 @@ it is given another name.
 - `transformation=identity`: a function applied to the sum for each session, such as `exp`
   for a parameter that must be positive or `logistic` for one between 0 and 1, as an
   inverse link function does in a regression.
+- `family_distribution=nothing`: the distribution that the value of each session is sampled
+  from, as a function of the transformed sum of the session, such as `Bernoulli`, `Poisson`
+  or `value -> Binomial(7, value)`. A distribution with other parameters takes them after
+  the transformed sum, in the order of `family_distribution_priors`, as `Normal` takes a
+  standard deviation after its mean. With `nothing`, the value of a session is its
+  transformed sum.
+- `family_distribution_priors=(;)`: the priors of the other parameters of the family
+  distribution, in a `NamedTuple`, such as `(; sd = Exponential(1))`. Each is sampled once,
+  for every session.
 - `default_priors=DefaultRegressionPriors()`: the priors of the terms that are given
   without one, by their kind, as a [`DefaultRegressionPriors`](@ref).
 - `default_settings=DefaultRegressionSettings()`: the coding of the categorical predictors
@@ -528,8 +546,9 @@ it is given another name.
 
 The terms are kept in the field `terms`, as a `NamedTuple` with each term under its name,
 those without a prior with the one from `default_priors`, and those without a coding or a
-choice of centering with the ones from `default_settings`, and the transformation and the
-name in fields of the same name.
+choice of centering with the ones from `default_settings`. The transformation, the family
+distribution, its priors and the name are kept in fields of the same name, with a
+`family_distribution` that is given as a type inside a function which makes it.
 
 # Formulas
 With StatsModels.jl loaded, the terms can be written as a `@formula`, in the syntax of
@@ -575,6 +594,19 @@ julia> keys(learning_rate.terms)
 (:intercept, :age, :diagnosis, :age_by_diagnosis, :participant)
 ```
 
+A discrete parameter, which is `true` in a session with a probability that depends on the
+age:
+```julia
+using LogExpFunctions: logistic
+
+uses_rewards = RegressionParameter(
+    Intercept(Normal(0, 1)),
+    ContinuousPredictor(:age, Normal(0, 0.5));
+    transformation = logistic,
+    family_distribution = Bernoulli,
+)
+```
+
 A regression written as a formula, with varying intercepts of the participants whose
 standard deviations differ between diagnoses, which a formula can't express, after it:
 ```julia
@@ -589,15 +621,24 @@ learning_rate = RegressionParameter(
 )
 ```
 """
-struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
+struct RegressionParameter{
+    Tterms<:NamedTuple,
+    Ttransformation,
+    Tfamily_distribution,
+    Tfamily_distribution_priors<:NamedTuple,
+}
     terms::Tterms
     transformation::Ttransformation
+    family_distribution::Tfamily_distribution
+    family_distribution_priors::Tfamily_distribution_priors
     name::Union{Nothing,Symbol}
 
-    #Gives the default priors and settings to the terms without them, checks the terms and keeps them under their names
+    #Gives the default priors and settings to the terms without them, checks the terms and keeps them under their names, with the family distribution and its priors
     function RegressionParameter(
         terms...;
         transformation=identity,
+        family_distribution=nothing,
+        family_distribution_priors::NamedTuple=(;),
         default_priors::DefaultRegressionPriors=DefaultRegressionPriors(),
         default_settings::DefaultRegressionSettings=DefaultRegressionSettings(),
         name::Union{Nothing,Symbol}=nothing,
@@ -630,10 +671,65 @@ struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
                 ),
             )
         end
-        return new{typeof(terms_by_name),typeof(transformation)}(
-            terms_by_name, transformation, name
+
+        #The priors of the other parameters of a family distribution need the distribution
+        if family_distribution === nothing && !isempty(family_distribution_priors)
+            throw(
+                ArgumentError(
+                    "A RegressionParameter was given family_distribution_priors, with the priors of $(keys(family_distribution_priors)), but no family_distribution, whose other parameters they are the priors of.",
+                ),
+            )
+        end
+
+        #With a family distribution, the values of the sessions are named session under the parameter's name, and the other parameters of the distribution family, so varying effects can't take those names
+        if family_distribution !== nothing
+            check_no_varying_effects_named(
+                terms_by_name, :session, "the values of the sessions"
+            )
+            check_no_varying_effects_named(
+                terms_by_name, :family, "the other parameters of the family distribution"
+            )
+        end
+
+        #A distribution given as a type, such as Bernoulli, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
+        kept_family_distribution = if family_distribution isa Type
+            ConstructorOf{family_distribution}()
+        else
+            family_distribution
+        end
+        return new{
+            typeof(terms_by_name),
+            typeof(transformation),
+            typeof(kept_family_distribution),
+            typeof(family_distribution_priors),
+        }(
+            terms_by_name,
+            transformation,
+            kept_family_distribution,
+            family_distribution_priors,
+            name,
         )
     end
+end
+
+"""
+    check_no_varying_effects_named(terms_by_name, reserved_name, named_so)
+
+Throw an informative error if `terms_by_name`, the terms of a [`RegressionParameter`](@ref)
+with a family distribution under their names, has [`VaryingEffects`](@ref) named
+`reserved_name`, which is the name of the variable that `named_so` describes, such as
+`"the values of the sessions"`. Used by the constructor of `RegressionParameter`.
+"""
+function check_no_varying_effects_named(
+    terms_by_name::NamedTuple, reserved_name::Symbol, named_so::String
+)
+    haskey(terms_by_name, reserved_name) || return nothing
+    getproperty(terms_by_name, reserved_name) isa VaryingEffects || return nothing
+    return throw(
+        ArgumentError(
+            "VaryingEffects of a RegressionParameter with a family distribution can't be named $reserved_name, which is the name of $named_so. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session).",
+        ),
+    )
 end
 
 """
@@ -726,18 +822,16 @@ function parameter_names(parameters_model::HierarchicalRegressionParameters)
     return keys(parameters_model.parameters)
 end
 
-#With the designs of its regressions, it can give a parameter what its transformation makes of the lowest and the highest sum of its regression. Before they are built, the values aren't known
+#With the designs of its regressions, it can give a parameter what its transformation makes of the lowest and the highest sum of its regression, or the values of its family distribution. Before the designs are built, the values aren't known
 function parameter_value_ranges(
     parameters_model::HierarchicalRegressionParameters{<:NamedTuple,<:NamedTuple}
 )
     ranges = Pair{Symbol,NamedTuple}[]
     for (name, regression_parameter) in pairs(parameters_model.parameters)
         sums = range_of_regression_sums(getproperty(parameters_model.designs, name))
-        transformation = regression_parameter.transformation
-        range = transformed_range(transformation, sums.lower, sums.upper)
+        range = range_of_regression_values(regression_parameter, sums)
         range === nothing && continue
-        source = "the transformation $transformation of its regression"
-        push!(ranges, name => merge(range, (; discrete=false, source)))
+        push!(ranges, name => range)
     end
     return (; ranges...)
 end
@@ -1692,4 +1786,45 @@ function range_of_regression_sums(design::NamedTuple)
         end
     end
     return (; lower=minimum(lowest_sums), upper=maximum(highest_sums))
+end
+
+"""
+    range_of_regression_values(regression_parameter, sums)
+
+Return the values that `regression_parameter`, a [`RegressionParameter`](@ref), can give a
+session, as [`parameter_value_ranges`](@ref) returns those of a parameter, or `nothing` when
+they aren't known. `sums` has the lowest and the highest sum of the regression, from
+[`range_of_regression_sums`](@ref). Without a family distribution, the values are what the
+transformation makes of the sums, from [`transformed_range`](@ref). With one, they are the
+values that [`distribution_support`](@ref) knows for the distribution of one transformed
+sum, made with a draw of its other parameters from their priors. Used by the
+`parameter_value_ranges` of [`HierarchicalRegressionParameters`](@ref).
+"""
+function range_of_regression_values(
+    regression_parameter::RegressionParameter{<:NamedTuple,<:Any,Nothing}, sums::NamedTuple
+)
+    transformation = regression_parameter.transformation
+    range = transformed_range(transformation, sums.lower, sums.upper)
+    range === nothing && return nothing
+    source = "the transformation $transformation of its regression"
+    return merge(range, (; discrete=false, source))
+end
+function range_of_regression_values(
+    regression_parameter::RegressionParameter, sums::NamedTuple
+)
+
+    #The distribution of a sum between the lowest and the highest, with its other parameters drawn from their priors. A distribution that can't be made this way is left to the check when a session runs
+    distribution = try
+        value = regression_parameter.transformation(clamp(0.0, sums.lower, sums.upper))
+        other_parameters = map(
+            prior -> rand(Xoshiro(0), prior),
+            values(regression_parameter.family_distribution_priors),
+        )
+        regression_parameter.family_distribution(value, other_parameters...)
+    catch
+        return nothing
+    end
+    support = distribution_support(distribution)
+    support === nothing && return nothing
+    return merge(support, (; source="its family distribution, such as $distribution"))
 end

@@ -3,7 +3,7 @@ Computational modeling of cognition and behavior.
 """
 module CognitiveModeling
 
-using Random: AbstractRNG, default_rng
+using Random: AbstractRNG, Xoshiro, default_rng
 
 include("defining_models/types.jl")
 include("defining_models/functions_to_extend.jl")
