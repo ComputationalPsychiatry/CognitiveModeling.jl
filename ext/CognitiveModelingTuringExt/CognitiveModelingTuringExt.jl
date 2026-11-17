@@ -69,7 +69,16 @@ using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
-include("turing_behavioral_session.jl")
+#The full model, made from its parts, the Turing.jl models of the full model, the sessions, a session and a timestep, each in a file named after it, and the helpers they use, in files named after the models they serve
+include("turing_full_model.jl")
+include("models/run_full_model.jl")
+include("models/multiple_behavioral_sessions.jl")
+include("models/behavioral_session.jl")
+include("models/catch_invalid_parameters.jl")
+include("models/behavioral_timestep.jl")
+include("models/impute_missing_values.jl")
+include("utility_functions/multiple_behavioral_sessions.jl")
+include("utility_functions/behavioral_session.jl")
 
 #The Turing.jl models of the parameter models, which give or sample the parameters of every session, each
 #in a file named as the file of its type in the package. The same kinds serve the parameters of the cognitive model and

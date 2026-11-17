@@ -1,0 +1,274 @@
+### MODEL FOR A BEHAVIORAL SESSION ###
+
+#Turing model for running a single behavioral session without an environment: every observation comes from the data
+Turing.@model function CognitiveModeling.turing_behavioral_session(
+    session_info::SessionInfo{<:Any,NoEnvironment}, cognitive_parameters
+)
+    cognitive_model = session_info.cognitive_model
+
+    #Fill in the default parameters, and initialize the state with them, with the Turing version so that a model can sample its start
+    cognitive_parameters_with_defaults = merge_default_parameters(
+        cognitive_model, cognitive_parameters
+    )
+    initial_cognitive_state ~ to_submodel(
+        turing_initialize_state(cognitive_model, cognitive_parameters_with_defaults)
+    )
+
+    #Check the names of the parameters, the state and the previous action against attribute_names, which is decided at compile time, and that each parameter is within its domain
+    check_match_attribute_names(
+        cognitive_model,
+        cognitive_parameters_with_defaults,
+        initial_cognitive_state,
+        session_info.previous_action,
+    )
+    if session_info.check_parameter_domains
+        check_parameters_in_domains(cognitive_model, cognitive_parameters_with_defaults)
+    end
+
+    #Run the timesteps from where the session starts, with the values arranged as those of a timestep
+    previous = (;
+        state=initial_cognitive_state,
+        observation=session_info.previous_observation,
+        action=session_info.previous_action,
+        environment=(; state=nothing),
+    )
+    saved_trajectories ~ to_submodel(
+        turing_run_all_timesteps(
+            session_info, cognitive_parameters_with_defaults, (;), previous
+        ),
+        false,
+    )
+
+    #The parameters as they were given, without the defaults, so that a model around the session which transforms its variables into them has them for each sample, with the trajectories the session saved
+    return (; cognitive_parameters, environment_parameters=(;), saved_trajectories)
+end
+
+#The same with an environment, which fills in the observations that are missing in the data, and takes its parameters too
+Turing.@model function CognitiveModeling.turing_behavioral_session(
+    session_info::SessionInfo{<:Any,<:AbstractTimestepModel},
+    cognitive_parameters,
+    environment_parameters=(;),
+)
+    #A session with nothing missing runs without its environment, whose scores of the observations wouldn't depend on any variable, so it has the variables of a session without one, and an empty record of the environment. It returns the environment parameters it was given
+    if !session_info.includes_environment
+        session_without_environment ~ to_submodel(
+            turing_behavioral_session(
+                remake_session_without_environment(session_info), cognitive_parameters
+            ),
+            false,
+        )
+        return (;
+            cognitive_parameters,
+            environment_parameters,
+            saved_trajectories=with_empty_environment_entry(
+                session_without_environment.saved_trajectories
+            ),
+        )
+    end
+
+    cognitive_model = session_info.cognitive_model
+    environment = session_info.environment
+
+    #Fill in the default parameters of both models, and initialize both states with them
+    cognitive_parameters_with_defaults = merge_default_parameters(
+        cognitive_model, cognitive_parameters
+    )
+    environment_parameters_with_defaults = merge_default_parameters(
+        environment, environment_parameters
+    )
+    initial_cognitive_state ~ to_submodel(
+        turing_initialize_state(cognitive_model, cognitive_parameters_with_defaults)
+    )
+    initial_environment_state ~
+    to_submodel(turing_initialize_state(environment, environment_parameters_with_defaults))
+
+    #Check the names of both models against attribute_names, which is decided at compile time
+    check_match_attribute_names(
+        cognitive_model,
+        cognitive_parameters_with_defaults,
+        initial_cognitive_state,
+        session_info.previous_action,
+    )
+    check_match_attribute_names(
+        environment,
+        environment_parameters_with_defaults,
+        initial_environment_state,
+        session_info.previous_environment_observation,
+    )
+
+    #Check that each parameter of both models is within its domain, unless the session leaves the check out
+    if session_info.check_parameter_domains
+        check_parameters_in_domains(cognitive_model, cognitive_parameters_with_defaults)
+        check_parameters_in_domains(environment, environment_parameters_with_defaults)
+    end
+
+    #Run the timesteps from where the session starts, with the values arranged as those of a timestep: the environment's are under environment, in its own names
+    previous = (;
+        state=initial_cognitive_state,
+        observation=session_info.previous_observation,
+        action=session_info.previous_action,
+        environment=(;
+            state=initial_environment_state,
+            observation=session_info.previous_environment_observation,
+            action=map_names(session_info.previous_action, session_info.action_map),
+        ),
+    )
+    saved_trajectories ~ to_submodel(
+        turing_run_all_timesteps(
+            session_info,
+            cognitive_parameters_with_defaults,
+            environment_parameters_with_defaults,
+            previous,
+        ),
+        false,
+    )
+
+    #The parameters as they were given, without the defaults, with the trajectories the session saved
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
+end
+
+#A session without an environment takes no environment parameters, so an empty NamedTuple passes, which lets several sessions be run alike, and anything else is an error
+function CognitiveModeling.turing_behavioral_session(
+    session_info::SessionInfo{<:Any,NoEnvironment},
+    cognitive_parameters,
+    environment_parameters::NamedTuple,
+)
+    check_environment_parameters(session_info, environment_parameters)
+    return turing_behavioral_session(session_info, cognitive_parameters)
+end
+
+### THE TIMESTEPS OF A SESSION ###
+
+"""
+    turing_run_all_timesteps(session_info, cognitive_parameters, environment_parameters,
+                         previous)
+
+Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
+as [`turing_behavioral_timestep`](@ref) with the prefix `timestep[t]`, saves what the save
+histories of `session_info` select, and scores the actions in the data, and the observations
+in the data when the environment runs, against the distributions of their timesteps all at
+once at the end, as observed values. Before each timestep from
+`first_timestep_to_check_stopping` of `session_info` on, it checks the
+[`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
+what it saved up to it, which is an error when the data continues. It returns the
+trajectories the session saved, as [`turing_behavioral_session`](@ref) describes them, which
+returns them under `saved_trajectories`. Both methods of that model call this one, after
+setting up the parameters and the initial states with or without an environment. Used by
+[`turing_behavioral_session`](@ref).
+"""
+Turing.@model function turing_run_all_timesteps(
+    session_info, cognitive_parameters, environment_parameters, previous
+)
+    n_timesteps = session_info.n_timesteps
+    first_timestep_to_check = session_info.first_timestep_to_check_stopping
+
+    #No timestep can run when the stopping criterion of either model is met already, when the criterion is checked from the start
+    if first_timestep_to_check == 1
+        check_stopping_criterion_not_met(
+            session_info.environment, previous.environment.state, environment_parameters
+        )
+        check_stopping_criterion_not_met(
+            session_info.cognitive_model, previous.state, cognitive_parameters
+        )
+    end
+
+    #Save what is kept from before the first timestep before it runs, since it can change a state in place
+    initial_saved = select_initial_timestep_values_to_save(
+        Val(saves_initial_timestep_values(session_info.cognitive_save_history)),
+        session_info,
+        previous,
+    )
+
+    #Run the first timestep outside the loop, since its inputs can have other types than all the rest
+    timestep_values ~ to_submodel(
+        prefix(
+            turing_behavioral_timestep(
+                session_info, 1, cognitive_parameters, environment_parameters, previous
+            ),
+            @varname(timestep[1]),
+        ),
+        false,
+    )
+
+    #Initialize storage for what is saved, arranged as it is returned, which starts with timestep 0 when it is kept
+    storage = initialize_all_storage(
+        initial_saved,
+        select_timestep_values_to_save(session_info, timestep_values),
+        n_timesteps,
+    )
+    offset = initial_saved === nothing ? 0 : 1
+
+    #Initialize the distributions of the actions and observations to condition on
+    distributions = initialize_distributions_for_conditioning(session_info, timestep_values)
+    distributions = store_distributions_for_conditioning(
+        session_info, distributions, timestep_values
+    )
+
+    #Run the remaining timesteps, each starting from the values of the one before, storing timestep t as element t + offset
+    n_timesteps_that_ran = n_timesteps
+    for t in 2:n_timesteps
+
+        #Stop when the stopping criterion of either model is met, on the timesteps where it is checked
+        if t >= first_timestep_to_check && (
+            stopping_criterion(
+                session_info.environment,
+                timestep_values.environment.state,
+                environment_parameters,
+            ) || stopping_criterion(
+                session_info.cognitive_model, timestep_values.state, cognitive_parameters
+            )
+        )
+            check_no_data_after(session_info, t - 1)
+            n_timesteps_that_ran = t - 1
+
+            #Keep only the timesteps that ran, shortening the vectors in place. The function uses t and not n_timesteps_that_ran, since a variable that is assigned in two places is boxed when a function uses it: its type is then unknown, and the session slower
+            map_saved(vector -> resize!(vector, t - 1 + offset), storage)
+            break
+        end
+
+        next_timestep_values ~ to_submodel(
+            prefix(
+                turing_behavioral_timestep(
+                    session_info,
+                    t,
+                    cognitive_parameters,
+                    environment_parameters,
+                    timestep_values,
+                ),
+                @varname(timestep[t]),
+            ),
+            false,
+        )
+        timestep_values = next_timestep_values
+        storage = store_timestep_values!(
+            storage,
+            select_timestep_values_to_save(session_info, timestep_values),
+            t + offset,
+        )
+        distributions = store_distributions_for_conditioning(
+            session_info, distributions, timestep_values
+        )
+    end
+
+    #Score the actions in the data, and the observations in the data with an environment, against the distributions of their timesteps, all at once as observed values
+    if !isempty(session_info.actions_to_condition_on)
+        session_info.actions_to_condition_on ~ product_distribution(
+            map(product_distribution, map(scorable_distributions, distributions.actions))
+        )
+    end
+    if has_environment(session_info) && !isempty(session_info.observations_to_condition_on)
+        session_info.observations_to_condition_on ~ product_distribution(
+            map(
+                product_distribution,
+                map(scorable_distributions, distributions.observations),
+            ),
+        )
+    end
+
+    return saved_trajectories(
+        storage,
+        timestep_sizes_until(
+            session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
+        ),
+    )
+end
