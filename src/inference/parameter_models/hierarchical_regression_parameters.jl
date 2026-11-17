@@ -73,7 +73,7 @@ end
 function ContinuousPredictor(columns, prior=nothing; keyword_arguments...)
     return throw(
         ArgumentError(
-            "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given $(repr(columns)). The product of several predictors is an Interaction.",
+            "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given $(repr(columns)).",
         ),
     )
 end
@@ -182,19 +182,21 @@ end
 
 An interaction of the predictors named in `terms`, a tuple of the names of two or more
 [`ContinuousPredictor`](@ref)s or [`CategoricalPredictor`](@ref)s of the same
-[`RegressionParameter`](@ref) or [`VaryingEffects`](@ref). It has a coefficient for each
-combination of one coefficient of each predictor, which is multiplied by the product of
-their values, as the predictors give them after coding the levels, with `prior` as its
-prior, such as `Normal(0, 0.5)`, or with `nothing` the regression's default prior for an
-interaction, from its [`DefaultRegressionPriors`](@ref). Two continuous predictors give one
-coefficient, a continuous and a categorical predictor one for each coefficient of the
-categorical predictor, and two categorical predictors one for each combination of their
-coefficients. In `VaryingEffects` it gives varying slopes, and `prior` is the prior of the
-standard deviation of their deviations.
+[`RegressionParameter`](@ref) or [`VaryingEffects`](@ref). Each of them must be a term there
+itself, so an interaction always comes with the main effects of its predictors. It has a
+coefficient for each combination of one coefficient of each predictor, which is multiplied
+by the product of their values, as the predictors give them after coding the levels, with
+`prior` as its prior, such as `Normal(0, 0.5)`, or with `nothing` the regression's default
+prior for an interaction, from its [`DefaultRegressionPriors`](@ref). Two continuous
+predictors give one coefficient, a continuous and a categorical predictor one for each
+coefficient of the categorical predictor, and two categorical predictors one for each
+combination of their coefficients. In `VaryingEffects` it gives varying slopes, and `prior`
+is the prior of the standard deviation of their deviations.
 
-The interaction is named `name`, which is the names of its predictors joined by `_by_`, as
-in `diagnosis_by_condition`, and each of its coefficients is named after the coefficients it
-multiplies, joined the same way, such as `diagnosis_clinical_by_condition_punishment`. Each
+The interaction is named `name`. By default, that is the names of its predictors joined by
+`_by_`, as in `diagnosis_by_condition`. Each of its coefficients is named after the
+coefficients it multiplies, joined by `_by_`, such as
+`diagnosis_clinical_by_condition_punishment`, whatever the interaction itself is named. Each
 argument is kept in a field of the same name, with `terms` as a tuple.
 
 # Examples
@@ -231,12 +233,13 @@ end
 Effects of a [`RegressionParameter`](@ref) that vary between the levels of `columns`, such
 as between participants: for each level, a deviation of each coefficient of its `terms`,
 from a normal distribution around zero whose standard deviation has the term's prior as its
-prior. The levels are the values of `columns`, a column of the table that the sessions were
-split from, or the combinations of the values of several columns given as a tuple. The
-terms are an [`Intercept`](@ref), for a varying intercept, and
-[`ContinuousPredictor`](@ref)s, [`CategoricalPredictor`](@ref)s and
-[`Interaction`](@ref)s, for varying slopes, as in the examples below. A term without a prior
-has the regression's default prior for a varying intercept or a varying slope, from its
+prior. Varying effects are also called random effects, and the other terms of a regression
+fixed effects. The levels are the values of `columns`, a column of the table that the
+sessions were split from, or the combinations of the values of several columns given as a
+tuple. The terms are an [`Intercept`](@ref), for a varying intercept, and
+[`ContinuousPredictor`](@ref)s, [`CategoricalPredictor`](@ref)s and [`Interaction`](@ref)s,
+for varying slopes, as in the examples below. A term without a prior has the regression's
+default prior for a varying intercept or a varying slope, from its
 [`DefaultRegressionPriors`](@ref). Each coefficient has a standard deviation of its own. A
 varying slope needs values that differ between the sessions of a level, such as a condition
 that changes between the blocks of a participant, and an interaction in varying effects
@@ -443,14 +446,14 @@ of the varying effects, each times its value in the session, with `transformatio
 to the sum. Each session must have one value of every column that is used, which isn't
 missing. The second form writes the terms as a formula, see below.
 
+A regression commonly has varying effects whose levels are the sessions, over the column or
+columns that identify them, such as `VaryingEffects(:id, Intercept(Exponential(1)))`, which
+give each session a value of its own. Without them, sessions with the same values in every
+column that is used have the same value of the parameter.
+
 Every term has a name of its own, which its coefficients or its variables are named after.
 A term is named after its column or columns, and an interaction after its predictors, unless
-it is given another name. Without varying effects whose levels are the sessions, sessions
-with the same values in every column that is used have the same value of the parameter.
-Varying effects over the columns that identify the sessions give each session a value of
-its own, such as `VaryingEffects(:id, Intercept(Exponential(1)))`. When every participant
-has one session, they are the same as a varying intercept over the participants, and only
-one of the two can be estimated.
+it is given another name.
 
 # Keyword arguments
 - `transformation=identity`: a function applied to the sum for each session, such as `exp`
@@ -569,7 +572,8 @@ end
 
 The parameter model of a full model which gives each parameter of every session by
 a regression on columns of the table that the sessions were split from, such as the age and
-the diagnosis of a participant, with varying effects. `parameters` is a `NamedTuple` with a
+the diagnosis of a participant, with varying effects, which are also called random effects.
+`parameters` is a `NamedTuple` with a
 [`RegressionParameter`](@ref) for each parameter that is fitted, which has the terms of its
 regression and their priors. It is kept in the field `parameters`. Useful for estimating the
 effect of a predictor on a parameter, or the difference between groups, together with the

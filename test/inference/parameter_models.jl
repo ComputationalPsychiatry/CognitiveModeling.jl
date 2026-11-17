@@ -411,7 +411,7 @@ const REGRESSION_TABLE = merge(
             Intercept(1), ContinuousPredictor(:age, 1), Interaction((:intercept, :age), 2)
         )
         #A continuous predictor reads one column, and a categorical one reads one or several and is coded in one of three ways, of which one has no reference level
-        @test_throws "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given (:age, :iq). The product of several predictors is an Interaction." ContinuousPredictor(
+        @test_throws "A ContinuousPredictor reads one column, given as a Symbol such as :age, but it was given (:age, :iq)." ContinuousPredictor(
             (:age, :iq), 1
         )
         @test_throws "The coding of a CategoricalPredictor is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :sum_to_zero." CategoricalPredictor(
