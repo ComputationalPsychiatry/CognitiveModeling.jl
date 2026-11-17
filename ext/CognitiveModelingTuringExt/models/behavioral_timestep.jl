@@ -192,17 +192,24 @@ can be scored against the distributions at the end of the session. The row is ta
 not given. Used by [`turing_behavioral_timestep`](@ref).
 """
 Turing.@model function turing_model_timestep(model, context, data_columns, t)
+    #Take this timestep's row of the data for the model's outputs
     data_output = select_row(data_columns, t)
+
+    #Run the model's timestep with the Turing version, so that a model can sample within it, and check that it returned a ModelOutput
     model_output ~ to_submodel(turing_run_timestep(model, context), false)
     model_output = check_model_output(model_output, model)
+
+    #Take the outputs from the data where it has them, and impute those that are missing from the distributions the model gave
     output ~ to_submodel(
         turing_impute_missing_values(data_output, model_output.output_distribution), false
     )
+
+    #Find which outputs have values in the data to condition on, which the session scores against the distributions the model gave, all at once at its end
     outputs_to_condition_on = find_outputs_to_condition_on(
         data_output, model_output.output_distribution, model
     )
 
-    #The output can have one of two types, so it goes in through build_named_entry
+    #Return the outputs, the model's new state, the distributions it gave and which outputs to condition on. The outputs can have one of two types, so they go in through build_named_entry
     return merge(
         build_named_entry(Val(:output), output),
         (;
