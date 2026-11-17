@@ -30,6 +30,13 @@ each parameter model for the sessions with
 [`CognitiveModeling.prepare_parameters_model`](@ref). When `environment_parameters_model`
 estimates parameters, every session with an environment includes it in the returned
 `sessions_info`.
+
+For sessions that check the domains of their parameters, it then checks what each
+parameter model can give against the domains in [`parameter_domains`](@ref): a prior or a
+transformation which can give a value outside a domain, as
+[`CognitiveModeling.parameter_value_ranges`](@ref) knows them, is an `ArgumentError`, and a
+fixed value outside its domain a [`ParameterDomainError`](@ref). The parameters of an
+environment that no session runs aren't checked.
 """
 function prepare_full_model(
     cognitive_parameters_model,
@@ -70,21 +77,35 @@ function prepare_full_model(
 
     #Check the parameters that the parameter models give against those of the models. An environment that no session runs doesn't need its parameters
     first_session = first(sessions_info.sessions)
+    environment_runs = any(session -> session.includes_environment, sessions_info.sessions)
     check_given_parameters(cognitive_parameters_model, first_session.cognitive_model, true)
     check_given_parameters(
-        environment_parameters_model,
-        first_session.environment,
-        any(session -> session.includes_environment, sessions_info.sessions),
+        environment_parameters_model, first_session.environment, environment_runs
     )
 
     #Prepare each parameter model for the sessions
+    cognitive_parameters_model = prepare_parameters_model(
+        cognitive_parameters_model, sessions_info
+    )
+    environment_parameters_model = prepare_parameters_model(
+        environment_parameters_model, sessions_info
+    )
+
+    #Check what each parameter model can give against the domains of the parameters, when the sessions check the domains
+    if first_session.check_parameter_domains
+        check_given_values_in_domains(
+            cognitive_parameters_model, first_session.cognitive_model
+        )
+        if environment_runs
+            check_given_values_in_domains(
+                environment_parameters_model, first_session.environment
+            )
+        end
+    end
+
     return (;
-        cognitive_parameters_model=prepare_parameters_model(
-            cognitive_parameters_model, sessions_info
-        ),
-        environment_parameters_model=prepare_parameters_model(
-            environment_parameters_model, sessions_info
-        ),
+        cognitive_parameters_model,
+        environment_parameters_model,
         downstream_model,
         sessions_info,
     )

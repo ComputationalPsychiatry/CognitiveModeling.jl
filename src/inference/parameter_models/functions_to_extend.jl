@@ -66,3 +66,52 @@ function prepare_parameters_model(
 )
     return parameters_model
 end
+
+"""
+    parameter_value_ranges(parameters_model)
+
+Return the values that `parameters_model` can give each parameter, in a `NamedTuple` under
+the names of the parameters: for each, a `NamedTuple` with the lowest and the highest value,
+`lower` and `upper`, whether the values are `discrete`, and `source`, which says where they
+come from in an error message. A parameter whose values aren't known is left out.
+[`prepare_full_model`](@ref) checks them against the domains of the parameters, from
+[`parameter_domains`](@ref), so that a prior or a transformation which reaches outside a
+domain is an error before a fit.
+
+[`IdenticalParameters`](@ref) and [`IndependentParameters`](@ref) give the values of each
+prior that [`CognitiveModeling.distribution_support`](@ref) knows. A
+[`HierarchicalGroupedParameters`](@ref) gives what the transformation of a parameter makes
+of the real line, for a parameter with the default normal distribution. A
+[`HierarchicalRegressionParameters`](@ref) that was prepared for the sessions gives what
+the transformation of a parameter makes of the sums of its regression.
+
+# Implementation
+A parameter model of one's own can add a method of this function. The default returns an
+empty `NamedTuple`, so that nothing is checked before a fit.
+
+# Examples
+```jldoctest
+julia> parameters_model = HierarchicalGroupedParameters((; learning_rate = HierarchicalParameter((; mean = 0.0, sd = 1.0); transformation = exp)));
+
+julia> CognitiveModeling.parameter_value_ranges(parameters_model).learning_rate.lower
+0.0
+```
+"""
+parameter_value_ranges(parameters_model::AbstractParametersModel) = (;)
+
+## Functions that an inference backend can implement for its distributions ##
+
+"""
+    distribution_support(distribution)
+
+Return the values that `distribution` can give, as a `NamedTuple` with the lowest and the
+highest value, `lower` and `upper`, and whether the values are `discrete`, or `nothing` when
+they aren't known. The parameter models read the values of their priors from it, for
+[`CognitiveModeling.parameter_value_ranges`](@ref).
+
+# Implementation
+An inference backend can add a method of this function for the distributions it takes, as
+the Turing.jl extension does for the univariate distributions of Distributions.jl. The
+default returns `nothing`.
+"""
+distribution_support(distribution) = nothing

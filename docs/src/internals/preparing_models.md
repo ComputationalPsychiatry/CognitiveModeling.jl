@@ -15,6 +15,14 @@ Public = false
 Pages = ["inference/utility_functions/preparing_models/prepare_full_model.jl"]
 ```
 
+## Checking what a parameter model can give against the domains of the parameters
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/utility_functions/preparing_models/check_given_values_in_domains.jl"]
+```
+
 ## Preparing the data of a session
 
 ```@autodocs

@@ -355,7 +355,7 @@ const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
     ),
 )
 
-# The same sessions with the model whose parameters have domains, and priors that stay within them, so that making the model gives no warning
+# The same sessions with the model whose parameters have domains, and priors that stay within them, which is checked when the model is made
 const TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS = turing_full_model(
     IndependentParameters((;
         learning_rate=Uniform(0, 1), inverse_temperature=Turing.FlatPos(0.0)

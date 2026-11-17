@@ -726,6 +726,22 @@ function parameter_names(parameters_model::HierarchicalRegressionParameters)
     return keys(parameters_model.parameters)
 end
 
+#With the designs of its regressions, it can give a parameter what its transformation makes of the lowest and the highest sum of its regression. Before they are built, the values aren't known
+function parameter_value_ranges(
+    parameters_model::HierarchicalRegressionParameters{<:NamedTuple,<:NamedTuple}
+)
+    ranges = Pair{Symbol,NamedTuple}[]
+    for (name, regression_parameter) in pairs(parameters_model.parameters)
+        sums = range_of_regression_sums(getproperty(parameters_model.designs, name))
+        transformation = regression_parameter.transformation
+        range = transformed_range(transformation, sums.lower, sums.upper)
+        range === nothing && continue
+        source = "the transformation $transformation of its regression"
+        push!(ranges, name => merge(range, (; discrete=false, source)))
+    end
+    return (; ranges...)
+end
+
 #The design of every regression is built once, when a full model is prepared, and kept in the field for the designs
 function prepare_parameters_model(
     parameters_model::HierarchicalRegressionParameters, sessions_info::MultipleSessionsInfo
@@ -1640,4 +1656,40 @@ function find_groups_of_levels(
         n_groups=groups.n_groups,
         group_symbol_names=groups.group_symbol_names,
     )
+end
+
+"""
+    range_of_regression_sums(design)
+
+Return the lowest and the highest value that the sum of a regression can have in a session,
+as a `NamedTuple` with `lower` and `upper`, from `design`, the design of the regression.
+With varying effects it is the real line, since their deviations are normal. Without them,
+the sum of a session is lowest and highest when every coefficient times its value in the
+session is, where the values that a coefficient can have are those of its prior, from
+[`distribution_support`](@ref), or any value when they aren't known. Used by the
+[`parameter_value_ranges`](@ref) of [`HierarchicalRegressionParameters`](@ref).
+"""
+function range_of_regression_sums(design::NamedTuple)
+
+    #Normal deviations can give the sum any value
+    isempty(design.varying_effects) || return (; lower=(-Inf), upper=Inf)
+
+    #The lowest and the highest sum of every session, from the lowest and the highest product of each coefficient and its value in the session
+    n_sessions_in_design = length(first(design.design_columns))
+    lowest_sums = zeros(n_sessions_in_design)
+    highest_sums = zeros(n_sessions_in_design)
+    for (prior, column) in
+        zip(values(design.coefficient_priors), values(design.design_columns))
+        support = distribution_support(prior)
+        lower, upper = support === nothing ? (-Inf, Inf) : (support.lower, support.upper)
+        for (session, value) in enumerate(column)
+
+            #A coefficient that is multiplied by zero adds nothing, also when it has no bound
+            iszero(value) && continue
+            products = (lower * value, upper * value)
+            lowest_sums[session] += min(products...)
+            highest_sums[session] += max(products...)
+        end
+    end
+    return (; lower=minimum(lowest_sums), upper=maximum(highest_sums))
 end

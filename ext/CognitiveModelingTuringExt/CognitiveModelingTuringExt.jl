@@ -6,7 +6,6 @@ using CognitiveModeling:
     run_timestep,
     initialize_state,
     attribute_names,
-    describe_model,
     NoEnvironment,
     session_trajectories_chain,
     session_parameters_chain
@@ -20,9 +19,6 @@ using CognitiveModeling:
     merge_default_parameters,
     check_match_attribute_names,
     check_parameters_in_domains,
-    check_domains_fit_model,
-    is_discrete,
-    parameter_domains,
     check_model_output,
     map_names
 using CognitiveModeling:
@@ -72,6 +68,7 @@ using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
+include("distribution_support.jl")
 include("turing_behavioral_session.jl")
 
 #The Turing.jl models of the parameter models, which give or sample the parameters of every session, each

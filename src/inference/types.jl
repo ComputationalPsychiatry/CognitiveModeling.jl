@@ -133,7 +133,9 @@ table.
   never checked. The extended help says why.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) each time the session runs, where a
-  value outside its domain throws a [`ParameterDomainError`](@ref), which stops a fit.
+  value outside its domain throws a [`ParameterDomainError`](@ref), which stops a fit, and
+  whether a full model checks what its parameter models can give against them when it is
+  made.
 - `missing_observation_values=(missing,)` and `missing_action_values=(missing,)`: the
   values in the data which stand for a missing observation or action, as one value, such as
   `-1`, or several in a tuple or a vector, such as `(missing, -1)`. Each is replaced by

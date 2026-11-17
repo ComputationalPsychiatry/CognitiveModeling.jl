@@ -37,6 +37,7 @@ include("inference/parameter_models/composite_parameters.jl")
 include("inference/parameter_models/functions_to_extend.jl")
 include("inference/functions_to_call.jl")
 include("inference/utility_functions/preparing_models/prepare_full_model.jl")
+include("inference/utility_functions/preparing_models/check_given_values_in_domains.jl")
 include("inference/utility_functions/preparing_models/prepare_session_data.jl")
 include("inference/utility_functions/preparing_models/split_table_into_sessions.jl")
 include("inference/utility_functions/preparing_models/include_environment_in_session.jl")
@@ -101,5 +102,6 @@ public turing_run_timestep,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
+public parameter_value_ranges, distribution_support
 
 end

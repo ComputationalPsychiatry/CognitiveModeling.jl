@@ -28,7 +28,7 @@ function CognitiveModeling.turing_full_model(
     )
     warn_if_saving_without_downstream_model(sessions_info, downstream_model)
 
-    #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled
+    #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled. What the parameter models can give is checked against the domains of the parameters there
     prepared = prepare_full_model(
         cognitive_parameters_model,
         sessions_info;
@@ -37,17 +37,6 @@ function CognitiveModeling.turing_full_model(
         fixed_cognitive_parameters,
         fixed_environment_parameters,
     )
-
-    #Warn when a prior or a transformation can give a parameter a value outside its domain, when the sessions check the domains
-    first_session = first(sessions_info.sessions)
-    if first_session.check_parameter_domains
-        warn_if_values_outside_domains(
-            cognitive_parameters_model, first_session.cognitive_model
-        )
-        warn_if_values_outside_domains(
-            environment_parameters_model, first_session.environment
-        )
-    end
     return turing_run_full_model(
         prepared.cognitive_parameters_model,
         prepared.sessions_info;
@@ -106,115 +95,6 @@ function warn_if_saving_without_downstream_model(
     sessions_save_anything(sessions_info) || return nothing
     @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_trajectories_chain(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
     return nothing
-end
-
-"""
-    warn_if_values_outside_domains(parameters_model, model)
-
-Warn when `parameters_model`, a parameter model, can give a parameter of `model` a
-value outside its domain in `parameter_domains`: values below its lower bound or above its
-upper bound, or values of a continuous distribution for a discrete parameter. What a
-parameter can be given is found by [`sampled_ranges`](@ref). A value outside its domain is
-a `ParameterDomainError` when a session runs, which stops the fit. Domains that don't fit
-the model are an `ArgumentError`. Used by `turing_full_model` when it creates the model, for
-sessions that check the domains.
-"""
-function warn_if_values_outside_domains(parameters_model, model::AbstractTimestepModel)
-
-    #Read the domains, which must be ParameterDomains under the names of parameters of the model
-    domains = parameter_domains(model)
-    check_domains_fit_model(model, domains)
-
-    #Compare what each parameter can be given with its domain
-    for (name, range) in sampled_ranges(parameters_model)
-        haskey(domains, name) || continue
-        domain = getproperty(domains, name)
-        if range.lower < domain.lower || range.upper > domain.upper
-            @warn "The parameter $name can be given values from $(range.lower) to $(range.upper), by $(range.source), but its domain in $(describe_model(model)) is from $(domain.lower) to $(domain.upper). A value outside the domain is a ParameterDomainError when a session runs, which stops the fit, also with catch_invalid_parameters = true. A prior or a transformation that stays within the domain avoids this."
-        end
-        if is_discrete(domain) && !range.discrete
-            @warn "The parameter $name is discrete in $(describe_model(model)), with values of type $(domain.type), but it is given continuous values by $(range.source). A value of another type is a ParameterDomainError when a session runs, which stops the fit."
-        end
-    end
-    return nothing
-end
-warn_if_values_outside_domains(parameters_model, ::NoEnvironment) = nothing
-
-"""
-    sampled_ranges(parameters_model)
-
-Return the values that `parameters_model`, a parameter model, can sample for each
-parameter, as a vector of pairs from the parameter's name to a `NamedTuple` with `lower`,
-`upper`, whether the values are `discrete`, and `source`, a description of where they come
-from: the support of a prior, or what a transformation makes of the two ends of the real
-line, for a hierarchical parameter with the default normal distribution, and for a
-regression with varying effects, which are normal. Parameters that are given without being
-sampled, or whose range isn't known, are left out. Used by
-[`warn_if_values_outside_domains`](@ref).
-"""
-sampled_ranges(parameters_model) = Pair{Symbol,NamedTuple}[]
-function sampled_ranges(parameters_model::Union{IdenticalParameters,IndependentParameters})
-    ranges = Pair{Symbol,NamedTuple}[]
-    for (name, prior) in pairs(parameters_model.priors)
-        prior isa UnivariateDistribution || continue
-        range = (;
-            lower=minimum(prior),
-            upper=maximum(prior),
-            discrete=prior isa DiscreteUnivariateDistribution,
-            source="its prior, $prior",
-        )
-        push!(ranges, name => range)
-    end
-    return ranges
-end
-function sampled_ranges(parameters_model::HierarchicalGroupedParameters)
-    ranges = Pair{Symbol,NamedTuple}[]
-    for (name, hierarchical_parameter) in pairs(parameters_model.parameters)
-        hierarchical_parameter.distribution === nothing || continue
-        transformation = hierarchical_parameter.transformation
-        ends = try
-            (transformation(-Inf), transformation(Inf))
-        catch
-            continue
-        end
-        all(value -> value isa Real, ends) || continue
-        range = (;
-            lower=min(ends...),
-            upper=max(ends...),
-            discrete=false,
-            source="the transformation $transformation of its group-level normal distribution",
-        )
-        push!(ranges, name => range)
-    end
-    return ranges
-end
-function sampled_ranges(parameters_model::HierarchicalRegressionParameters)
-    ranges = Pair{Symbol,NamedTuple}[]
-    for (name, regression_parameter) in pairs(parameters_model.parameters)
-
-        #Normal varying effects can give the sum any value on the real line
-        any(term -> term isa VaryingEffects, values(regression_parameter.terms)) || continue
-        transformation = regression_parameter.transformation
-        ends = try
-            (transformation(-Inf), transformation(Inf))
-        catch
-            continue
-        end
-        all(value -> value isa Real, ends) || continue
-        range = (;
-            lower=min(ends...),
-            upper=max(ends...),
-            discrete=false,
-            source="the transformation $transformation of its regression",
-        )
-        push!(ranges, name => range)
-    end
-    return ranges
-end
-function sampled_ranges(parameters_model::CompositeParameters)
-    return reduce(
-        vcat, map(sampled_ranges, parameters_model.parts); init=Pair{Symbol,NamedTuple}[]
-    )
 end
 
 """

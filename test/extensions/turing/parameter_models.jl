@@ -546,7 +546,7 @@ const REGRESSION_FULL_TABLE = merge(
         @test returned(model, given).environment_parameters.mean_reward ≈ [0.6, 0.4, 0.6]
     end
 
-    @testset "A transformation that reaches outside a domain gives a warning when the model is made, for a regression with varying effects" begin
+    @testset "A regression whose transformation reaches outside a domain is an error when the model is made" begin
         bounded_sessions = sessions_for_test(
             BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
         )
@@ -555,36 +555,34 @@ const REGRESSION_FULL_TABLE = merge(
             VaryingEffects(:id, Intercept(Exponential(1)));
             transformation=exp,
         )
-        @test_logs (
-            :warn,
-            r"The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its regression, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1\.",
-        ) turing_full_model(
+        full_model_with(learning_rate) = turing_full_model(
             HierarchicalRegressionParameters((;
-                learning_rate=RegressionParameter(
-                    Intercept(Normal(0, 1)), VaryingEffects(:id, Intercept(Exponential(1)))
-                ),
-                inverse_temperature=within_domain,
+                learning_rate, inverse_temperature=within_domain
             )),
             bounded_sessions,
         )
-        @test_logs turing_full_model(
-            HierarchicalRegressionParameters((;
-                learning_rate=RegressionParameter(
-                    Intercept(Normal(0, 1)),
-                    VaryingEffects(:id, Intercept(Exponential(1)));
-                    transformation=to_unit_interval,
-                ),
-                inverse_temperature=within_domain,
-            )),
-            bounded_sessions,
+        @test_throws "The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its regression, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1." full_model_with(
+            RegressionParameter(
+                Intercept(Normal(0, 1)), VaryingEffects(:id, Intercept(Exponential(1)))
+            ),
         )
-        #Without varying effects, what the regression can give isn't known, so nothing is warned about
-        @test_logs turing_full_model(
-            HierarchicalRegressionParameters((;
-                learning_rate=RegressionParameter(Intercept(Beta(2, 2))),
-                inverse_temperature=within_domain,
-            )),
-            bounded_sessions,
+        @test full_model_with(
+            RegressionParameter(
+                Intercept(Normal(0, 1)),
+                VaryingEffects(:id, Intercept(Exponential(1)));
+                transformation=to_unit_interval,
+            ),
+        ) isa Turing.DynamicPPL.Model
+        #Without varying effects, the sums are judged by the values that the priors of the coefficients can give: the ages are from 20 to 40
+        @test full_model_with(RegressionParameter(Intercept(Beta(2, 2)))) isa
+            Turing.DynamicPPL.Model
+        @test_throws "The parameter learning_rate can be given values from 0.0 to 1.4, by the transformation identity of its regression" full_model_with(
+            RegressionParameter(
+                Intercept(Beta(2, 2)), ContinuousPredictor(:age, Uniform(0, 0.01))
+            ),
+        )
+        @test_throws "The parameter learning_rate can be given values from -Inf to Inf" full_model_with(
+            RegressionParameter(Intercept(Normal(0, 1)))
         )
     end
 end

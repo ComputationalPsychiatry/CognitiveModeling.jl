@@ -16,3 +16,8 @@ end
 function parameter_names(parameters_model::IdenticalParameters)
     return keys(parameters_model.priors)
 end
+
+#It can give each parameter the values of its prior, where they are known
+function parameter_value_ranges(parameters_model::IdenticalParameters)
+    return value_ranges_of_priors(parameters_model.priors)
+end

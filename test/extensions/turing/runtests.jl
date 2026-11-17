@@ -31,6 +31,7 @@ end
     end
 
     include("extension_defaults.jl")
+    include("distribution_support.jl")
     include("turing_behavioral_session.jl")
     include("turing_full_model.jl")
     include("parameter_models.jl")
