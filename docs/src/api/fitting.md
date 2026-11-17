@@ -57,8 +57,5 @@ which models they take.
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = [
-    "inference/workflow_and_postprocessing/prepare_for_prediction.jl",
-    "inference/workflow_and_postprocessing/predict_session_trajectories.jl",
-]
+Pages = ["inference/workflow_and_postprocessing/predict_session_trajectories.jl"]
 ```

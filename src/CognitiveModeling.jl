@@ -47,7 +47,6 @@ include("inference/utility_functions/within_models/read_session_setup.jl")
 include("inference/utility_functions/within_models/read_timestep_data.jl")
 include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
-include("inference/workflow_and_postprocessing/prepare_for_prediction.jl")
 include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
