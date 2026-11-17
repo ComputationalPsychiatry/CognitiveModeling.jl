@@ -431,7 +431,8 @@ end
     RegressionParameter(terms...; transformation=identity,
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings(), name=nothing)
-    RegressionParameter(formula, terms...; contrasts=Dict{Symbol,Any}(), priors=(;),
+    RegressionParameter(formula, terms...; categorical_coding=(;),
+                        categorical_reference_levels=(;), priors=(;),
                         transformation=identity,
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings())
@@ -478,21 +479,29 @@ With StatsModels.jl loaded, the terms can be written as a `@formula`, in the syn
 MixedModels.jl, such as
 `@formula(learning_rate ~ 1 + age + diagnosis + (1 + condition | participant))`. Its
 left-hand side is the name of the parameter. An intercept is included unless the formula has
-`0 +`, and the same holds within varying effects. A column is a `ContinuousPredictor`, or a
-`CategoricalPredictor` when `contrasts`, a `Dict` from the names of columns to codings,
-gives it one: `DummyCoding()`, `EffectsCoding()` or `StatsModels.FullDummyCoding()`, whose
-`base` is the reference level, or `CategoricalTerm` for the coding of `default_settings`.
-Without a `base`, the reference level is the level of the first session, where
-StatsModels.jl takes the first level in sorted order. Columns joined by `&` are an
+`0 +`, and the same holds within varying effects. Columns joined by `&` are an
 `Interaction`, and `a * b` gives `a`, `b` and their interaction. `(terms | columns)` are
 `VaryingEffects` over `columns`, or over the combinations of the values of several columns
 joined by `&`, as in `(1 | participant & block)`, and their deviations are independent,
-where MixedModels.jl correlates those within one bar. Each term is named as the term of its
-kind is named, and `priors` gives the priors of terms by those names, such as
-`(; age = Normal(0, 0.05), participant = (; intercept = Exponential(0.5)))`, with a
-`NamedTuple` for the terms of varying effects, while the other terms have the default
-priors. Terms that a formula can't express, such as `VaryingEffects` with `group_by`, are
-given after the formula.
+where MixedModels.jl correlates those within one bar. Terms that a formula can't express,
+such as `VaryingEffects` with `group_by`, are given after the formula.
+
+A column is a `ContinuousPredictor`, unless `categorical_coding` or
+`categorical_reference_levels` names it, which makes it a `CategoricalPredictor`. Both are
+`NamedTuple`s from the names of columns: `categorical_coding` to the coding of each, such
+as `(; diagnosis = :effects, site = :dummy)`, and `categorical_reference_levels` to the
+reference level of each, such as `(; diagnosis = "control")`, as
+[`CategoricalPredictor`](@ref) takes them. A column that only
+`categorical_reference_levels` names has the coding of `default_settings`, which `nothing`
+as its coding gives too. A column that only `categorical_coding` names has the level of the
+first session as its reference level, where StatsModels.jl takes the first level in sorted
+order.
+
+Each term is named as the term of its kind is named, and `priors` gives the priors of terms
+by those names, such as
+`(; age = Normal(0, 0.05), age_by_diagnosis = Normal(0, 0.5), participant = (; intercept = Exponential(0.5)))`,
+with the name of an interaction joining those of its predictors by `_by_`, and with a
+`NamedTuple` for the terms of varying effects. The other terms have the default priors.
 
 # Examples
 ```jldoctest
@@ -514,8 +523,8 @@ using StatsModels
 learning_rate = RegressionParameter(
     @formula(learning_rate ~ 1 + age + diagnosis + age & diagnosis),
     VaryingEffects(:participant, Intercept(); group_by = :diagnosis);
-    contrasts = Dict(:diagnosis => DummyCoding(; base = "control")),
-    priors = (; age = Normal(0, 0.05)),
+    categorical_reference_levels = (; diagnosis = "control"),
+    priors = (; age = Normal(0, 0.05), age_by_diagnosis = Normal(0, 0.5)),
     default_priors,
 )
 ```

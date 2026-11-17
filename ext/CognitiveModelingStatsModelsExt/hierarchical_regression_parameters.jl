@@ -1,10 +1,11 @@
 ### THE REGRESSION OF A PARAMETER WRITTEN AS A FORMULA ###
 
-#Translates a formula into the terms of a RegressionParameter, which is named by the left-hand side, with the kinds of the predictors from the contrasts and the priors of the terms by their names. Terms that a formula can't express are given after it
+#Translates a formula into the terms of a RegressionParameter, which is named by the left-hand side, with the codings and the reference levels of the columns that are categorical predictors, and the priors of the terms by their names. Terms that a formula can't express are given after it
 function CognitiveModeling.RegressionParameter(
     formula::FormulaTerm,
     terms...;
-    contrasts=Dict{Symbol,Any}(),
+    categorical_coding::NamedTuple=(;),
+    categorical_reference_levels::NamedTuple=(;),
     priors::NamedTuple=(;),
     transformation=identity,
     default_priors::DefaultRegressionPriors=DefaultRegressionPriors(),
@@ -14,10 +15,23 @@ function CognitiveModeling.RegressionParameter(
     parameter_name = read_parameter_name(formula.lhs)
     description = "the formula of $parameter_name"
 
-    #Each term of the right-hand side as a term of the regression, with an intercept unless 0 leaves it out
+    #The columns that either keyword names are categorical predictors, and must be predictors of the formula
     right_hand_side = as_tuple_of_terms(formula.rhs)
-    check_contrasts_are_used(contrasts, right_hand_side, description)
-    formula_terms = translate_terms(right_hand_side, contrasts, description)
+    categorical_settings = (;
+        coding=categorical_coding, reference_levels=categorical_reference_levels
+    )
+    check_names_predictors(
+        "categorical_coding", categorical_coding, right_hand_side, description
+    )
+    check_names_predictors(
+        "categorical_reference_levels",
+        categorical_reference_levels,
+        right_hand_side,
+        description,
+    )
+
+    #Each term of the right-hand side as a term of the regression, with an intercept unless 0 leaves it out
+    formula_terms = translate_terms(right_hand_side, categorical_settings, description)
 
     #The terms named in the priors get those priors, and the others keep the default priors of their kinds
     check_prior_names(priors, formula_terms, description)
@@ -65,17 +79,19 @@ as_tuple_of_terms(sum::FunctionTerm{typeof(+)}) = Tuple(sum.args)
 as_tuple_of_terms(term) = (term,)
 
 """
-    translate_terms(formula_terms, contrasts, description)
+    translate_terms(formula_terms, categorical_settings, description)
 
 Return the terms of a regression that `formula_terms`, a tuple of the terms of a sum in a
 formula, are, with an [`Intercept`](@ref) first unless the sum has `0` or `-1`, as
 `translate_term` translates each. Used by the formula form of `RegressionParameter`, and by
 `translate_term` for the terms of varying effects.
 """
-function translate_terms(formula_terms::Tuple, contrasts, description::String)
+function translate_terms(
+    formula_terms::Tuple, categorical_settings::NamedTuple, description::String
+)
     intercept = includes_intercept(formula_terms, description) ? (Intercept(),) : ()
     others = Tuple(
-        translate_term(term, contrasts, description) for
+        translate_term(term, categorical_settings, description) for
         term in formula_terms if !(term isa ConstantTerm)
     )
     return (intercept..., others...)
@@ -103,44 +119,50 @@ function includes_intercept(formula_terms::Tuple, description::String)
 end
 
 """
-    translate_term(term, contrasts, description)
+    translate_term(term, categorical_settings, description)
 
 Return the term of a regression that `term`, a term of a formula other than a constant, is:
 a column is a [`ContinuousPredictor`](@ref), or a [`CategoricalPredictor`](@ref) when
-`contrasts` gives it a coding, as `predictor_of_column` decides, columns joined by `&` are
-an [`Interaction`](@ref), and `(terms | columns)` are [`VaryingEffects`](@ref) over
-`columns`, with an intercept unless `terms` has `0`. Anything else, such as a function of a
-column, is an error. `description` says which formula the term is in, for the errors. Used
-by `translate_terms`.
+`categorical_settings` has a coding or a reference level for it, as `predictor_of_column`
+decides, columns joined by `&` are an [`Interaction`](@ref), and `(terms | columns)` are
+[`VaryingEffects`](@ref) over `columns`, with an intercept unless `terms` has `0`. Anything
+else, such as a function of a column, is an error. `description` says which formula the
+term is in, for the errors. Used by `translate_terms`.
 """
-function translate_term(term::Term, contrasts, description::String)
-    return predictor_of_column(term.sym, get(contrasts, term.sym, nothing), description)
+function translate_term(term::Term, categorical_settings::NamedTuple, description::String)
+    return predictor_of_column(term.sym, categorical_settings, description)
 end
 
 #An interaction is an InteractionTerm, and within a call, as in varying effects, a call of &
-function translate_term(interaction::InteractionTerm, contrasts, description::String)
+function translate_term(
+    interaction::InteractionTerm, categorical_settings::NamedTuple, description::String
+)
     return Interaction(map(part -> read_column(part, description), interaction.terms))
 end
 function translate_term(
-    interaction::FunctionTerm{typeof(&)}, contrasts, description::String
+    interaction::FunctionTerm{typeof(&)},
+    categorical_settings::NamedTuple,
+    description::String,
 )
     return Interaction(Tuple(read_column(part, description) for part in interaction.args))
 end
 
 #Varying effects are written as in MixedModels.jl, with the terms whose coefficients vary before the bar and the columns whose levels they vary between after it
-function translate_term(varying::FunctionTerm{typeof(|)}, contrasts, description::String)
+function translate_term(
+    varying::FunctionTerm{typeof(|)}, categorical_settings::NamedTuple, description::String
+)
     terms_side, columns_side = varying.args
     columns = read_varying_effects_columns(columns_side, description)
     varying_terms = translate_terms(
         as_tuple_of_terms(terms_side),
-        contrasts,
+        categorical_settings,
         "the varying effects over $(join(columns, " & ")) in $description",
     )
     return VaryingEffects(columns, varying_terms...)
 end
 
 #Anything else isn't a term of a regression
-function translate_term(term, contrasts, description::String)
+function translate_term(term, categorical_settings::NamedTuple, description::String)
     return throw(
         ArgumentError(
             "The term $term of $description isn't a term of a RegressionParameter. A formula has columns, interactions of columns as in diagnosis & condition, and varying effects as in (1 + condition | participant). A column whose values are transformed, such as with log(age), is given as a column of the table with the transformed values.",
@@ -180,77 +202,58 @@ end
 ### THE KINDS OF THE PREDICTORS ###
 
 """
-    predictor_of_column(column, hint, description)
+    predictor_of_column(column, categorical_settings, description)
 
-Return the predictor that `column` of a formula is, with `hint`, what the contrasts give the
-column, or `nothing` when they give it nothing: a [`ContinuousPredictor`](@ref) without a
-hint or with `ContinuousTerm`, and a [`CategoricalPredictor`](@ref) with `CategoricalTerm`,
-with the coding of the regression's [`DefaultRegressionSettings`](@ref), with
-`DummyCoding()` or `EffectsCoding()`, whose `base` is the reference level, or with
-`StatsModels.FullDummyCoding()`. Any other hint is an error, which names the column. Used by
-`translate_term`.
+Return the predictor that `column` of a formula is: a [`CategoricalPredictor`](@ref) when
+`categorical_settings`, which has what `categorical_coding` and
+`categorical_reference_levels` give under `coding` and `reference_levels`, names it under
+either, with the coding and the reference level it has there, and a
+[`ContinuousPredictor`](@ref) otherwise. A coding that isn't a `Symbol` or `nothing` is an
+error, which names the column. Used by `translate_term`.
 """
-function predictor_of_column(column::Symbol, ::Nothing, description::String)
-    return ContinuousPredictor(column)
-end
-function predictor_of_column(column::Symbol, ::Type{ContinuousTerm}, description::String)
-    return ContinuousPredictor(column)
-end
-function predictor_of_column(column::Symbol, ::Type{CategoricalTerm}, description::String)
-    return CategoricalPredictor(column)
-end
-function predictor_of_column(column::Symbol, coding::DummyCoding, description::String)
-    check_has_no_levels(column, coding, description)
-    return CategoricalPredictor(column; coding=:dummy, reference_level=coding.base)
-end
-function predictor_of_column(column::Symbol, coding::EffectsCoding, description::String)
-    check_has_no_levels(column, coding, description)
-    return CategoricalPredictor(column; coding=:effects, reference_level=coding.base)
-end
 function predictor_of_column(
-    column::Symbol, ::StatsModels.FullDummyCoding, description::String
+    column::Symbol, categorical_settings::NamedTuple, description::String
 )
-    return CategoricalPredictor(column; coding=:full_dummy)
-end
-function predictor_of_column(column::Symbol, hint, description::String)
-    return throw(
-        ArgumentError(
-            "The contrasts give the column $column of $description $hint, but a column is a categorical predictor with DummyCoding(), EffectsCoding() or StatsModels.FullDummyCoding(), or with CategoricalTerm for the coding of the DefaultRegressionSettings, and a continuous predictor without a hint or with ContinuousTerm.",
-        ),
+    codings = categorical_settings.coding
+    reference_levels = categorical_settings.reference_levels
+
+    #A column that neither names is a continuous predictor
+    if !haskey(codings, column) && !haskey(reference_levels, column)
+        return ContinuousPredictor(column)
+    end
+
+    #A column that only one of them names has the default of the other
+    coding = get(codings, column, nothing)
+    if !(coding isa Union{Nothing,Symbol})
+        throw(
+            ArgumentError(
+                "categorical_coding gives the column $column of $description $(repr(coding)), but the coding of a categorical predictor is :dummy, :effects or :full_dummy, or nothing for the default coding.",
+            ),
+        )
+    end
+    return CategoricalPredictor(
+        column; coding, reference_level=get(reference_levels, column, nothing)
     )
 end
 
 """
-    check_has_no_levels(column, coding, description)
+    check_names_predictors(keyword, settings, formula_terms, description)
 
-Throw an informative error if `coding`, the coding the contrasts give `column`, has
-`levels`, since the levels of a [`CategoricalPredictor`](@ref) are the values of its column
-in the order of their first session. Used by `predictor_of_column`.
+Throw an informative error if `settings`, what the keyword argument `keyword` gives the
+columns of categorical predictors, names something that isn't a column of a predictor in
+`formula_terms`, the terms of the right-hand side of a formula, as when the name is
+misspelled: a column that is a term of its own, or of varying effects. Used by the formula
+form of `RegressionParameter`.
 """
-function check_has_no_levels(column::Symbol, coding, description::String)
-    coding.levels === nothing && return nothing
-    return throw(
-        ArgumentError(
-            "The contrasts give the column $column of $description the levels $(coding.levels), but the levels of a categorical predictor are the values of its column, in the order of their first session. Give the coding without levels.",
-        ),
-    )
-end
-
-"""
-    check_contrasts_are_used(contrasts, formula_terms, description)
-
-Throw an informative error if `contrasts` gives a hint for a name that isn't a column of a
-predictor in `formula_terms`, the terms of the right-hand side of a formula, as when the
-name is misspelled: a column that is a term of its own, or of varying effects. Used by the
-formula form of `RegressionParameter`.
-"""
-function check_contrasts_are_used(contrasts, formula_terms::Tuple, description::String)
+function check_names_predictors(
+    keyword::String, settings::NamedTuple, formula_terms::Tuple, description::String
+)
     columns = columns_of_predictors(formula_terms)
-    for column in keys(contrasts)
+    for column in keys(settings)
         if !(column in columns)
             throw(
                 ArgumentError(
-                    "The contrasts give a hint for $(repr(column)), which isn't a predictor of $description. Its predictors are $(Tuple(columns)).",
+                    "$keyword names $column, which isn't a predictor of $description. Its predictors are $(Tuple(columns)).",
                 ),
             )
         end
@@ -263,7 +266,7 @@ end
 
 Return the columns that are predictors in `formula_terms`, the terms of a sum in a formula,
 as a vector of names: a column that is a term of its own, and those in the terms of varying
-effects. Used by `check_contrasts_are_used`.
+effects. Used by `check_names_predictors`.
 """
 function columns_of_predictors(formula_terms::Tuple)
     columns = Symbol[]

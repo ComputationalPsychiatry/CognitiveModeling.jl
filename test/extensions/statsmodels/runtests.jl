@@ -1,11 +1,4 @@
-using StatsModels:
-    StatsModels,
-    @formula,
-    DummyCoding,
-    EffectsCoding,
-    HelmertCoding,
-    CategoricalTerm,
-    ContinuousTerm
+using StatsModels: @formula
 using JET: JET
 
 #The tests of the StatsModels.jl extension, which run with the main suite

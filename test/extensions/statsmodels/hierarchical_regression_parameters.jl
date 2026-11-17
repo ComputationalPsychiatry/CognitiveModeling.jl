@@ -44,10 +44,8 @@ end
                 diagnosis & condition +
                 (1 + condition | participant)
             );
-            contrasts=Dict(
-                :diagnosis => EffectsCoding(; base="control"),
-                :condition => DummyCoding(; base="reward"),
-            ),
+            categorical_coding=(; diagnosis=:effects, condition=:dummy),
+            categorical_reference_levels=(; diagnosis="control", condition="reward"),
             priors=(; age=0.5, participant=(; intercept=0.25)),
             transformation=exp,
             default_priors=FORMULA_PRIORS,
@@ -95,31 +93,53 @@ end
             (:intercept, :condition_punishment)
     end
 
-    @testset "A column is continuous unless the contrasts give it a coding, and CategoricalTerm gives it the default coding" begin
+    @testset "A column is continuous unless categorical_coding or categorical_reference_levels names it, and has the default of the one that doesn't" begin
         @test regression_terms_of(@formula(learning_rate ~ age)).age ===
             ContinuousPredictor(:age, 2)
+
+        #With its coding only, the reference level is left to the level of the first session
         @test regression_terms_of(
-            @formula(learning_rate ~ age); contrasts=Dict(:age => ContinuousTerm)
-        ).age === ContinuousPredictor(:age, 2)
+            @formula(learning_rate ~ diagnosis); categorical_coding=(; diagnosis=:effects)
+        ).diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:effects)
+        @test regression_terms_of(
+            @formula(learning_rate ~ 0 + diagnosis);
+            categorical_coding=(; diagnosis=:full_dummy),
+        ).diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:full_dummy)
+
+        #With its reference level only, or nothing as its coding, it has the default coding
         @test regression_terms_of(
             @formula(learning_rate ~ diagnosis);
-            contrasts=Dict(:diagnosis => CategoricalTerm),
-        ).diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:dummy)
+            categorical_reference_levels=(; diagnosis="control"),
+        ).diagnosis ===
+            CategoricalPredictor(:diagnosis, 3; coding=:dummy, reference_level="control")
         @test regression_terms_of(
             @formula(learning_rate ~ diagnosis);
-            contrasts=Dict(:diagnosis => CategoricalTerm),
+            categorical_reference_levels=(; diagnosis="control"),
             default_settings=DefaultRegressionSettings(; coding=:effects),
-        ).diagnosis.coding === :effects
-        @test regression_terms_of(
-            @formula(learning_rate ~ diagnosis);
-            contrasts=Dict(:diagnosis => EffectsCoding(; base="control")),
         ).diagnosis === CategoricalPredictor(
             :diagnosis, 3; coding=:effects, reference_level="control"
         )
         @test regression_terms_of(
-            @formula(learning_rate ~ 0 + diagnosis);
-            contrasts=Dict(:diagnosis => StatsModels.FullDummyCoding()),
-        ).diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:full_dummy)
+            @formula(learning_rate ~ diagnosis); categorical_coding=(; diagnosis=nothing)
+        ).diagnosis === CategoricalPredictor(:diagnosis, 3; coding=:dummy)
+
+        #With both
+        @test regression_terms_of(
+            @formula(learning_rate ~ diagnosis);
+            categorical_coding=(; diagnosis=:effects),
+            categorical_reference_levels=(; diagnosis="control"),
+        ).diagnosis === CategoricalPredictor(
+            :diagnosis, 3; coding=:effects, reference_level="control"
+        )
+
+        #Only some of the columns need to be named, and a column of varying effects can be
+        terms = regression_terms_of(
+            @formula(learning_rate ~ age + diagnosis + (1 + condition | participant));
+            categorical_coding=(; condition=:effects),
+            categorical_reference_levels=(; diagnosis="control"),
+        )
+        @test terms.age isa ContinuousPredictor && terms.diagnosis isa CategoricalPredictor
+        @test terms.participant.terms.condition.coding === :effects
     end
 
     @testset "An intercept is included unless the formula has 0 or -1, also in varying effects" begin
@@ -142,14 +162,14 @@ end
         @test keys(
             regression_terms_of(
                 @formula(learning_rate ~ age * diagnosis);
-                contrasts=Dict(:diagnosis => CategoricalTerm),
+                categorical_coding=(; diagnosis=:dummy),
             ),
         ) === (:intercept, :age, :diagnosis, :age_by_diagnosis)
         @test regression_terms_of(@formula(learning_rate ~ (1 | participant & block))).participant__block ===
             VaryingEffects((:participant, :block), Intercept(5); centered=false)
         varying_interaction = regression_terms_of(
             @formula(learning_rate ~ (1 + age + diagnosis + age & diagnosis | participant));
-            contrasts=Dict(:diagnosis => CategoricalTerm),
+            categorical_coding=(; diagnosis=:dummy),
         ).participant
         @test keys(varying_interaction.terms) ===
             (:intercept, :age, :diagnosis, :age_by_diagnosis)
@@ -191,18 +211,25 @@ end
     end
 
     @testset "What a regression can't take is an error which says what it takes" begin
-        #A coding other than the three, and levels, which come from the table
-        @test_throws "The contrasts give the column condition of the formula of learning_rate HelmertCoding(nothing, nothing), but a column is a categorical predictor with DummyCoding(), EffectsCoding() or StatsModels.FullDummyCoding(), or with CategoricalTerm for the coding of the DefaultRegressionSettings, and a continuous predictor without a hint or with ContinuousTerm." regression_terms_of(
-            @formula(learning_rate ~ condition);
-            contrasts=Dict(:condition => HelmertCoding()),
+        #A coding other than the three, one that isn't a Symbol, and a reference level with the coding that has none
+        @test_throws ArgumentError regression_terms_of(
+            @formula(learning_rate ~ condition); categorical_coding=(; condition=:helmert)
         )
-        @test_throws "The contrasts give the column condition of the formula of learning_rate the levels [\"reward\", \"punishment\"], but the levels of a categorical predictor are the values of its column, in the order of their first session. Give the coding without levels." regression_terms_of(
-            @formula(learning_rate ~ condition);
-            contrasts=Dict(:condition => DummyCoding(; levels=["reward", "punishment"])),
+        @test_throws "categorical_coding gives the column condition of the formula of learning_rate \"effects\", but the coding of a categorical predictor is :dummy, :effects or :full_dummy, or nothing for the default coding." regression_terms_of(
+            @formula(learning_rate ~ condition); categorical_coding=(; condition="effects")
         )
-        #A hint for a column that isn't a predictor, as when it is misspelled
-        @test_throws "The contrasts give a hint for :diagnosis, which isn't a predictor of the formula of learning_rate. Its predictors are (:age,)." regression_terms_of(
-            @formula(learning_rate ~ age); contrasts=Dict(:diagnosis => DummyCoding())
+        @test_throws "A CategoricalPredictor with the coding :full_dummy has a coefficient for every level and no reference level, but it was given the reference level \"reward\"." regression_terms_of(
+            @formula(learning_rate ~ 0 + condition);
+            categorical_coding=(; condition=:full_dummy),
+            categorical_reference_levels=(; condition="reward"),
+        )
+        #A name that isn't a predictor, as when it is misspelled
+        @test_throws "categorical_coding names diagnosis, which isn't a predictor of the formula of learning_rate. Its predictors are (:age,)." regression_terms_of(
+            @formula(learning_rate ~ age); categorical_coding=(; diagnosis=:dummy)
+        )
+        @test_throws "categorical_reference_levels names diagnosis, which isn't a predictor of the formula of learning_rate. Its predictors are (:age,)." regression_terms_of(
+            @formula(learning_rate ~ age);
+            categorical_reference_levels=(; diagnosis="control"),
         )
         #Priors for names that aren't terms, and varying effects given one prior
         @test_throws "The priors of the formula of learning_rate name agee, which isn't one of its terms, (:intercept, :age)." regression_terms_of(
