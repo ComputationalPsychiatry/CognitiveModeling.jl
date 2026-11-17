@@ -1,11 +1,10 @@
 ### THE REGRESSION OF A PARAMETER WRITTEN AS A FORMULA ###
 
-#Translates a formula into the terms of a RegressionParameter, which is named by the left-hand side, with the codings and the reference levels of the columns that are categorical predictors, and the priors of the terms by their names. Terms that a formula can't express are given after it
+#Translates a formula into the terms of a RegressionParameter, which is named by the left-hand side, with the columns that are categorical predictors as categorical_predictors names them or gives them, and the priors of the terms by their names. Terms that a formula can't express are given after it
 function CognitiveModeling.RegressionParameter(
     formula::FormulaTerm,
     terms...;
-    categorical_coding::NamedTuple=(;),
-    categorical_reference_levels::NamedTuple=(;),
+    categorical_predictors=(),
     priors::NamedTuple=(;),
     transformation=identity,
     family_distribution=nothing,
@@ -17,23 +16,13 @@ function CognitiveModeling.RegressionParameter(
     parameter_name = read_parameter_name(formula.lhs)
     description = "the formula of $parameter_name"
 
-    #The columns that either keyword names are categorical predictors, and must be predictors of the formula
+    #The categorical predictors under the names of their columns, which must be predictors of the formula
     right_hand_side = as_tuple_of_terms(formula.rhs)
-    categorical_settings = (;
-        coding=categorical_coding, reference_levels=categorical_reference_levels
-    )
-    check_names_predictors(
-        "categorical_coding", categorical_coding, right_hand_side, description
-    )
-    check_names_predictors(
-        "categorical_reference_levels",
-        categorical_reference_levels,
-        right_hand_side,
-        description,
-    )
+    predictors_by_column = read_categorical_predictors(categorical_predictors, description)
+    check_names_predictors(predictors_by_column, right_hand_side, description)
 
     #Each term of the right-hand side as a term of the regression, with an intercept unless 0 leaves it out
-    formula_terms = translate_terms(right_hand_side, categorical_settings, description)
+    formula_terms = translate_terms(right_hand_side, predictors_by_column, description)
 
     #The terms named in the priors get those priors, and the others keep the default priors of their kinds
     check_prior_names(priors, formula_terms, description)
@@ -83,7 +72,7 @@ as_tuple_of_terms(sum::FunctionTerm{typeof(+)}) = Tuple(sum.args)
 as_tuple_of_terms(term) = (term,)
 
 """
-    translate_terms(formula_terms, categorical_settings, description)
+    translate_terms(formula_terms, predictors_by_column, description)
 
 Return the terms of a regression that `formula_terms`, a tuple of the terms of a sum in a
 formula, are, with an [`Intercept`](@ref) first unless the sum has `0` or `-1`, as
@@ -92,12 +81,12 @@ for its interactions. Used by the formula form of `RegressionParameter`, and by
 `translate_term` for the terms of varying effects.
 """
 function translate_terms(
-    formula_terms::Tuple, categorical_settings::NamedTuple, description::String
+    formula_terms::Tuple, predictors_by_column::NamedTuple, description::String
 )
     intercept = includes_intercept(formula_terms, description) ? (Intercept(),) : ()
     columns_with_terms = Tuple(term.sym for term in formula_terms if term isa Term)
     others = Tuple(
-        translate_term(term, categorical_settings, description, columns_with_terms) for
+        translate_term(term, predictors_by_column, description, columns_with_terms) for
         term in formula_terms if !(term isa ConstantTerm)
     )
     return (intercept..., others...)
@@ -125,12 +114,12 @@ function includes_intercept(formula_terms::Tuple, description::String)
 end
 
 """
-    translate_term(term, categorical_settings, description, columns_with_terms)
+    translate_term(term, predictors_by_column, description, columns_with_terms)
 
 Return the term of a regression that `term`, a term of a formula other than a constant, is:
-a column is a [`ContinuousPredictor`](@ref), or a [`CategoricalPredictor`](@ref) when
-`categorical_settings` has a coding or a reference level for it, as `predictor_of_column`
-decides, columns joined by `&` are an [`Interaction`](@ref), whose predictors
+a column is a [`ContinuousPredictor`](@ref), or the [`CategoricalPredictor`](@ref) that
+`predictors_by_column` has under its name, as `predictor_of_column` decides, columns joined
+by `&` are an [`Interaction`](@ref), whose predictors
 `predictor_in_interaction` gives by their names or themselves, and `(terms | columns)` are
 [`VaryingEffects`](@ref) over `columns`, with an intercept unless `terms` has `0`. Anything
 else, such as a function of a column, is an error. `description` says which formula the
@@ -139,27 +128,24 @@ their own in the same sum. Used by `translate_terms`.
 """
 function translate_term(
     term::Term,
-    categorical_settings::NamedTuple,
+    predictors_by_column::NamedTuple,
     description::String,
     columns_with_terms::Tuple,
 )
-    return predictor_of_column(term.sym, categorical_settings, description)
+    return predictor_of_column(term.sym, predictors_by_column)
 end
 
 #An interaction is an InteractionTerm, and within a call, as in varying effects, a call of &
 function translate_term(
     interaction::InteractionTerm,
-    categorical_settings::NamedTuple,
+    predictors_by_column::NamedTuple,
     description::String,
     columns_with_terms::Tuple,
 )
     return Interaction(
         map(
             part -> predictor_in_interaction(
-                read_column(part, description),
-                columns_with_terms,
-                categorical_settings,
-                description,
+                read_column(part, description), columns_with_terms, predictors_by_column
             ),
             interaction.terms,
         ),
@@ -167,17 +153,14 @@ function translate_term(
 end
 function translate_term(
     interaction::FunctionTerm{typeof(&)},
-    categorical_settings::NamedTuple,
+    predictors_by_column::NamedTuple,
     description::String,
     columns_with_terms::Tuple,
 )
     return Interaction(
         Tuple(
             predictor_in_interaction(
-                read_column(part, description),
-                columns_with_terms,
-                categorical_settings,
-                description,
+                read_column(part, description), columns_with_terms, predictors_by_column
             ) for part in interaction.args
         ),
     )
@@ -186,7 +169,7 @@ end
 #Varying effects are written as in MixedModels.jl, with the terms whose coefficients vary before the bar and the columns whose levels they vary between after it
 function translate_term(
     varying::FunctionTerm{typeof(|)},
-    categorical_settings::NamedTuple,
+    predictors_by_column::NamedTuple,
     description::String,
     columns_with_terms::Tuple,
 )
@@ -194,7 +177,7 @@ function translate_term(
     columns = read_varying_effects_columns(columns_side, description)
     varying_terms = translate_terms(
         as_tuple_of_terms(terms_side),
-        categorical_settings,
+        predictors_by_column,
         "the varying effects over $(join(columns, " & ")) in $description",
     )
     return VaryingEffects(columns, varying_terms...)
@@ -202,7 +185,7 @@ end
 
 #Anything else isn't a term of a regression
 function translate_term(
-    term, categorical_settings::NamedTuple, description::String, columns_with_terms::Tuple
+    term, predictors_by_column::NamedTuple, description::String, columns_with_terms::Tuple
 )
     return throw(
         ArgumentError(
@@ -212,7 +195,7 @@ function translate_term(
 end
 
 """
-    predictor_in_interaction(column, columns_with_terms, categorical_settings, description)
+    predictor_in_interaction(column, columns_with_terms, predictors_by_column)
 
 Return how `column` of an interaction in a formula is given to the [`Interaction`](@ref):
 by its name when it is a term of its own in the same sum, whose columns are in
@@ -221,13 +204,10 @@ it, so that the interaction comes without the main effect of that column. Used b
 `translate_term`.
 """
 function predictor_in_interaction(
-    column::Symbol,
-    columns_with_terms::Tuple,
-    categorical_settings::NamedTuple,
-    description::String,
+    column::Symbol, columns_with_terms::Tuple, predictors_by_column::NamedTuple
 )
     column in columns_with_terms && return column
-    return predictor_of_column(column, categorical_settings, description)
+    return predictor_of_column(column, predictors_by_column)
 end
 
 """
@@ -262,58 +242,113 @@ end
 ### THE KINDS OF THE PREDICTORS ###
 
 """
-    predictor_of_column(column, categorical_settings, description)
+    read_categorical_predictors(categorical_predictors, description)
 
-Return the predictor that `column` of a formula is: a [`CategoricalPredictor`](@ref) when
-`categorical_settings`, which has what `categorical_coding` and
-`categorical_reference_levels` give under `coding` and `reference_levels`, names it under
-either, with the coding and the reference level it has there, and a
-[`ContinuousPredictor`](@ref) otherwise. A coding that isn't a `Symbol` or `nothing` is an
-error, which names the column. Used by `translate_term`.
+Return the categorical predictors of a formula as a `NamedTuple` with the
+[`CategoricalPredictor`](@ref) of each under the name of its column, from what the keyword
+argument `categorical_predictors` was given: the name of a column or a
+`CategoricalPredictor`, or a tuple or a vector of them, each read by
+`as_categorical_predictor`. A column that is given twice is an error. `description` says
+which formula it is, for the errors. Used by the formula form of `RegressionParameter`.
 """
-function predictor_of_column(
-    column::Symbol, categorical_settings::NamedTuple, description::String
-)
-    codings = categorical_settings.coding
-    reference_levels = categorical_settings.reference_levels
-
-    #A column that neither names is a continuous predictor
-    if !haskey(codings, column) && !haskey(reference_levels, column)
-        return ContinuousPredictor(column)
+function read_categorical_predictors(categorical_predictors, description::String)
+    predictors = map(
+        entry -> as_categorical_predictor(entry, description),
+        as_tuple(categorical_predictors),
+    )
+    columns = map(predictor -> only(predictor.columns), predictors)
+    for column in columns
+        if count(==(column), columns) > 1
+            throw(
+                ArgumentError(
+                    "categorical_predictors of $description gives the column $column more than once.",
+                ),
+            )
+        end
     end
+    return NamedTuple{columns}(predictors)
+end
 
-    #A column that only one of them names has the default of the other
-    coding = get(codings, column, nothing)
-    if !(coding isa Union{Nothing,Symbol})
+#A term of a formula is named after its column, and the same column can be a term of its own, part of an interaction and a varying slope, each with a prior of its own under its name in priors. So a predictor given here says how its column is coded and nothing else
+"""
+    as_categorical_predictor(entry, description)
+
+Return the [`CategoricalPredictor`](@ref) that `entry` of the keyword argument
+`categorical_predictors` of a formula is: for the name of a column, one with the default
+coding and reference level, and a `CategoricalPredictor` itself, which gives the coding or
+the reference level of its column. A `CategoricalPredictor` of several columns, with
+another name than its column or with a prior is an error, and so is anything else. Used by
+`read_categorical_predictors`.
+"""
+as_categorical_predictor(column::Symbol, description::String) = CategoricalPredictor(column)
+function as_categorical_predictor(predictor::CategoricalPredictor, description::String)
+    columns = predictor.columns
+    if length(columns) != 1
         throw(
             ArgumentError(
-                "categorical_coding gives the column $column of $description $(repr(coding)), but the coding of a categorical predictor is :dummy, :effects or :full_dummy, or nothing for the default coding.",
+                "categorical_predictors of $description has a CategoricalPredictor of the columns $columns, but a predictor of a formula reads one column. A predictor whose levels are the combinations of the values of several columns is given after the formula, as a term.",
             ),
         )
     end
-    return CategoricalPredictor(
-        column; coding, reference_level=get(reference_levels, column, nothing)
+    column = only(columns)
+    if predictor.name !== column
+        throw(
+            ArgumentError(
+                "categorical_predictors of $description has a CategoricalPredictor of the column $column that is named $(predictor.name), but a term of a formula is named after its column. A predictor with another name is given after the formula, as a term.",
+            ),
+        )
+    end
+    if predictor.prior !== nothing
+        throw(
+            ArgumentError(
+                "categorical_predictors of $description has a CategoricalPredictor of the column $column with the prior $(predictor.prior), but the priors of the terms of a formula are given in priors, under the names of the terms, such as priors = (; $column = Normal(0, 1)).",
+            ),
+        )
+    end
+    return predictor
+end
+function as_categorical_predictor(entry, description::String)
+    return throw(
+        ArgumentError(
+            "categorical_predictors of $description takes the names of the columns that are categorical predictors, such as (:diagnosis, :site), with a CategoricalPredictor in the place of a name to give its coding or its reference level, such as CategoricalPredictor(:diagnosis; reference_level = \"control\"), but it was given $(repr(entry)).",
+        ),
     )
 end
 
 """
-    check_names_predictors(keyword, settings, formula_terms, description)
+    predictor_of_column(column, predictors_by_column)
 
-Throw an informative error if `settings`, what the keyword argument `keyword` gives the
-columns of categorical predictors, names something that isn't a column of a predictor in
-`formula_terms`, the terms of the right-hand side of a formula, as when the name is
-misspelled: a column that is a term of its own, of an interaction or of varying effects.
-Used by the formula form of `RegressionParameter`.
+Return the predictor that `column` of a formula is: the [`CategoricalPredictor`](@ref) that
+`predictors_by_column` has under its name, as `read_categorical_predictors` made it from
+the keyword argument `categorical_predictors`, and a [`ContinuousPredictor`](@ref)
+otherwise. Used by `translate_term` and `predictor_in_interaction`.
+"""
+function predictor_of_column(column::Symbol, predictors_by_column::NamedTuple)
+    if haskey(predictors_by_column, column)
+        return getproperty(predictors_by_column, column)
+    end
+    return ContinuousPredictor(column)
+end
+
+"""
+    check_names_predictors(predictors_by_column, formula_terms, description)
+
+Throw an informative error if `predictors_by_column`, the categorical predictors that the
+keyword argument `categorical_predictors` gives under the names of their columns, has
+something that isn't a column of a predictor in `formula_terms`, the terms of the
+right-hand side of a formula, as when the name is misspelled: a column that is a term of
+its own, of an interaction or of varying effects. Used by the formula form of
+`RegressionParameter`.
 """
 function check_names_predictors(
-    keyword::String, settings::NamedTuple, formula_terms::Tuple, description::String
+    predictors_by_column::NamedTuple, formula_terms::Tuple, description::String
 )
     columns = columns_of_predictors(formula_terms)
-    for column in keys(settings)
+    for column in keys(predictors_by_column)
         if !(column in columns)
             throw(
                 ArgumentError(
-                    "$keyword names $column, which isn't a predictor of $description. Its predictors are $(Tuple(columns)).",
+                    "categorical_predictors names $column, which isn't a predictor of $description. Its predictors are $(Tuple(columns)).",
                 ),
             )
         end

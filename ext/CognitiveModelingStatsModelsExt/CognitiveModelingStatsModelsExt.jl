@@ -1,7 +1,7 @@
 module CognitiveModelingStatsModelsExt
 
 using CognitiveModeling
-using CognitiveModeling: with_prior
+using CognitiveModeling: with_prior, as_tuple
 using StatsModels: FormulaTerm, Term, ConstantTerm, InteractionTerm, FunctionTerm
 
 #The regression of a parameter of a HierarchicalRegressionParameters written as a formula, in a file named as the

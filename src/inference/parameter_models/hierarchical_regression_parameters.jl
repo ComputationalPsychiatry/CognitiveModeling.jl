@@ -488,8 +488,7 @@ end
                         family_distribution_priors=(;),
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings(), name=nothing)
-    RegressionParameter(formula, terms...; categorical_coding=(;),
-                        categorical_reference_levels=(;), priors=(;),
+    RegressionParameter(formula, terms...; categorical_predictors=(), priors=(;),
                         transformation=identity, family_distribution=nothing,
                         family_distribution_priors=(;),
                         default_priors=DefaultRegressionPriors(),
@@ -564,16 +563,16 @@ deviations are independent, where MixedModels.jl correlates those within one bar
 that a formula can't express, such as `VaryingEffects` with `group_by`, are given after the
 formula.
 
-A column is a `ContinuousPredictor`, unless `categorical_coding` or
-`categorical_reference_levels` names it, which makes it a `CategoricalPredictor`. Both are
-`NamedTuple`s from the names of columns: `categorical_coding` to the coding of each, such
-as `(; diagnosis = :effects, site = :dummy)`, and `categorical_reference_levels` to the
-reference level of each, such as `(; diagnosis = "control")`, as
-[`CategoricalPredictor`](@ref) takes them. A column that only
-`categorical_reference_levels` names has the coding of `default_settings`, which `nothing`
-as its coding gives too. A column that only `categorical_coding` names has the level of the
-first session as its reference level, where StatsModels.jl takes the first level in sorted
-order.
+A column is a `ContinuousPredictor`, unless `categorical_predictors` has it, which makes it
+a `CategoricalPredictor`. `categorical_predictors` takes the name of a column, such as
+`:diagnosis`, or a tuple of names, such as `(:diagnosis, :site)`. A column that is named has
+the coding of `default_settings`, and the level of the first session as its reference
+level, where StatsModels.jl takes the first level in sorted order. In the place of a name,
+a [`CategoricalPredictor`](@ref) gives the coding or the reference level of its column,
+such as `CategoricalPredictor(:diagnosis; coding = :effects, reference_level = "control")`.
+It reads one column and is named after it, and its prior is given in `priors`, as those of
+the other terms are. A column is the same predictor wherever the formula has it: as a term
+of its own, in an interaction and in varying effects.
 
 Each term is named as the term of its kind is named, and `priors` gives the priors of terms
 by those names, such as
@@ -614,7 +613,7 @@ using StatsModels
 learning_rate = RegressionParameter(
     @formula(learning_rate ~ 1 + age + diagnosis + age & diagnosis),
     VaryingEffects(:participant, Intercept(); group_by = :diagnosis);
-    categorical_reference_levels = (; diagnosis = "control"),
+    categorical_predictors = CategoricalPredictor(:diagnosis; reference_level = "control"),
     priors = (; age = Normal(0, 0.05), age_by_diagnosis = Normal(0, 0.5)),
     default_priors,
 )
