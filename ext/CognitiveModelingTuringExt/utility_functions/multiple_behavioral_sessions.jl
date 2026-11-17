@@ -8,8 +8,8 @@ Return `saved_trajectories`, what each session saved, with the trajectories in
 does. A session whose saved trajectories didn't fit the type of `saved_trajectories` has
 them in its place in `saved_with_other_types`, and is left unassigned in
 `saved_trajectories`. When there are none, `saved_trajectories` is returned as it is. Used
-by [`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the threads are
-done.
+by [`turing_multiple_behavioral_sessions`](@ref) with [`ParallelSessions`](@ref), after the
+threads are done.
 """
 function include_other_types(
     saved_trajectories::Vector, saved_with_other_types::Vector{Any}

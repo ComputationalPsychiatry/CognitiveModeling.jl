@@ -847,7 +847,7 @@ end
         parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         in_sequence = turing_multiple_behavioral_sessions(sessions_info, parameters)
         in_parallel = turing_multiple_behavioral_sessions(
-            sessions_info, parameters; parallelization=ParallelSessions()
+            sessions_info, parameters, (;), ParallelSessions()
         )
         @test_throws "The sessions run in parallel, so the model that is evaluated must be marked thread-safe with setthreadsafe(model, true) from DynamicPPL." logjoint(
             in_parallel, (;)
@@ -863,7 +863,7 @@ end
         )
         in_parallel_saving_actions = Turing.DynamicPPL.setthreadsafe(
             turing_multiple_behavioral_sessions(
-                saving_actions, parameters; parallelization=ParallelSessions()
+                saving_actions, parameters, (;), ParallelSessions()
             ),
             true,
         )

@@ -55,7 +55,7 @@ Turing.@model function turing_run_full_model(
 
     #Run all behavioral sessions, inside a try block when invalid parameters are caught. The parameters are sampled outside it, so that they are kept when a draw is rejected, which a sampler needs to start: it needs every variable to exist after its first draw, also when that draw is rejected
     sessions_submodel = turing_multiple_behavioral_sessions(
-        sessions_info, cognitive_parameters, environment_parameters; parallelization
+        sessions_info, cognitive_parameters, environment_parameters, parallelization
     )
     if catch_invalid_parameters
         sessions_result ~

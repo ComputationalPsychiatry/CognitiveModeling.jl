@@ -171,7 +171,7 @@ function turing_behavioral_session end
 
 """
     turing_multiple_behavioral_sessions(sessions_info::MultipleSessionsInfo,
-                                        cognitive_parameters, environment_parameters=(;);
+                                        cognitive_parameters, environment_parameters=(;),
                                         parallelization=SerialSessions())
 
 Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for every session in
@@ -180,11 +180,12 @@ Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for ever
 `session[3].timestep[2].choice.imputed`. Which session `i` is stands in
 `sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for a data identifier.
 Environment parameters can only be given when the sessions have an environment model. With
-`parallelization = ParallelSessions()`, the sessions run over the threads Julia was started
-with. **The model that is evaluated, which is the outermost one, must then be marked with
-`setthreadsafe(model, true)` from DynamicPPL**, since the log density of a threaded model
-that isn't is wrong with no error; the sessions throw an error when it isn't marked. See
-`parallelization` in [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
+[`ParallelSessions`](@ref)`()` as `parallelization`, after the environment parameters, which
+are `(;)` for sessions without an environment, the sessions run over the threads Julia was
+started with. **The model that is evaluated, which is the outermost one, must then be marked
+with `setthreadsafe(model, true)` from DynamicPPL**, since the log density of a threaded
+model that isn't is wrong with no error; the sessions throw an error when it isn't marked.
+See `parallelization` in [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
 for every session in the order of `sessions_info`, which is what a parameter model returns,

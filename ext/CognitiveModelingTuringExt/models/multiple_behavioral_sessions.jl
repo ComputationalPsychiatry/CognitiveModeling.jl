@@ -1,42 +1,14 @@
 ### MODEL FOR MULTIPLE SESSIONS ###
 
-#Turing model for running several behavioral sessions, each with its own cognitive parameters, as a submodel with the prefix session[i], and collecting the trajectories each saved
+#Turing model for running several behavioral sessions, each with its own cognitive parameters, as a submodel with the prefix session[i], and collecting the trajectories each saved. The sessions run one after the other. The first session runs outside the loop, so that the vector of what the sessions saved has its type, and a session whose trajectories have another type widens it
 #The environment parameters are given in the same form, one vector for each parameter with a value for each session, and only when the sessions have an environment
 Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     sessions_info::MultipleSessionsInfo,
     cognitive_parameters,
-    environment_parameters=(;);
-    parallelization=SerialSessions(),
+    environment_parameters=(;),
+    parallelization::SerialSessions=SerialSessions(),
 )
     check_environment_parameters(sessions_info, environment_parameters)
-    saved_trajectories ~ to_submodel(
-        turing_run_sessions(
-            parallelization, sessions_info, cognitive_parameters, environment_parameters
-        ),
-        false,
-    )
-
-    #The parameters as they were given, so that a model around the sessions which transforms its variables into them has them for each sample, with the trajectories each session saved
-    return (; cognitive_parameters, environment_parameters, saved_trajectories)
-end
-
-"""
-    turing_run_sessions(parallelization, sessions_info, cognitive_parameters,
-                        environment_parameters)
-
-Turing.jl model which runs every session in `sessions_info` as a submodel with the prefix
-`session[i]`, and returns a vector with the trajectories that each saved. The first session
-runs outside the loop, so that the vector has its type. Sessions of one type can still save
-trajectories of different types, such as an action that is `NoValue()` in one session only,
-and a session whose trajectories have another type widens the vector, as
-[`store_value!`](@ref) does. With [`SerialSessions`](@ref) the sessions run one after the
-other, and with [`ParallelSessions`](@ref) over the threads Julia was started with, which
-needs the model that is evaluated to be marked thread-safe, since the log density is
-silently wrong otherwise. Used by [`turing_multiple_behavioral_sessions`](@ref).
-"""
-Turing.@model function turing_run_sessions(
-    ::SerialSessions, sessions_info, cognitive_parameters, environment_parameters
-)
     sessions = sessions_info.sessions
     first_session ~ to_submodel(
         prefix(
@@ -67,12 +39,19 @@ Turing.@model function turing_run_sessions(
         #A session whose saved trajectories have another type widens the vector
         saved_trajectories = store_value!(saved_trajectories, session.saved_trajectories, i)
     end
-    return saved_trajectories
+
+    #The parameters as they were given, so that a model around the sessions which transforms its variables into them has them for each sample, with the trajectories each session saved
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
-Turing.@model function turing_run_sessions(
-    ::ParallelSessions, sessions_info, cognitive_parameters, environment_parameters
+#The same with the sessions over the threads Julia was started with, which needs the model that is evaluated to be marked thread-safe, since its log density is silently wrong otherwise
+Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
+    sessions_info::MultipleSessionsInfo,
+    cognitive_parameters,
+    environment_parameters,
+    parallelization::ParallelSessions,
 )
+    check_environment_parameters(sessions_info, environment_parameters)
     if !(__varinfo__ isa DynamicPPL.ThreadSafeVarInfo)
         throw(
             ArgumentError(
@@ -118,5 +97,7 @@ Turing.@model function turing_run_sessions(
         end
     end
     saved_trajectories = include_other_types(saved_trajectories, saved_with_other_types)
-    return saved_trajectories
+
+    #The parameters as they were given, with the trajectories each session saved
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
