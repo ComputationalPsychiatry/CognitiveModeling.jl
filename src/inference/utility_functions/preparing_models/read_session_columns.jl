@@ -7,7 +7,7 @@ Return the value of `column` in every session of `sessions_info`, as a vector in
 of the sessions, from the table that the sessions were split from. A session with more than
 one value in the column, or with a missing one, is an error, which starts with `reader`, a
 description of what reads the column, such as
-`"GroupedHierarchicalParameters groups learning_rate by"`. Used by
+`"HierarchicalGroupedParameters groups learning_rate by"`. Used by
 [`read_level_of_each_session`](@ref) and by the continuous predictors of a
 [`HierarchicalRegressionParameters`](@ref).
 """
@@ -66,7 +66,7 @@ their first session, and with no columns every session is in one group. A sessio
 than one value, or a missing value, in one of the columns is an error, which starts with
 `reader`, as for [`read_level_of_each_session`](@ref). Used by
 [`prepare_parameters_model`](@ref), for the groups of a
-[`GroupedHierarchicalParameters`](@ref) and for the varying effects of a
+[`HierarchicalGroupedParameters`](@ref) and for the varying effects of a
 [`HierarchicalRegressionParameters`](@ref).
 """
 function group_sessions(sessions_info::MultipleSessionsInfo, ::Tuple{}, ::String)

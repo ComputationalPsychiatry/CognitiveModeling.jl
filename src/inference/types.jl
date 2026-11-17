@@ -422,7 +422,7 @@ action is `MissingValue()`, where `environment_save_history` saves anything or w
 estimates the environment's parameters, unless `include_environment` says otherwise. The
 table is kept in the field `table`, without being copied, with the rows of each session in
 `session_rows`, so that a parameter model can read the columns it needs, such as
-those that a [`GroupedHierarchicalParameters`](@ref) groups the sessions by, and the
+those that a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the
 predictors of a [`HierarchicalRegressionParameters`](@ref).
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
@@ -663,7 +663,7 @@ inference backend fits to several sessions, which gives or estimates the paramet
 session, for the cognitive model and for the environment model alike. The package comes with
 [`NoParameters`](@ref), [`FixedParameters`](@ref),
 [`SessionwiseFixedParameters`](@ref), [`IdenticalParameters`](@ref),
-[`IndependentParameters`](@ref), [`GroupedHierarchicalParameters`](@ref) and
+[`IndependentParameters`](@ref), [`HierarchicalGroupedParameters`](@ref) and
 [`HierarchicalRegressionParameters`](@ref), and [`CompositeParameters`](@ref)
 combines several, each giving some of the parameters.
 

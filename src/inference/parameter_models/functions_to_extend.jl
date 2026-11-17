@@ -51,7 +51,7 @@ estimates_parameters(parameters_model) = true
 Return `parameters_model` prepared for the sessions in `sessions_info`, with what doesn't
 change between the evaluations of an inference backend's model worked out once, before the
 model is made. A [`SessionwiseFixedParameters`](@ref) has the values of every session
-looked up, a [`GroupedHierarchicalParameters`](@ref) has the group of every session
+looked up, a [`HierarchicalGroupedParameters`](@ref) has the group of every session
 found, a [`HierarchicalRegressionParameters`](@ref) has the design of every
 regression built, and a [`CompositeParameters`](@ref) has each of its parts prepared.
 Used by [`prepare_full_model`](@ref).

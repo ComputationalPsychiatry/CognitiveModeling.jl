@@ -82,7 +82,7 @@ include("parameter_models/fixed_parameters.jl")
 include("parameter_models/sessionwise_fixed_parameters.jl")
 include("parameter_models/identical_parameters.jl")
 include("parameter_models/independent_parameters.jl")
-include("parameter_models/grouped_hierarchical_parameters.jl")
+include("parameter_models/hierarchical_grouped_parameters.jl")
 include("parameter_models/hierarchical_regression_parameters.jl")
 include("parameter_models/composite_parameters.jl")
 

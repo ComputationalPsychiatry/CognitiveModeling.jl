@@ -5,7 +5,7 @@
 
 The parameter model of a full model which gives some of the parameters with each of
 its parts, which are parameter models, such as a
-[`GroupedHierarchicalParameters`](@ref) for the learning rate, an
+[`HierarchicalGroupedParameters`](@ref) for the learning rate, an
 [`IndependentParameters`](@ref) for the inverse temperature and a
 [`FixedParameters`](@ref) for a bias. What the parts give is merged. The variables
 of a part in `parts` are named as that part names them, and those of a part given by

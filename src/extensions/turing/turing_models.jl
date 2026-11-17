@@ -272,7 +272,7 @@ The variables of a parameter model are named as it names them, or under the
 parameter model's name with `include_submodel_prefixes = true`. With
 `IndependentParameters`, each parameter is a vector with a value for each session,
 such as `learning_rate.session`, so the learning rate of the third session is
-`learning_rate.session[3]`. With `GroupedHierarchicalParameters`, each parameter of
+`learning_rate.session[3]`. With `HierarchicalGroupedParameters`, each parameter of
 a group-level distribution is named after its prior, such as `learning_rate.mean.group` and
 `learning_rate.sd.group`, which is one value without groups, and otherwise has the value of
 each group under the group's symbol name, such as `learning_rate.mean.group.clinical`. The

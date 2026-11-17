@@ -41,7 +41,7 @@ const REGRESSION_TABLE = merge(
                 SessionwiseFixedParameters((;)),
                 IdenticalParameters((;)),
                 IndependentParameters((;)),
-                GroupedHierarchicalParameters((;)),
+                HierarchicalGroupedParameters((;)),
                 HierarchicalRegressionParameters((;)),
                 CompositeParameters(),
             ),
@@ -61,7 +61,7 @@ const REGRESSION_TABLE = merge(
             IndependentParameters((; probability=1))
         )
         @test CognitiveModeling.estimates_parameters(
-            GroupedHierarchicalParameters((;
+            HierarchicalGroupedParameters((;
                 probability=HierarchicalParameter((; mean=1, sd=2))
             )),
         )
@@ -89,7 +89,7 @@ const REGRESSION_TABLE = merge(
             IndependentParameters((; probability=1, scale=2))
         ) === (:probability, :scale)
         @test CognitiveModeling.parameter_names(
-            GroupedHierarchicalParameters((;
+            HierarchicalGroupedParameters((;
                 probability=HierarchicalParameter((; mean=1, sd=2))
             )),
         ) === (:probability,)
@@ -159,9 +159,9 @@ const REGRESSION_TABLE = merge(
         @test of_type.distribution === CognitiveModeling.ConstructorOf{Pair}() &&
             of_type.distribution(1, 2) === (1 => 2) &&
             of_type.centered === true
-        #GroupedHierarchicalParameters keeps one for each parameter, as they are given
+        #HierarchicalGroupedParameters keeps one for each parameter, as they are given
         parameters = (; probability=default, scale=grouped, offset=other)
-        @test GroupedHierarchicalParameters(parameters).parameters === parameters
+        @test HierarchicalGroupedParameters(parameters).parameters === parameters
     end
 
     @testset "The settings of each parameter are checked" begin
@@ -184,7 +184,7 @@ const REGRESSION_TABLE = merge(
             )
         end
         #Each parameter must be given one
-        @test_throws "GroupedHierarchicalParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for probability it was given (priors = (mean = 1, sd = 2),)." GroupedHierarchicalParameters((;
+        @test_throws "HierarchicalGroupedParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for probability it was given (priors = (mean = 1, sd = 2),)." HierarchicalGroupedParameters((;
             probability=(; priors)
         ))
     end
@@ -891,14 +891,14 @@ const REGRESSION_TABLE = merge(
             SessionwiseFixedParameters((; probability=[0.1, 0.2])), sessions_info
         )
 
-        hierarchical = GroupedHierarchicalParameters((;
+        hierarchical = HierarchicalGroupedParameters((;
             probability=HierarchicalParameter((; mean=1, sd=2); group_by=:diagnosis),
             scale=HierarchicalParameter((; mean=1, sd=2)),
         ))
         #The groups are kept in the same kind of model, in a field that is nothing until then
         @test hierarchical.groups === nothing
         grouped = CognitiveModeling.prepare_parameters_model(hierarchical, sessions_info)
-        @test grouped isa GroupedHierarchicalParameters
+        @test grouped isa HierarchicalGroupedParameters
         @test grouped.parameters === hierarchical.parameters
         @test grouped.groups.probability.group_of_each_session == [1, 2, 1, 2]
         @test grouped.groups.scale.n_groups == 1

@@ -14,7 +14,7 @@ struct ConstructorOf{T} end
     HierarchicalParameter(priors; distribution=nothing, transformation=identity,
                           group_by=nothing, centered=nothing)
 
-How one parameter of a [`GroupedHierarchicalParameters`](@ref) is sampled for every
+How one parameter of a [`HierarchicalGroupedParameters`](@ref) is sampled for every
 session: from a group-level distribution, whose own parameters are sampled from `priors`,
 once for each group of sessions.
 
@@ -133,7 +133,7 @@ struct HierarchicalParameter{
 end
 
 """
-    GroupedHierarchicalParameters(parameters)
+    HierarchicalGroupedParameters(parameters)
 
 The parameter model of a full model which samples each parameter of every session
 from a group-level distribution, whose own parameters are sampled from priors, once for each
@@ -155,7 +155,7 @@ name of each group when the sessions are grouped, and the prior itself when they
 using Turing
 using LogExpFunctions: logistic
 
-parameters_model = GroupedHierarchicalParameters((;
+parameters_model = HierarchicalGroupedParameters((;
     learning_rate = HierarchicalParameter(
         (; mean = Normal(0, 1), sd = Exponential(1));
         transformation = logistic,
@@ -167,21 +167,21 @@ parameters_model = GroupedHierarchicalParameters((;
 ))
 ```
 """
-struct GroupedHierarchicalParameters{
+struct HierarchicalGroupedParameters{
     Tparameters<:NamedTuple,Tgroups<:Union{Nothing,NamedTuple}
 } <: AbstractParametersModel
     parameters::Tparameters
     groups::Tgroups
 
     #Takes a HierarchicalParameter for each parameter. The groups of the sessions aren't found yet
-    function GroupedHierarchicalParameters(parameters::NamedTuple)
+    function HierarchicalGroupedParameters(parameters::NamedTuple)
         foreach(check_is_hierarchical_parameter, keys(parameters), values(parameters))
         return new{typeof(parameters),Nothing}(parameters, nothing)
     end
 
     #The same model with the groups of the sessions it is prepared for
-    function GroupedHierarchicalParameters(
-        parameters_model::GroupedHierarchicalParameters, groups::NamedTuple
+    function HierarchicalGroupedParameters(
+        parameters_model::HierarchicalGroupedParameters, groups::NamedTuple
     )
         parameters = parameters_model.parameters
         return new{typeof(parameters),typeof(groups)}(parameters, groups)
@@ -189,13 +189,13 @@ struct GroupedHierarchicalParameters{
 end
 
 #It gives the parameters it has a HierarchicalParameter for
-function parameter_names(parameters_model::GroupedHierarchicalParameters)
+function parameter_names(parameters_model::HierarchicalGroupedParameters)
     return keys(parameters_model.parameters)
 end
 
 #The group of every session is found once for each parameter, when a full model is prepared, and kept in the field for the groups, with the priors of the group-level parameters under the symbol name of each group
 function prepare_parameters_model(
-    parameters_model::GroupedHierarchicalParameters, sessions_info::MultipleSessionsInfo
+    parameters_model::HierarchicalGroupedParameters, sessions_info::MultipleSessionsInfo
 )
     names = keys(parameters_model.parameters)
     groups = NamedTuple{names}(
@@ -203,7 +203,7 @@ function prepare_parameters_model(
             groups_of_parameter = group_sessions(
                 sessions_info,
                 hierarchical_parameter.group_by,
-                "GroupedHierarchicalParameters groups $name by",
+                "HierarchicalGroupedParameters groups $name by",
             )
 
             #Without columns to group by, each group-level parameter is one value with its prior
@@ -216,21 +216,21 @@ function prepare_parameters_model(
             return merge(groups_of_parameter, (; group_priors))
         end,
     )
-    return GroupedHierarchicalParameters(parameters_model, groups)
+    return HierarchicalGroupedParameters(parameters_model, groups)
 end
 
 """
     check_is_hierarchical_parameter(name, hierarchical_parameter)
 
-Throw an informative error if what a [`GroupedHierarchicalParameters`](@ref) was
+Throw an informative error if what a [`HierarchicalGroupedParameters`](@ref) was
 given for the parameter `name` isn't a [`HierarchicalParameter`](@ref). Used by the
-constructor of `GroupedHierarchicalParameters`.
+constructor of `HierarchicalGroupedParameters`.
 """
 check_is_hierarchical_parameter(name::Symbol, ::HierarchicalParameter) = nothing
 function check_is_hierarchical_parameter(name::Symbol, hierarchical_parameter)
     return throw(
         ArgumentError(
-            "GroupedHierarchicalParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for $name it was given $(repr(hierarchical_parameter)).",
+            "HierarchicalGroupedParameters takes a HierarchicalParameter for each parameter, such as HierarchicalParameter((; mean = Normal(0, 1), sd = Exponential(1)); transformation = exp), but for $name it was given $(repr(hierarchical_parameter)).",
         ),
     )
 end

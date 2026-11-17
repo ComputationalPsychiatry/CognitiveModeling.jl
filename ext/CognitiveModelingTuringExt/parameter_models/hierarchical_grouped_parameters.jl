@@ -2,7 +2,7 @@
 
 #Each parameter of every session sampled from the distribution of its group, with the group of every session found when the full model was prepared
 Turing.@model function CognitiveModeling.turing_parameters_model(
-    parameters_model::GroupedHierarchicalParameters{<:NamedTuple,<:NamedTuple},
+    parameters_model::HierarchicalGroupedParameters{<:NamedTuple,<:NamedTuple},
     sessions_info::MultipleSessionsInfo,
 )
     parameters ~ to_submodel(
@@ -16,7 +16,7 @@ end
 
 #The same when it wasn't prepared, which finds the group of every session on each evaluation
 Turing.@model function CognitiveModeling.turing_parameters_model(
-    parameters_model::GroupedHierarchicalParameters{<:NamedTuple,Nothing},
+    parameters_model::HierarchicalGroupedParameters{<:NamedTuple,Nothing},
     sessions_info::MultipleSessionsInfo,
 )
     parameters ~ to_submodel(
@@ -33,10 +33,10 @@ end
 
 Turing.jl model which samples one parameter at a time from `parameters`, the
 [`HierarchicalParameter`](@ref) of each parameter of a
-[`GroupedHierarchicalParameters`](@ref), with
+[`HierarchicalGroupedParameters`](@ref), with
 [`turing_hierarchical_parameter`](@ref) under the parameter's name, and returns them
 in a `NamedTuple`, each as a vector with a value for every session. `groups` has the groups
-of the sessions for each parameter. Used by `GroupedHierarchicalParameters`.
+of the sessions for each parameter. Used by `HierarchicalGroupedParameters`.
 """
 Turing.@model function turing_hierarchical_parameters(
     parameters::NamedTuple{names}, groups::NamedTuple

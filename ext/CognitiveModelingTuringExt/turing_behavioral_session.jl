@@ -167,7 +167,7 @@ function sampled_ranges(parameters_model::Union{IdenticalParameters,IndependentP
     end
     return ranges
 end
-function sampled_ranges(parameters_model::GroupedHierarchicalParameters)
+function sampled_ranges(parameters_model::HierarchicalGroupedParameters)
     ranges = Pair{Symbol,NamedTuple}[]
     for (name, hierarchical_parameter) in pairs(parameters_model.parameters)
         hierarchical_parameter.distribution === nothing || continue

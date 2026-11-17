@@ -437,7 +437,7 @@ end
 Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
 tuple of one. Used for the arguments that take one value or several: the names given to
 [`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref),
-[`GroupedHierarchicalParameters`](@ref) and
+[`HierarchicalGroupedParameters`](@ref) and
 [`HierarchicalRegressionParameters`](@ref), which are then asserted to be `Symbol`s,
 and the values that stand for a missing value in [`SessionInfo`](@ref).
 """

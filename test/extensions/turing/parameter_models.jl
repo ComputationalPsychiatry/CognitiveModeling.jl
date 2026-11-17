@@ -98,13 +98,13 @@ end
 
 ## The parameter models which sample from the distributions of groups, or combine others ##
 
-@testset "GroupedHierarchicalParameters and CompositeParameters" begin
+@testset "HierarchicalGroupedParameters and CompositeParameters" begin
     sessions_info = sessions_for_test(
         SessionRescorlaWagner(), GROUPED_FULL_TABLE; impute_missing_actions=false
     )
 
     @testset "Each session's value is its group's mean plus a standardized value times its group's standard deviation, transformed" begin
-        hierarchical = GroupedHierarchicalParameters((;
+        hierarchical = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 GROUP_PRIORS; transformation=to_unit_interval, group_by=:group
             ),
@@ -148,7 +148,7 @@ end
     end
 
     @testset "A centered parameter is sampled from the distribution of its group, as name.session" begin
-        centered = GroupedHierarchicalParameters((;
+        centered = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 GROUP_PRIORS;
                 transformation=to_unit_interval,
@@ -180,7 +180,7 @@ end
     end
 
     @testset "Another distribution takes the group's values of its parameters, in the order of the priors" begin
-        with_laplace = GroupedHierarchicalParameters((;
+        with_laplace = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 (; location=Normal(0, 1), spread=Exponential(1));
                 distribution=(location, spread) -> Laplace(location, spread),
@@ -205,7 +205,7 @@ end
 
     @testset "A composite runs each part with its own variables, and merges what they give" begin
         composite = CompositeParameters(
-            GroupedHierarchicalParameters((;
+            HierarchicalGroupedParameters((;
                 learning_rate=HierarchicalParameter(
                     GROUP_PRIORS; transformation=to_unit_interval
                 )
@@ -252,7 +252,7 @@ end
     end
 
     @testset "The full model fits the sessions with the parameters of their groups" begin
-        hierarchical = GroupedHierarchicalParameters((;
+        hierarchical = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 GROUP_PRIORS; transformation=to_unit_interval, group_by=:group
             ),
@@ -415,7 +415,7 @@ const REGRESSION_FULL_TABLE = merge(
               logpdf(Normal(0, 0.5), -0.3)
     end
 
-    @testset "With an intercept and a varying intercept over the sessions alone, it gives what GroupedHierarchicalParameters gives without groups" begin
+    @testset "With an intercept and a varying intercept over the sessions alone, it gives what HierarchicalGroupedParameters gives without groups" begin
         for centered in (false, true)
             as_regression = CognitiveModeling.turing_parameters_model(
                 HierarchicalRegressionParameters((;
@@ -430,7 +430,7 @@ const REGRESSION_FULL_TABLE = merge(
                 sessions_info,
             )
             as_groups = CognitiveModeling.turing_parameters_model(
-                GroupedHierarchicalParameters((;
+                HierarchicalGroupedParameters((;
                     learning_rate=HierarchicalParameter(
                         GROUP_PRIORS; transformation=to_unit_interval, centered
                     ),

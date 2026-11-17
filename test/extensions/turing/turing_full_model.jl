@@ -1120,14 +1120,14 @@ end
             :warn,
             r"The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its group-level normal distribution",
         ) turing_full_model(
-            GroupedHierarchicalParameters((;
+            HierarchicalGroupedParameters((;
                 learning_rate=HierarchicalParameter(GROUP_PRIORS),
                 inverse_temperature=HierarchicalParameter(GROUP_PRIORS; transformation=exp),
             )),
             sessions_info,
         )
         @test_logs turing_full_model(
-            GroupedHierarchicalParameters((;
+            HierarchicalGroupedParameters((;
                 learning_rate=HierarchicalParameter(
                     GROUP_PRIORS; transformation=to_unit_interval
                 ),

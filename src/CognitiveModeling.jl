@@ -31,7 +31,7 @@ include("inference/parameter_models/fixed_parameters.jl")
 include("inference/parameter_models/sessionwise_fixed_parameters.jl")
 include("inference/parameter_models/identical_parameters.jl")
 include("inference/parameter_models/independent_parameters.jl")
-include("inference/parameter_models/grouped_hierarchical_parameters.jl")
+include("inference/parameter_models/hierarchical_grouped_parameters.jl")
 include("inference/parameter_models/hierarchical_regression_parameters.jl")
 include("inference/parameter_models/composite_parameters.jl")
 include("inference/parameter_models/functions_to_extend.jl")
@@ -75,7 +75,7 @@ export AbstractParametersModel,
     SessionwiseFixedParameters,
     IdenticalParameters,
     IndependentParameters,
-    GroupedHierarchicalParameters,
+    HierarchicalGroupedParameters,
     HierarchicalParameter,
     HierarchicalRegressionParameters,
     RegressionParameter,

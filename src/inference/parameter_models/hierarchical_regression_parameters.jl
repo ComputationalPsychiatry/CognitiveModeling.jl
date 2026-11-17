@@ -1389,7 +1389,7 @@ is `nothing`, and otherwise a `NamedTuple` with `prior` under the symbol name of
 in `groups`, as [`group_sessions`](@ref) and [`find_groups_of_levels`](@ref) give them.
 Used by [`build_varying_effects_design`](@ref), for the standard deviations of varying
 effects, and by [`prepare_parameters_model`](@ref) for the group-level parameters of a
-[`GroupedHierarchicalParameters`](@ref).
+[`HierarchicalGroupedParameters`](@ref).
 """
 priors_of_groups(prior, ::Nothing) = prior
 function priors_of_groups(prior, groups::NamedTuple)
