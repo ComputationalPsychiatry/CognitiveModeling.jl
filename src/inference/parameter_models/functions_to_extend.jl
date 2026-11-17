@@ -109,8 +109,7 @@ they aren't known. The parameter models read the values of their priors from it,
 [`CognitiveModeling.parameter_value_ranges`](@ref).
 
 # Implementation
-An inference backend can add a method of this function for the distributions it takes, as
-the Turing.jl extension does for the univariate distributions of Distributions.jl. The
+An inference backend can add a method of this function for the distributions it takes. The
 default returns `nothing`.
 """
 distribution_support(distribution) = nothing
