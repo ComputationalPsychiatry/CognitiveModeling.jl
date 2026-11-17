@@ -199,9 +199,11 @@ Turing.@model function turing_run_all_timesteps(
     offset = initial_saved === nothing ? 0 : 1
 
     #Initialize the distributions of the actions and observations to condition on
-    distributions = initialize_distributions_for_conditioning(session_info, timestep_values)
-    distributions = store_distributions_for_conditioning(
-        session_info, distributions, timestep_values
+    distributions_for_conditioning = initialize_distributions_for_conditioning(
+        session_info, timestep_values
+    )
+    distributions_for_conditioning = store_distributions_for_conditioning(
+        session_info, distributions_for_conditioning, timestep_values
     )
 
     #Run the remaining timesteps, each starting from the values of the one before, storing timestep t as element t + offset
@@ -245,22 +247,25 @@ Turing.@model function turing_run_all_timesteps(
             select_timestep_values_to_save(session_info, timestep_values),
             t + offset,
         )
-        distributions = store_distributions_for_conditioning(
-            session_info, distributions, timestep_values
+        distributions_for_conditioning = store_distributions_for_conditioning(
+            session_info, distributions_for_conditioning, timestep_values
         )
     end
 
     #Score the actions in the data, and the observations in the data with an environment, against the distributions of their timesteps, all at once as observed values
     if !isempty(session_info.actions_to_condition_on)
         session_info.actions_to_condition_on ~ product_distribution(
-            map(product_distribution, map(scorable_distributions, distributions.actions))
+            map(
+                product_distribution,
+                map(scorable_distributions, distributions_for_conditioning.actions),
+            ),
         )
     end
     if has_environment(session_info) && !isempty(session_info.observations_to_condition_on)
         session_info.observations_to_condition_on ~ product_distribution(
             map(
                 product_distribution,
-                map(scorable_distributions, distributions.observations),
+                map(scorable_distributions, distributions_for_conditioning.observations),
             ),
         )
     end

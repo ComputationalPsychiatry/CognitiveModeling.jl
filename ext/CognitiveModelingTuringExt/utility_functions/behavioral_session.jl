@@ -14,7 +14,8 @@ scorable_distributions(::Vector{Union{}}) = Normal{Float64}[]
 
 """
     initialize_distributions_for_conditioning(session_info, timestep_values)
-    store_distributions_for_conditioning(session_info, distributions, timestep_values)
+    store_distributions_for_conditioning(session_info, distributions_for_conditioning,
+                                         timestep_values)
 
 Keep the distributions that the values to condition on of a session are scored against: the
 cognitive model's for the actions, and the environment's for the observations when the
@@ -49,11 +50,11 @@ function initialize_distributions_for_conditioning(
 end
 
 function store_distributions_for_conditioning(
-    session_info::SessionInfo, distributions, timestep_values
+    session_info::SessionInfo, distributions_for_conditioning, timestep_values
 )
     return (;
         actions=store_output_distributions_for_conditioning(
-            distributions.actions,
+            distributions_for_conditioning.actions,
             scorable_distribution_of_each(
                 select_names(
                     timestep_values.action_distribution,
@@ -63,7 +64,7 @@ function store_distributions_for_conditioning(
             timestep_values.actions_to_condition_on_at_timestep,
         ),
         observations=store_output_distributions_for_conditioning(
-            distributions.observations,
+            distributions_for_conditioning.observations,
             scorable_distribution_of_each(
                 select_names(
                     observation_distribution_of(session_info, timestep_values),
