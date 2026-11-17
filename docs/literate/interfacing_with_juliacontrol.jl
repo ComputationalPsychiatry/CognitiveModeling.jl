@@ -51,9 +51,7 @@ end
 # On the first timestep the agent hasn't acted yet, which [`AbstractNoValue`](@ref) covers,
 # and no force is applied.
 
-function CognitiveModeling.apply_timestep_model(
-    environment::FirstOrderPlant, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::FirstOrderPlant, context::ModelContext)
 
     ## Unpack the context ##
     (; plant_state, timestep) = context.previous_state
@@ -107,7 +105,7 @@ function CognitiveModeling.initialize_state(model::PIDController, parameters)
     return (; pid=DiscretePID(; K, Ti, Td, Ts=model.timestep_size, umin=(-Inf), umax=Inf))
 end
 
-function CognitiveModeling.apply_timestep_model(model::PIDController, context::ModelContext)
+function CognitiveModeling.run_timestep(model::PIDController, context::ModelContext)
 
     ## Unpack the context ##
     pid = context.previous_state.pid
@@ -201,7 +199,7 @@ sessions_info = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
 )
 full_model = turing_full_model(
-    IndependentSessionParameters((;
+    IndependentParameters((;
         K=LogNormal(0, 1),
         Ti=LogNormal(0, 1),
         Td=LogNormal(-2, 1),
@@ -232,9 +230,7 @@ function CognitiveModeling.initialize_state(environment::DriftingTarget, paramet
     return (; target_position=0.0)
 end
 
-function CognitiveModeling.apply_timestep_model(
-    environment::DriftingTarget, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::DriftingTarget, context::ModelContext)
     #The target drifts, which is sampled with the generator of the context
     target_position =
         context.previous_state.target_position +
@@ -276,7 +272,7 @@ function CognitiveModeling.initialize_state(model::KalmanTracker, parameters)
     return (; kalman_filter)
 end
 
-function CognitiveModeling.apply_timestep_model(model::KalmanTracker, context::ModelContext)
+function CognitiveModeling.run_timestep(model::KalmanTracker, context::ModelContext)
 
     ## Unpack the context ##
     kalman_filter = context.previous_state.kalman_filter

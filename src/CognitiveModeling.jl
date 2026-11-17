@@ -26,15 +26,15 @@ include("simulation/simulate.jl")
 include("simulation/fixed_observations_environment.jl")
 include("simulation/display_name_maps_and_instantiated_models.jl")
 include("inference/types.jl")
-include("inference/session_parameter_models/no_session_parameters.jl")
-include("inference/session_parameter_models/fixed_session_parameters.jl")
-include("inference/session_parameter_models/fixed_session_parameters_by_session.jl")
-include("inference/session_parameter_models/identical_session_parameters.jl")
-include("inference/session_parameter_models/independent_session_parameters.jl")
-include("inference/session_parameter_models/grouped_hierarchical_session_parameters.jl")
-include("inference/session_parameter_models/hierarchical_regression_session_parameters.jl")
-include("inference/session_parameter_models/composite_session_parameters.jl")
-include("inference/functions_to_extend_for_session_parameter_models.jl")
+include("inference/parameter_models/no_parameters.jl")
+include("inference/parameter_models/fixed_parameters.jl")
+include("inference/parameter_models/sessionwise_fixed_parameters.jl")
+include("inference/parameter_models/identical_parameters.jl")
+include("inference/parameter_models/independent_parameters.jl")
+include("inference/parameter_models/grouped_hierarchical_parameters.jl")
+include("inference/parameter_models/hierarchical_regression_parameters.jl")
+include("inference/parameter_models/composite_parameters.jl")
+include("inference/parameter_models/functions_to_extend.jl")
 include("inference/functions_to_call.jl")
 include("inference/utility_functions/preparing_models/prepare_full_model.jl")
 include("inference/utility_functions/preparing_models/prepare_session_data.jl")
@@ -69,15 +69,15 @@ export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
 export simulate, simulate!, reset!
 export SessionInfo, MultipleSessionsInfo, NoEnvironment, prepare_for_prediction
-export AbstractSessionParametersModel,
-    NoSessionParameters,
-    FixedSessionParameters,
-    FixedSessionParametersBySession,
-    IdenticalSessionParameters,
-    IndependentSessionParameters,
-    GroupedHierarchicalSessionParameters,
+export AbstractParametersModel,
+    NoParameters,
+    FixedParameters,
+    SessionwiseFixedParameters,
+    IdenticalParameters,
+    IndependentParameters,
+    GroupedHierarchicalParameters,
     HierarchicalParameter,
-    HierarchicalRegressionSessionParameters,
+    HierarchicalRegressionParameters,
     RegressionParameter,
     Intercept,
     ContinuousPredictor,
@@ -86,19 +86,19 @@ export AbstractSessionParametersModel,
     VaryingEffects,
     DefaultRegressionPriors,
     DefaultRegressionSettings,
-    CompositeSessionParameters
+    CompositeParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions
 export turing_behavioral_session,
     turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 export session_trajectories_chain, session_parameters_chain, predict_session_trajectories
 
-#What users call with the package's name, as in CognitiveModeling.apply_timestep_model
-public apply_timestep_model, initialize_state, attribute_names
+#What users call with the package's name, as in CognitiveModeling.run_timestep
+public run_timestep, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, discrete_parameter_names, continuous_parameter_names
-public turing_apply_timestep_model,
-    turing_initialize_state, turing_session_parameters_model, turing_downstream_model
+public turing_run_timestep,
+    turing_initialize_state, turing_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 

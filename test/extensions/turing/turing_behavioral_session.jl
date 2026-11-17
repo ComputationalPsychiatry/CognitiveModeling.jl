@@ -4,9 +4,7 @@ struct SessionRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::SessionRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::SessionRescorlaWagner, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::SessionRescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     r = context.input.reward
     Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
@@ -32,9 +30,7 @@ struct TwoContinuousActions <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TwoContinuousActions, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::TwoContinuousActions, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::TwoContinuousActions, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput(
@@ -55,7 +51,7 @@ struct ActsEverySecondTimestep <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::ActsEverySecondTimestep, parameters)
     return (; n_timesteps=0, timestep_size=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::ActsEverySecondTimestep, context::ModelContext
 )
     n_timesteps = context.previous_state.n_timesteps + 1
@@ -76,7 +72,7 @@ struct NoisySessionModel <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::NoisySessionModel, parameters)
     return (; expected_reward=0.5)
 end
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
     model::NoisySessionModel, context::ModelContext
 )
     noise ~ Normal(0, context.parameters.noise_scale)
@@ -95,9 +91,7 @@ end
 #Repeats its previous choice with a probability of 0.9, and chooses at random when there is none
 struct RepeatsPreviousChoice <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RepeatsPreviousChoice, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    model::RepeatsPreviousChoice, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::RepeatsPreviousChoice, context::ModelContext)
     previous = context.previous_output.choice
     return ModelOutput((; choice=Bernoulli(
         if previous isa AbstractNoValue
@@ -118,9 +112,7 @@ struct RecordsWhoStarts <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters)
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.apply_timestep_model(
-    model::RecordsWhoStarts, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::RecordsWhoStarts, context::ModelContext)
     return ModelOutput((; choice=Deterministic(true)), (; who_starts=context.who_starts))
 end
 function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
@@ -134,7 +126,7 @@ struct RejectsHighLearningRate <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RejectsHighLearningRate, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::RejectsHighLearningRate, context::ModelContext
 )
     context.parameters.learning_rate > 1 &&
@@ -156,9 +148,7 @@ struct StartsFromParameter <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StartsFromParameter, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::StartsFromParameter, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::StartsFromParameter, context::ModelContext)
     Vₜ =
         context.previous_state.expected_reward +
         context.parameters.learning_rate *
@@ -191,9 +181,7 @@ Turing.@model function CognitiveModeling.turing_initialize_state(
     start_noise ~ Normal(0, 0.1)
     return (; expected_reward=parameters.initial_value + start_noise)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::SamplesItsStart, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::SamplesItsStart, context::ModelContext)
     Vₜ =
         context.previous_state.expected_reward +
         context.parameters.learning_rate *
@@ -214,7 +202,7 @@ struct RewardsPreviousChoice <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RewardsPreviousChoice, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsPreviousChoice, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : float(context.input.choice)
@@ -233,9 +221,7 @@ CognitiveModeling.default_parameters(environment::RewardsPreviousChoice) = (; sc
 #Gives a symbol as the reward, which can't be scored as a point mass
 struct GivesSymbol <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::GivesSymbol, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::GivesSymbol, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::GivesSymbol, context::ModelContext)
     return ModelOutput((; reward=Deterministic(:win)))
 end
 function CognitiveModeling.attribute_names(environment::GivesSymbol)
@@ -245,9 +231,7 @@ end
 #Ends after a number of timesteps which is a parameter, counting them in its state, and always pays 1
 struct EndsAfterPulls <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::EndsAfterPulls, parameters) = (; pulls=0)
-function CognitiveModeling.apply_timestep_model(
-    environment::EndsAfterPulls, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::EndsAfterPulls, context::ModelContext)
     return ModelOutput(
         (; reward=Deterministic(1.0)), (; pulls=context.previous_state.pulls + 1)
     )
@@ -268,8 +252,8 @@ struct StopsWhenSure <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StopsWhenSure, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(model::StopsWhenSure, context::ModelContext)
-    return apply_timestep_model(SessionRescorlaWagner(), context)
+function CognitiveModeling.run_timestep(model::StopsWhenSure, context::ModelContext)
+    return run_timestep(SessionRescorlaWagner(), context)
 end
 function CognitiveModeling.attribute_names(model::StopsWhenSure)
     return ModelAttributes(;
@@ -286,9 +270,7 @@ end
 #Gives no observations at all
 struct GivesNothing <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::GivesNothing, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::GivesNothing, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::GivesNothing, context::ModelContext)
     return ModelOutput((;))
 end
 function CognitiveModeling.attribute_names(environment::GivesNothing)
@@ -298,9 +280,7 @@ end
 #A bandit which pays a reward of 1 with a probability of 0.8 after a choice of true, and 0.2 after false, so that a reward says something about the choice before it
 struct PaysForChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::PaysForChoice, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::PaysForChoice, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::PaysForChoice, context::ModelContext)
     choice = context.input.choice
     choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))
     return ModelOutput((; reward=Bernoulli(choice ? 0.8 : 0.2)))
@@ -312,9 +292,7 @@ end
 #Gives a distribution to sample its reward from
 struct NoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::NoisyRewards, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::NoisyRewards, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::NoisyRewards, context::ModelContext)
     return ModelOutput((; reward=Normal(0.5, 1.0)))
 end
 function CognitiveModeling.attribute_names(environment::NoisyRewards)
@@ -324,9 +302,7 @@ end
 #Gives the reward of NoisyRewards under another name, with a cue which isn't random, and takes the choice under another name, for maps of names
 struct NoisyPayoffs <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::NoisyPayoffs, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::NoisyPayoffs, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::NoisyPayoffs, context::ModelContext)
     return ModelOutput((; payoff=Normal(0.5, 1.0), cue=Deterministic(1.0)))
 end
 function CognitiveModeling.attribute_names(environment::NoisyPayoffs)
@@ -338,7 +314,7 @@ end
 #Samples a drift of its state within each timestep in Turing, and gives the state as a reward which isn't random
 struct DriftingRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::DriftingRewards, parameters) = (; level=0.5)
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
     environment::DriftingRewards, context::ModelContext
 )
     drift ~ Normal(0, 1)
@@ -352,7 +328,7 @@ end
 #Gives no reward before the first choice, and the previous choice afterwards
 struct RewardsAfterFirstChoice <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsAfterFirstChoice, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsAfterFirstChoice, context::ModelContext
 )
     context.input.choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))

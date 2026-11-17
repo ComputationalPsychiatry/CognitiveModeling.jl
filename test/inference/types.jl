@@ -36,8 +36,8 @@ function CognitiveModeling.attribute_names(::GivesPayoffAndCue)
     )
 end
 
-#A session parameter model of one's own, without any of the optional methods
-struct ParametersModelOfOwn <: AbstractSessionParametersModel end
+#A parameter model of one's own, without any of the optional methods
+struct ParametersModelOfOwn <: AbstractParametersModel end
 
 @testset "Types for data" begin
     @testset "The marker for a missing value is its own type, apart from the one for nothing happening" begin

@@ -24,7 +24,7 @@ function check_unique_session_symbol_names(session_ids::AbstractVector)
         end
         throw(
             ArgumentError(
-                "The data identifiers $(repr(first_id)) and $(repr(session_id)) both give the symbol name $symbol_name, which the chains of a fit and FixedSessionParametersBySession find a session by. The data identifier of every session must give a symbol name of its own.",
+                "The data identifiers $(repr(first_id)) and $(repr(session_id)) both give the symbol name $symbol_name, which the chains of a fit and SessionwiseFixedParameters find a session by. The data identifier of every session must give a symbol name of its own.",
             ),
         )
     end

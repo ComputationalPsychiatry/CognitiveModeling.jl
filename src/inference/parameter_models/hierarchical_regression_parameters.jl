@@ -433,7 +433,7 @@ end
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings())
 
-How one parameter of a [`HierarchicalRegressionSessionParameters`](@ref) is given to every
+How one parameter of a [`HierarchicalRegressionParameters`](@ref) is given to every
 session: by a regression on columns of the table that the sessions were split from, whose
 `terms` are an [`Intercept`](@ref), [`ContinuousPredictor`](@ref)s,
 [`CategoricalPredictor`](@ref)s, [`Interaction`](@ref)s and [`VaryingEffects`](@ref). The
@@ -462,7 +462,7 @@ one of the two can be estimated.
   and whether varying effects are centered, for the terms that are given without them, as a
   [`DefaultRegressionSettings`](@ref).
 - `name=nothing`: the name of the parameter, which a
-  [`HierarchicalRegressionSessionParameters`](@ref) checks against the name the regression
+  [`HierarchicalRegressionParameters`](@ref) checks against the name the regression
   is given under, or `nothing` for no check. A formula gives it.
 
 The terms are kept in the field `terms`, as a `NamedTuple` with each term under its name,
@@ -565,9 +565,9 @@ struct RegressionParameter{Tterms<:NamedTuple,Ttransformation}
 end
 
 """
-    HierarchicalRegressionSessionParameters(parameters)
+    HierarchicalRegressionParameters(parameters)
 
-The session parameter model of a full model which gives each parameter of every session by
+The parameter model of a full model which gives each parameter of every session by
 a regression on columns of the table that the sessions were split from, such as the age and
 the diagnosis of a participant, with varying effects. `parameters` is a `NamedTuple` with a
 [`RegressionParameter`](@ref) for each parameter that is fitted, which has the terms of its
@@ -602,7 +602,7 @@ each parameter:
 using Turing
 using LogExpFunctions: logistic
 
-session_parameter_model = HierarchicalRegressionSessionParameters((;
+parameters_model = HierarchicalRegressionParameters((;
     learning_rate = RegressionParameter(
         Intercept(Normal(0, 1)),
         ContinuousPredictor(:age, Normal(0, 0.5)),
@@ -626,21 +626,21 @@ session_parameter_model = HierarchicalRegressionSessionParameters((;
 ))
 ```
 """
-struct HierarchicalRegressionSessionParameters{
+struct HierarchicalRegressionParameters{
     Tparameters<:NamedTuple,Tdesigns<:Union{Nothing,NamedTuple}
-} <: AbstractSessionParametersModel
+} <: AbstractParametersModel
     parameters::Tparameters
     designs::Tdesigns
 
     #Takes a RegressionParameter for each parameter. The designs of the regressions aren't built yet
-    function HierarchicalRegressionSessionParameters(parameters::NamedTuple)
+    function HierarchicalRegressionParameters(parameters::NamedTuple)
         foreach(check_is_regression_parameter, keys(parameters), values(parameters))
         return new{typeof(parameters),Nothing}(parameters, nothing)
     end
 
     #The same model with the designs of its regressions for the sessions it is prepared for
-    function HierarchicalRegressionSessionParameters(
-        parameters_model::HierarchicalRegressionSessionParameters, designs::NamedTuple
+    function HierarchicalRegressionParameters(
+        parameters_model::HierarchicalRegressionParameters, designs::NamedTuple
     )
         parameters = parameters_model.parameters
         return new{typeof(parameters),typeof(designs)}(parameters, designs)
@@ -648,14 +648,13 @@ struct HierarchicalRegressionSessionParameters{
 end
 
 #It gives the parameters it has a RegressionParameter for
-function parameter_names(parameters_model::HierarchicalRegressionSessionParameters)
+function parameter_names(parameters_model::HierarchicalRegressionParameters)
     return keys(parameters_model.parameters)
 end
 
 #The design of every regression is built once, when a full model is prepared, and kept in the field for the designs
 function prepare_parameters_model(
-    parameters_model::HierarchicalRegressionSessionParameters,
-    sessions_info::MultipleSessionsInfo,
+    parameters_model::HierarchicalRegressionParameters, sessions_info::MultipleSessionsInfo
 )
     names = keys(parameters_model.parameters)
     designs = NamedTuple{names}(
@@ -666,16 +665,16 @@ function prepare_parameters_model(
             values(parameters_model.parameters),
         ),
     )
-    return HierarchicalRegressionSessionParameters(parameters_model, designs)
+    return HierarchicalRegressionParameters(parameters_model, designs)
 end
 
 """
     check_is_regression_parameter(name, regression_parameter)
 
-Throw an informative error if what a [`HierarchicalRegressionSessionParameters`](@ref) was
+Throw an informative error if what a [`HierarchicalRegressionParameters`](@ref) was
 given for the parameter `name` isn't a [`RegressionParameter`](@ref), or is one named after
 another parameter, as by the left-hand side of its formula. Used by the constructor of
-`HierarchicalRegressionSessionParameters`.
+`HierarchicalRegressionParameters`.
 """
 function check_is_regression_parameter(
     name::Symbol, regression_parameter::RegressionParameter
@@ -684,14 +683,14 @@ function check_is_regression_parameter(
     regression_parameter.name === name && return nothing
     return throw(
         ArgumentError(
-            "HierarchicalRegressionSessionParameters was given the regression of $(regression_parameter.name) for the parameter $name. The name of a RegressionParameter, which the left-hand side of its formula gives, must be the name it is given under.",
+            "HierarchicalRegressionParameters was given the regression of $(regression_parameter.name) for the parameter $name. The name of a RegressionParameter, which the left-hand side of its formula gives, must be the name it is given under.",
         ),
     )
 end
 function check_is_regression_parameter(name::Symbol, regression_parameter)
     return throw(
         ArgumentError(
-            "HierarchicalRegressionSessionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but for $name it was given $(repr(regression_parameter)).",
+            "HierarchicalRegressionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but for $name it was given $(repr(regression_parameter)).",
         ),
     )
 end
@@ -1001,7 +1000,7 @@ end
     build_regression_design(sessions_info, regression_parameter, parameter_name)
 
 Return the design of the regression of the parameter `parameter_name` for the sessions in
-`sessions_info`, as [`HierarchicalRegressionSessionParameters`](@ref) keeps it in its field
+`sessions_info`, as [`HierarchicalRegressionParameters`](@ref) keeps it in its field
 `designs`: the prior and the values of each coefficient of the intercept, the predictors and
 the interactions, from [`build_coefficients`](@ref), and the design of the varying effects
 of each column, from [`build_varying_effects_design`](@ref). Used by
@@ -1160,13 +1159,13 @@ function read_predictor_values(
     values = read_one_value_of_each_session(
         sessions_info,
         column,
-        "HierarchicalRegressionSessionParameters predicts $parameter_name from",
+        "HierarchicalRegressionParameters predicts $parameter_name from",
     )
     for value in values
         if !(value isa Real)
             throw(
                 ArgumentError(
-                    "HierarchicalRegressionSessionParameters predicts $parameter_name from the column $column as a continuous predictor, but it has the value $(repr(value)), which isn't a number. Give it as a CategoricalPredictor instead.",
+                    "HierarchicalRegressionParameters predicts $parameter_name from the column $column as a continuous predictor, but it has the value $(repr(value)), which isn't a number. Give it as a CategoricalPredictor instead.",
                 ),
             )
         end
@@ -1200,7 +1199,7 @@ function build_contrast_columns(
     level_of_each_session = read_level_of_each_session(
         sessions_info,
         columns,
-        "HierarchicalRegressionSessionParameters predicts $parameter_name from",
+        "HierarchicalRegressionParameters predicts $parameter_name from",
     )
 
     #The levels are the values of the columns, in the order of their first session
@@ -1208,7 +1207,7 @@ function build_contrast_columns(
     if length(levels) < 2
         throw(
             ArgumentError(
-                "HierarchicalRegressionSessionParameters predicts $parameter_name from $(describe_columns(columns)) as a categorical predictor, but every session has the value $(repr(only(levels))), so there is no difference between levels to estimate.",
+                "HierarchicalRegressionParameters predicts $parameter_name from $(describe_columns(columns)) as a categorical predictor, but every session has the value $(repr(only(levels))), so there is no difference between levels to estimate.",
             ),
         )
     end
@@ -1322,7 +1321,7 @@ end
 
 Return the design of `varying_effects`, a [`VaryingEffects`](@ref) of the regression of the
 parameter `parameter_name`, for the sessions in `sessions_info`, as
-[`HierarchicalRegressionSessionParameters`](@ref) describes it: the prior of the standard
+[`HierarchicalRegressionParameters`](@ref) describes it: the prior of the standard
 deviation of the deviations of each coefficient of their terms, with the prior under the
 symbol name of each group when the levels are grouped, the values that the deviations are
 multiplied by, from [`build_coefficients`](@ref), the reference levels of their predictors,
@@ -1377,7 +1376,7 @@ is `nothing`, and otherwise a `NamedTuple` with `prior` under the symbol name of
 in `groups`, as [`group_sessions`](@ref) and [`find_groups_of_levels`](@ref) give them.
 Used by [`build_varying_effects_design`](@ref), for the standard deviations of varying
 effects, and by [`prepare_parameters_model`](@ref) for the group-level parameters of a
-[`GroupedHierarchicalSessionParameters`](@ref).
+[`GroupedHierarchicalParameters`](@ref).
 """
 priors_of_groups(prior, ::Nothing) = prior
 function priors_of_groups(prior, groups::NamedTuple)
@@ -1430,7 +1429,7 @@ function find_varying_effects_levels(
     levels = group_sessions(
         sessions_info,
         varying_effects.columns,
-        "HierarchicalRegressionSessionParameters has varying effects of $parameter_name for each value of",
+        "HierarchicalRegressionParameters has varying effects of $parameter_name for each value of",
     )
     groups = find_groups_of_levels(
         sessions_info,
@@ -1478,9 +1477,7 @@ function find_groups_of_levels(
     description::String,
 )
     groups = group_sessions(
-        sessions_info,
-        group_by,
-        "HierarchicalRegressionSessionParameters groups $description by",
+        sessions_info, group_by, "HierarchicalRegressionParameters groups $description by"
     )
 
     #The group of a level is the group of its sessions, which must all be in one
@@ -1491,7 +1488,7 @@ function find_groups_of_levels(
         if length(groups_of_level) != 1
             throw(
                 ArgumentError(
-                    "HierarchicalRegressionSessionParameters groups $description by $group_by, but the sessions of $(level_symbol_names[level]) are in the groups $(join(groups.group_symbol_names[groups_of_level], ", ")). The sessions of one level of varying effects must all be in one group.",
+                    "HierarchicalRegressionParameters groups $description by $group_by, but the sessions of $(level_symbol_names[level]) are in the groups $(join(groups.group_symbol_names[groups_of_level], ", ")). The sessions of one level of varying effects must all be in one group.",
                 ),
             )
         end

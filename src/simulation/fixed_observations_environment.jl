@@ -27,7 +27,7 @@ using CognitiveModeling
 #A Rescorla-Wagner model which chooses when it expects more than half a reward
 struct LearnsRewards <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::LearnsRewards, parameters) = (; expected_reward = 0.5)
-function CognitiveModeling.apply_timestep_model(model::LearnsRewards, context::ModelContext)
+function CognitiveModeling.run_timestep(model::LearnsRewards, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Deterministic(Vₜ > 0.5)), (; expected_reward = Vₜ))
@@ -109,9 +109,7 @@ function initialize_state(::FixedObservationsEnvironment, parameters)
 end
 
 #Gives the next entry of each observation
-function apply_timestep_model(
-    environment::FixedObservationsEnvironment, context::ModelContext
-)
+function run_timestep(environment::FixedObservationsEnvironment, context::ModelContext)
     n_observations_given = context.previous_state.n_observations_given + 1
 
     #Every entry is given once, and the environment doesn't start again from the first

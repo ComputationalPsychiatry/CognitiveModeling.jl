@@ -1,5 +1,5 @@
-@testset "Reading the columns that a session parameter model uses" begin
-    reader = "GroupedHierarchicalSessionParameters groups probability by"
+@testset "Reading the columns that a parameter model uses" begin
+    reader = "GroupedHierarchicalParameters groups probability by"
 
     @testset "The value of a column is read for every session, in the order of the sessions" begin
         sessions_info = grouped_sessions()
@@ -10,10 +10,10 @@
             sessions_info, :site, reader
         ) == [1, 1, 2, 2]
         #The error starts with what reads the column
-        @test_throws "HierarchicalRegressionSessionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." CognitiveModeling.read_one_value_of_each_session(
+        @test_throws "HierarchicalRegressionParameters predicts probability from the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a parameter model reads." CognitiveModeling.read_one_value_of_each_session(
             sessions_info,
             :wave,
-            "HierarchicalRegressionSessionParameters predicts probability from",
+            "HierarchicalRegressionParameters predicts probability from",
         )
     end
 
@@ -30,7 +30,7 @@
             (; diagnosis="clinical", site=2),
             (; diagnosis="control", site=2),
         ]
-        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\"." CognitiveModeling.read_level_of_each_session(
+        @test_throws "GroupedHierarchicalParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\"." CognitiveModeling.read_level_of_each_session(
             sessions_info, (:diagnosis, :wave), reader
         )
     end
@@ -69,13 +69,13 @@
 
     @testset "A session must have one value of each column that is read, and the table must have the column" begin
         sessions_info = grouped_sessions()
-        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a session parameter model reads." CognitiveModeling.group_sessions(
+        @test_throws "GroupedHierarchicalParameters groups probability by the column wave, which has the values [1, 2] in the session \"S1\". Each session must have one value of every column that a parameter model reads." CognitiveModeling.group_sessions(
             sessions_info, (:wave,), reader
         )
         with_missing = grouped_sessions(
             merge(GROUPS_TABLE, (; site=[1, 1, 1, 1, missing, 2]))
         )
-        @test_throws "GroupedHierarchicalSessionParameters groups probability by the column site, which has the values Union{Missing, Int64}[missing] in the session \"S3\"." CognitiveModeling.group_sessions(
+        @test_throws "GroupedHierarchicalParameters groups probability by the column site, which has the values Union{Missing, Int64}[missing] in the session \"S3\"." CognitiveModeling.group_sessions(
             with_missing, (:site,), reader
         )
         @test_throws "The table that the sessions were split from has no column age. Its columns are (:id, :diagnosis, :site, :wave, :outcome, :choice)." CognitiveModeling.group_sessions(

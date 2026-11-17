@@ -1,7 +1,7 @@
 ## Functions that a model must implement ##
 
 """
-    apply_timestep_model(model::AbstractTimestepModel, context::ModelContext)::ModelOutput
+    run_timestep(model::AbstractTimestepModel, context::ModelContext)::ModelOutput
 
 Run a single timestep of `model`: update its state, and return what its outputs are sampled
 from. For a cognitive model the outputs are its actions, and for an environment model the
@@ -24,7 +24,7 @@ using Distributions: BernoulliLogit
 
 struct RescorlaWagner <: AbstractCognitiveModel end
 
-function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
 
     ## Unpack the context ##
     #Reward observed on this timestep
@@ -50,16 +50,16 @@ end
 parameters = (; learning_rate = 0.1, inverse_temperature = 2.0)
 context = ModelContext(; input = (; reward = 1.0), previous_state = (; expected_reward = 0.5), previous_output = (; choice = NoValue()), parameters)
 
-CognitiveModeling.apply_timestep_model(RescorlaWagner(), context).new_state
+CognitiveModeling.run_timestep(RescorlaWagner(), context).new_state
 
 # output
 
 (expected_reward = 0.55,)
 ```
 """
-function apply_timestep_model(model::AbstractTimestepModel, context)
+function run_timestep(model::AbstractTimestepModel, context)
     return error(
-        "There is no apply_timestep_model method for $(describe_model(model)) with a context of type $(typeof(context)). Each model must define CognitiveModeling.apply_timestep_model(model::$(typeof(model)), context::CognitiveModeling.ModelContext).",
+        "There is no run_timestep method for $(describe_model(model)) with a context of type $(typeof(context)). Each model must define CognitiveModeling.run_timestep(model::$(typeof(model)), context::CognitiveModeling.ModelContext).",
     )
 end
 
@@ -101,10 +101,10 @@ Return the names of the parameters, states, inputs and outputs of `model`, in a
 [`ModelAttributes`](@ref).
 
 The names define the model, so they must match what the model uses. The parameters are the
-names that [`apply_timestep_model`](@ref) and [`initialize_state`](@ref) read from the
+names that [`run_timestep`](@ref) and [`initialize_state`](@ref) read from the
 parameters. The states are the names in the state that `initialize_state` returns and in
-`new_state`, which `apply_timestep_model` reads from `context.previous_state`. The inputs
-are the names that `apply_timestep_model` reads from `context.input`, and the outputs are
+`new_state`, which `run_timestep` reads from `context.previous_state`. The inputs
+are the names that `run_timestep` reads from `context.input`, and the outputs are
 the names in `output_distribution`, which are also those in `context.previous_output`. For a
 cognitive model the inputs are its observations and the outputs its actions, and for an
 environment model the inputs are the actions it receives and the outputs the observations it

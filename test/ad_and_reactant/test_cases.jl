@@ -21,7 +21,7 @@ struct LearnsRewards{Taction} <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::LearnsRewards{Taction}, context::ModelContext
 ) where {Taction}
     V₋₁ = context.previous_state.expected_reward
@@ -51,7 +51,7 @@ struct RewardsFollowActions <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RewardsFollowActions, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsFollowActions, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -72,7 +72,7 @@ struct PayoffsFollowLevers <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::PayoffsFollowLevers, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::PayoffsFollowLevers, context::ModelContext
 )
     action = context.input.lever isa AbstractNoValue ? 0.5 : context.input.lever
@@ -97,9 +97,7 @@ end
 # An environment which takes the choice, and whose reward is sampled whatever it is
 struct SampledRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    environment::SampledRewards, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::SampledRewards, context::ModelContext)
     return ModelOutput((; reward=SampledReward(context.parameters.reward_probability)))
 end
 function CognitiveModeling.attribute_names(environment::SampledRewards)
@@ -113,9 +111,7 @@ struct LearnsOverTime <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsOverTime, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::LearnsOverTime, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::LearnsOverTime, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     α = context.parameters.learning_rate
     β = context.parameters.inverse_temperature
@@ -137,7 +133,7 @@ end
 # An environment whose reward grows with the time that passes
 struct RewardsGrowOverTime <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsGrowOverTime, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsGrowOverTime, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -156,9 +152,7 @@ end
 # A model and an environment which leave out their states
 struct ChoosesWithoutState <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ChoosesWithoutState, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    model::ChoosesWithoutState, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::ChoosesWithoutState, context::ModelContext)
     return ModelOutput((;
         choice=Deterministic(inv(1 + exp(-context.parameters.inverse_temperature)))
     ))
@@ -170,7 +164,7 @@ function CognitiveModeling.attribute_names(model::ChoosesWithoutState)
 end
 struct RewardsWithoutState <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithoutState, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsWithoutState, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -187,9 +181,7 @@ struct LearnsWithNoise <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::LearnsWithNoise, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::LearnsWithNoise, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     α = context.parameters.learning_rate
     β = context.parameters.inverse_temperature
@@ -217,7 +209,7 @@ function CognitiveModeling.initialize_state(model::LearnsInPlace, parameters)
         ]
     )
 end
-function CognitiveModeling.apply_timestep_model(model::LearnsInPlace, context::ModelContext)
+function CognitiveModeling.run_timestep(model::LearnsInPlace, context::ModelContext)
     V = context.previous_state.expected_rewards
     α = context.parameters.learning_rate
     β = context.parameters.inverse_temperature
@@ -245,10 +237,10 @@ struct LearnsInPlaceWithDeepcopy <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsInPlaceWithDeepcopy, parameters)
     return CognitiveModeling.initialize_state(LearnsInPlace(), parameters)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::LearnsInPlaceWithDeepcopy, context::ModelContext
 )
-    return CognitiveModeling.apply_timestep_model(LearnsInPlace(), context)
+    return CognitiveModeling.run_timestep(LearnsInPlace(), context)
 end
 function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlaceWithDeepcopy, state)
     return deepcopy(state)
@@ -262,9 +254,7 @@ struct RewardsUntilEnd <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RewardsUntilEnd, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
-    environment::RewardsUntilEnd, context::ModelContext
-)
+function CognitiveModeling.run_timestep(environment::RewardsUntilEnd, context::ModelContext)
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
     n_timesteps = context.previous_state.n_timesteps + 1
     return ModelOutput(
@@ -291,7 +281,7 @@ struct RewardsNotAlwaysGiven <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RewardsNotAlwaysGiven, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsNotAlwaysGiven, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -580,7 +570,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::LearnsAndForgetsWithinDomains, context::ModelContext
 )
     V₋₁ = context.previous_state.expected_reward
@@ -611,7 +601,7 @@ function CognitiveModeling.parameter_domains(model::LearnsAndForgetsWithinDomain
 end
 struct RewardsWithinDomain <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithinDomain, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::RewardsWithinDomain, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice

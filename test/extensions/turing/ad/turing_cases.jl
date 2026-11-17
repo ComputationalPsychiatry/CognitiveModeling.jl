@@ -13,9 +13,7 @@ struct TuringRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::TuringRescorlaWagner, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::TuringRescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     r = context.input.reward
     Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
@@ -40,7 +38,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::TuringRescorlaWagnerWithInitialValue, context::ModelContext
 )
     V₋₁ = context.previous_state.expected_reward
@@ -66,10 +64,10 @@ function CognitiveModeling.initialize_state(
 )
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::TuringRescorlaWagnerWithinDomains, context::ModelContext
 )
-    return CognitiveModeling.apply_timestep_model(TuringRescorlaWagner(), context)
+    return CognitiveModeling.run_timestep(TuringRescorlaWagner(), context)
 end
 function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithinDomains)
     return CognitiveModeling.attribute_names(TuringRescorlaWagner())
@@ -86,7 +84,7 @@ struct TuringThreeObservations <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringThreeObservations, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::TuringThreeObservations, context::ModelContext
 )
     #The reward updates the expected reward, and the cue and the bonus, when it is given, shift the choice
@@ -113,7 +111,7 @@ struct TuringContinuousAction <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringContinuousAction, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::TuringContinuousAction, context::ModelContext
 )
     V₋₁ = context.previous_state.expected_reward
@@ -136,7 +134,7 @@ struct TuringNoisyModel <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringNoisyModel, parameters)
     return (; expected_reward=0.5)
 end
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
     model::TuringNoisyModel, context::ModelContext
 )
     noise ~ Normal(0, context.parameters.noise_scale)
@@ -163,7 +161,7 @@ function CognitiveModeling.initialize_state(
 )
     return (;)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::TuringRewardsPreviousChoice, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -176,7 +174,7 @@ end
 # Gives a distribution around the previous choice to sample the reward from, so that a missing reward is a latent
 struct TuringNoisyRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::TuringNoisyRewards, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::TuringNoisyRewards, context::ModelContext
 )
     reward = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -193,10 +191,10 @@ function CognitiveModeling.initialize_state(
 )
     return (;)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::TuringNoisyRewardsWithinDomain, context::ModelContext
 )
-    return CognitiveModeling.apply_timestep_model(TuringNoisyRewards(), context)
+    return CognitiveModeling.run_timestep(TuringNoisyRewards(), context)
 end
 function CognitiveModeling.attribute_names(environment::TuringNoisyRewardsWithinDomain)
     return CognitiveModeling.attribute_names(TuringNoisyRewards())
@@ -333,7 +331,7 @@ const TURING_SESSIONS = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
 )
 const TURING_FULL_MODEL = turing_full_model(
-    IndependentSessionParameters((;
+    IndependentParameters((;
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
     TURING_SESSIONS,
@@ -342,7 +340,7 @@ const TURING_FULL_MODEL = turing_full_model(
 # The same sessions with the model of three parameters. Each session's parameters are read from a NamedTuple with a vector for
 # each parameter, and from three on, Enzyme stopped the process on a row read with a recursive merge, which select_row avoids
 const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
-    IndependentSessionParameters((;
+    IndependentParameters((;
         learning_rate=Turing.Flat(),
         inverse_temperature=Turing.Flat(),
         initial_value=Turing.Flat(),
@@ -359,7 +357,7 @@ const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
 
 # The same sessions with the model whose parameters have domains, and priors that stay within them, so that making the model gives no warning
 const TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS = turing_full_model(
-    IndependentSessionParameters((;
+    IndependentParameters((;
         learning_rate=Uniform(0, 1), inverse_temperature=Turing.FlatPos(0.0)
     )),
     MultipleSessionsInfo(
@@ -383,11 +381,11 @@ const TURING_SESSIONS_WITH_ENVIRONMENT = MultipleSessionsInfo(
     environment=TuringNoisyRewards(),
 )
 const TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS = turing_full_model(
-    IndependentSessionParameters((;
+    IndependentParameters((;
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
     TURING_SESSIONS_WITH_ENVIRONMENT;
-    environment_parameters_model=IdenticalSessionParameters((; scale=Turing.Flat())),
+    environment_parameters_model=IdenticalParameters((; scale=Turing.Flat())),
 )
 
 # The same sessions with a column that puts the first and the third in one group, for parameters from the distributions of groups
@@ -404,7 +402,7 @@ const TURING_GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
 
 # Both parameters from the distributions of groups, as standardized values: the learning rate with two groups, the inverse temperature with one
 const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
-    GroupedHierarchicalSessionParameters((;
+    GroupedHierarchicalParameters((;
         learning_rate=HierarchicalParameter(
             TURING_GROUP_PRIORS; transformation=turing_to_unit_interval, group_by=:group
         ),
@@ -415,8 +413,8 @@ const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
 
 # A composite: the learning rate from the distributions of two groups directly, and the inverse temperature independent for each session
 const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
-    CompositeSessionParameters(
-        GroupedHierarchicalSessionParameters((;
+    CompositeParameters(
+        GroupedHierarchicalParameters((;
             learning_rate=HierarchicalParameter(
                 TURING_GROUP_PRIORS;
                 transformation=turing_to_unit_interval,
@@ -424,7 +422,7 @@ const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
                 centered=true,
             ),
         )),
-        IndependentSessionParameters((; inverse_temperature=Turing.Flat())),
+        IndependentParameters((; inverse_temperature=Turing.Flat())),
     ),
     TURING_GROUPED_SESSIONS,
 )
@@ -450,7 +448,7 @@ const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
 # and a varying slope of the age for each participant, and a varying intercept for each session, whose standard deviation
 # is one for each group, and the inverse temperature with centered varying intercepts of the participants
 const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
-    HierarchicalRegressionSessionParameters((;
+    HierarchicalRegressionParameters((;
         learning_rate=RegressionParameter(
             Intercept(Normal(0, 1)),
             ContinuousPredictor(:age, Normal(0, 1)),

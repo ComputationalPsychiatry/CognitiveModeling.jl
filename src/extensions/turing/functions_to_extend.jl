@@ -1,14 +1,14 @@
 ## Functions that a cognitive model or an environment model can implement ##
 
 """
-    turing_apply_timestep_model(model::AbstractTimestepModel, context::ModelContext)
+    turing_run_timestep(model::AbstractTimestepModel, context::ModelContext)
 
 Create a Turing.jl model for a single timestep of `model`, a cognitive model or an
 environment model, to be used as a submodel, which returns a [`ModelOutput`](@ref). This
 needs Turing.jl to be loaded.
 
 # Implementation
-A model can add a method of this function. The default calls [`apply_timestep_model`](@ref).
+A model can add a method of this function. The default calls [`run_timestep`](@ref).
 A model which samples within a timestep needs to add a method, however; or if any other
 changes are desired within Turing. It must sample with `~` instead of from `context.rng`.
 Otherwise the model has a different log density each time it is evaluated, with no error.
@@ -24,7 +24,7 @@ using Turing
 
 struct NoisyRescorlaWagner <: AbstractCognitiveModel end
 
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
         model::NoisyRescorlaWagner,
         context::ModelContext,
     )
@@ -47,7 +47,7 @@ Turing.@model function CognitiveModeling.turing_apply_timestep_model(
 end
 ```
 """
-function turing_apply_timestep_model end
+function turing_run_timestep end
 
 """
     turing_initialize_state(model::AbstractTimestepModel, parameters)
@@ -62,7 +62,7 @@ enough for most models, since a starting state that is fitted is simply one that
 from a parameter there: a fitted session runs it with the parameters of each evaluation, so
 a prior on the parameter is a prior on the starting state. A model which samples something
 of its own when it initializes needs to add a method, and sample it with `~`, as for
-[`turing_apply_timestep_model`](@ref). Its variables are named under
+[`turing_run_timestep`](@ref). Its variables are named under
 `initial_cognitive_state`, or `initial_environment_state` for an environment model.
 
 # Examples
@@ -86,23 +86,23 @@ end
 """
 function turing_initialize_state end
 
-## Functions that a session parameter model implements ##
+## Functions that a parameter model implements ##
 
 """
-    turing_session_parameters_model(parameters_model, sessions_info::MultipleSessionsInfo)
+    turing_parameters_model(parameters_model, sessions_info::MultipleSessionsInfo)
 
-Create the Turing.jl model of `parameters_model`, a session parameter model, which gives or
+Create the Turing.jl model of `parameters_model`, a parameter model, which gives or
 samples the parameters of every session in `sessions_info`, for the cognitive model or the
 environment model of a [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
 
 The model must return a `NamedTuple` with one entry for each parameter, named as the model
 names it, and a vector in each with one value for every session, in the order of the
-sessions. Each subtype of [`AbstractSessionParametersModel`](@ref) that comes with
+sessions. Each subtype of [`AbstractParametersModel`](@ref) that comes with
 CognitiveModeling.jl has a method.
 
 # Implementation
-A session parameter model of another kind, such as a regression, is a subtype of
-`AbstractSessionParametersModel` with a method of this function. It can read
+A parameter model of another kind, such as a regression, is a subtype of
+`AbstractParametersModel` with a method of this function. It can read
 [`n_sessions`](@ref) and the data identifiers of the sessions from `sessions_info`, the
 columns of the table that the sessions were split from, when there is one, with
 [`CognitiveModeling.session_column_values`](@ref), such as the covariates of a regression,
@@ -111,7 +111,7 @@ method of [`CognitiveModeling.prepare_parameters_model`](@ref). The full model t
 one that samples, so that with it the environment of every session runs, and the
 observations in the data inform the environment's parameters.
 """
-function turing_session_parameters_model end
+function turing_parameters_model end
 
 ## Functions that a downstream model implements ##
 
@@ -121,7 +121,7 @@ function turing_session_parameters_model end
 
 Create the Turing.jl model of `downstream_model`, the final submodel of a
 [`turing_full_model`](@ref), which is run after the sessions, with the trajectories the
-sessions saved, the cognitive parameters of every session as the session parameter model
+sessions saved, the cognitive parameters of every session as the parameter model
 returned them, and the sessions' `sessions_info`. This needs Turing.jl to be loaded.
 
 The model can return anything, which the full model returns as its `downstream_values`.

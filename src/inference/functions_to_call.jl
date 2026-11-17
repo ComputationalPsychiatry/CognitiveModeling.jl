@@ -3,9 +3,9 @@
 """
     n_sessions(sessions_info)
 
-Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a session parameter
-model gives the parameters of. Used by the session parameter models of the inference
-backends, such as those of [`IndependentSessionParameters`](@ref).
+Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a parameter
+model gives the parameters of. Used by the parameter models of the inference
+backends, such as those of [`IndependentParameters`](@ref).
 """
 n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
@@ -14,7 +14,7 @@ n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
 Return the index `i` of the session with the data identifier `session_id` in a
 [`MultipleSessionsInfo`](@ref), which is how the models of several sessions number it: its
-parameters are element `i` of each vector a session parameter model gives, and its saved
+parameters are element `i` of each vector a parameter model gives, and its saved
 trajectories are element `i` of what the sessions return. The data identifier is the value
 in the session column, or a `NamedTuple` of the values when there are several, as in
 `sessions_info.session_ids`. Used by users reading the results of a fit, not by the models.
@@ -36,7 +36,7 @@ Return the symbol name of a session, a `Symbol` made from its data identifier: t
 a single session column, as in `S1`, and the name and the value of each of several columns,
 joined by `_` within a column and by `__` between columns, as in `id_S1__block_2`. The
 chains of a fit name the entries of a session after it, such as `S1.learning_rate`, and
-[`FixedSessionParametersBySession`](@ref) can find the values of a session by it. After
+[`SessionwiseFixedParameters`](@ref) can find the values of a session by it. After
 `using CognitiveModeling: session_id_to_symbol`, the learning rate of a session is
 `chain[@varname(\$(session_id_to_symbol(session_id)).learning_rate)]`.
 
@@ -66,7 +66,7 @@ end
 Return the values of `column` in the table that the sessions in `sessions_info` were split
 from, as one vector for each session, of its rows in the table. It is an error when the
 sessions were given already prepared, without a table, and when the table has no such
-column. Useful for a session parameter model that reads a column, such as one to group the
+column. Useful for a parameter model that reads a column, such as one to group the
 sessions by, or the covariate of a regression. Used by
 [`read_one_value_of_each_session`](@ref).
 """

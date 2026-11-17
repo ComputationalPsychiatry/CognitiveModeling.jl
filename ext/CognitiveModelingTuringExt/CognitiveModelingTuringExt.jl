@@ -3,7 +3,7 @@ module CognitiveModelingTuringExt
 using CognitiveModeling
 using CognitiveModeling:
     AbstractTimestepModel,
-    apply_timestep_model,
+    run_timestep,
     initialize_state,
     attribute_names,
     describe_model,
@@ -11,9 +11,9 @@ using CognitiveModeling:
     session_trajectories_chain,
     session_parameters_chain
 using CognitiveModeling:
-    turing_apply_timestep_model,
+    turing_run_timestep,
     turing_initialize_state,
-    turing_session_parameters_model,
+    turing_parameters_model,
     turing_downstream_model,
     turing_catch_invalid_parameters
 using CognitiveModeling:
@@ -38,7 +38,7 @@ using CognitiveModeling:
     sessions_save_anything,
     collect_parameters_in_session_order,
     prepare_full_model,
-    as_session_parameters_model,
+    as_parameters_model,
     prepare_parameters_model,
     parameter_names,
     merge_parameters_of_parts,
@@ -74,17 +74,17 @@ using Turing.DynamicPPL: VarName
 include("extension_defaults.jl")
 include("turing_behavioral_session.jl")
 
-#The Turing.jl models of the session parameter models, which give or sample the parameters of every session, each
+#The Turing.jl models of the parameter models, which give or sample the parameters of every session, each
 #in a file named as the file of its type in the package. The same kinds serve the parameters of the cognitive model and
 #those of the environment model, and each returns one vector for each parameter, with a value for every session
-include("session_parameter_models/no_session_parameters.jl")
-include("session_parameter_models/fixed_session_parameters.jl")
-include("session_parameter_models/fixed_session_parameters_by_session.jl")
-include("session_parameter_models/identical_session_parameters.jl")
-include("session_parameter_models/independent_session_parameters.jl")
-include("session_parameter_models/grouped_hierarchical_session_parameters.jl")
-include("session_parameter_models/hierarchical_regression_session_parameters.jl")
-include("session_parameter_models/composite_session_parameters.jl")
+include("parameter_models/no_parameters.jl")
+include("parameter_models/fixed_parameters.jl")
+include("parameter_models/sessionwise_fixed_parameters.jl")
+include("parameter_models/identical_parameters.jl")
+include("parameter_models/independent_parameters.jl")
+include("parameter_models/grouped_hierarchical_parameters.jl")
+include("parameter_models/hierarchical_regression_parameters.jl")
+include("parameter_models/composite_parameters.jl")
 
 include("session_trajectories_chain.jl")
 

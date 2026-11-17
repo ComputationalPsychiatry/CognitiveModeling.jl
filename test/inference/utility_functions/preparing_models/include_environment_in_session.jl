@@ -12,14 +12,14 @@
         )
         @test !sessions_info.sessions[1].includes_environment
         @test CognitiveModeling.include_environments_if_estimated(
-            NoSessionParameters(), sessions_info
+            NoParameters(), sessions_info
         ) === sessions_info
         @test CognitiveModeling.include_environments_if_estimated(
-            FixedSessionParameters((; scale=2.0)), sessions_info
+            FixedParameters((; scale=2.0)), sessions_info
         ) === sessions_info
         for sampling in (
-            IdenticalSessionParameters((; scale=1)),
-            IndependentSessionParameters((; scale=1)),
+            IdenticalParameters((; scale=1)),
+            IndependentParameters((; scale=1)),
             ParametersModelOfOwn(),
         )
             sampled = CognitiveModeling.include_environments_if_estimated(
@@ -42,7 +42,7 @@
         @test !any(
             session -> session.includes_environment,
             CognitiveModeling.include_environments_if_estimated(
-                IdenticalSessionParameters((; scale=1)), without
+                IdenticalParameters((; scale=1)), without
             ).sessions,
         )
     end

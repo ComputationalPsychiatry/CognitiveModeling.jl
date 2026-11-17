@@ -18,5 +18,5 @@ using JET: JET
         JET.test_package(extension; target_modules=(extension,))
     end
 
-    include("hierarchical_regression_session_parameters.jl")
+    include("hierarchical_regression_parameters.jl")
 end

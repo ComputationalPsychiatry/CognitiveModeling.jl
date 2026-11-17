@@ -1,9 +1,6 @@
 using CognitiveModeling
 using CognitiveModeling:
-    apply_timestep_model,
-    initialize_state,
-    turing_apply_timestep_model,
-    turing_initialize_state
+    run_timestep, initialize_state, turing_run_timestep, turing_initialize_state
 using Test
 using JET: JET
 using Random: Xoshiro
@@ -36,6 +33,6 @@ end
     include("extension_defaults.jl")
     include("turing_behavioral_session.jl")
     include("turing_full_model.jl")
-    include("session_parameter_models.jl")
+    include("parameter_models.jl")
     include("session_trajectories_chain.jl")
 end

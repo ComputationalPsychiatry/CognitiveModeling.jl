@@ -2,7 +2,7 @@
 #
 # *This page is a draft.*
 #
-# [`turing_full_model`](@ref) fits several sessions with session parameter models, which
+# [`turing_full_model`](@ref) fits several sessions with parameter models, which
 # give the parameters of every session in one of the ways the package offers. A Turing.jl
 # model of one's own can give them in any other way, and run the sessions inside it as a
 # submodel: [`turing_multiple_behavioral_sessions`](@ref) runs several sessions, and
@@ -33,9 +33,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
 
-function CognitiveModeling.apply_timestep_model(
-    model::RescorlaWagner, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
     #The expected reward before this timestep, and after its reward
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
@@ -61,7 +59,7 @@ struct BernoulliRewards <: AbstractEnvironmentModel end
 
 CognitiveModeling.initialize_state(environment::BernoulliRewards, parameters) = (;)
 
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::BernoulliRewards, context::ModelContext
 )
     return ModelOutput((; reward=Bernoulli(context.parameters.reward_probability)))

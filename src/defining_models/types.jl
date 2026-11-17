@@ -29,7 +29,7 @@ there are, and `attribute_names` gives them. On one line, as inside a vector, a 
 its type and its kind.
 
 # Implementation
-Create a subtype and add methods of [`apply_timestep_model`](@ref),
+Create a subtype and add methods of [`run_timestep`](@ref),
 [`initialize_state`](@ref) and [`attribute_names`](@ref) for it. A model can also add
 methods of [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
@@ -73,7 +73,7 @@ own kind.
 
 # Implementation
 Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
-[`apply_timestep_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref),
+[`run_timestep`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref),
 and optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
@@ -231,7 +231,7 @@ struct UnknownWhoStarts end
     ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
                  rng=default_rng(), who_starts=UnknownWhoStarts())
 
-Everything a model needs to run a single timestep, which [`apply_timestep_model`](@ref)
+Everything a model needs to run a single timestep, which [`run_timestep`](@ref)
 receives. The arguments can be given by name, which says what each one is, or in this order.
 
 Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
@@ -331,7 +331,7 @@ end
 """
     ModelOutput(output_distribution, new_state=(;))
 
-The outputs of a model for a single timestep, which [`apply_timestep_model`](@ref) returns.
+The outputs of a model for a single timestep, which [`run_timestep`](@ref) returns.
 
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
@@ -437,8 +437,8 @@ end
 Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
 tuple of one. Used for the arguments that take one value or several: the names given to
 [`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref),
-[`GroupedHierarchicalSessionParameters`](@ref) and
-[`HierarchicalRegressionSessionParameters`](@ref), which are then asserted to be `Symbol`s,
+[`GroupedHierarchicalParameters`](@ref) and
+[`HierarchicalRegressionParameters`](@ref), which are then asserted to be `Symbol`s,
 and the values that stand for a missing value in [`SessionInfo`](@ref).
 """
 as_tuple(values::Tuple) = values
@@ -525,6 +525,35 @@ function Base.getproperty(
 end
 
 Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs)
+
+## Kinds of attributes ##
+
+"""
+    AbstractAttributeKind
+
+Supertype of the kinds of attributes that the data of a session has:
+[`ObservationKind`](@ref) for the observations, which are the inputs in the attributes of
+its cognitive model, and [`ActionKind`](@ref) for the actions, which are its outputs. Used
+when a table is split into sessions and when the data of a session is named, to say which
+of the two a column or a vector of data is.
+"""
+abstract type AbstractAttributeKind end
+
+"""
+    ObservationKind()
+
+The kind of attribute that the observations of a session are, see
+[`AbstractAttributeKind`](@ref).
+"""
+struct ObservationKind <: AbstractAttributeKind end
+
+"""
+    ActionKind()
+
+The kind of attribute that the actions of a session are, see
+[`AbstractAttributeKind`](@ref).
+"""
+struct ActionKind <: AbstractAttributeKind end
 
 ## The values a parameter can take ##
 
@@ -638,7 +667,7 @@ is_discrete(::ParameterDomain{Ttype}) where {Ttype} = !(Ttype <: Real) || Ttype 
     InvalidParametersError(message)
     InvalidParametersError()
 
-An error for a model to throw from [`apply_timestep_model`](@ref) or
+An error for a model to throw from [`run_timestep`](@ref) or
 [`initialize_state`](@ref) when its parameters aren't valid, as in
 `throw(InvalidParametersError())`.
 

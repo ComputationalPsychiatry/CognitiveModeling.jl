@@ -37,33 +37,6 @@ observations with `impute_missing_observations = false`, and of the missing acti
 """
 struct UnimputedMissingValue <: AbstractNoValue end
 
-## Types for which of its two kinds of data a session is given ##
-
-"""
-    AbstractDataKind
-
-Supertype of the two kinds of data a session has: [`ObservationKind`](@ref) for the
-observations, which are the inputs in the attributes of its cognitive model, and
-[`ActionKind`](@ref) for the actions, which are its outputs. Used when a table is split
-into sessions and when the data of a session is named, to say which of the two a column or
-a vector of data is.
-"""
-abstract type AbstractDataKind end
-
-"""
-    ObservationKind()
-
-The kind of data that the observations of a session are, see [`AbstractDataKind`](@ref).
-"""
-struct ObservationKind <: AbstractDataKind end
-
-"""
-    ActionKind()
-
-The kind of data that the actions of a session are, see [`AbstractDataKind`](@ref).
-"""
-struct ActionKind <: AbstractDataKind end
-
 ## Types for how a session is set up, which are the same whatever it is fitted with ##
 
 """
@@ -448,9 +421,9 @@ action is `MissingValue()`, where `environment_save_history` saves anything or w
 `check_stopping_criterion` is `true`, and in an inference backend's full model that
 estimates the environment's parameters, unless `include_environment` says otherwise. The
 table is kept in the field `table`, without being copied, with the rows of each session in
-`session_rows`, so that a session parameter model can read the columns it needs, such as
-those that a [`GroupedHierarchicalSessionParameters`](@ref) groups the sessions by, and the
-predictors of a [`HierarchicalRegressionSessionParameters`](@ref).
+`session_rows`, so that a parameter model can read the columns it needs, such as
+those that a [`GroupedHierarchicalParameters`](@ref) groups the sessions by, and the
+predictors of a [`HierarchicalRegressionParameters`](@ref).
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -664,7 +637,7 @@ function MultipleSessionsInfo(
     end
     session_ids = map(first, sessions_rows)
 
-    #The table is kept with the rows of each session, so that a session parameter model can read the columns it needs
+    #The table is kept with the rows of each session, so that a parameter model can read the columns it needs
     return MultipleSessionsInfo(
         sessions, session_ids; table, session_rows=map(last, sessions_rows)
     )
@@ -683,27 +656,27 @@ end
 ## Types for what gives the parameters of the sessions in a full model ##
 
 """
-    AbstractSessionParametersModel
+    AbstractParametersModel
 
-Supertype for session parameter models: the part of a full model, the model that an
+Supertype for parameter models: the part of a full model, the model that an
 inference backend fits to several sessions, which gives or estimates the parameters of every
 session, for the cognitive model and for the environment model alike. The package comes with
-[`NoSessionParameters`](@ref), [`FixedSessionParameters`](@ref),
-[`FixedSessionParametersBySession`](@ref), [`IdenticalSessionParameters`](@ref),
-[`IndependentSessionParameters`](@ref), [`GroupedHierarchicalSessionParameters`](@ref) and
-[`HierarchicalRegressionSessionParameters`](@ref), and [`CompositeSessionParameters`](@ref)
+[`NoParameters`](@ref), [`FixedParameters`](@ref),
+[`SessionwiseFixedParameters`](@ref), [`IdenticalParameters`](@ref),
+[`IndependentParameters`](@ref), [`GroupedHierarchicalParameters`](@ref) and
+[`HierarchicalRegressionParameters`](@ref), and [`CompositeParameters`](@ref)
 combines several, each giving some of the parameters.
 
 # Implementation
 Create a subtype, and for each inference backend it is used with, add a method of that
-backend's function for session parameter models, as the backend's documentation describes. A
+backend's function for parameter models, as the backend's documentation describes. A
 method of [`CognitiveModeling.parameter_names`](@ref) lets the parameters it gives be
 checked before a fit, and a method of [`CognitiveModeling.prepare_parameters_model`](@ref)
 lets it work out once, before the backend's model is made, what doesn't change between
 evaluations. A model which only gives values, and estimates nothing, adds a method of
 [`CognitiveModeling.estimates_parameters`](@ref).
 """
-abstract type AbstractSessionParametersModel end
+abstract type AbstractParametersModel end
 
 ## Types for what runs after the sessions in a full model ##
 

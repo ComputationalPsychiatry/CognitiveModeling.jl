@@ -19,7 +19,7 @@ struct BenchmarkRescorlaWagner <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::BenchmarkRescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::BenchmarkRescorlaWagner, context::ModelContext
 )
     V₋₁ = context.previous_state.expected_reward
@@ -42,7 +42,7 @@ end
 # An environment which gives a reward with a fixed probability, whatever the choice
 struct BenchmarkRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::BenchmarkRewards, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::BenchmarkRewards, context::ModelContext
 )
     return ModelOutput((; reward=Bernoulli(context.parameters.reward_probability)))
@@ -155,7 +155,7 @@ SUITE["turing"]["single session"] = benchmark_turing_model(
 )
 SUITE["turing"]["full model, independent sessions"] = benchmark_turing_model(
     turing_full_model(
-        IndependentSessionParameters((;
+        IndependentParameters((;
             learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 1)
         )),
         BENCHMARK_SESSIONS,

@@ -1,8 +1,8 @@
 # Internals of fitting
 
-The internals of the sessions and of reading them from a table. Those of session parameter
+The internals of the sessions and of reading them from a table. Those of parameter
 models and of the utility functions are on pages of their own:
-[Session parameter models](session_parameter_models.md),
+[Parameter models](parameter_models.md),
 [Preparing models](preparing_models.md) and [Within models](within_models.md).
 
 ```@index

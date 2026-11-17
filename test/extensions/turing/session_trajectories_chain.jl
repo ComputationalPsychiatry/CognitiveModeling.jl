@@ -13,7 +13,7 @@ end
 @testset "session_trajectories_chain" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
     sessions_info = sessions_for_test(; impute_missing_actions=false)
-    model = turing_full_model(IndependentSessionParameters(FULL_PRIORS), sessions_info)
+    model = turing_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "The chain from a fitted full model has the saved trajectories of each session, numbered as the fit, and the parameters are a chain of their own" begin
@@ -218,7 +218,7 @@ end
             ],
         )
         imputing = turing_full_model(
-            IndependentSessionParameters(FULL_PRIORS),
+            IndependentParameters(FULL_PRIORS),
             sessions_for_test(SessionRescorlaWagner(), table),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
@@ -279,7 +279,7 @@ end
     @testset "With an environment, the observations are simulated too, in response to the simulated actions" begin
         #RewardsPreviousChoice gives the previous choice as the reward, and 0.5 before the first
         with_environment = turing_full_model(
-            IndependentSessionParameters(FULL_PRIORS),
+            IndependentParameters(FULL_PRIORS),
             sessions_for_test(; environment=RewardsPreviousChoice()),
         )
         simulated = @test_logs match_mode = :any predict_session_trajectories(

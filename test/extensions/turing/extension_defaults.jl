@@ -2,9 +2,7 @@
 #Only has the normal functions, so it gets the defaults in Turing
 struct OnlyNormalFunction <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::OnlyNormalFunction, parameters) = (; total=0.0)
-function CognitiveModeling.apply_timestep_model(
-    model::OnlyNormalFunction, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::OnlyNormalFunction, context::ModelContext)
     return ModelOutput(
         (; choice=Bernoulli(0.5)),
         (; total=context.previous_state.total + context.input.reward),
@@ -16,7 +14,7 @@ end
 
 #Has its own Turing version, which samples within the timestep
 struct SamplesWithinTimestep <: AbstractCognitiveModel end
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
     model::SamplesWithinTimestep, context::ModelContext
 )
     noise ~ Normal(0, 1)
@@ -32,8 +30,7 @@ Turing.@model function run_timesteps_as_submodels(model, rewards)
     for t in eachindex(rewards)
         context = ModelContext((; reward=rewards[t]), state, (; choice=NoValue()), (;))
         output ~ to_submodel(
-            prefix(turing_apply_timestep_model(model, context), @varname(timestep[t])),
-            false,
+            prefix(turing_run_timestep(model, context), @varname(timestep[t])), false
         )
         state = output.new_state
     end
@@ -57,7 +54,7 @@ struct OnlyNormalEnvironment <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::OnlyNormalEnvironment, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     environment::OnlyNormalEnvironment, context::ModelContext
 )
     return ModelOutput(
@@ -69,8 +66,8 @@ end
 #A model without methods of its own
 struct ModelWithoutMethods <: AbstractCognitiveModel end
 
-#A session parameter model and a downstream model without methods of their own
-struct ParametersModelWithoutMethod <: AbstractSessionParametersModel end
+#A parameter model and a downstream model without methods of their own
+struct ParametersModelWithoutMethod <: AbstractParametersModel end
 struct DownstreamModelWithoutMethod <: AbstractDownstreamModel end
 
 @testset "turing_initialize_state" begin
@@ -106,10 +103,10 @@ end
         session_columns=:id,
         who_starts=EnvironmentStarts(),
     )
-    @test_throws "There is no turing_session_parameters_model method for a session parameter model of type ParametersModelWithoutMethod. Each session parameter model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::ParametersModelWithoutMethod, sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter." CognitiveModeling.turing_session_parameters_model(
+    @test_throws "There is no turing_parameters_model method for a parameter model of type ParametersModelWithoutMethod. Each parameter model must define Turing.@model function CognitiveModeling.turing_parameters_model(parameters_model::ParametersModelWithoutMethod, sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter." CognitiveModeling.turing_parameters_model(
         ParametersModelWithoutMethod(), sessions_info
     )
-    @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type @NamedTuple{learning_rate::Beta{Float64}}." CognitiveModeling.turing_session_parameters_model(
+    @test_throws "A parameter model must be a subtype of AbstractParametersModel, such as IndependentParameters(priors) with the priors in a NamedTuple, or FixedParameters(values) for given values, but it has type @NamedTuple{learning_rate::Beta{Float64}}." CognitiveModeling.turing_parameters_model(
         (; learning_rate=Beta(2, 2)), sessions_info
     )
     @test_throws "There is no turing_downstream_model method for a downstream model of type DownstreamModelWithoutMethod." CognitiveModeling.turing_downstream_model(
@@ -134,16 +131,15 @@ end
     )
 end
 
-@testset "turing_apply_timestep_model" begin
+@testset "turing_run_timestep" begin
     context = ModelContext((; reward=1.0), (; total=0.5), (; choice=NoValue()), (;))
 
-    @testset "The default gives what apply_timestep_model returns" begin
-        output = turing_apply_timestep_model(OnlyNormalFunction(), context)()
+    @testset "The default gives what run_timestep returns" begin
+        output = turing_run_timestep(OnlyNormalFunction(), context)()
         @test output isa ModelOutput
-        @test output.new_state ==
-            apply_timestep_model(OnlyNormalFunction(), context).new_state
+        @test output.new_state == run_timestep(OnlyNormalFunction(), context).new_state
         @test output.output_distribution ==
-            apply_timestep_model(OnlyNormalFunction(), context).output_distribution
+            run_timestep(OnlyNormalFunction(), context).output_distribution
     end
 
     @testset "The default works as a submodel, and has no variables" begin
@@ -152,8 +148,8 @@ end
         @test model() == (; total=3.0)
     end
 
-    @testset "A model without an apply_timestep_model method gives the informative error" begin
-        @test_throws "Each model must define" turing_apply_timestep_model(
+    @testset "A model without an run_timestep method gives the informative error" begin
+        @test_throws "Each model must define" turing_run_timestep(
             ModelWithoutMethods(), context
         )()
     end
@@ -162,14 +158,13 @@ end
         environment_context = ModelContext(
             (; choice=true), (; n_timesteps=2), (; reward=0.0), (;), 1
         )
-        output = turing_apply_timestep_model(OnlyNormalEnvironment(), environment_context)()
+        output = turing_run_timestep(OnlyNormalEnvironment(), environment_context)()
         @test output isa ModelOutput && output.new_state === (; n_timesteps=3)
     end
 
     @testset "A model's own method is used instead of the default" begin
-        @test @varname(noise) in keys(
-            rand(Xoshiro(1), turing_apply_timestep_model(SamplesWithinTimestep(), context))
-        )
+        @test @varname(noise) in
+            keys(rand(Xoshiro(1), turing_run_timestep(SamplesWithinTimestep(), context)))
     end
 
     @testset "Each timestep has its own variable, and they count in the log density" begin

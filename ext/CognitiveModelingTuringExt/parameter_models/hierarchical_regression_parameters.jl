@@ -1,8 +1,8 @@
 ### EACH PARAMETER GIVEN BY A REGRESSION ON COLUMNS OF THE SESSIONS' TABLE ###
 
 #Each parameter of every session given by its regression, with the design of every regression built when the full model was prepared
-Turing.@model function CognitiveModeling.turing_session_parameters_model(
-    parameters_model::HierarchicalRegressionSessionParameters{<:NamedTuple,<:NamedTuple},
+Turing.@model function CognitiveModeling.turing_parameters_model(
+    parameters_model::HierarchicalRegressionParameters{<:NamedTuple,<:NamedTuple},
     sessions_info::MultipleSessionsInfo,
 )
     parameters ~ to_submodel(
@@ -15,12 +15,12 @@ Turing.@model function CognitiveModeling.turing_session_parameters_model(
 end
 
 #The same when it wasn't prepared, which builds the design of every regression on each evaluation
-Turing.@model function CognitiveModeling.turing_session_parameters_model(
-    parameters_model::HierarchicalRegressionSessionParameters{<:NamedTuple,Nothing},
+Turing.@model function CognitiveModeling.turing_parameters_model(
+    parameters_model::HierarchicalRegressionParameters{<:NamedTuple,Nothing},
     sessions_info::MultipleSessionsInfo,
 )
     parameters ~ to_submodel(
-        CognitiveModeling.turing_session_parameters_model(
+        CognitiveModeling.turing_parameters_model(
             prepare_parameters_model(parameters_model, sessions_info), sessions_info
         ),
         false,
@@ -33,10 +33,10 @@ end
 
 Turing.jl model which gives one parameter at a time from `parameters`, the
 [`RegressionParameter`](@ref) of each parameter of a
-[`HierarchicalRegressionSessionParameters`](@ref), with
+[`HierarchicalRegressionParameters`](@ref), with
 [`turing_regression_parameter`](@ref) under the parameter's name, and returns them in a
 `NamedTuple`, each as a vector with a value for each of `n_sessions` sessions. `designs` has
-the design of each regression. Used by `HierarchicalRegressionSessionParameters`.
+the design of each regression. Used by `HierarchicalRegressionParameters`.
 """
 Turing.@model function turing_regression_parameters(
     parameters::NamedTuple{names}, designs::NamedTuple, n_sessions

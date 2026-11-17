@@ -48,7 +48,7 @@ and must when it samples anything of its own, within a timestep or when it start
 public, but not exported.
 
 ```@docs
-CognitiveModeling.turing_apply_timestep_model
+CognitiveModeling.turing_run_timestep
 CognitiveModeling.turing_initialize_state
 ```
 
@@ -56,11 +56,11 @@ CognitiveModeling.turing_initialize_state
 
 These are what the parts of [`turing_full_model`](@ref) are written with, beside the types
 and functions on the pages [Fitting](fitting.md) and
-[Session parameter models](session_parameter_models.md). They are public, but not exported.
+[Parameter models](parameter_models.md). They are public, but not exported.
 In a Turing.jl model of several sessions, session `i` of
 [`CognitiveModeling.session_index`](@ref) has its variables under `session[i]`.
 
 ```@docs
-CognitiveModeling.turing_session_parameters_model
+CognitiveModeling.turing_parameters_model
 CognitiveModeling.turing_downstream_model
 ```

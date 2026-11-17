@@ -3,9 +3,7 @@ struct LearnsRewardsWithCues <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsRewardsWithCues, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.apply_timestep_model(
-    model::LearnsRewardsWithCues, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::LearnsRewardsWithCues, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = if context.input.reward isa AbstractNoValue
         V₋₁
@@ -27,9 +25,7 @@ end
 #A model which only observes rewards, and takes no actions
 struct ObservesRewards <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ObservesRewards, parameters) = (;)
-function CognitiveModeling.apply_timestep_model(
-    model::ObservesRewards, context::ModelContext
-)
+function CognitiveModeling.run_timestep(model::ObservesRewards, context::ModelContext)
     return ModelOutput((;))
 end
 function CognitiveModeling.attribute_names(model::ObservesRewards)
@@ -74,13 +70,13 @@ end
 
     @testset "It gives the next entry of each observation on every timestep" begin
         environment = FixedObservationsEnvironment(rewards)
-        output = CognitiveModeling.apply_timestep_model(
+        output = CognitiveModeling.run_timestep(
             environment, ModelContext((;), (; n_observations_given=1), (; reward=1.0), (;))
         )
         @test output ===
             ModelOutput((; reward=Deterministic(0.0)), (; n_observations_given=2))
         several = FixedObservationsEnvironment((; reward=[1.0, 0.0], cue=[:left, :right]))
-        @test CognitiveModeling.apply_timestep_model(
+        @test CognitiveModeling.run_timestep(
             several,
             ModelContext(
                 (;),
@@ -250,9 +246,9 @@ end
             reward=[1.0, 0.0, 1.0], cue=[1, 2, 3]
         ))
         context = ModelContext((;), (; n_observations_given=1), (; reward=1.0, cue=1), (;))
-        @test @inferred(CognitiveModeling.apply_timestep_model(environment, context)) isa
+        @test @inferred(CognitiveModeling.run_timestep(environment, context)) isa
             ModelOutput
-        CognitiveModeling.apply_timestep_model(environment, context)
-        @test @allocated(CognitiveModeling.apply_timestep_model(environment, context)) == 0
+        CognitiveModeling.run_timestep(environment, context)
+        @test @allocated(CognitiveModeling.run_timestep(environment, context)) == 0
     end
 end

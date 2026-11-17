@@ -36,7 +36,7 @@ state ~ to_submodel(turing_initialize_state(cognitive_model, cognitive_parameter
 for t in 1:n_timesteps
 
     #The cognitive model gives a distribution for each action, under the prefix timestep[t]
-    output ~ to_submodel(turing_apply_timestep_model(cognitive_model, context))
+    output ~ to_submodel(turing_run_timestep(cognitive_model, context))
 
     #An action that is missing in the data is a latent variable with that distribution
     choice.imputed ~ output.output_distribution.choice
@@ -56,7 +56,7 @@ starts, and scores the observations in the data like the actions.
 The states where the session starts come from [`turing_initialize_state`](@ref) of each
 model with the parameters, so that a starting state which is a parameter is fitted like any
 other, and a model can sample its start. Both models are treated the same way on each
-timestep: [`turing_apply_timestep_model`](@ref) of the cognitive model runs as a submodel
+timestep: [`turing_run_timestep`](@ref) of the cognitive model runs as a submodel
 with the prefix `timestep[t]`, so a model which samples within a timestep has its own
 variables for each timestep, such as `timestep[3].noise`, and an environment model runs with
 the prefix `timestep[t].environment`. The outputs of each, the actions and the observations,
@@ -120,7 +120,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = parameters.initial_value)
 end
 
-function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     Pₜ = BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))
@@ -194,8 +194,8 @@ marked. See `parallelization` in [`turing_full_model`](@ref). This needs Turing.
 loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
-for every session in the order of `sessions_info`, which is what a session parameter model
-returns, see [`turing_session_parameters_model`](@ref), and `environment_parameters` is in
+for every session in the order of `sessions_info`, which is what a parameter model
+returns, see [`turing_parameters_model`](@ref), and `environment_parameters` is in
 the same form. It returns a `NamedTuple` with `cognitive_parameters` and
 `environment_parameters` as they were given, and `saved_behavioral_trajectories`, a vector
 with the trajectories each session saved, in the same order, as
@@ -203,7 +203,7 @@ with the trajectories each session saved, in the same order, as
 Turing.jl model which samples the parameters of the sessions in some way of its own, as a
 submodel without a prefix:
 `to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
-[`turing_full_model`](@ref) does this with session parameter models. A model of one's own
+[`turing_full_model`](@ref) does this with parameter models. A model of one's own
 which returns what it returns has its results read with
 [`session_trajectories_chain`](@ref) and [`session_parameters_chain`](@ref), also when it
 transforms its variables into the parameters.
@@ -212,7 +212,7 @@ function turing_multiple_behavioral_sessions end
 
 """
     turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
-                      environment_parameters_model=NoSessionParameters(),
+                      environment_parameters_model=NoParameters(),
                       downstream_model=NoDownstreamModel(),
                       fixed_cognitive_parameters=(;), fixed_environment_parameters=(;),
                       catch_invalid_parameters=false, parallelization=SerialSessions(),
@@ -226,18 +226,18 @@ Create the Turing.jl model which fits a cognitive model to several sessions, in 
 of a measurement on a state. This needs Turing.jl to be loaded.
 
 # Arguments
-- `cognitive_parameters_model`: the session parameter model of the cognitive model, which
+- `cognitive_parameters_model`: the parameter model of the cognitive model, which
   gives or estimates its parameters for every session: a subtype of
-  [`AbstractSessionParametersModel`](@ref), such as [`IndependentSessionParameters`](@ref)
-  with a prior for each parameter. A tuple of session parameter models, or a `NamedTuple`
-  of them, is made into a [`CompositeSessionParameters`](@ref) of them, with each part of
+  [`AbstractParametersModel`](@ref), such as [`IndependentParameters`](@ref)
+  with a prior for each parameter. A tuple of parameter models, or a `NamedTuple`
+  of them, is made into a [`CompositeParameters`](@ref) of them, with each part of
   a `NamedTuple` under its name. So is a tuple or a `NamedTuple` given as
   `environment_parameters_model`.
 - `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
   [`MultipleSessionsInfo`](@ref).
-- `environment_parameters_model=NoSessionParameters()`: the session parameter model of the
+- `environment_parameters_model=NoParameters()`: the parameter model of the
   environment model of the sessions, when they have one. By default the environment's
-  parameters take its default values, and [`FixedSessionParameters`](@ref) gives others.
+  parameters take its default values, and [`FixedParameters`](@ref) gives others.
   When they are estimated, every session includes its environment, also those with nothing
   to impute, so that the observations in the data inform them, which is an error for a
   session prepared with `include_environment = false`. Sessions without an environment take
@@ -247,8 +247,8 @@ of a measurement on a state. This needs Turing.jl to be loaded.
   [`AbstractDownstreamModel`](@ref). The default samples nothing.
 - `fixed_cognitive_parameters::NamedTuple=(;)` and
   `fixed_environment_parameters::NamedTuple=(;)`: values which every session gets for the
-  parameters they name, such as `(; initial_value = 0.3)`, while the session parameter
-  models give the others. A parameter is either fixed here or given by its session
+  parameters they name, such as `(; initial_value = 0.3)`, while the parameter
+  models give the others. A parameter is either fixed here or given by its
   parameter model, and a fixed parameter must be one in the model's attributes.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
   session rejects the sample instead of stopping the sampler, by running the sessions inside
@@ -260,25 +260,25 @@ of a measurement on a state. This needs Turing.jl to be loaded.
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
   threaded model has a wrong log density with no error, so the sessions throw an error
   instead.
-- `include_submodel_prefixes::Bool=false`: whether the variables of the two session
+- `include_submodel_prefixes::Bool=false`: whether the variables of the two
   parameter models and of the downstream model are named under `cognitive_parameters_model`,
   `environment_parameters_model` and `downstream_model`. Without the prefixes, the names are
   shorter, but a variable of the same name in two of them is one variable, which `sample`
   refuses with an error, and which a log density gives one value with both priors counted.
   A warning says so when the model is made, when the cognitive model and the environment
-  model have a parameter of the same name and both session parameter models sample.
+  model have a parameter of the same name and both parameter models sample.
 
-The variables of a session parameter model are named as it names them, or under the
-session parameter model's name with `include_submodel_prefixes = true`. With
-`IndependentSessionParameters`, each parameter is a vector with a value for each session,
+The variables of a parameter model are named as it names them, or under the
+parameter model's name with `include_submodel_prefixes = true`. With
+`IndependentParameters`, each parameter is a vector with a value for each session,
 such as `learning_rate.session`, so the learning rate of the third session is
-`learning_rate.session[3]`. With `GroupedHierarchicalSessionParameters`, each parameter of
+`learning_rate.session[3]`. With `GroupedHierarchicalParameters`, each parameter of
 a group-level distribution is named after its prior, such as `learning_rate.mean.group` and
 `learning_rate.sd.group`, which is one value without groups, and otherwise has the value of
 each group under the group's symbol name, such as `learning_rate.mean.group.clinical`. The
 values of the sessions before the transformation are `learning_rate.standardized`, or
 `learning_rate.session` for a parameter that is centered. With
-`HierarchicalRegressionSessionParameters`, the coefficients of the intercept, the predictors
+`HierarchicalRegressionParameters`, the coefficients of the intercept, the predictors
 and the interactions of a parameter are one variable, `learning_rate.coef`, with each under
 its name, such as `learning_rate.coef.intercept`, `learning_rate.coef.age`,
 `learning_rate.coef.diagnosis_clinical` for a level of a categorical predictor, and
@@ -289,14 +289,14 @@ group under the group's symbol name when the levels are grouped, such as
 `learning_rate.participant.intercept.sd.clinical`, and a standardized value for each level,
 `learning_rate.participant.intercept.standardized`, or the deviation of each level,
 `learning_rate.participant.intercept.deviation`, when they are centered. A part of a
-[`CompositeSessionParameters`](@ref) that is given with a name has its variables under that
+[`CompositeParameters`](@ref) that is given with a name has its variables under that
 name, such as `noise.bias.session`. The variables of the sessions are under `session[i]`,
 and those of the downstream model as it names them, or under `downstream_model` with the
 prefixes.
 
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,
 `saved_behavioral_trajectories` and `downstream_values`: the cognitive parameters and the
-environment parameters of every session as the session parameter models gave them, the
+environment parameters of every session as the parameter models gave them, the
 trajectories each session saved, as [`turing_multiple_behavioral_sessions`](@ref) returns
 them, and what the downstream model returned.
 `returned(model, chain)` gives them for each sample, so a fitted state is read from the
@@ -334,7 +334,7 @@ sessions_info = MultipleSessionsInfo(
 )
 
 #Each session has its own parameters, from the same priors
-cognitive_parameters_model = IndependentSessionParameters((;
+cognitive_parameters_model = IndependentParameters((;
     learning_rate = Beta(2, 2),
     inverse_temperature = LogNormal(0, 1),
 ))

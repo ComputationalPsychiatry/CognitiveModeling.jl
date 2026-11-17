@@ -1,11 +1,11 @@
 ### DEFAULT METHODS OF THE FUNCTIONS THAT MODELS AND THE PARTS OF A FULL MODEL IMPLEMENT ###
 
-#Default implementation of turing_apply_timestep_model for both kinds of model, which just calls the normal apply_timestep_model function
+#Default implementation of turing_run_timestep for both kinds of model, which just calls the normal run_timestep function
 #Can be extended for specific cognitive models or environment models that sample within a timestep
-Turing.@model function CognitiveModeling.turing_apply_timestep_model(
+Turing.@model function CognitiveModeling.turing_run_timestep(
     model::AbstractTimestepModel, context
 )
-    return apply_timestep_model(model, context)
+    return run_timestep(model, context)
 end
 
 #Default implementation of turing_initialize_state for both kinds of model, which just calls the normal initialize_state function
@@ -26,22 +26,22 @@ Turing.@model function CognitiveModeling.turing_downstream_model(
     return nothing
 end
 
-#Informative error for a session parameter model without a method of its own
-function CognitiveModeling.turing_session_parameters_model(
-    parameters_model::AbstractSessionParametersModel, sessions_info::MultipleSessionsInfo
+#Informative error for a parameter model without a method of its own
+function CognitiveModeling.turing_parameters_model(
+    parameters_model::AbstractParametersModel, sessions_info::MultipleSessionsInfo
 )
     return error(
-        "There is no turing_session_parameters_model method for a session parameter model of type $(typeof(parameters_model)). Each session parameter model must define Turing.@model function CognitiveModeling.turing_session_parameters_model(parameters_model::$(typeof(parameters_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
+        "There is no turing_parameters_model method for a parameter model of type $(typeof(parameters_model)). Each parameter model must define Turing.@model function CognitiveModeling.turing_parameters_model(parameters_model::$(typeof(parameters_model)), sessions_info::MultipleSessionsInfo), which returns a NamedTuple with one vector for each parameter.",
     )
 end
 
-#Informative error for something that isn't a session parameter model, such as the priors on their own
-function CognitiveModeling.turing_session_parameters_model(
+#Informative error for something that isn't a parameter model, such as the priors on their own
+function CognitiveModeling.turing_parameters_model(
     parameters_model, sessions_info::MultipleSessionsInfo
 )
     return throw(
         ArgumentError(
-            "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type $(typeof(parameters_model)).",
+            "A parameter model must be a subtype of AbstractParametersModel, such as IndependentParameters(priors) with the priors in a NamedTuple, or FixedParameters(values) for given values, but it has type $(typeof(parameters_model)).",
         ),
     )
 end

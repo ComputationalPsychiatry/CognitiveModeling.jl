@@ -78,8 +78,7 @@ end
             who_starts=EnvironmentStarts(),
         )
         prepared = CognitiveModeling.prepare_parameters_model(
-            HierarchicalRegressionSessionParameters((; learning_rate=from_formula)),
-            sessions_info,
+            HierarchicalRegressionParameters((; learning_rate=from_formula)), sessions_info
         )
         design = prepared.designs.learning_rate
         @test keys(design.design_columns) === (
@@ -184,9 +183,9 @@ end
             @formula(learning_rate ~ 1); default_priors=FORMULA_PRIORS
         )
         @test named.name === :learning_rate
-        @test HierarchicalRegressionSessionParameters((; learning_rate=named)) isa
-            HierarchicalRegressionSessionParameters
-        @test_throws "HierarchicalRegressionSessionParameters was given the regression of learning_rate for the parameter inverse_temperature." HierarchicalRegressionSessionParameters((;
+        @test HierarchicalRegressionParameters((; learning_rate=named)) isa
+            HierarchicalRegressionParameters
+        @test_throws "HierarchicalRegressionParameters was given the regression of learning_rate for the parameter inverse_temperature." HierarchicalRegressionParameters((;
             inverse_temperature=named
         ))
     end

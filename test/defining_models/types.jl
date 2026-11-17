@@ -280,6 +280,13 @@ using Random: Xoshiro, default_rng
         @test sizeof(from_literals()) == 0
     end
 
+    @testset "The kinds of attributes that the data of a session has are types of their own" begin
+        @test CognitiveModeling.ObservationKind() isa
+            CognitiveModeling.AbstractAttributeKind
+        @test CognitiveModeling.ActionKind() isa CognitiveModeling.AbstractAttributeKind
+        @test CognitiveModeling.ObservationKind() !== CognitiveModeling.ActionKind()
+    end
+
     @testset "InvalidParametersError has a default message, and takes another" begin
         @test InvalidParametersError() isa Exception
         @test sprint(showerror, InvalidParametersError()) ==

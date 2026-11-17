@@ -8,7 +8,7 @@
             "A", "B", "A"
         ])
         #Two data identifiers which aren't equal can still give the same symbol name
-        @test_throws "The data identifiers 1 and \"1\" both give the symbol name 1, which the chains of a fit and FixedSessionParametersBySession find a session by. The data identifier of every session must give a symbol name of its own." CognitiveModeling.check_unique_session_symbol_names(
+        @test_throws "The data identifiers 1 and \"1\" both give the symbol name 1, which the chains of a fit and SessionwiseFixedParameters find a session by. The data identifier of every session must give a symbol name of its own." CognitiveModeling.check_unique_session_symbol_names(
             Any[1, "1"]
         )
     end

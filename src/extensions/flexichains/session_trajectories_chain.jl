@@ -91,11 +91,11 @@ it, which is what one of three models returns, as for [`session_trajectories_cha
 their `MultipleSessionsInfo`, or [`turing_behavioral_session`](@ref), given without a
 session info, whose parameters are named without a session, as `learning_rate` and
 `environment.mean_reward`. The parameters are those each session was given, without the
-default values of its models. With a full model, they are those the session parameter
-models gave each session, so a session parameter model other than
-[`IndependentSessionParameters`](@ref) gives parameters that aren't in the chain itself,
-such as one value for every session from [`IdenticalSessionParameters`](@ref), and values
-from [`FixedSessionParameters`](@ref) that were never sampled. A model of one's own around
+default values of its models. With a full model, they are those the parameter
+models gave each session, so a parameter model other than
+[`IndependentParameters`](@ref) gives parameters that aren't in the chain itself,
+such as one value for every session from [`IdenticalParameters`](@ref), and values
+from [`FixedParameters`](@ref) that were never sampled. A model of one's own around
 [`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref) gives
 the parameters it passed to the sessions, such as transformations of its variables, when it
 returns what they return. The third form, in the Turing extension, takes a model made by one

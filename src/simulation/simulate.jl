@@ -486,7 +486,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     #Update the environment
     environment_output = check_model_output(
         @inline(
-            apply_timestep_model(
+            run_timestep(
                 environment,
                 ModelContext(
                     previous_environment_action,
@@ -511,7 +511,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     #Update the cognitive model
     cognitive_output = check_model_output(
         @inline(
-            apply_timestep_model(
+            run_timestep(
                 cognitive_model,
                 ModelContext(
                     observation,
@@ -579,7 +579,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     #Update the cognitive model
     cognitive_output = check_model_output(
         @inline(
-            apply_timestep_model(
+            run_timestep(
                 cognitive_model,
                 ModelContext(
                     previous_observation,
@@ -604,7 +604,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     #Update the environment
     environment_output = check_model_output(
         @inline(
-            apply_timestep_model(
+            run_timestep(
                 environment,
                 ModelContext(
                     environment_action,
@@ -963,7 +963,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = BernoulliLogit(Vₜ - 0.5)), (; expected_reward = Vₜ))
@@ -980,7 +980,7 @@ function CognitiveModeling.initialize_state(environment::BernoulliRewards, param
     return (;)
 end
 
-function CognitiveModeling.apply_timestep_model(environment::BernoulliRewards, context::ModelContext)
+function CognitiveModeling.run_timestep(environment::BernoulliRewards, context::ModelContext)
     return ModelOutput((; reward = Bernoulli(context.parameters.reward_probability)))
 end
 
@@ -1162,7 +1162,7 @@ function CognitiveModeling.initialize_state(model::RandomChoices, parameters)
     return (;)
 end
 
-function CognitiveModeling.apply_timestep_model(model::RandomChoices, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RandomChoices, context::ModelContext)
     return ModelOutput((; choice = Bernoulli(0.5)))
 end
 
@@ -1176,7 +1176,7 @@ function CognitiveModeling.initialize_state(model::TimestepCounter, parameters)
     return (; n_timesteps = 0)
 end
 
-function CognitiveModeling.apply_timestep_model(model::TimestepCounter, context::ModelContext)
+function CognitiveModeling.run_timestep(model::TimestepCounter, context::ModelContext)
     n_timesteps = context.previous_state.n_timesteps + 1
     return ModelOutput((; timestep = Deterministic(n_timesteps)), (; n_timesteps))
 end
@@ -1312,7 +1312,7 @@ function simulate_timestep(
     #Update the model
     model_output = check_model_output(
         @inline(
-            apply_timestep_model(
+            run_timestep(
                 model,
                 ModelContext(
                     input,
@@ -1394,7 +1394,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))
@@ -1489,7 +1489,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.apply_timestep_model(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))

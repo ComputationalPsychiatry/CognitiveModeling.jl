@@ -47,7 +47,7 @@ Public = false
 Pages = ["inference/utility_functions/preparing_models/check_session_identifiers.jl"]
 ```
 
-## Reading the columns that a session parameter model uses
+## Reading the columns that a parameter model uses
 
 ```@autodocs
 Modules = [CognitiveModeling]

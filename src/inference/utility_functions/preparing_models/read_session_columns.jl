@@ -1,4 +1,4 @@
-## Reading the columns that a session parameter model uses ##
+## Reading the columns that a parameter model uses ##
 
 """
     read_one_value_of_each_session(sessions_info, column, reader)
@@ -7,9 +7,9 @@ Return the value of `column` in every session of `sessions_info`, as a vector in
 of the sessions, from the table that the sessions were split from. A session with more than
 one value in the column, or with a missing one, is an error, which starts with `reader`, a
 description of what reads the column, such as
-`"GroupedHierarchicalSessionParameters groups learning_rate by"`. Used by
+`"GroupedHierarchicalParameters groups learning_rate by"`. Used by
 [`read_level_of_each_session`](@ref) and by the continuous predictors of a
-[`HierarchicalRegressionSessionParameters`](@ref).
+[`HierarchicalRegressionParameters`](@ref).
 """
 function read_one_value_of_each_session(
     sessions_info::MultipleSessionsInfo, column::Symbol, reader::String
@@ -20,7 +20,7 @@ function read_one_value_of_each_session(
         if length(values_of_session) != 1 || ismissing(only(values_of_session))
             throw(
                 ArgumentError(
-                    "$reader the column $column, which has the values $(values_of_session) in the session $(repr(sessions_info.session_ids[i])). Each session must have one value of every column that a session parameter model reads.",
+                    "$reader the column $column, which has the values $(values_of_session) in the session $(repr(sessions_info.session_ids[i])). Each session must have one value of every column that a parameter model reads.",
                 ),
             )
         end
@@ -36,7 +36,7 @@ names, as a vector in the order of the sessions: its value of a single column, o
 `NamedTuple` of its values of several. Each value is read with
 [`read_one_value_of_each_session`](@ref), whose errors start with `reader`. Used by
 [`group_sessions`](@ref) and by the categorical predictors of a
-[`HierarchicalRegressionSessionParameters`](@ref).
+[`HierarchicalRegressionParameters`](@ref).
 """
 function read_level_of_each_session(
     sessions_info::MultipleSessionsInfo, columns::Tuple{Vararg{Symbol}}, reader::String
@@ -66,8 +66,8 @@ their first session, and with no columns every session is in one group. A sessio
 than one value, or a missing value, in one of the columns is an error, which starts with
 `reader`, as for [`read_level_of_each_session`](@ref). Used by
 [`prepare_parameters_model`](@ref), for the groups of a
-[`GroupedHierarchicalSessionParameters`](@ref) and for the varying effects of a
-[`HierarchicalRegressionSessionParameters`](@ref).
+[`GroupedHierarchicalParameters`](@ref) and for the varying effects of a
+[`HierarchicalRegressionParameters`](@ref).
 """
 function group_sessions(sessions_info::MultipleSessionsInfo, ::Tuple{}, ::String)
     return (;

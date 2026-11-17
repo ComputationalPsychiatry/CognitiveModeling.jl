@@ -1,8 +1,8 @@
 ### EACH PARAMETER SAMPLED ONCE, FOR EVERY SESSION ###
 
 #Each parameter sampled once, and given to every session
-Turing.@model function CognitiveModeling.turing_session_parameters_model(
-    parameters_model::IdenticalSessionParameters, sessions_info::MultipleSessionsInfo
+Turing.@model function CognitiveModeling.turing_parameters_model(
+    parameters_model::IdenticalParameters, sessions_info::MultipleSessionsInfo
 )
     parameters ~ to_submodel(
         turing_identical_parameters(parameters_model.priors, n_sessions(sessions_info)),
@@ -17,7 +17,7 @@ end
 Turing.jl model which samples one parameter at a time from `priors`, each once, with
 [`turing_identical_parameter`](@ref) under the parameter's name, and returns them in a
 `NamedTuple`, each as a vector with that value for each of `n_sessions` sessions. Used by
-[`IdenticalSessionParameters`](@ref).
+[`IdenticalParameters`](@ref).
 """
 Turing.@model function turing_identical_parameters(
     priors::NamedTuple{names}, n_sessions

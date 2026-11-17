@@ -19,11 +19,11 @@ function sessions_to_prepare(; keywords...)
 end
 
 @testset "prepare_full_model" begin
-    sampled = IndependentSessionParameters((; probability=1))
+    sampled = IndependentParameters((; probability=1))
 
-    @testset "It returns the parts of a full model, with each session parameter model prepared for the sessions" begin
+    @testset "It returns the parts of a full model, with each parameter model prepared for the sessions" begin
         sessions_info = sessions_to_prepare()
-        by_session = FixedSessionParametersBySession((;
+        by_session = SessionwiseFixedParameters((;
             S1=(; probability=0.1),
             S2=(; probability=0.2),
             S3=(; probability=0.3),
@@ -38,7 +38,7 @@ end
         )
         @test prepared.cognitive_parameters_model.parameters_by_session ==
             (; probability=[0.1, 0.2, 0.3, 0.4])
-        @test prepared.environment_parameters_model === NoSessionParameters()
+        @test prepared.environment_parameters_model === NoParameters()
         @test prepared.downstream_model === NoDownstreamModel()
         @test prepared.sessions_info === sessions_info
     end
@@ -49,30 +49,30 @@ end
         prepared = CognitiveModeling.prepare_full_model(
             sampled,
             sessions_info;
-            environment_parameters_model=IdenticalSessionParameters((; scale=1)),
+            environment_parameters_model=IdenticalParameters((; scale=1)),
         )
         @test all(session -> session.includes_environment, prepared.sessions_info.sessions)
         @test prepared.sessions_info.table === sessions_info.table
         @test prepared.sessions_info.session_rows == sessions_info.session_rows
     end
 
-    @testset "The parameters that a session parameter model gives are checked against those of the model" begin
+    @testset "The parameters that a parameter model gives are checked against those of the model" begin
         sessions_info = sessions_to_prepare()
-        @test_throws "The session parameter model, a IndependentSessionParameters, gives the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
-            IndependentSessionParameters((; probability=1, bias=2)), sessions_info
+        @test_throws "The parameter model, a IndependentParameters, gives the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
+            IndependentParameters((; probability=1, bias=2)), sessions_info
         )
-        @test_throws "The session parameter model, a NoSessionParameters, doesn't give the parameters (:probability,) of a cognitive model of type SessionCounter, which have no default values." CognitiveModeling.prepare_full_model(
-            NoSessionParameters(), sessions_info
+        @test_throws "The parameter model, a NoParameters, doesn't give the parameters (:probability,) of a cognitive model of type SessionCounter, which have no default values." CognitiveModeling.prepare_full_model(
+            NoParameters(), sessions_info
         )
         #One of one's own doesn't tell its parameters, so nothing is checked
         @test CognitiveModeling.prepare_full_model(
             ParametersModelOfOwn(), sessions_info
         ).cognitive_parameters_model === ParametersModelOfOwn()
         #Sessions without an environment take no environment parameters
-        @test_throws "The sessions have no environment model, but the session parameter model of the environment, a FixedSessionParameters, gives the parameters (:scale,)." CognitiveModeling.prepare_full_model(
+        @test_throws "The sessions have no environment model, but the parameter model of the environment, a FixedParameters, gives the parameters (:scale,)." CognitiveModeling.prepare_full_model(
             sampled,
             sessions_info;
-            environment_parameters_model=FixedSessionParameters((; scale=2.0)),
+            environment_parameters_model=FixedParameters((; scale=2.0)),
         )
     end
 
@@ -80,13 +80,13 @@ end
         #No session runs the environment, since nothing is missing, so its parameter isn't needed
         not_running = sessions_to_prepare(; environment=GivesReward())
         @test CognitiveModeling.prepare_full_model(sampled, not_running).environment_parameters_model ===
-            NoSessionParameters()
+            NoParameters()
         #A session with something missing runs it, and then the parameter must be given
         running = sessions_to_prepare(;
             environment=GivesReward(),
             environment_save_history=SaveHistory(; outputs=:reward),
         )
-        @test_throws "The session parameter model, a NoSessionParameters, doesn't give the parameters (:scale,) of an environment model of type GivesReward, which have no default values." CognitiveModeling.prepare_full_model(
+        @test_throws "The parameter model, a NoParameters, doesn't give the parameters (:scale,) of an environment model of type GivesReward, which have no default values." CognitiveModeling.prepare_full_model(
             sampled, running
         )
         with_default = sessions_to_prepare(;
@@ -94,52 +94,50 @@ end
             environment_save_history=SaveHistory(; outputs=:reward),
         )
         @test CognitiveModeling.prepare_full_model(sampled, with_default).environment_parameters_model ===
-            NoSessionParameters()
+            NoParameters()
     end
 
-    @testset "A tuple or a NamedTuple of session parameter models is made into a composite of them" begin
+    @testset "A tuple or a NamedTuple of parameter models is made into a composite of them" begin
         sessions_info = sessions_to_prepare()
         from_tuple = CognitiveModeling.prepare_full_model(
-            (sampled, NoSessionParameters()), sessions_info
+            (sampled, NoParameters()), sessions_info
         )
         @test from_tuple.cognitive_parameters_model ===
-            CompositeSessionParameters(sampled, NoSessionParameters())
+            CompositeParameters(sampled, NoParameters())
         from_named_tuple = CognitiveModeling.prepare_full_model(
             (; learning=sampled), sessions_info
         )
         @test CognitiveModeling.part_names(from_named_tuple.cognitive_parameters_model) ===
             (:learning,)
-        #The session parameter model of the environment can be given the same way
+        #The parameter model of the environment can be given the same way
         @test CognitiveModeling.prepare_full_model(
-            sampled, sessions_info; environment_parameters_model=(NoSessionParameters(),)
-        ).environment_parameters_model === CompositeSessionParameters(NoSessionParameters())
+            sampled, sessions_info; environment_parameters_model=(NoParameters(),)
+        ).environment_parameters_model === CompositeParameters(NoParameters())
     end
 
     @testset "The parts must be of the right kind" begin
         sessions_info = sessions_to_prepare()
-        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it has type Float64." CognitiveModeling.prepare_full_model(
+        @test_throws "A parameter model must be a subtype of AbstractParametersModel, such as IndependentParameters(priors) with the priors in a NamedTuple, or FixedParameters(values) for given values, but it has type Float64." CognitiveModeling.prepare_full_model(
             2.0, sessions_info
         )
-        #Priors given on their own are a NamedTuple, which would be made into a composite of the session parameter models in it
-        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel, such as IndependentSessionParameters(priors) with the priors in a NamedTuple, or FixedSessionParameters(values) for given values, but it was given a NamedTuple whose probability has type Int64. A NamedTuple of session parameter models is made into a CompositeSessionParameters of them, each under its name." CognitiveModeling.prepare_full_model(
+        #Priors given on their own are a NamedTuple, which would be made into a composite of the parameter models in it
+        @test_throws "A parameter model must be a subtype of AbstractParametersModel, such as IndependentParameters(priors) with the priors in a NamedTuple, or FixedParameters(values) for given values, but it was given a NamedTuple whose probability has type Int64. A NamedTuple of parameter models is made into a CompositeParameters of them, each under its name." CognitiveModeling.prepare_full_model(
             (; probability=1), sessions_info
         )
-        @test_throws "A session parameter model must be a subtype of AbstractSessionParametersModel" CognitiveModeling.prepare_full_model(
+        @test_throws "A parameter model must be a subtype of AbstractParametersModel" CognitiveModeling.prepare_full_model(
             sampled, sessions_info; environment_parameters_model=(; scale=2.0)
         )
         @test_throws "The downstream model must be a subtype of AbstractDownstreamModel, or NoDownstreamModel() for none, but it has type Symbol." CognitiveModeling.prepare_full_model(
             sampled, sessions_info; downstream_model=:none
         )
     end
-    @testset "Fixed values join the session parameter model in a composite, and are checked against the model" begin
+    @testset "Fixed values join the parameter model in a composite, and are checked against the model" begin
         sessions_info = sessions_to_prepare()
         own = ParametersModelOfOwn()
-        fixed = FixedSessionParameters((; probability=0.3))
+        fixed = FixedParameters((; probability=0.3))
         #Without parameters of its own, the fixed values are all there is
         prepared = CognitiveModeling.prepare_full_model(
-            NoSessionParameters(),
-            sessions_info;
-            fixed_cognitive_parameters=(; probability=0.3),
+            NoParameters(), sessions_info; fixed_cognitive_parameters=(; probability=0.3)
         )
         @test prepared.cognitive_parameters_model === fixed
         #A model of one's own keeps its place next to the fixed values, and the parts of a composite stay side by side
@@ -148,7 +146,7 @@ end
         )
         @test prepared.cognitive_parameters_model.parts === (own, fixed)
         @test CognitiveModeling.with_fixed_parameters(
-            CompositeSessionParameters(own, own),
+            CompositeParameters(own, own),
             (; probability=0.3),
             SessionCounter(),
             "fixed_cognitive_parameters",
@@ -156,7 +154,7 @@ end
         #The parts of a composite keep their names, and the fixed values join without one
         @test CognitiveModeling.part_names(
             CognitiveModeling.with_fixed_parameters(
-                CompositeSessionParameters(own; other=own),
+                CompositeParameters(own; other=own),
                 (; probability=0.3),
                 SessionCounter(),
                 "fixed_cognitive_parameters",
@@ -171,11 +169,10 @@ end
         prepared = CognitiveModeling.prepare_full_model(
             sampled, with_environment; fixed_environment_parameters=(; scale=2.0)
         )
-        @test prepared.environment_parameters_model ===
-            FixedSessionParameters((; scale=2.0))
+        @test prepared.environment_parameters_model === FixedParameters((; scale=2.0))
         @test !any(session -> session.includes_environment, prepared.sessions_info.sessions)
         #A parameter is either fixed or given, a fixed one must be in the model's attributes, and sessions without an environment take none for it
-        @test_throws "fixed_cognitive_parameters fixes the parameters (:probability,), which the session parameter model, a IndependentSessionParameters, gives too. A parameter is either fixed or given by the session parameter model." CognitiveModeling.prepare_full_model(
+        @test_throws "fixed_cognitive_parameters fixes the parameters (:probability,), which the parameter model, a IndependentParameters, gives too. A parameter is either fixed or given by the parameter model." CognitiveModeling.prepare_full_model(
             sampled, sessions_info; fixed_cognitive_parameters=(; probability=0.3)
         )
         @test_throws "fixed_cognitive_parameters fixes the parameters (:bias,), which aren't in the attributes of a cognitive model of type SessionCounter. Its attributes have the parameters (:probability,)." CognitiveModeling.prepare_full_model(
