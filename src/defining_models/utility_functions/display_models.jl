@@ -1,19 +1,24 @@
 ## Displaying models, and describing them in messages ##
 """
-    print_attribute_names(io, attributes; shorten=false, domains=(;))
+    print_attribute_names(io, attributes; shorten=false, domains=(;), defaults=(;))
 
 Print a line for each kind of attribute in `attributes`, a [`ModelAttributes`](@ref), with
 `none` if it has no names of that kind. With `shorten`, a kind with more names than
-[`shows_every_name`](@ref) allows shows only how many there are. A parameter with a
-[`ParameterDomain`](@ref) in `domains` has it after its name, as
-[`describe_domain`](@ref) writes it, such as `learning_rate ∈ [0, 1]`.
+[`shows_every_name`](@ref) allows shows only how many there are. When a parameter has a
+[`ParameterDomain`](@ref) in `domains` or a default value in `defaults`, the parameters are
+listed one on a line instead, as [`print_parameter_lines`](@ref) writes them.
 
 The `show` methods of a `ModelAttributes`, of a cognitive model and of an environment model
 each print a header of their own, and then these lines. Only those of the models shorten
-them and give the domains, since a `ModelAttributes` is where the full lists are read.
+them and give the domains and the default values, since a `ModelAttributes` is where the
+full lists are read.
 """
 function print_attribute_names(
-    io::IO, attributes::ModelAttributes; shorten::Bool=false, domains::NamedTuple=(;)
+    io::IO,
+    attributes::ModelAttributes;
+    shorten::Bool=false,
+    domains::NamedTuple=(;),
+    defaults::NamedTuple=(;),
 )
     for (kind, names) in (
         ("Parameters", attributes.parameters),
@@ -21,14 +26,16 @@ function print_attribute_names(
         ("Inputs", attributes.inputs),
         ("Outputs", attributes.outputs),
     )
-        print(io, "\n", kind, ": ")
+        print(io, "\n", kind, ":")
         if isempty(names)
-            print(io, "none")
+            print(io, " none")
+        elseif kind == "Parameters" &&
+            any(name -> has_domain_or_default(name, domains, defaults), names)
+            print_parameter_lines(io, names, domains, defaults; shorten)
         elseif shorten && !shows_every_name(io, names)
-            print(io, length(names), " (see attribute_names)")
-        elseif kind == "Parameters"
-            join(io, (name_with_domain(name, domains) for name in names), ", ")
+            print(io, " ", length(names), " (see attribute_names)")
         else
+            print(io, " ")
             join(io, names, ", ")
         end
     end
@@ -36,17 +43,62 @@ function print_attribute_names(
 end
 
 """
-    name_with_domain(name, domains)
+    has_domain_or_default(name, domains, defaults)
 
-Return the name of a parameter as the display of a model writes it: followed by its domain
-in `domains`, as in `learning_rate ∈ [0, 1]`, when it has a [`ParameterDomain`](@ref) there,
-and alone otherwise. Used by [`print_attribute_names`](@ref).
+Return whether the parameter `name` has a [`ParameterDomain`](@ref) in `domains` or a
+default value in `defaults`, so that the display of a model has more to show of it than its
+name. Used by [`print_attribute_names`](@ref).
 """
-function name_with_domain(name::Symbol, domains::NamedTuple)
-    haskey(domains, name) || return string(name)
-    domain = getproperty(domains, name)
-    domain isa ParameterDomain || return string(name)
-    return string(name, " ∈ ", describe_domain(domain))
+function has_domain_or_default(name::Symbol, domains::NamedTuple, defaults::NamedTuple)
+    return haskey(defaults, name) ||
+           (haskey(domains, name) && getproperty(domains, name) isa ParameterDomain)
+end
+
+"""
+    print_parameter_lines(io, names, domains, defaults; shorten=false)
+
+Print the parameters `names` one on a line, each with its domain in `domains` after its
+name, as [`describe_domain`](@ref) writes it, and then its default value in `defaults`, as
+in `inverse_temperature ∈ [0, ∞) (default 2.0)`. A parameter without either has its name
+alone. With `shorten`, only as many are listed as [`n_parameter_lines`](@ref) allows, and
+the last line says how many more there are. Used by [`print_attribute_names`](@ref).
+"""
+function print_parameter_lines(
+    io::IO,
+    names::Tuple{Vararg{Symbol}},
+    domains::NamedTuple,
+    defaults::NamedTuple;
+    shorten::Bool=false,
+)
+    n_listed = shorten ? n_parameter_lines(io, names) : length(names)
+    compact_io = IOContext(io, :compact => true)
+    for index in 1:n_listed
+        name = names[index]
+        print(io, "\n  ", name)
+        if haskey(domains, name) && getproperty(domains, name) isa ParameterDomain
+            print(io, " ∈ ", describe_domain(getproperty(domains, name)))
+        end
+        if haskey(defaults, name)
+            print(io, " (default ")
+            show(compact_io, getproperty(defaults, name))
+            print(io, ")")
+        end
+    end
+    if n_listed < length(names)
+        print(io, "\n  … and ", length(names) - n_listed, " more (see attribute_names)")
+    end
+    return nothing
+end
+
+"""
+    n_parameter_lines(io, names)
+
+Return how many of the parameters `names` a display on `io` lists one on a line: all of them
+when `io` isn't limited, as when printing to a file, and at most ten otherwise. Used by
+[`print_parameter_lines`](@ref).
+"""
+function n_parameter_lines(io::IO, names::Tuple{Vararg{Symbol}})
+    return get(io, :limit, false) ? min(length(names), 10) : length(names)
 end
 
 """
@@ -56,7 +108,7 @@ Return `domain`, a [`ParameterDomain`](@ref), as the display of a model writes i
 name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or
 `[0, ∞)`, the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, and the
 type of a parameter that isn't a number, such as `AbstractString`. Used by
-[`name_with_domain`](@ref).
+[`print_parameter_lines`](@ref).
 """
 function describe_domain(domain::ParameterDomain{Ttype}) where {Ttype}
     lower, upper = domain.lower, domain.upper
@@ -132,7 +184,7 @@ function Base.show(io::IO, ::MIME"text/plain", attributes::ModelAttributes)
     return nothing
 end
 
-#Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, and the names of its attributes, with the domain of each parameter that has one
+#Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, and the names of its attributes, with the domain and the default value of each parameter that has one
 function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
 
     #Print the kind and the type of the model
@@ -150,7 +202,11 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
     if has_attribute_names(model)
         attributes = check_type_attribute_names(attribute_names(model), model)
         print_attribute_names(
-            io, attributes; shorten=true, domains=domains_to_display(model)
+            io,
+            attributes;
+            shorten=true,
+            domains=domains_to_display(model),
+            defaults=defaults_to_display(model),
         )
     else
         print(io, "\nAttributes: not specified")
@@ -167,14 +223,20 @@ end
 
 """
     domains_to_display(model)
+    defaults_to_display(model)
 
-Return the domains of the parameters of `model` for its display: what
-[`parameter_domains`](@ref) returns when it is a `NamedTuple`, and none otherwise, so that
-a model whose domains aren't right is still shown. Used by the `show` method of a model.
+Return the domains and the default values of the parameters of `model` for its display: what
+[`parameter_domains`](@ref) and [`default_parameters`](@ref) return when it is a
+`NamedTuple`, and none otherwise, so that a model whose domains or default values aren't
+right is still shown. Used by the `show` method of a model.
 """
 function domains_to_display(model::AbstractTimestepModel)
     domains = parameter_domains(model)
     return domains isa NamedTuple ? domains : (;)
+end
+function defaults_to_display(model::AbstractTimestepModel)
+    defaults = default_parameters(model)
+    return defaults isa NamedTuple ? defaults : (;)
 end
 
 """

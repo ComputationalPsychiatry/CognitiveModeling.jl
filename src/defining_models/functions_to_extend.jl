@@ -182,7 +182,8 @@ end
 
 Return the default parameter values of a cognitive model or of an environment model, such as
 `(; learning_rate = 0.1)`, which [`InstantiatedModel`](@ref) and [`simulate`](@ref) use for
-the parameters they aren't given.
+the parameters they aren't given. The display of a model shows each default value after the
+name of its parameter.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
@@ -235,7 +236,10 @@ julia> CognitiveModeling.discrete_parameter_names(CountsOptions())
 julia> CountsOptions()
 -- Cognitive model --
 Type: CountsOptions
-Parameters: learning_rate ∈ [0, 1], n_options ∈ {1, 2, …}, bias
+Parameters:
+  learning_rate ∈ [0, 1]
+  n_options ∈ {1, 2, …}
+  bias
 States: none
 Inputs: none
 Outputs: none

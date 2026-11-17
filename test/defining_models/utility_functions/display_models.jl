@@ -50,12 +50,29 @@ function CognitiveModeling.parameter_domains(model::ModelWithDisplayedDomains)
         strategy=ParameterDomain(; type=Symbol),
     )
 end
+function CognitiveModeling.default_parameters(model::ModelWithDisplayedDomains)
+    return (; inverse_temperature=2.0, bias=0.5, strategy=:greedy)
+end
 
-#A model with more parameters than a display lists, of which one has a domain
+#A model with default values for some of its parameters, and no domains
+struct ModelWithDisplayedDefaults <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithDisplayedDefaults)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :weights), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.default_parameters(model::ModelWithDisplayedDefaults)
+    return (; weights=collect(1.0:100.0))
+end
+
+#A model with more parameters than a display lists one on a line, of which one has a domain
 struct ModelWithManyParametersAndADomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithManyParametersAndADomain)
     return ModelAttributes(;
-        parameters=(:a, :b, :c, :d, :e, :f), states=(), inputs=(), outputs=()
+        parameters=(:a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l),
+        states=(),
+        inputs=(),
+        outputs=(),
     )
 end
 function CognitiveModeling.parameter_domains(model::ModelWithManyParametersAndADomain)
@@ -140,11 +157,16 @@ end
         )
     end
 
-    @testset "The REPL shows the domain of a parameter after its name" begin
+    @testset "The REPL lists the parameters one on a line when any has a domain or a default value" begin
         @test repr("text/plain", ModelWithDisplayedDomains()) == """
             -- Cognitive model --
             Type: ModelWithDisplayedDomains
-            Parameters: learning_rate ∈ [0, 1], inverse_temperature ∈ [0, ∞), bias, n_options ∈ {1, 2, …}, strategy ∈ Symbol
+            Parameters:
+              learning_rate ∈ [0, 1]
+              inverse_temperature ∈ [0, ∞) (default 2.0)
+              bias (default 0.5)
+              n_options ∈ {1, 2, …}
+              strategy ∈ Symbol (default :greedy)
             States: expected_reward
             Inputs: reward
             Outputs: choice"""
@@ -157,15 +179,46 @@ end
         )
         @test string(ModelWithDisplayedDomains()) ==
             "ModelWithDisplayedDomains (cognitive model)"
-        #With more parameters than are listed, there are no domains either, and without a limit there are
-        @test occursin(
-            "Parameters: 6 (see attribute_names)",
-            repr("text/plain", ModelWithManyParametersAndADomain(); context=:limit => true),
+        #Default values alone give the same list, with a large array shortened in the REPL
+        @test repr("text/plain", ModelWithDisplayedDefaults(); context=:limit => true) ==
+            """
+-- Cognitive model --
+Type: ModelWithDisplayedDefaults
+Parameters:
+  learning_rate
+  weights (default [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0  …  91.0, 92.0, 93.0, 94.0, 95.0, 96.0, 97.0, 98.0, 99.0, 100.0])
+States: none
+Inputs: none
+Outputs: none"""
+    end
+
+    @testset "The REPL lists at most ten parameters one on a line, and says how many more there are" begin
+        shown = repr(
+            "text/plain", ModelWithManyParametersAndADomain(); context=:limit => true
         )
-        @test occursin(
-            "Parameters: a, b ∈ [0, ∞), c, d, e, f",
-            repr("text/plain", ModelWithManyParametersAndADomain()),
-        )
+        @test occursin("\nParameters:\n  a\n  b ∈ [0, ∞)\n  c\n", shown)
+        @test occursin("\n  j\n  … and 2 more (see attribute_names)\nStates: none", shown)
+        @test !occursin("\n  k\n", shown)
+        twelve_names =
+            CognitiveModeling.attribute_names(ModelWithManyParametersAndADomain()).parameters
+        limited_io = IOContext(IOBuffer(), :limit => true)
+        @test CognitiveModeling.n_parameter_lines(limited_io, twelve_names) == 10
+        @test CognitiveModeling.n_parameter_lines(limited_io, (:a, :b, :c)) == 3
+        #Without a limit, as when printing to a file, every parameter is listed
+        unlimited = repr("text/plain", ModelWithManyParametersAndADomain())
+        @test occursin("\n  k\n  l\nStates: none", unlimited)
+        @test !occursin("more", unlimited)
+        @test CognitiveModeling.n_parameter_lines(IOBuffer(), twelve_names) == 12
+    end
+
+    @testset "A parameter has more to show than its name when it has a domain or a default value" begin
+        domains = (; learning_rate=ParameterDomain(; lower=0), noise=(; lower=0))
+        defaults = (; bias=0.5)
+        @test CognitiveModeling.has_domain_or_default(:learning_rate, domains, defaults)
+        @test CognitiveModeling.has_domain_or_default(:bias, domains, defaults)
+        @test !CognitiveModeling.has_domain_or_default(:temperature, domains, defaults)
+        #A domain that isn't a ParameterDomain isn't shown
+        @test !CognitiveModeling.has_domain_or_default(:noise, domains, defaults)
     end
 
     @testset "A domain is written as an interval, as whole numbers, or as a type" begin
