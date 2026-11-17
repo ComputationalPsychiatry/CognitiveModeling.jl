@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794930783298,
+  "lastUpdate": 1794940917479,
   "repoUrl": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl",
   "entries": {
     "CognitiveModeling.jl": [
@@ -288,6 +288,102 @@ window.BENCHMARK_DATA = {
             "value": 3068,
             "unit": "ns",
             "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "committer": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "distinct": true,
+          "id": "b1bc0e621994964a1a012d889f9d4a0a96ad7c04",
+          "message": "Show in the sketch of the tutorial on discrete parameters how to read the names of the discrete and of the continuous variables of a Turing.jl model from the distributions that DynamicPPL.jl records, and how to give each kind a sampler in Gibbs, with nadapts for a sampler which adapts, since NUTS doesn't adapt inside Gibbs without it, and run the same lines in the tests of the Turing.jl extension, on a model of one's own, on a full model with a discrete parameter and an imputed choice, and on a regression with a family, so that a change in Turing.jl or DynamicPPL.jl shows there",
+          "timestamp": "2026-11-17T19:37:49+01:00",
+          "tree_id": "ce3d68c5c25bca3f0cd25b9374dd87baf6c3b0ad",
+          "url": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/commit/b1bc0e621994964a1a012d889f9d4a0a96ad7c04"
+        },
+        "date": 1794940916549,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "simulate/saving everything",
+            "value": 3065.6666666666665,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4160\nallocs=16\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "simulate/saving nothing",
+            "value": 1450.2,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=512\nallocs=16\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Enzyme",
+            "value": 135008.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=200144\nallocs=697\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ForwardDiff",
+            "value": 115299.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=339488\nallocs=392\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Mooncake",
+            "value": 106551,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=92496\nallocs=980\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ReverseDiff",
+            "value": 1388297,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1556528\nallocs=42516\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/log density",
+            "value": 19820,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=22752\nallocs=175\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Enzyme",
+            "value": 7823.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16688\nallocs=29\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ForwardDiff",
+            "value": 3741.875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4904\nallocs=16\nparams={\"evals\":8,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Mooncake",
+            "value": 6768.666666666667,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5936\nallocs=51\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ReverseDiff",
+            "value": 146381,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=155296\nallocs=4245\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/log density",
+            "value": 1755.6,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
         ]
       }
