@@ -259,34 +259,13 @@ of a measurement on a state. This needs Turing.jl to be loaded.
   warning says so when the model is made, when the cognitive model and the environment model
   have a parameter of the same name and both parameter models sample.
 
-The variables of a parameter model are named as it names them, or under the parameter
-model's name with `include_submodel_prefixes = true`. With `IndependentParameters`, each
-parameter is a vector with a value for each session, such as `learning_rate.session`, so the
-learning rate of the third session is `learning_rate.session[3]`. With
-`HierarchicalGroupedParameters`, each parameter of a group-level distribution is named after
-its prior, such as `learning_rate.mean.group` and `learning_rate.sd.group`, which is one
-value without groups, and otherwise has the value of each group under the group's symbol
-name, such as `learning_rate.mean.group.clinical`. The values of the sessions before the
-transformation are `learning_rate.standardized`, or `learning_rate.session` for a parameter
-that is centered. With `HierarchicalRegressionParameters`, the coefficients of the
-intercept, the predictors and the interactions of a parameter are one variable,
-`learning_rate.coef`, with each under its name, such as `learning_rate.coef.intercept`,
-`learning_rate.coef.age`, `learning_rate.coef.diagnosis_clinical` for a level of a
-categorical predictor, and `learning_rate.coef.age_by_diagnosis_clinical` for an
-interaction. Varying effects have the variables of each of their coefficients under their
-name and the coefficient's: the standard deviation,
-`learning_rate.participant.intercept.sd`, which has the value of each group under the
-group's symbol name when the levels are grouped, such as
-`learning_rate.participant.intercept.sd.clinical`, and a standardized value for each level,
-`learning_rate.participant.intercept.standardized`, or the deviation of each level,
-`learning_rate.participant.intercept.deviation`, when they are centered. A regression with a
-family also has the value of every session as a vector, `learning_rate.session`, and the
-other parameters of the family's distribution as one variable, `learning_rate.family`, with
-each under its name, such as `learning_rate.family.sd`. A part of a
-[`CompositeParameters`](@ref) that is given with a name has its variables under that name,
-such as `noise.bias.session`. The variables of the sessions are under `session[i]`, and
-those of the downstream model as it names them, or under `downstream_model` with the
-prefixes.
+The variables of a parameter model are named after the parameters, such as
+`learning_rate.session` with `IndependentParameters`, where `learning_rate.session[3]` is
+the learning rate of the third session, or under the parameter model's name with
+`include_submodel_prefixes = true`. A part of a [`CompositeParameters`](@ref) that is given
+with a name has its variables under that name. The variables of the sessions are under
+`session[i]`, and those of the downstream model as it names them, or under
+`downstream_model` with the prefixes. `rand(model)` shows every variable's name.
 
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,
 `saved_trajectories` and `downstream_values`: the cognitive parameters and the environment
