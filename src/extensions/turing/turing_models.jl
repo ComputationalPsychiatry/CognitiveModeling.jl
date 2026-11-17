@@ -158,12 +158,12 @@ end
 chain = sample(fit_one_session(session_info), NUTS(), 1000)
 
 #The parameters and the expected rewards on each timestep, for each sample
-results = returned(fit_one_session(session_info), chain)
-results[1].saved_trajectories.states
+returned_values = returned(fit_one_session(session_info), chain)
+returned_values[1].saved_trajectories.states
 
 #The same as chains, which merge into one
-parameters = session_parameters_chain(results)
-trajectories = session_trajectories_chain(results)
+parameters = session_parameters_chain(returned_values)
+trajectories = session_trajectories_chain(returned_values)
 merge(parameters, trajectories)
 ```
 """
@@ -197,8 +197,8 @@ own, as a submodel without a prefix:
 `to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
 [`turing_full_model`](@ref) does this with parameter models. A model of one's own can return
 the same `NamedTuple`, and [`session_trajectories_chain`](@ref) and
-[`session_parameters_chain`](@ref) then read its results too, also when it transforms its
-variables into the parameters.
+[`session_parameters_chain`](@ref) then read what it returns too, also when it transforms
+its variables into the parameters.
 """
 function turing_multiple_behavioral_sessions end
 
@@ -315,9 +315,9 @@ model = turing_full_model(cognitive_parameters_model, sessions_info)
 chain = sample(model, NUTS(), 1000)
 
 #The parameters and the expected rewards of every session, for each sample
-results = returned(model, chain)
-results[1].cognitive_parameters.learning_rate
-results[1].saved_trajectories[2].states
+returned_values = returned(model, chain)
+returned_values[1].cognitive_parameters.learning_rate
+returned_values[1].saved_trajectories[2].states
 
 #The same fit without saving, and the states read from the chain afterwards
 sessions_without_saving = MultipleSessionsInfo(
@@ -325,7 +325,7 @@ sessions_without_saving = MultipleSessionsInfo(
 )
 unsaved = turing_full_model(cognitive_parameters_model, sessions_without_saving)
 chain = sample(unsaved, NUTS(), 1000)
-results = returned(model, chain)
+returned_values = returned(model, chain)
 ```
 """
 function turing_full_model end

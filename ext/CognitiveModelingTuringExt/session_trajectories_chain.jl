@@ -12,33 +12,33 @@ function CognitiveModeling.session_trajectories_chain(
         info -> with_save_history(info, cognitive_save_history, environment_save_history),
         "session_trajectories_chain",
     )
-    results = returned(saving_model, chain)
+    returned_values = returned(saving_model, chain)
     numbering = sample_numbering(chain)
     session_info = info_of(saving_model)
     if session_info isa SessionInfo
-        return session_trajectories_chain(results; numbering...)
+        return session_trajectories_chain(returned_values; numbering...)
     else
-        return session_trajectories_chain(results, session_info; numbering...)
+        return session_trajectories_chain(returned_values, session_info; numbering...)
     end
 end
 
 #Reruns a full model, several sessions or a single session on every sample of the chain, and makes a chain of the parameters each session was given
 function CognitiveModeling.session_parameters_chain(model::DynamicPPL.Model, chain)
-    #A model of one's own has no session info to name the parameters by, so its results are given instead
+    #A model of one's own has no session info to name the parameters by, so what it returns is given instead
     if !is_session_model(model)
         throw(
             ArgumentError(
-                "session_parameters_chain(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_parameters_chain the results of returned(model, chain) instead.",
+                "session_parameters_chain(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_parameters_chain what returned(model, chain) gives instead.",
             ),
         )
     end
-    results = returned(model, chain)
+    returned_values = returned(model, chain)
     numbering = sample_numbering(chain)
     session_info = info_of(model)
     if session_info isa SessionInfo
-        return session_parameters_chain(results; numbering...)
+        return session_parameters_chain(returned_values; numbering...)
     else
-        return session_parameters_chain(results, session_info; numbering...)
+        return session_parameters_chain(returned_values, session_info; numbering...)
     end
 end
 
@@ -74,15 +74,15 @@ function CognitiveModeling.predict_session_trajectories(
         "predict_session_trajectories",
     )
     #Everything within the timesteps is simulated again, with the parameters of each sample
-    results = returned_with_simulation(
+    returned_values = returned_with_simulation(
         rng, predictive_model, without_timestep_variables(chain)
     )
     numbering = sample_numbering(chain)
     session_info = info_of(predictive_model)
     if session_info isa SessionInfo
-        return session_trajectories_chain(results; numbering...)
+        return session_trajectories_chain(returned_values; numbering...)
     else
-        return session_trajectories_chain(results, session_info; numbering...)
+        return session_trajectories_chain(returned_values, session_info; numbering...)
     end
 end
 
@@ -199,7 +199,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_trajectories_chain the results of returned(model, chain) instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give session_trajectories_chain what returned(model, chain) gives instead.",
             ),
         )
     end

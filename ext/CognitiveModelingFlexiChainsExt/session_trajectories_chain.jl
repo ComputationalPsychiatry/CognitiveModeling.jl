@@ -1,52 +1,54 @@
 ### THE TRAJECTORIES OF FITTED SESSIONS, AS A CHAIN ###
 
-#The results of a full model, or of several sessions, with every entry named after the session it belongs to
+#The returned values of a full model, or of several sessions, with every entry named after the session it belongs to
 function CognitiveModeling.session_trajectories_chain(
-    results::AbstractMatrix,
+    returned_values::AbstractMatrix,
     sessions_info::MultipleSessionsInfo;
-    iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
-    chain_indices::AbstractVector{<:Integer}=1:size(results, 2),
+    iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
+    chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
 )
-    check_results(results)
-    check_results_of_multiple_sessions(first(results), sessions_info)
+    check_returned_values(returned_values)
+    check_returned_values_of_multiple_sessions(first(returned_values), sessions_info)
 
-    #The results of a full model and of several sessions hold what each session saved under saved_trajectories
+    #The returned values of a full model and of several sessions hold what each session saved under saved_trajectories
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
         add_session_entries!(
             entries,
-            results,
+            returned_values,
             (session_id_to_symbol(session_id),),
-            result -> result.saved_trajectories[i],
+            returned_value -> returned_value.saved_trajectories[i],
         )
     end
-    return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
+    return chain_of_entries(entries, size(returned_values)...; iter_indices, chain_indices)
 end
 
-#The results of a single session, with every entry named without the symbol name of a session
+#The returned values of a single session, with every entry named without the symbol name of a session
 function CognitiveModeling.session_trajectories_chain(
-    results::AbstractMatrix;
-    iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
-    chain_indices::AbstractVector{<:Integer}=1:size(results, 2),
+    returned_values::AbstractMatrix;
+    iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
+    chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
 )
-    check_results(results)
-    check_results_of_single_session(first(results))
+    check_returned_values(returned_values)
+    check_returned_values_of_single_session(first(returned_values))
     entries = empty_entries()
-    add_session_entries!(entries, results, (), result -> result.saved_trajectories)
-    return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
+    add_session_entries!(
+        entries, returned_values, (), returned_value -> returned_value.saved_trajectories
+    )
+    return chain_of_entries(entries, size(returned_values)...; iter_indices, chain_indices)
 end
 
 ### THE PARAMETERS OF FITTED SESSIONS, AS A CHAIN ###
 
-#The parameters of every session from the results of a full model or of several sessions, named after the session, with the environment's under environment
+#The parameters of every session from the returned values of a full model or of several sessions, named after the session, with the environment's under environment
 function CognitiveModeling.session_parameters_chain(
-    results::AbstractMatrix,
+    returned_values::AbstractMatrix,
     sessions_info::MultipleSessionsInfo;
-    iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
-    chain_indices::AbstractVector{<:Integer}=1:size(results, 2),
+    iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
+    chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
 )
-    check_results(results)
-    check_results_of_multiple_sessions(first(results), sessions_info)
+    check_returned_values(returned_values)
+    check_returned_values_of_multiple_sessions(first(returned_values), sessions_info)
 
     #Each parameter has one vector with a value for every session, so session i has the value i of each
     entries = empty_entries()
@@ -54,85 +56,98 @@ function CognitiveModeling.session_parameters_chain(
         symbol_name_of_session = session_id_to_symbol(session_id)
         add_parameter_entries!(
             entries,
-            results,
+            returned_values,
             (symbol_name_of_session,),
-            result -> map(
-                values_of_sessions -> values_of_sessions[i], result.cognitive_parameters
+            returned_value -> map(
+                values_of_sessions -> values_of_sessions[i],
+                returned_value.cognitive_parameters,
             ),
         )
         add_parameter_entries!(
             entries,
-            results,
+            returned_values,
             (symbol_name_of_session, :environment),
-            result -> map(
+            returned_value -> map(
                 values_of_sessions -> values_of_sessions[i],
-                result.environment_parameters,
+                returned_value.environment_parameters,
             ),
         )
     end
-    return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
+    return chain_of_entries(entries, size(returned_values)...; iter_indices, chain_indices)
 end
 
 #The parameters of a single session, named after the parameter alone, with the environment's under environment
 function CognitiveModeling.session_parameters_chain(
-    results::AbstractMatrix;
-    iter_indices::AbstractVector{<:Integer}=1:size(results, 1),
-    chain_indices::AbstractVector{<:Integer}=1:size(results, 2),
+    returned_values::AbstractMatrix;
+    iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
+    chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
 )
-    check_results(results)
-    check_results_of_single_session(first(results))
+    check_returned_values(returned_values)
+    check_returned_values_of_single_session(first(returned_values))
     entries = empty_entries()
-    add_parameter_entries!(entries, results, (), result -> result.cognitive_parameters)
     add_parameter_entries!(
-        entries, results, (:environment,), result -> result.environment_parameters
+        entries, returned_values, (), returned_value -> returned_value.cognitive_parameters
     )
-    return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
+    add_parameter_entries!(
+        entries,
+        returned_values,
+        (:environment,),
+        returned_value -> returned_value.environment_parameters,
+    )
+    return chain_of_entries(entries, size(returned_values)...; iter_indices, chain_indices)
 end
 
 ### ADDING THE ENTRIES OF EACH SESSION ###
 
 """
-    add_parameter_entries!(entries, results, prefix, parameters_of)
+    add_parameter_entries!(entries, returned_values, prefix, parameters_of)
 
 Add an entry under `prefix` to `entries` for each parameter of one session, where
-`parameters_of` gives the session's parameters from the result of one sample, as a
+`parameters_of` gives the session's parameters from the returned value of one sample, as a
 `NamedTuple` with the value of each parameter. Used by [`session_parameters_chain`](@ref).
 """
 function add_parameter_entries!(
-    entries, results, prefix::Tuple{Vararg{Symbol}}, parameters_of
+    entries, returned_values, prefix::Tuple{Vararg{Symbol}}, parameters_of
 )
-    for parameter in keys(parameters_of(first(results)))
+    for parameter in keys(parameters_of(first(returned_values)))
         add_entry!(
             entries,
             entry_name(prefix..., parameter),
-            map(result -> getproperty(parameters_of(result), parameter), results),
+            map(
+                returned_value -> getproperty(parameters_of(returned_value), parameter),
+                returned_values,
+            ),
         )
     end
     return entries
 end
 
 """
-    add_session_entries!(entries, results, session_prefix, saved_trajectories_of)
+    add_session_entries!(entries, returned_values, session_prefix, saved_trajectories_of)
 
 Add an entry to `entries` for everything one session saved, where `saved_trajectories_of`
-gives the session's saved trajectories from the result of one sample, and `session_prefix`
-holds the session's symbol name, or nothing for a single session. The cognitive model's
-values are named under the session alone, and the environment's under `environment` after
-it, as [`add_model_entries!`](@ref) names them. Used by
+gives the session's saved trajectories from the returned value of one sample, and
+`session_prefix` holds the session's symbol name, or nothing for a single session. The
+cognitive model's values are named under the session alone, and the environment's under
+`environment` after it, as [`add_model_entries!`](@ref) names them. Used by
 [`session_trajectories_chain`](@ref).
 """
 function add_session_entries!(
-    entries, results, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of
+    entries, returned_values, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of
 )
     add_model_entries!(
-        entries, results, session_prefix, saved_trajectories_of, :action_distributions
+        entries,
+        returned_values,
+        session_prefix,
+        saved_trajectories_of,
+        :action_distributions,
     )
-    if hasproperty(saved_trajectories_of(first(results)), :environment)
+    if hasproperty(saved_trajectories_of(first(returned_values)), :environment)
         add_model_entries!(
             entries,
-            results,
+            returned_values,
             (session_prefix..., :environment),
-            result -> saved_trajectories_of(result).environment,
+            returned_value -> saved_trajectories_of(returned_value).environment,
             :observation_distributions,
         )
     end
@@ -140,24 +155,25 @@ function add_session_entries!(
 end
 
 """
-    add_model_entries!(entries, results, prefix, saved_trajectories_of, distribution_kind)
+    add_model_entries!(entries, returned_values, prefix, saved_trajectories_of, distribution_kind)
 
 Add an entry under `prefix` to `entries` for everything one model of a session saved, where
-`saved_trajectories_of` gives its saved trajectories from the result of one sample, with
-`states`, `observations`, `actions` and `distribution_kind`, which is `action_distributions`
-for a cognitive model and `observation_distributions` for an environment model. There is one
-entry for each observation and action that was saved, named after it alone, one for each
-distribution, under its kind, and one for each state. Each entry holds, for every sample, a
-vector over the timesteps. Used by [`add_session_entries!`](@ref).
+`saved_trajectories_of` gives its saved trajectories from the returned value of one sample,
+with `states`, `observations`, `actions` and `distribution_kind`, which is
+`action_distributions` for a cognitive model and `observation_distributions` for an
+environment model. There is one entry for each observation and action that was saved, named
+after it alone, one for each distribution, under its kind, and one for each state. Each
+entry holds, for every sample, a vector over the timesteps. Used by
+[`add_session_entries!`](@ref).
 """
 function add_model_entries!(
     entries,
-    results,
+    returned_values,
     prefix::Tuple{Vararg{Symbol}},
     saved_trajectories_of,
     distribution_kind,
 )
-    first_saved = saved_trajectories_of(first(results))
+    first_saved = saved_trajectories_of(first(returned_values))
 
     #Each observation and action that was saved, named after it alone
     for kind in (:observations, :actions)
@@ -166,11 +182,11 @@ function add_model_entries!(
                 entries,
                 entry_name(prefix..., name),
                 map(
-                    result -> [
-                        getproperty(value, name) for
-                        value in getproperty(saved_trajectories_of(result), kind)
+                    returned_value -> [
+                        getproperty(value, name) for value in
+                        getproperty(saved_trajectories_of(returned_value), kind)
                     ],
-                    results,
+                    returned_values,
                 ),
             )
         end
@@ -182,11 +198,12 @@ function add_model_entries!(
             entries,
             entry_name(prefix..., distribution_kind, name),
             map(
-                result -> [
-                    getproperty(value, name) for value in
-                    getproperty(saved_trajectories_of(result), distribution_kind)
+                returned_value -> [
+                    getproperty(value, name) for value in getproperty(
+                        saved_trajectories_of(returned_value), distribution_kind
+                    )
                 ],
-                results,
+                returned_values,
             ),
         )
     end
@@ -197,11 +214,11 @@ function add_model_entries!(
             entries,
             entry_name(prefix..., name),
             map(
-                result -> [
+                returned_value -> [
                     getproperty(state, name) for
-                    state in saved_trajectories_of(result).states
+                    state in saved_trajectories_of(returned_value).states
                 ],
-                results,
+                returned_values,
             ),
         )
     end
@@ -272,18 +289,19 @@ end
 ### CHECKS ###
 
 """
-    check_results(results)
+    check_returned_values(returned_values)
 
-Throw an informative error if there are no results, or if a sample has `nothing` as its
-result, which a model that catches invalid parameters gives for a rejected sample. Used by
-[`session_trajectories_chain`](@ref).
+Throw an informative error if there are no returned values, or if a sample has `nothing` as
+its returned value, which a model that catches invalid parameters gives for a rejected
+sample. Used by [`session_trajectories_chain`](@ref).
 """
-function check_results(results::AbstractMatrix)
-    isempty(results) && throw(ArgumentError("There are no results to make a chain of."))
-    if any(isnothing, results)
+function check_returned_values(returned_values::AbstractMatrix)
+    isempty(returned_values) &&
+        throw(ArgumentError("There are no returned values to make a chain of."))
+    if any(isnothing, returned_values)
         throw(
             ArgumentError(
-                "A sample has nothing as its result, which a model that catches invalid parameters gives for a rejected sample. A chain only holds accepted samples, so make the results with returned(model, chain).",
+                "A sample has nothing as its returned value, which a model that catches invalid parameters gives for a rejected sample. A chain only holds accepted samples, so make the returned values with returned(model, chain).",
             ),
         )
     end
@@ -291,41 +309,43 @@ function check_results(results::AbstractMatrix)
 end
 
 """
-    check_results_of_multiple_sessions(result, sessions_info)
-    check_results_of_single_session(result)
+    check_returned_values_of_multiple_sessions(returned_value, sessions_info)
+    check_returned_values_of_single_session(returned_value)
 
-Throw an informative error if `result`, the result of the first sample, isn't what the
-models of several sessions return, [`turing_full_model`](@ref) and
+Throw an informative error if `returned_value`, the returned value of the first sample,
+isn't what the models of several sessions return, [`turing_full_model`](@ref) and
 [`turing_multiple_behavioral_sessions`](@ref), with what each session saved in a vector
 under `saved_trajectories`, for as many sessions as `sessions_info` has, or what
 [`turing_behavioral_session`](@ref) returns, with what the session saved under
 `saved_trajectories`. Used by [`session_trajectories_chain`](@ref) and
 [`session_parameters_chain`](@ref).
 """
-function check_results_of_multiple_sessions(result, sessions_info::MultipleSessionsInfo)
+function check_returned_values_of_multiple_sessions(
+    returned_value, sessions_info::MultipleSessionsInfo
+)
     if !(
-        result isa NamedTuple &&
-        hasproperty(result, :saved_trajectories) &&
-        result.saved_trajectories isa AbstractVector
+        returned_value isa NamedTuple &&
+        hasproperty(returned_value, :saved_trajectories) &&
+        returned_value.saved_trajectories isa AbstractVector
     )
         throw(
             ArgumentError(
-                "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample, but they are of type $(typeof(result)). The results of a single session are given without a session info.",
+                "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a single session are given without a session info.",
             ),
         )
     end
-    check_number_of_sessions(result.saved_trajectories, sessions_info)
+    check_number_of_sessions(returned_value.saved_trajectories, sessions_info)
     return nothing
 end
-function check_results_of_single_session(result)
+function check_returned_values_of_single_session(returned_value)
     if !(
-        result isa NamedTuple &&
-        hasproperty(result, :saved_trajectories) &&
-        result.saved_trajectories isa NamedTuple
+        returned_value isa NamedTuple &&
+        hasproperty(returned_value, :saved_trajectories) &&
+        returned_value.saved_trajectories isa NamedTuple
     )
         throw(
             ArgumentError(
-                "Without a session info, the results must be what turing_behavioral_session returns for each sample, but they are of type $(typeof(result)). The results of a full model or of several sessions are given with their MultipleSessionsInfo.",
+                "Without a session info, the returned values must be what turing_behavioral_session returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a full model or of several sessions are given with their MultipleSessionsInfo.",
             ),
         )
     end
@@ -335,8 +355,8 @@ end
 """
     check_number_of_sessions(saved_trajectories, sessions_info)
 
-Throw an informative error if the results have another number of sessions than
-`sessions_info`. Used by [`check_results_of_multiple_sessions`](@ref).
+Throw an informative error if the returned values have another number of sessions than
+`sessions_info`. Used by [`check_returned_values_of_multiple_sessions`](@ref).
 """
 function check_number_of_sessions(
     saved_trajectories::AbstractVector, sessions_info::MultipleSessionsInfo
@@ -344,7 +364,7 @@ function check_number_of_sessions(
     if length(saved_trajectories) != length(sessions_info.session_ids)
         throw(
             DimensionMismatch(
-                "The results have $(length(saved_trajectories)) sessions, but the session info has $(length(sessions_info.session_ids)).",
+                "The returned values have $(length(saved_trajectories)) sessions, but the session info has $(length(sessions_info.session_ids)).",
             ),
         )
     end

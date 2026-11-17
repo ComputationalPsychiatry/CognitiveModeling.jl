@@ -133,11 +133,11 @@ end
             sessions_by_hand(FULL_TABLE, learning_rates, inverse_temperatures)
         @test isempty(keys(rand(Xoshiro(1), model)))
         #It returns the parameters it was given, and what each session saved, in order
-        result = returned(model, (;))
-        @test result.cognitive_parameters ==
+        returned_value = returned(model, (;))
+        @test returned_value.cognitive_parameters ==
               (; learning_rate=learning_rates, inverse_temperature=inverse_temperatures) &&
-            result.environment_parameters == (;)
-        saved = result.saved_trajectories
+            returned_value.environment_parameters == (;)
+        saved = returned_value.saved_trajectories
         @test saved isa Vector && length(saved) == 3
         @test [length(session.states) for session in saved] == [4, 3, 5]
         @test saved[2].states[2].expected_reward ≈ 0.5 + 0.3 * (0.0 - 0.5)
@@ -223,24 +223,24 @@ end
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         parameters = (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
-        result = returned(
+        returned_value = returned(
             turing_multiple_behavioral_sessions(
                 sessions_info, parameters, (; scale=[2.0, 1.0, 3.0])
             ),
             (;),
         )
         #RewardsPreviousChoice gives the previous choice scaled, so the second reward of S1 is 2.0 after a choice of true, and S3's is 3.0
-        saved = result.saved_trajectories
+        saved = returned_value.saved_trajectories
         @test saved[1].observations[3] == (; reward=2.0) &&
             saved[3].observations[3] == (; reward=3.0)
         #The environment parameters are returned as they were given
-        @test result.environment_parameters == (; scale=[2.0, 1.0, 3.0])
+        @test returned_value.environment_parameters == (; scale=[2.0, 1.0, 3.0])
         #Without environment parameters, its defaults are used, and none are returned
-        result = returned(
+        returned_value = returned(
             turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
         )
-        @test result.saved_trajectories[1].observations[3] == (; reward=1.0) &&
-            result.environment_parameters == (;)
+        @test returned_value.saved_trajectories[1].observations[3] == (; reward=1.0) &&
+            returned_value.environment_parameters == (;)
         @test_throws "Environment parameters were given, (scale = [2.0, 2.0, 2.0],), but the session has no environment." logjoint(
             turing_multiple_behavioral_sessions(
                 sessions_for_test(; impute_missing_actions=false),
@@ -339,20 +339,20 @@ end
             @varname(learning_rate.session) => [0.2, 0.3, 0.4],
             @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
         )
-        result = returned(model, given)
-        @test keys(result) == (
+        returned_value = returned(model, given)
+        @test keys(returned_value) == (
             :cognitive_parameters,
             :environment_parameters,
             :saved_trajectories,
             :downstream_values,
         )
-        @test result.environment_parameters === (;)
-        @test result.cognitive_parameters ==
+        @test returned_value.environment_parameters === (;)
+        @test returned_value.cognitive_parameters ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
-        @test length(result.saved_trajectories) == 3
-        @test result.saved_trajectories[2].states[2].expected_reward ≈
+        @test length(returned_value.saved_trajectories) == 3
+        @test returned_value.saved_trajectories[2].states[2].expected_reward ≈
             0.5 + 0.3 * (0.0 - 0.5)
-        @test result.downstream_values === nothing
+        @test returned_value.downstream_values === nothing
     end
 
     @testset "With include_submodel_prefixes, the parameter models and the downstream model have their variables under their names" begin
@@ -426,10 +426,11 @@ end
             @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
             @varname(slope) => 0.8,
         )
-        result = returned(model, given)
-        @test result.downstream_values == 0.8
+        returned_value = returned(model, given)
+        @test returned_value.downstream_values == 0.8
         last_expected_rewards = [
-            session.states[end].expected_reward for session in result.saved_trajectories
+            session.states[end].expected_reward for
+            session in returned_value.saved_trajectories
         ]
         @test loglikelihood(model, given) ≈
             sessions_by_hand(FULL_TABLE, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0]) +
@@ -754,10 +755,12 @@ end
         @test size(chain, 1) == 50
         @test Set(Turing.FlexiChains.parameters(chain)) ==
             Set([@varname(learning_rate.session), @varname(inverse_temperature.session)])
-        results = returned(model, chain)
-        @test length(results) == 50
-        @test length(results[1].cognitive_parameters.learning_rate) == 3
-        @test [length(session.states) for session in results[1].saved_trajectories] == [4, 3, 5]
+        returned_values = returned(model, chain)
+        @test length(returned_values) == 50
+        @test length(returned_values[1].cognitive_parameters.learning_rate) == 3
+        @test [
+            length(session.states) for session in returned_values[1].saved_trajectories
+        ] == [4, 3, 5]
         #With the missing choice imputed, its latent is sampled too, by a sampler for discrete variables
         with_imputed = turing_full_model(
             IndependentParameters(FULL_PRIORS), sessions_for_test()
@@ -829,8 +832,10 @@ end
         )
         for seed in 1:3
             chain = sample(Xoshiro(seed), without_downstream, NUTS(), 10; progress=false)
-            @test size(chain, 1) == 10 &&
-                all(result -> result isa NamedTuple, returned(without_downstream, chain))
+            @test size(chain, 1) == 10 && all(
+                returned_value -> returned_value isa NamedTuple,
+                returned(without_downstream, chain),
+            )
         end
     end
 
@@ -889,13 +894,15 @@ end
         unsaved = turing_full_model(IndependentParameters(FULL_PRIORS), unsaved_sessions)
         saving = saving_full_model(IndependentParameters(FULL_PRIORS), saving_sessions)
         chain = sample(Xoshiro(2), unsaved, NUTS(), 20; progress=false)
-        results = returned(saving, chain)
-        @test length(results) == 20
-        @test [length(session.states) for session in results[1].saved_trajectories] == [4, 3, 5]
+        returned_values = returned(saving, chain)
+        @test length(returned_values) == 20
+        @test [
+            length(session.states) for session in returned_values[1].saved_trajectories
+        ] == [4, 3, 5]
         @test returned(unsaved, chain)[1].saved_trajectories[1].states == fill((;), 4)
         #The first state of each session is the initial one, and the parameters are the chain's
-        learning_rates = results[1].cognitive_parameters.learning_rate
-        @test results[1].saved_trajectories[1].states[2].expected_reward ≈
+        learning_rates = returned_values[1].cognitive_parameters.learning_rate
+        @test returned_values[1].saved_trajectories[1].states[2].expected_reward ≈
             0.5 + learning_rates[1] * (1.0 - 0.5)
     end
 

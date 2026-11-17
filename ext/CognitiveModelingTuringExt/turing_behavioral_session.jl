@@ -494,14 +494,14 @@ end
 
 #Turing model which runs any Turing model inside a try block, and gives the parameters a log density of -Inf if a cognitive model throws an InvalidParametersError
 Turing.@model function CognitiveModeling.turing_catch_invalid_parameters(model)
-    result = nothing
+    returned_value = nothing
     try
-        result ~ to_submodel(model, false)
+        returned_value ~ to_submodel(model, false)
     catch error
         error isa InvalidParametersError || rethrow()
         Turing.@addlogprob! -Inf
     end
-    return result
+    return returned_value
 end
 
 ### THE TIMESTEPS OF A SESSION ###

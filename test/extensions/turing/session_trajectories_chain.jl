@@ -190,13 +190,13 @@ end
             ),
         )
         single_chain = sample(Xoshiro(9), single_model, Prior(), 10; progress=false)
-        results = returned(single_model, single_chain)
-        single_parameters = session_parameters_chain(results)
+        returned_values = returned(single_model, single_chain)
+        single_parameters = session_parameters_chain(returned_values)
         @test Turing.FlexiChains.get_name.(keys(single_parameters)) ==
             [@varname(learning_rate), @varname(inverse_temperature)]
         @test vec(single_parameters[@varname(learning_rate)]) ≈
             to_unit_interval.(vec(single_chain[@varname(learning_rate_logit)]))
-        single_trajectories = session_trajectories_chain(results)
+        single_trajectories = session_trajectories_chain(returned_values)
         @test single_trajectories[@varname(expected_reward)][3] ≈ expected_rewards_by_hand(
             SESSION_REWARDS.reward, single_parameters[@varname(learning_rate)][3]
         )

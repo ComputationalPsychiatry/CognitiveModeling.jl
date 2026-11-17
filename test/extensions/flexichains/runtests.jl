@@ -131,7 +131,7 @@ function single_session_result(
     return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
-#The results of two samples, as two iterations of one chain
+#The returned values of two samples, as two iterations of one chain
 two_samples(first_result, second_result) = reshape([first_result, second_result], 2, 1)
 
 #Two samples of a full model of the sessions by participant, each with a learning rate for P1 and P2 and what they saved
@@ -172,7 +172,7 @@ end
         JET.test_package(extension; target_modules=(extension,))
     end
 
-    @testset "The results of a full model give what each session saved, named after the session and the attribute, in the order of the sessions" begin
+    @testset "The returned values of a full model give what each session saved, named after the session and the attribute, in the order of the sessions" begin
         chain = session_trajectories_chain(FULL_MODEL_RESULTS, chain_sessions())
         @test chain isa FlexiChains.FlexiChain
         @test entry_names(chain) == [
@@ -232,7 +232,7 @@ end
             "P2.learning_rate",
             "P2.environment.mean_reward",
         ]
-        #The results of several sessions give the same chain, and those of a single session the parameters without a session
+        #The returned values of several sessions give the same chain, and those of a single session the parameters without a session
         several = two_samples(
             multiple_sessions_result(
                 (; learning_rate=[0.5, 0.2]),
@@ -268,16 +268,16 @@ end
         @test entry_names(merge(session_trajectories_chain(single), single_chain)) ==
             ["expected_value", "learning_rate", "environment.mean_reward"]
         #Results of another kind are errors
-        @test_throws "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample" session_parameters_chain(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample" session_parameters_chain(
             single, chain_sessions()
         )
-        @test_throws "Without a session info, the results must be what turing_behavioral_session returns for each sample" session_parameters_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns for each sample" session_parameters_chain(
             several
         )
     end
 
     @testset "What isn't saved has no entry" begin
-        results = two_samples(
+        returned_values = two_samples(
             full_model_result(
                 (; learning_rate=[0.5, 0.2]),
                 [saves_expected_values([0.0, 0.0, 0.5]), saves_expected_values([0.0, 0.0])],
@@ -287,7 +287,7 @@ end
                 [saves_expected_values([0.0, 0.0, 0.4]), saves_expected_values([0.0, 0.0])],
             ),
         )
-        @test entry_names(session_trajectories_chain(results, chain_sessions())) ==
+        @test entry_names(session_trajectories_chain(returned_values, chain_sessions())) ==
             ["P1.expected_value", "P2.expected_value"]
     end
 
@@ -337,7 +337,7 @@ end
         ) == ["expected_value"]
     end
 
-    @testset "The results of several sessions have the same names, and those of a single session no symbol name of a session" begin
+    @testset "The returned values of several sessions have the same names, and those of a single session no symbol name of a session" begin
         sessions = [
             saves_everything([1.0, 0.0], [0.0, 0.3], [0.0, 0.0, 0.5]),
             saves_expected_values([0.0, 0.0]),
@@ -386,7 +386,7 @@ end
     end
 
     @testset "The samples are numbered as given" begin
-        results = fill(
+        returned_values = fill(
             multiple_sessions_result(
                 (; learning_rate=[0.5, 0.2]),
                 [saves_expected_values([0.0, 0.0, 0.5]), saves_expected_values([0.0, 0.0])],
@@ -395,7 +395,7 @@ end
             2,
         )
         chain = session_trajectories_chain(
-            results, chain_sessions(); iter_indices=11:13, chain_indices=[4, 7]
+            returned_values, chain_sessions(); iter_indices=11:13, chain_indices=[4, 7]
         )
         @test FlexiChains.iter_indices(chain) == 11:13 &&
             FlexiChains.chain_indices(chain) == [4, 7]
@@ -408,26 +408,26 @@ end
         one_of_several = multiple_sessions_result(
             (; learning_rate=[0.5]), [saves_expected_values([0.0, 0.0, 0.5])]
         )
-        @test_throws "There are no results to make a chain of." session_trajectories_chain(
+        @test_throws "There are no returned values to make a chain of." session_trajectories_chain(
             Matrix{Any}(undef, 0, 1)
         )
-        @test_throws "With a MultipleSessionsInfo, the results must be what turing_full_model or turing_multiple_behavioral_sessions returns" session_trajectories_chain(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns" session_trajectories_chain(
             reshape([one_session], 1, 1), chain_sessions()
         )
-        @test_throws "Without a session info, the results must be what turing_behavioral_session returns" session_trajectories_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" session_trajectories_chain(
             reshape([one_of_several], 1, 1)
         )
         #What a session saved alone isn't what a model returns
-        @test_throws "Without a session info, the results must be what turing_behavioral_session returns" session_trajectories_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" session_trajectories_chain(
             reshape([saves_expected_values([0.0, 0.0, 0.5])], 1, 1)
         )
-        @test_throws "A sample has nothing as its result" session_trajectories_chain(
+        @test_throws "A sample has nothing as its returned value" session_trajectories_chain(
             reshape([nothing, one_session], 2, 1)
         )
-        @test_throws "The results have 1 sessions, but the session info has 2." session_trajectories_chain(
+        @test_throws "The returned values have 1 sessions, but the session info has 2." session_trajectories_chain(
             reshape([one_of_several], 1, 1), chain_sessions()
         )
-        #A model can't name a state like an observation, but results made by hand can, which the chain refuses
+        #A model can't name a state like an observation, but returned values made by hand can, which the chain refuses
         clashing = [
             saved_by_session(
                 1;
