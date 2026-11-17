@@ -96,7 +96,8 @@ end
 Throw a [`ParameterDomainError`](@ref) if `value`, the value of the parameter `name` of
 `model`, is outside `domain`, a [`ParameterDomain`](@ref): a real number that the domain's
 type doesn't take, as [`takes_value`](@ref) decides, or that is below the lower bound or
-above the upper bound, which a `NaN` always is, or a value that isn't a number and isn't of
+above the upper bound, which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides
+for a number that isn't one of Julia's own, or a value that isn't a number and isn't of
 the domain's type. Every element of an array is checked as a value of its own. A number
 that isn't a real number, and an array of them, is left alone. Used by
 [`check_values_in_domains`](@ref).
@@ -105,10 +106,32 @@ function check_value_in_domain(
     model::AbstractTimestepModel, name::Symbol, value::Real, domain::ParameterDomain{Ttype}
 ) where {Ttype}
     takes_value(Ttype, value) || throw_not_of_type(model, name, value, domain)
-    if !(domain.lower <= value <= domain.upper)
+    if !(domain.lower <= value <= domain.upper) && is_beyond_bounds(value, domain)
         throw_outside_bounds(model, name, value, domain)
     end
     return nothing
+end
+
+#A number of automatic differentiation can compare as beyond a bound that it equals: ForwardDiff.jl orders numbers of the same value by their derivatives, so that a learning rate of exactly 1 whose derivative is above zero compares as above 1, as it does when a transformation such as logistic reaches 1 while a sampler explores. Such a number is compared with the nearest number beyond each bound instead, which its value alone decides. Julia's own numbers are compared with the bounds as they are
+"""
+    is_beyond_bounds(value, domain)
+
+Return whether `value`, a real number which didn't compare as within the bounds of `domain`,
+a [`ParameterDomain`](@ref), is beyond them. One of Julia's own number types always is. A
+number of another type, such as one of automatic differentiation, is when it is `NaN`, or
+when it is at or beyond the nearest floating-point number below the lower bound or above
+the upper bound. Used by [`check_value_in_domain`](@ref).
+"""
+function is_beyond_bounds(
+    ::Union{AbstractFloat,Integer,Rational,AbstractIrrational}, ::ParameterDomain
+)
+    return true
+end
+function is_beyond_bounds(value::Real, domain::ParameterDomain)
+    isnan(value) && return true
+    is_below = isfinite(domain.lower) && value <= prevfloat(float(domain.lower))
+    is_above = isfinite(domain.upper) && value >= nextfloat(float(domain.upper))
+    return is_below || is_above
 end
 
 #Numbers that aren't real numbers can't be compared with the bounds, such as the numbers that Reactant.jl traces while it compiles

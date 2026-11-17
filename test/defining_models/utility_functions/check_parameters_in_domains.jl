@@ -43,6 +43,19 @@ end
 #A number that isn't a real number, as the numbers that Reactant.jl traces aren't, which can't be compared with anything
 struct NumberWithoutValue <: Number end
 
+#A stand-in for a number of automatic differentiation which orders numbers of the same value by their derivatives, as those of ForwardDiff.jl are ordered
+struct NumberWithDerivative <: Real
+    value::Float64
+    derivative::Float64
+end
+function Base.:<=(number::NumberWithDerivative, bound::Real)
+    return number.value < bound || (number.value == bound && number.derivative <= 0)
+end
+function Base.:<=(bound::Real, number::NumberWithDerivative)
+    return bound < number.value || (bound == number.value && number.derivative >= 0)
+end
+Base.isnan(number::NumberWithDerivative) = isnan(number.value)
+
 #Checks the same parameters many times, to measure what a check costs when a model runs
 function check_many_times(model, parameters, n_times)
     for _ in 1:n_times
@@ -126,6 +139,35 @@ end
         )
         #The error isn't the one a model throws for parameters to be sampled again
         @test !(ParameterDomainError("") isa InvalidParametersError)
+    end
+
+    @testset "A number of automatic differentiation that equals a bound is within it, whatever its derivative" begin
+        model = ModelWithDomains()
+        check(learning_rate) = CognitiveModeling.check_parameters_in_domains(
+            model, merge(valid_parameters, (; learning_rate))
+        )
+        #The stand-in compares as beyond a bound that it equals when its derivative points beyond it
+        @test !(NumberWithDerivative(1.0, 2.0) <= 1)
+        @test !(0 <= NumberWithDerivative(0.0, -2.0))
+        @test check(NumberWithDerivative(1.0, 2.0)) === nothing
+        @test check(NumberWithDerivative(0.0, -2.0)) === nothing
+        @test check(NumberWithDerivative(0.5, 2.0)) === nothing
+        #A value beyond a bound is outside it, also by the smallest step there is, and so is a NaN
+        @test_throws ParameterDomainError check(NumberWithDerivative(1.5, 0.0))
+        @test_throws ParameterDomainError check(NumberWithDerivative(nextfloat(1.0), 2.0))
+        @test_throws ParameterDomainError check(NumberWithDerivative(-0.5, 2.0))
+        @test_throws ParameterDomainError check(NumberWithDerivative(prevfloat(0.0), -2.0))
+        @test_throws ParameterDomainError check(NumberWithDerivative(NaN, 0.0))
+        #A side without a bound has nothing beyond it
+        @test !CognitiveModeling.is_beyond_bounds(
+            NumberWithDerivative(Inf, 2.0), ParameterDomain(; lower=0)
+        )
+        @test !CognitiveModeling.is_beyond_bounds(
+            NumberWithDerivative(-Inf, -2.0), ParameterDomain(; upper=0)
+        )
+        #Julia's own numbers are compared with the bounds as they are, however close they are
+        @test_throws ParameterDomainError check(big"1.0" + big"1e-30")
+        @test_throws ParameterDomainError check(nextfloat(1.0))
     end
 
     @testset "A value of another type than the domain's is a ParameterDomainError" begin

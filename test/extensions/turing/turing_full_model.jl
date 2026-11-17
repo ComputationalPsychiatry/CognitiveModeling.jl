@@ -1025,6 +1025,20 @@ end
         )
     end
 
+    @testset "A number of ForwardDiff.jl that equals a bound of its domain is within it" begin
+        Dual = Turing.ForwardDiff.Dual
+        check(learning_rate) = CognitiveModeling.check_parameters_in_domains(
+            BoundedRescorlaWagner(), (; learning_rate, inverse_temperature=2.0)
+        )
+        #A learning rate of exactly 1 or 0, as when a transformation reaches the bound while a sampler explores, with a derivative that points beyond it
+        @test check(Dual(1.0, 1.0e-30)) === nothing
+        @test check(Dual(0.0, -1.0)) === nothing
+        @test check(Dual(Dual(1.0, 1.0e-30), Dual(1.0e-30, 0.0))) === nothing
+        @test_throws ParameterDomainError check(Dual(1.5, 0.0))
+        @test_throws ParameterDomainError check(Dual(nextfloat(1.0), 1.0))
+        @test_throws ParameterDomainError check(Dual(NaN, 1.0))
+    end
+
     @testset "A fixed value outside its domain is an error when the model is made" begin
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
