@@ -1,0 +1,49 @@
+name: Benchmarks
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  # One run at a time, since each adds its results to the same file on the gh-pages branch
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: write # lets the benchmark action push the results to gh-pages, and comment on a commit
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Install the benchmark environment
+        run: julia --color=yes --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+      - name: Run the benchmarks
+        run: julia --color=yes --project=benchmark benchmark/run_benchmarks.jl
+      # Adds the results to the history on the gh-pages branch, with a page of charts, in a folder of its own beside
+      # the folders that Documenter deploys. A benchmark that got much slower gives a comment on the commit, without
+      # failing the run, since the timings of the runners vary
+      - name: Store the results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: CognitiveModeling.jl
+          tool: julia
+          output-file-path: benchmark/results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: benchmarks
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: false
+          summary-always: true

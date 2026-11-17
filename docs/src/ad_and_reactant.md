@@ -6,10 +6,10 @@ cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, 
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
 states, with a state changed in place, with a selection of what is saved, with maps of names
 between the model and the environment, with an environment which ends the simulation, with
-a reward that isn't given on every timestep, with parameter domains, and on single
-observations, and agents simulated with an environment or on single observations, with and
-without a history, and with a state saved with `deepcopy`. Code in the package's extensions
-is differentiated in
+a reward that isn't given on every timestep, with an environment of fixed observations, with
+parameter domains, and on single observations, and agents simulated with an environment or
+on single observations, with and without a history, and with a state saved with `deepcopy`.
+Code in the package's extensions is differentiated in
 suites of its own, each with its own environment, beside the other tests of the extension.
 The one for Turing.jl, in `test/extensions/turing/ad`, differentiates the log density of
 Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
@@ -25,13 +25,23 @@ since the backends work without it and with other probabilistic programming lang
 Every gradient is compared with finite differences. Zygote isn't supported, because the
 package uses for loops.
 
+The Turing.jl models can't be compiled with Reactant, so the functions that the model of a
+session calls within an inference backend are compiled in sessions that are run by hand, in
+`test/ad_and_reactant/session_by_hand.jl`: the log density is added up directly, and
+everything else is done by the package's functions, in the steps of the Turing.jl model of a
+session. They run with the agent or the environment starting, with a reward that isn't
+given on every timestep, with imputed actions, with an environment whose observations are
+imputed, which doesn't run, or which scores every observation, with maps of names, with
+saved histories, with a size for each timestep, with a session that ends when a stopping
+criterion is met, and with several sessions.
+
 | Backend | Forms tested |
 |---|---|
 | ForwardDiff | default, chunk size 1 |
 | ReverseDiff | default, compiled tape |
 | Enzyme | forward, reverse, and both with runtime activity |
 | Mooncake | forward, reverse |
-| Reactant | compiled value, and compiled Enzyme reverse gradient, on the cases without a `Xoshiro` |
+| Reactant | compiled value, and compiled Enzyme reverse gradient, on the cases without a `Xoshiro` and on the sessions run by hand |
 
 ## Known failures
 
@@ -46,6 +56,7 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, Revers
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reported as Enzyme.jl issue 3912 |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reported as Enzyme.jl issue 3911 |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reported as Enzyme.jl issue 3911 |
+| Enzyme forward and reverse without runtime activity | `simulate` with a [`FixedObservationsEnvironment`](@ref) whose observations have two types, such as a reward that is `NoValue` on some timesteps | throws an `EnzymeRuntimeActivityError` | use runtime activity, which is right. Observations of one type pass |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
 | Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session with one observation, which is `NoValue` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine, and so is a session with three observations of which one is `NoValue` on some timesteps |
 
@@ -66,6 +77,11 @@ These aren't failures of the package's own code, but a model can run into them.
   error, when it runs in a loop on values that differ between the timesteps. The `softmax`
   of LogExpFunctions.jl is right, and so is any softmax which keeps its exponentials in a
   variable and divides them by their sum. It is reported as Enzyme.jl issue 4030.
+- **Enzyme without runtime activity and objects that hold data:** an object with an array in
+  it that is made within the function that is differentiated, or captured by it, such as a
+  [`FixedObservationsEnvironment`](@ref) made from the observations there, throws an
+  `EnzymeRuntimeActivityError`. Make it once outside the function, as a constant, or use
+  runtime activity.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.
@@ -99,3 +115,6 @@ These aren't failures of the package's own code, but a model can run into them.
   and the default generator repeats its numbers on every run, so pass a
   `Reactant.ReactantRNG()` as a positional argument. Compile times grow with the number of
   timesteps, because the loop is unrolled, so a few hundred timesteps is the practical limit.
+  A function can't be compiled when it is given, or holds, an object with a field declared
+  as `NamedTuple` without its names and types, such as a model with `settings::NamedTuple`:
+  give the field a type parameter instead.

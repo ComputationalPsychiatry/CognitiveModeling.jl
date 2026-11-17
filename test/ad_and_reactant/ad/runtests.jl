@@ -49,6 +49,13 @@ const KNOWN_FAILURES = [
             "reading the history of an agent, agent starts",
         ],
     ),
+    (;
+        bug="Enzyme without runtime activity throws an EnzymeRuntimeActivityError when the observations of a FixedObservationsEnvironment have two types, such as a reward that is NoValue on some timesteps, whatever is saved. It is right with runtime activity, and with observations of one type",
+        backends=["Enzyme forward", "Enzyme reverse"],
+        cases=[
+            "simulate with fixed observations that aren't always given, environment starts"
+        ],
+    ),
 ]
 
 function is_known_failure(case_name, backend_name)

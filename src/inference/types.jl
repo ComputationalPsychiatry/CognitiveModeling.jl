@@ -548,11 +548,14 @@ julia> sessions_info.sessions[1].actions
 ```
 """
 struct MultipleSessionsInfo{
-    Tsessions<:AbstractVector{<:SessionInfo},Tsession_ids<:AbstractVector
+    Tsessions<:AbstractVector{<:SessionInfo},
+    Tsession_ids<:AbstractVector,
+    Ttable<:Union{Nothing,NamedTuple},
 }
     sessions::Tsessions
     session_ids::Tsession_ids
-    table::Union{Nothing,NamedTuple}
+    #Typed by the table itself: Reactant.jl can't compile a function which holds an object with a field declared as NamedTuple, which the sessions are for an inference backend that compiles its models with it
+    table::Ttable
     session_rows::Union{Nothing,Vector{Vector{Int}}}
 
     #Only takes sessions of one type, with a data identifier for each, and the rows of each in the table when there is one
@@ -593,7 +596,7 @@ struct MultipleSessionsInfo{
             )
         end
         session_rows = session_rows === nothing ? nothing : map(Vector{Int}, session_rows)
-        return new{typeof(sessions),typeof(session_ids)}(
+        return new{typeof(sessions),typeof(session_ids),typeof(table)}(
             sessions, session_ids, table, session_rows
         )
     end

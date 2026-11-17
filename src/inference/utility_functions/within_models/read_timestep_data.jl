@@ -18,7 +18,8 @@ vectors with one entry for each timestep. The values are read as a tuple with
 [`read_row_values`](@ref), so that a column which holds two types, such as an action that is
 [`MissingValue`](@ref) on some timesteps, gives one of two `NamedTuple`s with concrete
 fields rather than one without a definite type. Used by the timesteps of fitted sessions,
-and by the models of several sessions, which read the parameters of one session with it.
+by the models of several sessions, which read the parameters of one session with it, and by
+a [`FixedObservationsEnvironment`](@ref), which reads the observations of a timestep.
 """
 function select_row(columns::NamedTuple{names}, t) where {names}
 

@@ -22,3 +22,11 @@ Modules = [CognitiveModeling]
 Private = false
 Pages = ["simulation/types.jl"]
 ```
+
+## An environment with fixed observations
+
+```@autodocs
+Modules = [CognitiveModeling]
+Private = false
+Pages = ["simulation/fixed_observations_environment.jl"]
+```

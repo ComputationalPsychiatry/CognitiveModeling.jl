@@ -6,6 +6,8 @@
 /test/ad_and_reactant/**/Manifest*.toml
 /test/extensions/**/Manifest*.toml
 /test/tutorials/**/Manifest*.toml
+/benchmark/Manifest*.toml
+/benchmark/results.json
 /docs/build/
 /docs/src/generated/
 LocalPreferences.toml

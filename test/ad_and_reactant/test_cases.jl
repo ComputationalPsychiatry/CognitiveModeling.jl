@@ -670,6 +670,39 @@ function simulate_on_observations_within_domains(x)
     return total
 end
 
+# Environments of fixed observations, of which one has a reward that isn't given on some timesteps. They are made once,
+# as an environment with the observations of an experiment is, and not within the function that is differentiated
+const FIXED_REWARDS = FixedObservationsEnvironment((;
+    reward=[1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+))
+const FIXED_REWARDS_NOT_ALWAYS_GIVEN = FixedObservationsEnvironment((;
+    reward=Union{NoValue,Float64}[
+        1.0, 0.0, NoValue(), 1.0, 0.0, NoValue(), 0.0, 0.0, NoValue(), 1.0
+    ]
+))
+
+# A simulation with an environment of fixed observations, which ends after the last of them, with the parameters from a
+# vector. The environment takes no actions, so the map passes none on
+function simulate_with_fixed_observations(x, who_starts, environment)
+    simulation = simulate(
+        LearnsRewards{Deterministic}(),
+        environment;
+        who_starts,
+        n_steps=20,
+        cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
+        environment_parameters=(;),
+        action_map=NameMap(),
+        cognitive_save_history=SaveHistory(SaveEverything()),
+    )
+
+    #Timestep 0 has no action, so the sum starts at timestep 1
+    total = zero(x[1])
+    for t in 2:length(simulation.actions)
+        total += simulation.actions[t].choice
+    end
+    return total
+end
+
 # What the AD and Reactant tests check. In each entry,
 # f takes a vector x and returns a number, such as a model's log likelihood for example data.
 # Set reactant = false for what can't run on Reactant. Here that's Xoshiro, which Reactant doesn't support.
@@ -908,6 +941,26 @@ const TEST_CASES = [
         name="simulate with a reward that isn't always given, saving only the states, agent starts",
         f=x -> simulate_with_rewards_not_always_given(
             x, AgentStarts(), SaveHistory(; states=:expected_reward)
+        ),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with fixed observations, environment starts",
+        f=x -> simulate_with_fixed_observations(x, EnvironmentStarts(), FIXED_REWARDS),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with fixed observations, agent starts",
+        f=x -> simulate_with_fixed_observations(x, AgentStarts(), FIXED_REWARDS),
+        x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with fixed observations that aren't always given, environment starts",
+        f=x -> simulate_with_fixed_observations(
+            x, EnvironmentStarts(), FIXED_REWARDS_NOT_ALWAYS_GIVEN
         ),
         x=[0.3, 2.0],
         reactant=true,

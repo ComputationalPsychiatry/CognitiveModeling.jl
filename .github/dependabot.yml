@@ -18,6 +18,7 @@ updates:
       - "/test/ad_and_reactant/reactant"
       - "/test/extensions/turing"
       - "/test/extensions/turing/ad"
+      - "/benchmark"
     target-branch: "dev"
     schedule:
       interval: "weekly"

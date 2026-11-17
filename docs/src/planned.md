@@ -57,6 +57,8 @@ This page lists what is planned and not written yet. The list will grow.
 
 - Benchmarks which compare the speed of simulating and fitting with other inference
   backends and packages, such as Stan.
+- Extended benchmarks with full data sets, beside the small ones in the `benchmark` folder,
+  which run on every push.
 
 ## Plots
 

@@ -23,6 +23,7 @@ include("model_history/utility_functions/storage.jl")
 include("model_history/utility_functions/display_save_histories.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
+include("simulation/fixed_observations_environment.jl")
 include("simulation/display_name_maps_and_instantiated_models.jl")
 include("inference/types.jl")
 include("inference/session_parameter_models/no_session_parameters.jl")
@@ -63,7 +64,7 @@ export AbstractNoValue, NoValue, BeforeFirstTimestep
 export MissingValue, UnimputedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
 export ParameterDomain, ParameterDomainError
-export CommonRLEnvironment
+export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
 export simulate, simulate!, reset!

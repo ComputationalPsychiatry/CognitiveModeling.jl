@@ -899,6 +899,8 @@ const COUNTER_TABLE = (;
         )
         @test sessions_info.table === COUNTER_TABLE
         @test sessions_info.session_rows == [[1, 2], [3, 4, 5]]
+        #The field of the table has the type of the table itself, which Reactant.jl needs to compile a function with the sessions in it
+        @test fieldtype(typeof(sessions_info), :table) === typeof(COUNTER_TABLE)
         #The copies with other save histories and for prediction keep both
         for copy in (
             MultipleSessionsInfo(
@@ -918,6 +920,7 @@ const COUNTER_TABLE = (;
         #Sessions that are given already prepared have no table, unless it is given with the rows of each
         prepared = MultipleSessionsInfo(sessions_info.sessions, sessions_info.session_ids)
         @test prepared.table === nothing && prepared.session_rows === nothing
+        @test fieldtype(typeof(prepared), :table) === Nothing
         @test_throws "The sessions were given already prepared, without the table they came from, so they have no column block." CognitiveModeling.session_column_values(
             prepared, :block
         )
