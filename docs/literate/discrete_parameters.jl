@@ -100,10 +100,6 @@ sampler = Gibbs(
 )
 chain = sample(model, sampler, 1000)
 
-# When the model is made, the values that the family distribution can give are checked
-# against the domain of the parameter, so a `Poisson` for a parameter that is `true` or
-# `false` is an error before the fit.
-
 # ## Ordered levels and counts
 #
 # A parameter with ordered levels, such as a number of planning steps from one to four,

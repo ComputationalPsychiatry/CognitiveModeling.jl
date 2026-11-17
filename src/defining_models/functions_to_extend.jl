@@ -202,9 +202,7 @@ parameter that has one. A parameter without a domain can take any value.
 The parameters of a simulation and of a fitted session are checked against their domains
 before anything runs, and a value outside its domain throws a
 [`ParameterDomainError`](@ref), unless [`simulate`](@ref), [`InstantiatedModel`](@ref) or
-[`SessionInfo`](@ref) is given `check_parameter_domains = false`. A full model also checks
-what its parameter models can give before a fit, so that a prior or a transformation which
-can give a value outside a domain is an error when the model is made.
+[`SessionInfo`](@ref) is given `check_parameter_domains = false`.
 [`CognitiveModeling.discrete_parameter_names`](@ref) gives the discrete parameters, and
 [`CognitiveModeling.continuous_parameter_names`](@ref) the continuous ones, which are
 sampled in different ways. The display of a model shows each domain after the name of its

@@ -819,20 +819,6 @@ function parameter_names(parameters_model::HierarchicalRegressionParameters)
     return keys(parameters_model.parameters)
 end
 
-#With the designs of its regressions, it can give a parameter what its transformation makes of the lowest and the highest sum of its regression, or the values of its family distribution. Before the designs are built, the values aren't known
-function parameter_value_ranges(
-    parameters_model::HierarchicalRegressionParameters{<:NamedTuple,<:NamedTuple}
-)
-    ranges = Pair{Symbol,NamedTuple}[]
-    for (name, regression_parameter) in pairs(parameters_model.parameters)
-        sums = range_of_regression_sums(getproperty(parameters_model.designs, name))
-        range = range_of_regression_values(regression_parameter, sums)
-        range === nothing && continue
-        push!(ranges, name => range)
-    end
-    return (; ranges...)
-end
-
 #The design of every regression is built once, when a full model is prepared, and kept in the field for the designs
 function prepare_parameters_model(
     parameters_model::HierarchicalRegressionParameters, sessions_info::MultipleSessionsInfo
@@ -1747,81 +1733,4 @@ function find_groups_of_levels(
         n_groups=groups.n_groups,
         group_symbol_names=groups.group_symbol_names,
     )
-end
-
-"""
-    range_of_regression_sums(design)
-
-Return the lowest and the highest value that the sum of a regression can have in a session,
-as a `NamedTuple` with `lower` and `upper`, from `design`, the design of the regression.
-With varying effects it is the real line, since their deviations are normal. Without them,
-the sum of a session is lowest and highest when every coefficient times its value in the
-session is, where the values that a coefficient can have are those of its prior, from
-[`distribution_support`](@ref), or any value when they aren't known. Used by the
-[`parameter_value_ranges`](@ref) of [`HierarchicalRegressionParameters`](@ref).
-"""
-function range_of_regression_sums(design::NamedTuple)
-
-    #Normal deviations can give the sum any value
-    isempty(design.varying_effects) || return (; lower=(-Inf), upper=Inf)
-
-    #The lowest and the highest sum of every session, from the lowest and the highest product of each coefficient and its value in the session
-    n_sessions_in_design = length(first(design.design_columns))
-    lowest_sums = zeros(n_sessions_in_design)
-    highest_sums = zeros(n_sessions_in_design)
-    for (prior, column) in
-        zip(values(design.coefficient_priors), values(design.design_columns))
-        support = distribution_support(prior)
-        lower, upper = support === nothing ? (-Inf, Inf) : (support.lower, support.upper)
-        for (session, value) in enumerate(column)
-
-            #A coefficient that is multiplied by zero adds nothing, also when it has no bound
-            iszero(value) && continue
-            products = (lower * value, upper * value)
-            lowest_sums[session] += min(products...)
-            highest_sums[session] += max(products...)
-        end
-    end
-    return (; lower=minimum(lowest_sums), upper=maximum(highest_sums))
-end
-
-"""
-    range_of_regression_values(regression_parameter, sums)
-
-Return the values that `regression_parameter`, a [`RegressionParameter`](@ref), can give a
-session, as [`parameter_value_ranges`](@ref) returns those of a parameter, or `nothing` when
-they aren't known. `sums` has the lowest and the highest sum of the regression, from
-[`range_of_regression_sums`](@ref). Without a family distribution, the values are what the
-transformation makes of the sums, from [`transformed_range`](@ref). With one, they are the
-values that [`distribution_support`](@ref) knows for the distribution of one transformed
-sum, made with a draw of its other parameters from their priors. Used by the
-`parameter_value_ranges` of [`HierarchicalRegressionParameters`](@ref).
-"""
-function range_of_regression_values(
-    regression_parameter::RegressionParameter{<:NamedTuple,<:Any,Nothing}, sums::NamedTuple
-)
-    transformation = regression_parameter.transformation
-    range = transformed_range(transformation, sums.lower, sums.upper)
-    range === nothing && return nothing
-    source = "the transformation $transformation of its regression"
-    return merge(range, (; discrete=false, source))
-end
-function range_of_regression_values(
-    regression_parameter::RegressionParameter, sums::NamedTuple
-)
-
-    #The distribution of a sum between the lowest and the highest, with its other parameters drawn from their priors. A distribution that can't be made this way is left to the check when a session runs
-    distribution = try
-        value = regression_parameter.transformation(clamp(0.0, sums.lower, sums.upper))
-        other_parameters = map(
-            prior -> rand(Xoshiro(0), prior),
-            values(regression_parameter.family_distribution_priors),
-        )
-        regression_parameter.family_distribution(value, other_parameters...)
-    catch
-        return nothing
-    end
-    support = distribution_support(distribution)
-    support === nothing && return nothing
-    return merge(support, (; source="its family distribution, such as $distribution"))
 end

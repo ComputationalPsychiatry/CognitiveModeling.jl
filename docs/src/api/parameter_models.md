@@ -46,15 +46,4 @@ exported.
 CognitiveModeling.parameter_names
 CognitiveModeling.estimates_parameters
 CognitiveModeling.prepare_parameters_model
-CognitiveModeling.parameter_value_ranges
-```
-
-## Functions that an inference backend can implement
-
-An inference backend can add methods of this for the distributions it takes, so that the
-priors of a full model are checked against the domains of the parameters before a fit. It
-is public, but not exported.
-
-```@docs
-CognitiveModeling.distribution_support
 ```

@@ -681,8 +681,7 @@ end
 
 Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when its
 type is a type of whole numbers, or isn't a type of real numbers. Used by
-[`discrete_parameter_names`](@ref), by the display of a model and by
-[`check_range_in_domain`](@ref).
+[`discrete_parameter_names`](@ref) and by the display of a model.
 """
 is_discrete(::ParameterDomain{Ttype}) where {Ttype} = !(Ttype <: Real) || Ttype <: Integer
 

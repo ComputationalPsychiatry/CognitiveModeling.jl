@@ -68,7 +68,6 @@ using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
-include("distribution_support.jl")
 include("turing_behavioral_session.jl")
 
 #The Turing.jl models of the parameter models, which give or sample the parameters of every session, each

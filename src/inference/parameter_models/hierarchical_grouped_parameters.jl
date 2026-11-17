@@ -194,20 +194,6 @@ function parameter_names(parameters_model::HierarchicalGroupedParameters)
     return keys(parameters_model.parameters)
 end
 
-#With the default normal distribution, it can give a parameter what its transformation makes of the real line. The values of another distribution depend on its parameters, so they aren't known
-function parameter_value_ranges(parameters_model::HierarchicalGroupedParameters)
-    ranges = Pair{Symbol,NamedTuple}[]
-    for (name, hierarchical_parameter) in pairs(parameters_model.parameters)
-        hierarchical_parameter.distribution === nothing || continue
-        transformation = hierarchical_parameter.transformation
-        range = transformed_range(transformation, -Inf, Inf)
-        range === nothing && continue
-        source = "the transformation $transformation of its group-level normal distribution"
-        push!(ranges, name => merge(range, (; discrete=false, source)))
-    end
-    return (; ranges...)
-end
-
 #The group of every session is found once for each parameter, when a full model is prepared, and kept in the field for the groups, with the priors of the group-level parameters under the symbol name of each group
 function prepare_parameters_model(
     parameters_model::HierarchicalGroupedParameters, sessions_info::MultipleSessionsInfo

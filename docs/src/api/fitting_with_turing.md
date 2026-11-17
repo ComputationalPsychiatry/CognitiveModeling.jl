@@ -64,10 +64,3 @@ In a Turing.jl model of several sessions, session `i` of
 CognitiveModeling.turing_parameters_model
 CognitiveModeling.turing_downstream_model
 ```
-
-## The values that a distribution can give
-
-With Turing.jl loaded, [`CognitiveModeling.distribution_support`](@ref) knows the values
-that a univariate distribution of Distributions.jl can give. A full model then checks the
-priors of its parameter models, and the family distributions of its regressions, against the
-domains of the parameters when it is made.

@@ -710,58 +710,45 @@ end
         ]
         @test all(value -> value isa Bool, parameters_chain[@varname(S2.uses_rewards)])
 
-        #A discrete parameter needs a family distribution, whose values must be within its domain
-        full_model_with(uses_rewards) = turing_full_model(
-            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
+        #A discrete parameter needs a family distribution: without one, the value of a session isn't one that its domain takes, which stops the evaluation
+        without_family = turing_full_model(
+            HierarchicalRegressionParameters((;
+                learning_rate,
+                uses_rewards=RegressionParameter(
+                    Intercept(Normal(0, 1)); transformation=to_unit_interval
+                ),
+            )),
             discrete_sessions,
         )
-        @test_throws "The parameter uses_rewards is discrete in a cognitive model of type LearnsOrNot, with values of type Bool, but it is given continuous values by the transformation to_unit_interval of its regression." full_model_with(
-            RegressionParameter(Intercept(Normal(0, 1)); transformation=to_unit_interval)
-        )
-        @test_throws "The parameter uses_rewards can be given values from 0 to Inf, by its family distribution, such as $(Poisson(1.0)), but its domain in a cognitive model of type LearnsOrNot is from 0 to 1." full_model_with(
-            RegressionParameter(
-                Intercept(Normal(0, 1)); transformation=exp, family_distribution=Poisson
+        @test_throws "of type Float64, but its domain takes true and false, or 0 and 1." logjoint(
+            without_family,
+            Dict(
+                @varname(learning_rate.coef) => (; intercept=0.2),
+                @varname(uses_rewards.coef) => (; intercept=0.5),
             ),
         )
     end
 
-    @testset "A regression whose transformation reaches outside a domain is an error when the model is made" begin
+    @testset "A value that a regression gives outside a domain stops the evaluation" begin
         bounded_sessions = sessions_for_test(
             BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
         )
-        within_domain = RegressionParameter(
-            Intercept(Normal(0, 1)),
-            VaryingEffects(:id, Intercept(Exponential(1)));
-            transformation=exp,
-        )
-        full_model_with(learning_rate) = turing_full_model(
+        model = turing_full_model(
             HierarchicalRegressionParameters((;
-                learning_rate, inverse_temperature=within_domain
+                learning_rate=RegressionParameter(Intercept(Normal(0, 1))),
+                inverse_temperature=RegressionParameter(
+                    Intercept(Normal(0, 1)); transformation=exp
+                ),
             )),
             bounded_sessions,
         )
-        @test_throws "The parameter learning_rate can be given values from -Inf to Inf, by the transformation identity of its regression, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1." full_model_with(
-            RegressionParameter(
-                Intercept(Normal(0, 1)), VaryingEffects(:id, Intercept(Exponential(1)))
-            ),
+        given_intercept(intercept) = Dict(
+            @varname(learning_rate.coef) => (; intercept),
+            @varname(inverse_temperature.coef) => (; intercept=0.0),
         )
-        @test full_model_with(
-            RegressionParameter(
-                Intercept(Normal(0, 1)),
-                VaryingEffects(:id, Intercept(Exponential(1)));
-                transformation=to_unit_interval,
-            ),
-        ) isa Turing.DynamicPPL.Model
-        #Without varying effects, the sums are judged by the values that the priors of the coefficients can give: the ages are from 20 to 40
-        @test full_model_with(RegressionParameter(Intercept(Beta(2, 2)))) isa
-            Turing.DynamicPPL.Model
-        @test_throws "The parameter learning_rate can be given values from 0.0 to 1.4, by the transformation identity of its regression" full_model_with(
-            RegressionParameter(
-                Intercept(Beta(2, 2)), ContinuousPredictor(:age, Uniform(0, 0.01))
-            ),
-        )
-        @test_throws "The parameter learning_rate can be given values from -Inf to Inf" full_model_with(
-            RegressionParameter(Intercept(Normal(0, 1)))
-        )
+        @test isfinite(logjoint(model, given_intercept(0.3)))
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+        ) logjoint(model, given_intercept(1.5))
     end
 end
