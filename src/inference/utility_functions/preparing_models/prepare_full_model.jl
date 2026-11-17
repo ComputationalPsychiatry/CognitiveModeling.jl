@@ -28,7 +28,8 @@ neither given nor has a default value, unless it is a parameter of an environmen
 session runs. It prepares each parameter model for the sessions with
 [`CognitiveModeling.prepare_parameters_model`](@ref). When `environment_parameters_model`
 estimates parameters, every session with an environment includes it in the returned
-`sessions_info`.
+`sessions_info`. It warns when the sessions save anything and there is no downstream model
+to use what they save.
 """
 function prepare_full_model(
     cognitive_parameters_model,
@@ -76,6 +77,9 @@ function prepare_full_model(
         any(session -> session.includes_environment, sessions_info.sessions),
     )
 
+    #Saving adds a cost to every evaluation of a model, which nothing in it uses without a downstream model
+    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
+
     #Prepare each parameter model for the sessions
     return (;
         cognitive_parameters_model=prepare_parameters_model(
@@ -87,6 +91,22 @@ function prepare_full_model(
         downstream_model,
         sessions_info,
     )
+end
+
+#The trajectories are read after a fit with get_session_trajectories instead, from sessions that save nothing
+"""
+    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
+
+Warn when a session in `sessions_info` saves anything and `downstream_model` is
+[`NoDownstreamModel`](@ref). Used by [`prepare_full_model`](@ref).
+"""
+function warn_if_saving_without_downstream_model(
+    sessions_info::MultipleSessionsInfo, downstream_model
+)
+    downstream_model isa NoDownstreamModel || return nothing
+    sessions_save_anything(sessions_info) || return nothing
+    @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
+    return nothing
 end
 
 """

@@ -8,7 +8,8 @@ using CognitiveModeling:
     attribute_names,
     NoEnvironment,
     get_session_trajectories,
-    get_session_parameters
+    get_session_parameters,
+    with_save_history
 using CognitiveModeling:
     turing_run_timestep,
     turing_initialize_state,
@@ -31,7 +32,6 @@ using CognitiveModeling:
     remake_session_without_environment,
     include_environments_if_estimated,
     estimates_parameters,
-    sessions_save_anything,
     collect_parameters_in_session_order,
     prepare_full_model,
     as_parameters_model,

@@ -93,8 +93,26 @@ end
             environment=GivesRewardByDefault(),
             environment_save_history=SaveHistory(; outputs=:reward),
         )
-        @test CognitiveModeling.prepare_full_model(sampled, with_default).environment_parameters_model ===
-            NoParameters()
+        #These sessions save, so preparing them warns that nothing uses what they save
+        prepared = @test_logs (:warn, r"^The sessions save trajectories") CognitiveModeling.prepare_full_model(
+            sampled, with_default
+        )
+        @test prepared.environment_parameters_model === NoParameters()
+    end
+
+    @testset "Sessions that save anything without a downstream model to use it give a warning" begin
+        saving = sessions_to_prepare(;
+            environment=GivesRewardByDefault(),
+            environment_save_history=SaveHistory(; outputs=:reward),
+        )
+        @test_logs (
+            :warn,
+            "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards.",
+        ) CognitiveModeling.prepare_full_model(sampled, saving)
+        #Sessions that save nothing give none
+        @test_logs CognitiveModeling.prepare_full_model(
+            sampled, sessions_to_prepare(; environment=GivesReward())
+        )
     end
 
     @testset "A tuple or a NamedTuple of parameter models is made into a composite of them" begin

@@ -17,6 +17,14 @@ Public = false
 Pages = ["inference/types.jl"]
 ```
 
+## Workflow and postprocessing
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/workflow_and_postprocessing/get_session_trajectories.jl"]
+```
+
 ## Reading tables with Tables.jl
 
 ```@autodocs

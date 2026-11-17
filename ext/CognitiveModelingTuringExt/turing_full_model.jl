@@ -1,6 +1,6 @@
 ### THE FULL MODEL, MADE FROM ITS PARTS ###
 
-#Creates the Turing model for fitting a cognitive model to several sessions, after warning when both parameter models can sample variables of the same name, and when the sessions save trajectories no downstream model uses, and after preparing its parts once
+#Creates the Turing model for fitting a cognitive model to several sessions, after warning when both parameter models can sample variables of the same name, and after preparing its parts once, which warns when the sessions save trajectories that no downstream model uses
 #The warnings and the preparation are done here, when the model is made, and not in the model, whose body is differentiated and runs on every evaluation: a warning holds a try block, which Mooncake can't differentiate
 function CognitiveModeling.turing_full_model(
     cognitive_parameters_model,
@@ -23,7 +23,6 @@ function CognitiveModeling.turing_full_model(
         sessions_info,
         include_submodel_prefixes,
     )
-    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
 
     #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled
     prepared = prepare_full_model(
@@ -74,22 +73,5 @@ function warn_if_parameter_names_overlap(
     if !isempty(shared_names)
         @warn "The cognitive model and the environment model both have the parameters $shared_names, and both parameter models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart."
     end
-    return nothing
-end
-
-"""
-    warn_if_saving_without_downstream_model(sessions_info, downstream_model)
-
-Warn when a session in `sessions_info` saves anything and `downstream_model` is
-`NoDownstreamModel`, since saving adds a cost to each gradient and nothing in the model
-uses the saved trajectories: they are read after the fit with `get_session_trajectories`,
-from sessions that save nothing. Used by `turing_full_model` when it creates the model.
-"""
-function warn_if_saving_without_downstream_model(
-    sessions_info::MultipleSessionsInfo, downstream_model
-)
-    downstream_model isa NoDownstreamModel || return nothing
-    sessions_save_anything(sessions_info) || return nothing
-    @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
     return nothing
 end

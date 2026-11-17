@@ -88,24 +88,6 @@ end
 ### HELPERS FOR READING AND SIMULATING FITTED SESSIONS ###
 
 """
-    with_save_history(info, cognitive_save_history, environment_save_history)
-
-Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions save
-what the two save histories select. Used by `get_session_trajectories` and
-`predict_session_trajectories`.
-"""
-function with_save_history(
-    info::SessionInfo, cognitive_save_history, environment_save_history
-)
-    return SessionInfo(info; cognitive_save_history, environment_save_history)
-end
-function with_save_history(
-    info::MultipleSessionsInfo, cognitive_save_history, environment_save_history
-)
-    return MultipleSessionsInfo(info; cognitive_save_history, environment_save_history)
-end
-
-"""
     with_session_info(model, change, function_name)
 
 Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
