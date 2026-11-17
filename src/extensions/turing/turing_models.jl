@@ -162,8 +162,8 @@ returned_values = returned(fit_one_session(session_info), chain)
 returned_values[1].saved_trajectories.states
 
 #The same as chains, which merge into one
-parameters = session_parameters_chain(returned_values)
-trajectories = session_trajectories_chain(returned_values)
+parameters = get_session_parameters(returned_values)
+trajectories = get_session_trajectories(returned_values)
 merge(parameters, trajectories)
 ```
 """
@@ -196,9 +196,9 @@ block for a Turing.jl model which samples the parameters of the sessions in some
 own, as a submodel without a prefix:
 `to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
 [`turing_full_model`](@ref) does this with parameter models. A model of one's own can return
-the same `NamedTuple`, and [`session_trajectories_chain`](@ref) and
-[`session_parameters_chain`](@ref) then read what it returns too, also when it transforms
-its variables into the parameters.
+the same `NamedTuple`, and [`get_session_trajectories`](@ref) and
+[`get_session_parameters`](@ref) then read what it returns too, also when it transforms its
+variables into the parameters.
 """
 function turing_multiple_behavioral_sessions end
 
@@ -276,7 +276,7 @@ state is read from the chain without simulating again.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read
-from the chain afterwards with [`session_trajectories_chain`](@ref), or with `returned` on
+from the chain afterwards with [`get_session_trajectories`](@ref), or with `returned` on
 the model of a copy of the sessions that saves them,
 `MultipleSessionsInfo(sessions_info; cognitive_save_history = SaveHistory(; states = :expected_reward))`,
 since the two models have the same variables. A warning says so when the sessions save

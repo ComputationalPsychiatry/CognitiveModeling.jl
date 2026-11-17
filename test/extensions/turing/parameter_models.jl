@@ -722,7 +722,7 @@ end
             returned(model, chain),
         )
         #The values of the sessions after the fit, under each session's symbol name
-        parameters_chain = session_parameters_chain(model, chain)
+        parameters_chain = get_session_parameters(model, chain)
         @test Turing.FlexiChains.get_name.(keys(parameters_chain)) == [
             @varname(S1.learning_rate),
             @varname(S1.uses_rewards),

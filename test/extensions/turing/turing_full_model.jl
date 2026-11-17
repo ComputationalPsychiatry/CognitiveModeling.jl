@@ -92,7 +92,7 @@ end
 #A full model of sessions which save trajectories, without a downstream model, which warns when it is made
 const SAVING_WARNING = (
     :warn,
-    "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_trajectories_chain(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards.",
+    "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards.",
 )
 function saving_full_model(arguments...; keywords...)
     return @test_logs SAVING_WARNING turing_full_model(arguments...; keywords...)
@@ -1167,7 +1167,7 @@ end
         info -> MultipleSessionsInfo(
             info; cognitive_save_history=SaveHistory(; states=:expected_reward)
         ),
-        "session_trajectories_chain",
+        "get_session_trajectories",
     )
     @test all(session -> session.includes_environment, saving.args.sessions_info.sessions)
 end

@@ -173,7 +173,7 @@ end
     end
 
     @testset "The returned values of a full model give what each session saved, named after the session and the attribute, in the order of the sessions" begin
-        chain = session_trajectories_chain(FULL_MODEL_RESULTS, chain_sessions())
+        chain = get_session_trajectories(FULL_MODEL_RESULTS, chain_sessions())
         @test chain isa FlexiChains.FlexiChain
         @test entry_names(chain) == [
             "P1.outcome",
@@ -195,7 +195,7 @@ end
     end
 
     @testset "The parameters of the sessions are a chain of their own, with the environment's under environment" begin
-        chain = session_parameters_chain(FULL_MODEL_RESULTS, chain_sessions())
+        chain = get_session_parameters(FULL_MODEL_RESULTS, chain_sessions())
         @test entry_names(chain) == ["P1.learning_rate", "P2.learning_rate"]
         @test size(entry(chain, "P1.learning_rate")) == (2, 1)
         @test vec(entry(chain, "P1.learning_rate")) == [0.5, 0.4] &&
@@ -212,7 +212,7 @@ end
                 environment_parameters=(; mean_reward=[0.7, 0.7]),
             ),
         )
-        chain = session_parameters_chain(with_environment, chain_sessions())
+        chain = get_session_parameters(with_environment, chain_sessions())
         @test entry_names(chain) == [
             "P1.learning_rate",
             "P1.environment.mean_reward",
@@ -221,9 +221,7 @@ end
         ]
         @test vec(entry(chain, "P2.environment.mean_reward")) == [0.6, 0.7]
         #It merges with the chain of the saved trajectories
-        merged = merge(
-            session_trajectories_chain(with_environment, chain_sessions()), chain
-        )
+        merged = merge(get_session_trajectories(with_environment, chain_sessions()), chain)
         @test entry_names(merged) == [
             "P1.expected_value",
             "P2.expected_value",
@@ -245,10 +243,10 @@ end
                 environment_parameters=(; mean_reward=[0.7, 0.7]),
             ),
         )
-        @test entry_names(session_parameters_chain(several, chain_sessions())) ==
+        @test entry_names(get_session_parameters(several, chain_sessions())) ==
             entry_names(chain)
         @test vec(
-            entry(session_parameters_chain(several, chain_sessions()), "P2.learning_rate")
+            entry(get_session_parameters(several, chain_sessions()), "P2.learning_rate")
         ) == [0.2, 0.1]
         single = two_samples(
             single_session_result(
@@ -262,16 +260,16 @@ end
                 environment_parameters=(; mean_reward=0.7),
             ),
         )
-        single_chain = session_parameters_chain(single)
+        single_chain = get_session_parameters(single)
         @test entry_names(single_chain) == ["learning_rate", "environment.mean_reward"]
         @test vec(entry(single_chain, "learning_rate")) == [0.5, 0.4]
-        @test entry_names(merge(session_trajectories_chain(single), single_chain)) ==
+        @test entry_names(merge(get_session_trajectories(single), single_chain)) ==
             ["expected_value", "learning_rate", "environment.mean_reward"]
         #Results of another kind are errors
-        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample" session_parameters_chain(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample" get_session_parameters(
             single, chain_sessions()
         )
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns for each sample" session_parameters_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns for each sample" get_session_parameters(
             several
         )
     end
@@ -287,7 +285,7 @@ end
                 [saves_expected_values([0.0, 0.0, 0.4]), saves_expected_values([0.0, 0.0])],
             ),
         )
-        @test entry_names(session_trajectories_chain(returned_values, chain_sessions())) ==
+        @test entry_names(get_session_trajectories(returned_values, chain_sessions())) ==
             ["P1.expected_value", "P2.expected_value"]
     end
 
@@ -300,7 +298,7 @@ end
             ),
             saved_by_session(1; environment=environment_record([0.0, 0.1], [1.0])),
         ]
-        chain = session_trajectories_chain(
+        chain = get_session_trajectories(
             reshape(
                 [multiple_sessions_result((; learning_rate=[0.5, 0.2]), sessions)], 1, 1
             ),
@@ -329,7 +327,7 @@ end
             ),
         )
         @test entry_names(
-            session_trajectories_chain(
+            get_session_trajectories(
                 reshape(
                     [single_session_result((; learning_rate=0.5), empty_environment)], 1, 1
                 ),
@@ -342,7 +340,7 @@ end
             saves_everything([1.0, 0.0], [0.0, 0.3], [0.0, 0.0, 0.5]),
             saves_expected_values([0.0, 0.0]),
         ]
-        chain = session_trajectories_chain(
+        chain = get_session_trajectories(
             reshape(
                 [multiple_sessions_result((; learning_rate=[0.5, 0.2]), sessions)], 1, 1
             ),
@@ -355,7 +353,7 @@ end
             "P1.expected_value",
             "P2.expected_value",
         ]
-        chain = session_trajectories_chain(
+        chain = get_session_trajectories(
             reshape([single_session_result((; learning_rate=0.5), first(sessions))], 1, 1)
         )
         @test entry_names(chain) ==
@@ -369,7 +367,7 @@ end
             saves_expected_values([0.0, 0.0]),
             saves_expected_values([0.0, 0.2]),
         ]
-        chain = session_trajectories_chain(
+        chain = get_session_trajectories(
             reshape(
                 [multiple_sessions_result((; learning_rate=[0.5, 0.2, 0.1]), sessions)],
                 1,
@@ -394,7 +392,7 @@ end
             3,
             2,
         )
-        chain = session_trajectories_chain(
+        chain = get_session_trajectories(
             returned_values, chain_sessions(); iter_indices=11:13, chain_indices=[4, 7]
         )
         @test FlexiChains.iter_indices(chain) == 11:13 &&
@@ -408,23 +406,23 @@ end
         one_of_several = multiple_sessions_result(
             (; learning_rate=[0.5]), [saves_expected_values([0.0, 0.0, 0.5])]
         )
-        @test_throws "There are no returned values to make a chain of." session_trajectories_chain(
+        @test_throws "There are no returned values to make a chain of." get_session_trajectories(
             Matrix{Any}(undef, 0, 1)
         )
-        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns" session_trajectories_chain(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns" get_session_trajectories(
             reshape([one_session], 1, 1), chain_sessions()
         )
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" session_trajectories_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" get_session_trajectories(
             reshape([one_of_several], 1, 1)
         )
         #What a session saved alone isn't what a model returns
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" session_trajectories_chain(
+        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" get_session_trajectories(
             reshape([saves_expected_values([0.0, 0.0, 0.5])], 1, 1)
         )
-        @test_throws "A sample has nothing as its returned value" session_trajectories_chain(
+        @test_throws "A sample has nothing as its returned value" get_session_trajectories(
             reshape([nothing, one_session], 2, 1)
         )
-        @test_throws "The returned values have 1 sessions, but the session info has 2." session_trajectories_chain(
+        @test_throws "The returned values have 1 sessions, but the session info has 2." get_session_trajectories(
             reshape([one_of_several], 1, 1), chain_sessions()
         )
         #A model can't name a state like an observation, but returned values made by hand can, which the chain refuses
@@ -436,7 +434,7 @@ end
             ),
             saves_expected_values([0.0, 0.0]),
         ]
-        @test_throws "Two values would have the same name in the chain, P1.outcome" session_trajectories_chain(
+        @test_throws "Two values would have the same name in the chain, P1.outcome" get_session_trajectories(
             reshape(
                 [multiple_sessions_result((; learning_rate=[0.5, 0.2]), clashing)], 1, 1
             ),

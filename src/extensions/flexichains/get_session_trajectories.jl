@@ -1,13 +1,13 @@
 ## The trajectories of fitted sessions, as a chain, made in the FlexiChains extension ##
 
 """
-    session_trajectories_chain(returned_values, sessions_info::MultipleSessionsInfo;
-                               iter_indices=1:size(returned_values, 1),
-                               chain_indices=1:size(returned_values, 2))
-    session_trajectories_chain(returned_values; iter_indices=1:size(returned_values, 1),
-                               chain_indices=1:size(returned_values, 2))
-    session_trajectories_chain(model, chain; cognitive_save_history=SaveHistory(),
-                               environment_save_history=SaveHistory())
+    get_session_trajectories(returned_values, sessions_info::MultipleSessionsInfo;
+                             iter_indices=1:size(returned_values, 1),
+                             chain_indices=1:size(returned_values, 2))
+    get_session_trajectories(returned_values; iter_indices=1:size(returned_values, 1),
+                             chain_indices=1:size(returned_values, 2))
+    get_session_trajectories(model, chain; cognitive_save_history=SaveHistory(),
+                             environment_save_history=SaveHistory())
 
 Return the trajectories that fitted sessions saved, for every sample, as a `FlexiChain` from
 FlexiChains.jl with the same samples as the fit, so that they can be summarized and plotted
@@ -23,7 +23,7 @@ across, as `returned(model, chain)` gives it in Turing.jl. Its elements are what
 three models returns:
 - [`turing_full_model`](@ref), given with its `MultipleSessionsInfo`. The entries of each
   session are named after its symbol name, such as `P1.expected_value`. The parameters of
-  the sessions are a chain of their own, see [`session_parameters_chain`](@ref), and what a
+  the sessions are a chain of their own, see [`get_session_parameters`](@ref), and what a
   downstream model returned isn't included.
 - [`turing_multiple_behavioral_sessions`](@ref), given with its `MultipleSessionsInfo`,
   named in the same way.
@@ -61,24 +61,24 @@ run its environment, see [`SessionInfo`](@ref).
 # Examples
 ```julia
 chain = sample(model, NUTS(), 1000)
-session_trajectories = session_trajectories_chain(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
+session_trajectories = get_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
 
 #The expected values of participant P2 over the timesteps, for every sample
 session_trajectories[@varname(P2.expected_value)]
 
 #The parameters of the sessions, in the same chain
-everything = merge(session_trajectories, session_parameters_chain(model, chain))
+everything = merge(session_trajectories, get_session_parameters(model, chain))
 ```
 """
-function session_trajectories_chain end
+function get_session_trajectories end
 
 """
-    session_parameters_chain(returned_values, sessions_info::MultipleSessionsInfo;
-                             iter_indices=1:size(returned_values, 1),
-                             chain_indices=1:size(returned_values, 2))
-    session_parameters_chain(returned_values; iter_indices=1:size(returned_values, 1),
-                             chain_indices=1:size(returned_values, 2))
-    session_parameters_chain(model, chain)
+    get_session_parameters(returned_values, sessions_info::MultipleSessionsInfo;
+                           iter_indices=1:size(returned_values, 1),
+                           chain_indices=1:size(returned_values, 2))
+    get_session_parameters(returned_values; iter_indices=1:size(returned_values, 1),
+                           chain_indices=1:size(returned_values, 2))
+    get_session_parameters(model, chain)
 
 Return the parameters of every fitted session, for every sample, as a `FlexiChain` with the
 same samples as the fit, named after the session: `P1.learning_rate` for a parameter of the
@@ -87,7 +87,7 @@ needs FlexiChains.jl to be loaded, which Turing.jl loads.
 
 `returned_values` is a matrix with one element for each sample, as `returned(model, chain)`
 gives it, which is what one of three models returns, as for
-[`session_trajectories_chain`](@ref): [`turing_full_model`](@ref) or
+[`get_session_trajectories`](@ref): [`turing_full_model`](@ref) or
 [`turing_multiple_behavioral_sessions`](@ref), given with their `MultipleSessionsInfo`, or
 [`turing_behavioral_session`](@ref), given without a session info, whose parameters are
 named without a session, as `learning_rate` and `environment.mean_reward`. The parameters
@@ -101,18 +101,18 @@ the parameters it passed to the sessions, such as transformations of its variabl
 returns what they return. The third form, in the Turing extension, takes a model made by one
 of the three functions, or such a model inside [`turing_catch_invalid_parameters`](@ref),
 and a chain sampled from it, and numbers the samples as the chain does. It merges with the
-chain of [`session_trajectories_chain`](@ref), which has the same samples, with `merge`.
+chain of [`get_session_trajectories`](@ref), which has the same samples, with `merge`.
 
 # Examples
 ```julia
 chain = sample(model, NUTS(), 1000)
-parameters = session_parameters_chain(model, chain)
+parameters = get_session_parameters(model, chain)
 
 #The learning rate of participant P1, for every sample
 parameters[@varname(P1.learning_rate)]
 
 #The same from a model of one's own around the sessions, which returns what they return
-parameters = session_parameters_chain(returned(own_model, chain), sessions_info)
+parameters = get_session_parameters(returned(own_model, chain), sessions_info)
 ```
 """
-function session_parameters_chain end
+function get_session_parameters end

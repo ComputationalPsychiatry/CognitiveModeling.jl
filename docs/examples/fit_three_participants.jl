@@ -121,13 +121,13 @@ chain = sample(model, NUTS(), 1000)
 
 ## The results ##
 
-#The model was fitted without saving the expected values, which is fastest. session_trajectories_chain reruns it on every sample
+#The model was fitted without saving the expected values, which is fastest. get_session_trajectories reruns it on every sample
 #with sessions that save them, and gives a chain with the expected values of each participant, named after them, as
-#P1.expected_value. session_parameters_chain gives the parameters of each participant the same way, as P1.learning_rate
-session_trajectories = session_trajectories_chain(
+#P1.expected_value. get_session_parameters gives the parameters of each participant the same way, as P1.learning_rate
+session_trajectories = get_session_trajectories(
     model, chain; cognitive_save_history=SaveHistory(; states=:expected_value)
 )
-session_parameters = session_parameters_chain(model, chain)
+session_parameters = get_session_parameters(model, chain)
 
 #The participants, as the first part of those names
 participants = Symbol.(sessions_info.session_ids)

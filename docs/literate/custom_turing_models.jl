@@ -8,7 +8,7 @@
 # submodel: [`turing_multiple_behavioral_sessions`](@ref) runs several sessions, and
 # [`turing_behavioral_session`](@ref) runs one. Both return the parameters they were given,
 # with the trajectories the sessions saved. So when a model of one's own returns what they
-# return, [`session_parameters_chain`](@ref) and [`session_trajectories_chain`](@ref) read
+# return, [`get_session_parameters`](@ref) and [`get_session_trajectories`](@ref) read
 # its fit as they read that of a full model, also when the parameters are transformations of
 # the model's variables, which the chain itself doesn't have.
 #
@@ -150,10 +150,10 @@ chain = sample(Xoshiro(1), model, NUTS(), 500; progress=false)
 # The chain has the variables of the model: the population's mean and standard deviation,
 # the standardized deviations and the inverse temperature, but not the learning rates, which
 # the model computes from them. `returned` gives what the model returned for each sample,
-# and [`session_parameters_chain`](@ref) makes a chain of it with the parameters of each
+# and [`get_session_parameters`](@ref) makes a chain of it with the parameters of each
 # session, named after the session, such as `P3.learning_rate`:
 
-parameters = session_parameters_chain(returned(model, chain), sessions_info)
+parameters = get_session_parameters(returned(model, chain), sessions_info)
 
 # The mean learning rate of each participant, next to the one they were simulated with:
 
@@ -169,12 +169,12 @@ parameters = session_parameters_chain(returned(model, chain), sessions_info)
 # The trajectories are read the same way. A fit is fastest when the sessions save nothing,
 # and the same model with a copy of the sessions that save the expected rewards has the same
 # variables, so `returned` runs it on the samples of the chain, and
-# [`session_trajectories_chain`](@ref) makes a chain of what the sessions saved:
+# [`get_session_trajectories`](@ref) makes a chain of what the sessions saved:
 
 saving_sessions = MultipleSessionsInfo(
     sessions_info; cognitive_save_history=SaveHistory(; states=:expected_reward)
 )
-trajectories = session_trajectories_chain(
+trajectories = get_session_trajectories(
     returned(hierarchical_learning_rates(saving_sessions), chain), sessions_info
 )
 
@@ -223,13 +223,13 @@ single_chain = sample(Xoshiro(2), single_model, NUTS(), 500; progress=false)
 # session, such as `learning_rate` and `expected_reward`:
 
 single_results = returned(single_model, single_chain)
-merge(session_parameters_chain(single_results), session_trajectories_chain(single_results))
+merge(get_session_parameters(single_results), get_session_trajectories(single_results))
 
 # ## What a model of one's own needs
 #
 # - It returns what [`turing_multiple_behavioral_sessions`](@ref) or
 #   [`turing_behavioral_session`](@ref) returns, as it is, for `returned` to give it to
-#   [`session_parameters_chain`](@ref) and [`session_trajectories_chain`](@ref).
+#   [`get_session_parameters`](@ref) and [`get_session_trajectories`](@ref).
 # - The parameters of several sessions are a `NamedTuple` with one vector for each
 #   parameter, with a value for every session in the order of `sessions_info.session_ids`.
 #   [`CognitiveModeling.session_index`](@ref) gives the place of a session's data identifier.

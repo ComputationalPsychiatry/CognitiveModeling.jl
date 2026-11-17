@@ -20,7 +20,7 @@ Pages = ["extensions/turing/turing_models.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
-Pages = ["extensions/flexichains/session_trajectories_chain.jl"]
+Pages = ["extensions/flexichains/get_session_trajectories.jl"]
 ```
 
 ### Predictive checks
@@ -29,7 +29,7 @@ With Turing.jl loaded, [`predict_session_trajectories`](@ref) takes a model made
 [`turing_full_model`](@ref), [`turing_multiple_behavioral_sessions`](@ref) or
 [`turing_behavioral_session`](@ref), or such a model inside
 [`turing_catch_invalid_parameters`](@ref), and a chain sampled from it. It returns the
-simulated trajectories as a `FlexiChain`, as [`session_trajectories_chain`](@ref) makes it.
+simulated trajectories as a `FlexiChain`, as [`get_session_trajectories`](@ref) makes it.
 For a prior predictive check, give a chain sampled from the prior, such as
 `sample(model, Prior(), 1000)`.
 

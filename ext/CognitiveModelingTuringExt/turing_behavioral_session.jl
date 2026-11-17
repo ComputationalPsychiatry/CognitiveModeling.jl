@@ -85,7 +85,7 @@ end
 
 Warn when a session in `sessions_info` saves anything and `downstream_model` is
 `NoDownstreamModel`, since saving adds a cost to each gradient and nothing in the model
-uses the saved trajectories: they are read after the fit with `session_trajectories_chain`,
+uses the saved trajectories: they are read after the fit with `get_session_trajectories`,
 from sessions that save nothing. Used by `turing_full_model` when it creates the model.
 """
 function warn_if_saving_without_downstream_model(
@@ -93,7 +93,7 @@ function warn_if_saving_without_downstream_model(
 )
     downstream_model isa NoDownstreamModel || return nothing
     sessions_save_anything(sessions_info) || return nothing
-    @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and session_trajectories_chain(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
+    @warn "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards."
     return nothing
 end
 

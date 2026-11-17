@@ -7,8 +7,8 @@ using CognitiveModeling:
     initialize_state,
     attribute_names,
     NoEnvironment,
-    session_trajectories_chain,
-    session_parameters_chain
+    get_session_trajectories,
+    get_session_parameters
 using CognitiveModeling:
     turing_run_timestep,
     turing_initialize_state,
@@ -83,6 +83,6 @@ include("parameter_models/hierarchical_grouped_parameters.jl")
 include("parameter_models/hierarchical_regression_parameters.jl")
 include("parameter_models/composite_parameters.jl")
 
-include("session_trajectories_chain.jl")
+include("get_session_trajectories.jl")
 
 end

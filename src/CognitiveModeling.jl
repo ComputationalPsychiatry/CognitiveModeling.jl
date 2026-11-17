@@ -53,7 +53,7 @@ include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
 #the package, with their docstrings, and the helpers that call an extension
 include("extensions/common_rl_interface/common_rl_environment.jl")
-include("extensions/flexichains/session_trajectories_chain.jl")
+include("extensions/flexichains/get_session_trajectories.jl")
 include("extensions/tables/column_table.jl")
 include("extensions/turing/functions_to_extend.jl")
 include("extensions/turing/turing_models.jl")
@@ -93,7 +93,7 @@ export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions
 export turing_behavioral_session,
     turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
-export session_trajectories_chain, session_parameters_chain, predict_session_trajectories
+export get_session_trajectories, get_session_parameters, predict_session_trajectories
 
 #What users call with the package's name, as in CognitiveModeling.run_timestep
 public run_timestep, initialize_state, attribute_names

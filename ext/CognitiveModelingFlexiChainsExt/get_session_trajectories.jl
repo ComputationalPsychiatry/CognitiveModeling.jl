@@ -1,7 +1,7 @@
 ### THE TRAJECTORIES OF FITTED SESSIONS, AS A CHAIN ###
 
 #The returned values of a full model, or of several sessions, with every entry named after the session it belongs to
-function CognitiveModeling.session_trajectories_chain(
+function CognitiveModeling.get_session_trajectories(
     returned_values::AbstractMatrix,
     sessions_info::MultipleSessionsInfo;
     iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
@@ -24,7 +24,7 @@ function CognitiveModeling.session_trajectories_chain(
 end
 
 #The returned values of a single session, with every entry named without the symbol name of a session
-function CognitiveModeling.session_trajectories_chain(
+function CognitiveModeling.get_session_trajectories(
     returned_values::AbstractMatrix;
     iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
     chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
@@ -41,7 +41,7 @@ end
 ### THE PARAMETERS OF FITTED SESSIONS, AS A CHAIN ###
 
 #The parameters of every session from the returned values of a full model or of several sessions, named after the session, with the environment's under environment
-function CognitiveModeling.session_parameters_chain(
+function CognitiveModeling.get_session_parameters(
     returned_values::AbstractMatrix,
     sessions_info::MultipleSessionsInfo;
     iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
@@ -77,7 +77,7 @@ function CognitiveModeling.session_parameters_chain(
 end
 
 #The parameters of a single session, named after the parameter alone, with the environment's under environment
-function CognitiveModeling.session_parameters_chain(
+function CognitiveModeling.get_session_parameters(
     returned_values::AbstractMatrix;
     iter_indices::AbstractVector{<:Integer}=1:size(returned_values, 1),
     chain_indices::AbstractVector{<:Integer}=1:size(returned_values, 2),
@@ -104,7 +104,7 @@ end
 
 Add an entry under `prefix` to `entries` for each parameter of one session, where
 `parameters_of` gives the session's parameters from the returned value of one sample, as a
-`NamedTuple` with the value of each parameter. Used by [`session_parameters_chain`](@ref).
+`NamedTuple` with the value of each parameter. Used by [`get_session_parameters`](@ref).
 """
 function add_parameter_entries!(
     entries, returned_values, prefix::Tuple{Vararg{Symbol}}, parameters_of
@@ -130,7 +130,7 @@ gives the session's saved trajectories from the returned value of one sample, an
 `session_prefix` holds the session's symbol name, or nothing for a single session. The
 cognitive model's values are named under the session alone, and the environment's under
 `environment` after it, as [`add_model_entries!`](@ref) names them. Used by
-[`session_trajectories_chain`](@ref).
+[`get_session_trajectories`](@ref).
 """
 function add_session_entries!(
     entries, returned_values, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of
@@ -243,7 +243,7 @@ end
 
 Return the entries of a chain before any is added: the values of each entry under its key in
 a `Dict`, which has no order, and the names of the entries in the order they are added. Used
-by [`session_trajectories_chain`](@ref).
+by [`get_session_trajectories`](@ref).
 """
 empty_entries() = (; values=Dict{Any,AbstractMatrix}(), names=VarName[])
 
@@ -275,7 +275,7 @@ Return a `FlexiChain` with `entries`, in the order they were added, and with the
 numbered by `iter_indices` and `chain_indices`. A `FlexiChain` keeps the order of the
 dictionary it is made from, and a `Dict` has none, so the chain is indexed with the names in
 their order afterwards, which gives a chain with the entries in that order. Used by
-[`session_trajectories_chain`](@ref).
+[`get_session_trajectories`](@ref).
 """
 function chain_of_entries(
     entries, n_iterations::Integer, n_chains::Integer; iter_indices, chain_indices
@@ -293,7 +293,7 @@ end
 
 Throw an informative error if there are no returned values, or if a sample has `nothing` as
 its returned value, which a model that catches invalid parameters gives for a rejected
-sample. Used by [`session_trajectories_chain`](@ref).
+sample. Used by [`get_session_trajectories`](@ref).
 """
 function check_returned_values(returned_values::AbstractMatrix)
     isempty(returned_values) &&
@@ -317,8 +317,8 @@ isn't what the models of several sessions return, [`turing_full_model`](@ref) an
 [`turing_multiple_behavioral_sessions`](@ref), with what each session saved in a vector
 under `saved_trajectories`, for as many sessions as `sessions_info` has, or what
 [`turing_behavioral_session`](@ref) returns, with what the session saved under
-`saved_trajectories`. Used by [`session_trajectories_chain`](@ref) and
-[`session_parameters_chain`](@ref).
+`saved_trajectories`. Used by [`get_session_trajectories`](@ref) and
+[`get_session_parameters`](@ref).
 """
 function check_returned_values_of_multiple_sessions(
     returned_value, sessions_info::MultipleSessionsInfo
