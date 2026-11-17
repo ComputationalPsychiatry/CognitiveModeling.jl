@@ -105,9 +105,9 @@ end
     describe_domain(domain)
 
 Return `domain`, a [`ParameterDomain`](@ref), as the display of a model writes it after the
-name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or
-`[0, ∞)`, the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, and the
-type of a parameter that isn't a number, such as `AbstractString`. Used by
+name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or `[0, ∞)`,
+the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, and the type of
+a parameter that isn't a number, such as `AbstractString`. Used by
 [`print_parameter_lines`](@ref).
 """
 function describe_domain(domain::ParameterDomain{Ttype}) where {Ttype}

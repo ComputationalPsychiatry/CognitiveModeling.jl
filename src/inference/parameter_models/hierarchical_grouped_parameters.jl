@@ -39,12 +39,12 @@ once for each group of sessions.
   have a value for each group under the group's symbol name, made from its values as
   [`session_id_to_symbol`](@ref) makes that of a session. With `nothing`, every session is
   in one group, and each group-level parameter is one value.
-- `centered=nothing`: for the default normal distribution, whether the value of each
-  session is sampled from the distribution of its group, with `true`, or as a standardized
-  value which the group's mean shifts and its standard deviation scales, with `false`,
-  which is the default, since it usually samples better when the data of a session informs
-  its parameters little. Any other distribution is always sampled from directly, and
-  giving `centered` with one is an error.
+- `centered=nothing`: for the default normal distribution, whether the value of each session
+  is sampled from the distribution of its group, with `true`, or as a standardized value
+  which the group's mean shifts and its standard deviation scales, with `false`, which is
+  the default, since it usually samples better when the data of a session informs its
+  parameters little. Any other distribution is always sampled from directly, and giving
+  `centered` with one is an error.
 
 Each argument is kept in a field of the same name, with `group_by` as a tuple of column
 names, which is empty for one group, `centered` as `true` or `false`, and a `distribution`
@@ -136,10 +136,10 @@ end
 """
     HierarchicalGroupedParameters(parameters)
 
-The parameter model of a full model which samples each parameter of every session
-from a group-level distribution, whose own parameters are sampled from priors, once for each
-group of sessions. `parameters` is a `NamedTuple` with a [`HierarchicalParameter`](@ref) for
-each parameter that is fitted, which has its priors, its group-level distribution, its
+The parameter model of a full model which samples each parameter of every session from a
+group-level distribution, whose own parameters are sampled from priors, once for each group
+of sessions. `parameters` is a `NamedTuple` with a [`HierarchicalParameter`](@ref) for each
+parameter that is fitted, which has its priors, its group-level distribution, its
 transformation and the columns that group the sessions, so the parameters can be grouped by
 different columns. It is kept in the field `parameters`.
 
@@ -237,9 +237,9 @@ end
 """
     check_is_hierarchical_parameter(name, hierarchical_parameter)
 
-Throw an informative error if what a [`HierarchicalGroupedParameters`](@ref) was
-given for the parameter `name` isn't a [`HierarchicalParameter`](@ref). Used by the
-constructor of `HierarchicalGroupedParameters`.
+Throw an informative error if what a [`HierarchicalGroupedParameters`](@ref) was given for
+the parameter `name` isn't a [`HierarchicalParameter`](@ref). Used by the constructor of
+`HierarchicalGroupedParameters`.
 """
 check_is_hierarchical_parameter(name::Symbol, ::HierarchicalParameter) = nothing
 function check_is_hierarchical_parameter(name::Symbol, hierarchical_parameter)

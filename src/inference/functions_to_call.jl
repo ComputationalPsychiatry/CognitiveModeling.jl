@@ -3,9 +3,9 @@
 """
     n_sessions(sessions_info)
 
-Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a parameter
-model gives the parameters of. Used by the parameter models of the inference
-backends, such as those of [`IndependentParameters`](@ref).
+Return how many sessions a [`MultipleSessionsInfo`](@ref) has, which a parameter model gives
+the parameters of. Used by the parameter models of the inference backends, such as those of
+[`IndependentParameters`](@ref).
 """
 n_sessions(sessions_info::MultipleSessionsInfo) = length(sessions_info.sessions)
 
@@ -66,9 +66,8 @@ end
 Return the values of `column` in the table that the sessions in `sessions_info` were split
 from, as one vector for each session, of its rows in the table. It is an error when the
 sessions were given already prepared, without a table, and when the table has no such
-column. Useful for a parameter model that reads a column, such as one to group the
-sessions by, or the covariate of a regression. Used by
-[`read_one_value_of_each_session`](@ref).
+column. Useful for a parameter model that reads a column, such as one to group the sessions
+by, or the covariate of a regression. Used by [`read_one_value_of_each_session`](@ref).
 """
 function session_column_values(sessions_info::MultipleSessionsInfo, column::Symbol)
     table = sessions_info.table

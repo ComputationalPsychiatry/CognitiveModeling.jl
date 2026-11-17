@@ -87,10 +87,9 @@ other than the reference level, or for every level with the coding `:full_dummy`
 `prior` as its prior, such as `Normal(0, 1)`, or with `nothing` the regression's default
 prior for a categorical predictor, from its [`DefaultRegressionPriors`](@ref). Its levels
 are the values of `columns`, a column of the table that the sessions were split from, or the
-combinations of the values of several columns given as a tuple. In
-[`VaryingEffects`](@ref) it gives varying slopes, a deviation of each coefficient for each
-level of the varying effects, and `prior` is the prior of the standard deviation of the
-deviations.
+combinations of the values of several columns given as a tuple. In [`VaryingEffects`](@ref)
+it gives varying slopes, a deviation of each coefficient for each level of the varying
+effects, and `prior` is the prior of the standard deviation of the deviations.
 
 # Keyword arguments
 - `reference_level=nothing`: the reference level, such as `"control"`, or a `NamedTuple` of
@@ -99,15 +98,15 @@ deviations.
 - `coding=nothing`: how the coefficients are coded, `:dummy`, `:effects` or `:full_dummy`,
   or with `nothing` the regression's default coding, from its
   [`DefaultRegressionSettings`](@ref), which is `:dummy` unless another is given. With
-  `:dummy`, each is the difference
-  between a level and the reference level, such as the difference between a clinical and a
-  non-clinical group. With `:effects`, each is the difference between a level and the mean
-  of the levels, and the difference of the reference level is minus the sum of the others,
-  which gives the reference level a wider prior than the others when there are three levels
-  or more. With `:full_dummy`, every level has a coefficient, which is added for the
-  sessions of that level. Without an [`Intercept`](@ref), each is the value of its level,
-  and every level has the same prior. With an `Intercept`, or another predictor coded this
-  way, only the priors tell their coefficients apart.
+  `:dummy`, each is the difference between a level and the reference level, such as the
+  difference between a clinical and a non-clinical group. With `:effects`, each is the
+  difference between a level and the mean of the levels, and the difference of the reference
+  level is minus the sum of the others, which gives the reference level a wider prior than
+  the others when there are three levels or more. With `:full_dummy`, every level has a
+  coefficient, which is added for the sessions of that level. Without an
+  [`Intercept`](@ref), each is the value of its level, and every level has the same prior.
+  With an `Intercept`, or another predictor coded this way, only the priors tell their
+  coefficients apart.
 - `name`: the name of the predictor, which is the name of its column, or the names of its
   columns joined by two underscores, as in `diagnosis__site`. The coefficient of a level of
   one column is named after the predictor and the level, such as `diagnosis_clinical`, and
@@ -541,8 +540,8 @@ it is given another name.
   and whether varying effects are centered, for the terms that are given without them, as a
   [`DefaultRegressionSettings`](@ref).
 - `name=nothing`: the name of the parameter, which a
-  [`HierarchicalRegressionParameters`](@ref) checks against the name the regression
-  is given under, or `nothing` for no check. A formula gives it.
+  [`HierarchicalRegressionParameters`](@ref) checks against the name the regression is given
+  under, or `nothing` for no check. A formula gives it.
 
 The terms are kept in the field `terms`, as a `NamedTuple` with each term under its name,
 those without a prior with the one from `default_priors`, and those without a coding or a
@@ -735,14 +734,13 @@ end
 """
     HierarchicalRegressionParameters(parameters)
 
-The parameter model of a full model which gives each parameter of every session by
-a regression on columns of the table that the sessions were split from, such as the age and
+The parameter model of a full model which gives each parameter of every session by a
+regression on columns of the table that the sessions were split from, such as the age and
 the diagnosis of a participant, with varying effects, which are also called random effects.
-`parameters` is a `NamedTuple` with a
-[`RegressionParameter`](@ref) for each parameter that is fitted, which has the terms of its
-regression and their priors. It is kept in the field `parameters`. Useful for estimating the
-effect of a predictor on a parameter, or the difference between groups, together with the
-parameters of the sessions.
+`parameters` is a `NamedTuple` with a [`RegressionParameter`](@ref) for each parameter that
+is fitted, which has the terms of its regression and their priors. It is kept in the field
+`parameters`. Useful for estimating the effect of a predictor on a parameter, or the
+difference between groups, together with the parameters of the sessions.
 
 A full model builds the design of every regression once, before it is made, from the table
 that [`MultipleSessionsInfo`](@ref) keeps, so sessions that were prepared one at a time can
@@ -855,8 +853,8 @@ end
 """
     check_is_regression_parameter(name, regression_parameter)
 
-Throw an informative error if what a [`HierarchicalRegressionParameters`](@ref) was
-given for the parameter `name` isn't a [`RegressionParameter`](@ref), or is one named after
+Throw an informative error if what a [`HierarchicalRegressionParameters`](@ref) was given
+for the parameter `name` isn't a [`RegressionParameter`](@ref), or is one named after
 another parameter, as by the left-hand side of its formula. Used by the constructor of
 `HierarchicalRegressionParameters`.
 """

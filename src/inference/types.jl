@@ -14,8 +14,7 @@ observation on that timestep: as a latent variable with that distribution, or as
 of a [`Deterministic`](@ref). A value that isn't in the data and isn't to be imputed is
 [`UnimputedMissingValue`](@ref) instead. [`NoValue`](@ref) is different: it says that
 nothing was done or observed on the timestep. Unlike `missing`, arithmetic on it is an
-error. By default, a [`SessionInfo`](@ref) replaces `missing` in the
-data by it.
+error. By default, a [`SessionInfo`](@ref) replaces `missing` in the data by it.
 """
 struct MissingValue end
 
@@ -155,10 +154,10 @@ table.
 
 Each argument is kept in a field of the same name, except the values that stand for a
 missing one and whether they are imputed, whose work is done in the data here. The other
-fields are `includes_environment`, whether the session
-includes the environment, as `include_environment` decides it, `environment_observations`,
-the data of the environment's outputs in its own names, `previous_environment_observation`,
-the observation the environment starts from in its own names, `actions_to_condition_on` and
+fields are `includes_environment`, whether the session includes the environment, as
+`include_environment` decides it, `environment_observations`, the data of the environment's
+outputs in its own names, `previous_environment_observation`, the observation the
+environment starts from in its own names, `actions_to_condition_on` and
 `observations_to_condition_on`, the values in the data of each name, which fitting
 conditions on, with the observations in the environment's names, `n_timesteps`,
 `saved_timestep_sizes`, the sizes a fitted session returns with what it saves, and
@@ -423,9 +422,9 @@ action is `MissingValue()`, where `environment_save_history` saves anything or w
 `check_stopping_criterion` is `true`, and in an inference backend's full model that
 estimates the environment's parameters, unless `include_environment` says otherwise. The
 table is kept in the field `table`, without being copied, with the rows of each session in
-`session_rows`, so that a parameter model can read the columns it needs, such as
-those that a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the
-predictors of a [`HierarchicalRegressionParameters`](@ref).
+`session_rows`, so that a parameter model can read the columns it needs, such as those that
+a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the predictors of a
+[`HierarchicalRegressionParameters`](@ref).
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -439,11 +438,11 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   or a `DataFrame` with those columns.
 
 # Keyword arguments
-- `observation_columns`: the columns with the observations. When the model has only one
-  kind of observation in its attributes, a single name, such as `:outcome`, is its column,
+- `observation_columns`: the columns with the observations. When the model has only one kind
+  of observation in its attributes, a single name, such as `:outcome`, is its column,
   whatever the observation is called. Several observations are given in a tuple, each as the
-  name in the model's attributes when the column is named the same, or as
-  a pair from the column's name to the model's, as in a [`NameMap`](@ref), such as
+  name in the model's attributes when the column is named the same, or as a pair from the
+  column's name to the model's, as in a [`NameMap`](@ref), such as
   `(:outcome => :reward, :cue)`, so that one model fits tables with other names. A single
   name among the actions in the model's attributes is an error, since the two keyword
   arguments may then be swapped. An observation or action whose value is composed from
@@ -660,22 +659,21 @@ end
 """
     AbstractParametersModel
 
-Supertype for parameter models: the part of a full model, the model that an
-inference backend fits to several sessions, which gives or estimates the parameters of every
-session, for the cognitive model and for the environment model alike. The package comes with
-[`NoParameters`](@ref), [`FixedParameters`](@ref),
-[`SessionwiseFixedParameters`](@ref), [`IdenticalParameters`](@ref),
-[`IndependentParameters`](@ref), [`HierarchicalGroupedParameters`](@ref) and
-[`HierarchicalRegressionParameters`](@ref), and [`CompositeParameters`](@ref)
-combines several, each giving some of the parameters.
+Supertype for parameter models: the part of a full model, the model that an inference
+backend fits to several sessions, which gives or estimates the parameters of every session,
+for the cognitive model and for the environment model alike. The package comes with
+[`NoParameters`](@ref), [`FixedParameters`](@ref), [`SessionwiseFixedParameters`](@ref),
+[`IdenticalParameters`](@ref), [`IndependentParameters`](@ref),
+[`HierarchicalGroupedParameters`](@ref) and [`HierarchicalRegressionParameters`](@ref), and
+[`CompositeParameters`](@ref) combines several, each giving some of the parameters.
 
 # Implementation
 Create a subtype, and for each inference backend it is used with, add a method of that
-backend's function for parameter models, as the backend's documentation describes. A
-method of [`CognitiveModeling.parameter_names`](@ref) lets the parameters it gives be
-checked before a fit, and a method of [`CognitiveModeling.prepare_parameters_model`](@ref)
-lets it work out once, before the backend's model is made, what doesn't change between
-evaluations. A model which only gives values, and estimates nothing, adds a method of
+backend's function for parameter models, as the backend's documentation describes. A method
+of [`CognitiveModeling.parameter_names`](@ref) lets the parameters it gives be checked
+before a fit, and a method of [`CognitiveModeling.prepare_parameters_model`](@ref) lets it
+work out once, before the backend's model is made, what doesn't change between evaluations.
+A model which only gives values, and estimates nothing, adds a method of
 [`CognitiveModeling.estimates_parameters`](@ref).
 """
 abstract type AbstractParametersModel end
@@ -685,8 +683,8 @@ abstract type AbstractParametersModel end
 """
     AbstractDownstreamModel
 
-Supertype for downstream models: the final submodel of a full model, which is run after
-the sessions with the trajectories they saved, such as for correlations with other kinds of
+Supertype for downstream models: the final submodel of a full model, which is run after the
+sessions with the trajectories they saved, such as for correlations with other kinds of
 data, or a regression of a measurement on a state. [`NoDownstreamModel`](@ref) is the
 default.
 

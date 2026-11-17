@@ -3,8 +3,8 @@
 """
     FixedParameters(parameters)
 
-The parameter model of a full model which gives every session the same values, such
-as `(; scale = 2.0)`, with nothing sampled. The values are kept in the field `parameters`.
+The parameter model of a full model which gives every session the same values, such as
+`(; scale = 2.0)`, with nothing sampled. The values are kept in the field `parameters`.
 """
 struct FixedParameters{Tparameters<:NamedTuple} <: AbstractParametersModel
     parameters::Tparameters

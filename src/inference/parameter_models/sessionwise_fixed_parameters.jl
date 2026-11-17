@@ -3,8 +3,8 @@
 """
     SessionwiseFixedParameters(parameters_by_session)
 
-The parameter model of a full model which gives each session parameters of its own,
-with nothing sampled. `parameters_by_session` holds the parameters of each session in one of
+The parameter model of a full model which gives each session parameters of its own, with
+nothing sampled. `parameters_by_session` holds the parameters of each session in one of
 three forms: by the session's symbol name, in a `NamedTuple` with an entry for each session,
 such as `(; S1 = (; scale = 2.0), S2 = (; scale = 3.0))`; by its data identifier, in a
 dictionary, such as `Dict("S1" => (; scale = 2.0), "S2" => (; scale = 3.0))`; or in the
@@ -44,8 +44,8 @@ end
 """
     has_vector_for_each_parameter(parameters_by_session)
 
-Return whether `parameters_by_session`, as a [`SessionwiseFixedParameters`](@ref) holds
-it, gives the parameters in the order of the sessions, as a `NamedTuple` with one vector for
+Return whether `parameters_by_session`, as a [`SessionwiseFixedParameters`](@ref) holds it,
+gives the parameters in the order of the sessions, as a `NamedTuple` with one vector for
 each parameter, and not by the sessions' symbol names or data identifiers. Used by
 [`parameter_names`](@ref) and [`collect_parameters_in_session_order`](@ref).
 """
@@ -58,13 +58,13 @@ end
     collect_parameters_in_session_order(parameters_by_session, session_ids)
 
 Return the parameters of each session in `parameters_by_session`, as
-[`SessionwiseFixedParameters`](@ref) holds them, as one vector for each parameter with
-a value for every session, in the order of `session_ids`, with the parameters of each
-session found by [`parameters_of_session`](@ref). A session with other parameters than the
-first is an error. Parameters that are already in the order of the sessions are returned as
-they are, after checking that each vector has a value for every session. Used by
-[`prepare_parameters_model`](@ref), and by the models of `SessionwiseFixedParameters`
-in the inference backends.
+[`SessionwiseFixedParameters`](@ref) holds them, as one vector for each parameter with a
+value for every session, in the order of `session_ids`, with the parameters of each session
+found by [`parameters_of_session`](@ref). A session with other parameters than the first is
+an error. Parameters that are already in the order of the sessions are returned as they are,
+after checking that each vector has a value for every session. Used by
+[`prepare_parameters_model`](@ref), and by the models of `SessionwiseFixedParameters` in the
+inference backends.
 """
 function collect_parameters_in_session_order(parameters_by_session, session_ids)
 
@@ -109,8 +109,8 @@ end
 
 Return the parameters of the session with the data identifier `session_id` in
 `parameters_by_session`: the entry under the session's symbol name, as
-[`session_id_to_symbol`](@ref) gives it, in a `NamedTuple`, and the entry under the
-data identifier itself in a dictionary. A session without parameters is an error. Used by
+[`session_id_to_symbol`](@ref) gives it, in a `NamedTuple`, and the entry under the data
+identifier itself in a dictionary. A session without parameters is an error. Used by
 [`collect_parameters_in_session_order`](@ref).
 """
 function parameters_of_session(parameters_by_session::NamedTuple, session_id)

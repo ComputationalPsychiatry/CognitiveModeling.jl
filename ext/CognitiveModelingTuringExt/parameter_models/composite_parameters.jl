@@ -16,10 +16,10 @@ end
 """
     turing_composite_parameters(parts, Val(part_names), sessions_info)
 
-Turing.jl model which runs the parameter models in `parts`, a tuple, one at a time,
-each with its variables under its name in `part_names`, or as it names them itself when its
-name is `nothing`, and returns the parameters they give merged into one `NamedTuple`, which
-is an error when two give the same parameter. Used by [`CompositeParameters`](@ref).
+Turing.jl model which runs the parameter models in `parts`, a tuple, one at a time, each
+with its variables under its name in `part_names`, or as it names them itself when its name
+is `nothing`, and returns the parameters they give merged into one `NamedTuple`, which is an
+error when two give the same parameter. Used by [`CompositeParameters`](@ref).
 """
 Turing.@model function turing_composite_parameters(
     parts::Tuple, ::Val{Tpart_names}, sessions_info::MultipleSessionsInfo
@@ -45,9 +45,9 @@ end
 """
     turing_part_model(part, Val(name), sessions_info)
 
-Return the Turing.jl model of `part`, a part of a [`CompositeParameters`](@ref), with
-its variables under `name`, or as the part names them itself when `name` is `nothing`. Used
-by [`turing_composite_parameters`](@ref).
+Return the Turing.jl model of `part`, a part of a [`CompositeParameters`](@ref), with its
+variables under `name`, or as the part names them itself when `name` is `nothing`. Used by
+[`turing_composite_parameters`](@ref).
 """
 function turing_part_model(part, ::Val{nothing}, sessions_info::MultipleSessionsInfo)
     return CognitiveModeling.turing_parameters_model(part, sessions_info)

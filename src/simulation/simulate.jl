@@ -5,9 +5,8 @@
 Sample an output from what a model returned, using `rand`. Each output in a `NamedTuple` is
 sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an
 entry that is [`NoValue`](@ref) is kept. A number, a string or a symbol is a value and not
-something to sample from, and throws an `ArgumentError` which
-names [`Deterministic`](@ref). Used on each timestep of a simulation, by
-[`simulate_timestep`](@ref).
+something to sample from, and throws an `ArgumentError` which names [`Deterministic`](@ref).
+Used on each timestep of a simulation, by [`simulate_timestep`](@ref).
 """
 function sample_output(rng, output_distribution)
     return rand(rng, output_distribution)
@@ -1013,15 +1012,15 @@ simulation.states
 # Extended help
 The return type is concrete as long as the types of the outputs don't change between
 timesteps. If they do, like an observation with an entry that is sometimes
-[`NoValue`](@ref), the vector for that output holds a `Union` of the types. The same
-goes for timestep 0 when it has other types than the timesteps after it, which the
-observations and actions usually do, since they are `BeforeFirstTimestep()` there.
+[`NoValue`](@ref), the vector for that output holds a `Union` of the types. The same goes
+for timestep 0 when it has other types than the timesteps after it, which the observations
+and actions usually do, since they are `BeforeFirstTimestep()` there.
 
 Nothing is copied when outputs are saved. A model or environment which changes an object in
 its state in place, instead of returning a new one, must add a method of
 [`prepare_state_for_saving`](@ref), or all the saved states show the final values, with no
-error. Observations and actions have no such function, so they must be new
-objects on each timestep.
+error. Observations and actions have no such function, so they must be new objects on each
+timestep.
 """
 function simulate(
     cognitive_model::AbstractTimestepModel,

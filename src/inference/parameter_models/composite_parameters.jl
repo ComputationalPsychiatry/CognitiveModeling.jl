@@ -3,17 +3,16 @@
 """
     CompositeParameters(parts...; named_parts...)
 
-The parameter model of a full model which gives some of the parameters with each of
-its parts, which are parameter models, such as a
-[`HierarchicalGroupedParameters`](@ref) for the learning rate, an
-[`IndependentParameters`](@ref) for the inverse temperature and a
-[`FixedParameters`](@ref) for a bias. What the parts give is merged. The variables
-of a part in `parts` are named as that part names them, and those of a part given by
-keyword in `named_parts` are named under its keyword, such as `noise.learning_rate.session`
-for a part given as `noise`. No two parts can give the same parameter: this is checked when
-it is made, for the parts whose [`CognitiveModeling.parameter_names`](@ref) are known, and
-when it runs, for the others. It samples when any part does. The parts are kept in the
-field `parts`, as a tuple, with those in `named_parts` last.
+The parameter model of a full model which gives some of the parameters with each of its
+parts, which are parameter models, such as a [`HierarchicalGroupedParameters`](@ref) for the
+learning rate, an [`IndependentParameters`](@ref) for the inverse temperature and a
+[`FixedParameters`](@ref) for a bias. What the parts give is merged. The variables of a part
+in `parts` are named as that part names them, and those of a part given by keyword in
+`named_parts` are named under its keyword, such as `noise.learning_rate.session` for a part
+given as `noise`. No two parts can give the same parameter: this is checked when it is made,
+for the parts whose [`CognitiveModeling.parameter_names`](@ref) are known, and when it runs,
+for the others. It samples when any part does. The parts are kept in the field `parts`, as a
+tuple, with those in `named_parts` last.
 
 # Examples
 ```julia
@@ -63,13 +62,13 @@ end
 """
     as_parameters_model(parameters_model)
 
-Return `parameters_model` as one parameter model: a tuple of parameter
-models as a [`CompositeParameters`](@ref) of them, and a `NamedTuple` of them as a
-`CompositeParameters` with each part under its name, which its variables are then
-named under. Anything else is returned as it is, for [`prepare_full_model`](@ref) to check.
-A tuple or a `NamedTuple` with something other than a parameter model in it is an
-error. Used by `prepare_full_model` and by the functions of the inference backends that
-make a full model, such as `turing_full_model`.
+Return `parameters_model` as one parameter model: a tuple of parameter models as a
+[`CompositeParameters`](@ref) of them, and a `NamedTuple` of them as a `CompositeParameters`
+with each part under its name, which its variables are then named under. Anything else is
+returned as it is, for [`prepare_full_model`](@ref) to check. A tuple or a `NamedTuple` with
+something other than a parameter model in it is an error. Used by `prepare_full_model` and
+by the functions of the inference backends that make a full model, such as
+`turing_full_model`.
 """
 as_parameters_model(parameters_model) = parameters_model
 function as_parameters_model(parts::Tuple)
@@ -100,10 +99,10 @@ end
 """
     part_names(parameters_model)
 
-Return the name of each part of `parameters_model`, a [`CompositeParameters`](@ref),
-in a tuple in the order of its parts, with `nothing` for a part given without a name. Used
-by the models of `CompositeParameters` in the inference backends, which name the
-variables of a part under its name, and by [`prepare_parameters_model`](@ref) and
+Return the name of each part of `parameters_model`, a [`CompositeParameters`](@ref), in a
+tuple in the order of its parts, with `nothing` for a part given without a name. Used by the
+models of `CompositeParameters` in the inference backends, which name the variables of a
+part under its name, and by [`prepare_parameters_model`](@ref) and
 [`add_part_without_name`](@ref), which keep the names.
 """
 function part_names(::CompositeParameters{Tparts,Tpart_names}) where {Tparts,Tpart_names}
@@ -114,9 +113,9 @@ end
     add_part_without_name(parameters_model, part)
 
 Return `parameters_model` with `part` added to it as a part without a name: a
-[`CompositeParameters`](@ref) with its own parts, which keep their names, and then
-`part`, or a new `CompositeParameters` of `parameters_model` and `part` for any other
-parameter model. Used by [`with_fixed_parameters`](@ref).
+[`CompositeParameters`](@ref) with its own parts, which keep their names, and then `part`,
+or a new `CompositeParameters` of `parameters_model` and `part` for any other parameter
+model. Used by [`with_fixed_parameters`](@ref).
 """
 function add_part_without_name(parameters_model::CompositeParameters, part)
     parts = (parameters_model.parts..., part)
@@ -154,10 +153,9 @@ end
 """
     check_parts_give_different_parameters(parts)
 
-Throw an informative error if two of `parts`, the parts of a
-[`CompositeParameters`](@ref), give the same parameter, for the parts whose
-[`parameter_names`](@ref) are known. Used by the constructor of
-`CompositeParameters`.
+Throw an informative error if two of `parts`, the parts of a [`CompositeParameters`](@ref),
+give the same parameter, for the parts whose [`parameter_names`](@ref) are known. Used by
+the constructor of `CompositeParameters`.
 """
 function check_parts_give_different_parameters(parts::Tuple)
     given_by = Dict{Symbol,Any}()
@@ -184,8 +182,7 @@ end
 Return the parameters that two parts of a [`CompositeParameters`](@ref) give, each a
 `NamedTuple` with one vector for each parameter, merged into one, after checking that they
 give different parameters, which matters for the parts whose names weren't known when the
-model was made. Used by the models of `CompositeParameters` in the inference
-backends.
+model was made. Used by the models of `CompositeParameters` in the inference backends.
 """
 function merge_parameters_of_parts(parameters::NamedTuple, other_parameters::NamedTuple)
     shared_names = Tuple(

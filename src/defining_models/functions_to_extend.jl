@@ -101,23 +101,23 @@ Return the names of the parameters, states, inputs and outputs of `model`, in a
 [`ModelAttributes`](@ref).
 
 The names define the model, so they must match what the model uses. The parameters are the
-names that [`run_timestep`](@ref) and [`initialize_state`](@ref) read from the
-parameters. The states are the names in the state that `initialize_state` returns and in
-`new_state`, which `run_timestep` reads from `context.previous_state`. The inputs
-are the names that `run_timestep` reads from `context.input`, and the outputs are
-the names in `output_distribution`, which are also those in `context.previous_output`. For a
-cognitive model the inputs are its observations and the outputs its actions, and for an
-environment model the inputs are the actions it receives and the outputs the observations it
-gives. Nothing checks that they match while the model runs.
+names that [`run_timestep`](@ref) and [`initialize_state`](@ref) read from the parameters.
+The states are the names in the state that `initialize_state` returns and in `new_state`,
+which `run_timestep` reads from `context.previous_state`. The inputs are the names that
+`run_timestep` reads from `context.input`, and the outputs are the names in
+`output_distribution`, which are also those in `context.previous_output`. For a cognitive
+model the inputs are its observations and the outputs its actions, and for an environment
+model the inputs are the actions it receives and the outputs the observations it gives.
+Nothing checks that they match while the model runs.
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
 without one kind of attribute gives `()` for it. [`simulate`](@ref) and
 [`InstantiatedModel`](@ref) use the output names for the output before the first timestep,
-and check the parameters, the previous output and the state against the names. A
-simulation with an environment also checks that the two models fit together: the outputs
-of each must be the inputs of the other, unless a [`NameMap`](@ref) says which of them are
-passed on, and under which names.
+and check the parameters, the previous output and the state against the names. A simulation
+with an environment also checks that the two models fit together: the outputs of each must
+be the inputs of the other, unless a [`NameMap`](@ref) says which of them are passed on, and
+under which names.
 
 # Examples
 ```jldoctest
@@ -155,9 +155,8 @@ isn't affected.
 A model can add a method of this function. The default returns `state` as it is, so nothing
 is copied. One which changes an object in its state in place must add a method which copies
 it, or all the saved states show the final values, with no error. The method must return the
-state with the names in the model's attributes, since a
-[`SaveHistory`](@ref) selects states by those names. Nothing checks this while the model
-runs.
+state with the names in the model's attributes, since a [`SaveHistory`](@ref) selects states
+by those names. Nothing checks this while the model runs.
 
 # Examples
 ```jldoctest
@@ -264,10 +263,10 @@ runs, and what is returned and added to the histories has the timesteps that ran
 environment starts, the cognitive model has then made its last observation and acted on it,
 and the environment doesn't receive that action. When the cognitive model starts, the
 environment has then responded to the last action with an observation, and the cognitive
-model doesn't receive that observation. A model whose criterion is already met
-before the first timestep can't be simulated, and throws an error: a new simulation starts
-from the initial state, and [`reset!`](@ref) puts an [`InstantiatedModel`](@ref) back there.
-A fitted session checks it as [`SessionInfo`](@ref) describes.
+model doesn't receive that observation. A model whose criterion is already met before the
+first timestep can't be simulated, and throws an error: a new simulation starts from the
+initial state, and [`reset!`](@ref) puts an [`InstantiatedModel`](@ref) back there. A fitted
+session checks it as [`SessionInfo`](@ref) describes.
 
 # Implementation
 A model can add a method of this function. The default returns `false`, so a simulation runs

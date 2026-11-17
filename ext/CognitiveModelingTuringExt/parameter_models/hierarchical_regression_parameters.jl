@@ -33,10 +33,10 @@ end
 
 Turing.jl model which gives one parameter at a time from `parameters`, the
 [`RegressionParameter`](@ref) of each parameter of a
-[`HierarchicalRegressionParameters`](@ref), with
-[`turing_regression_parameter`](@ref) under the parameter's name, and returns them in a
-`NamedTuple`, each as a vector with a value for each of `n_sessions` sessions. `designs` has
-the design of each regression. Used by `HierarchicalRegressionParameters`.
+[`HierarchicalRegressionParameters`](@ref), with [`turing_regression_parameter`](@ref) under
+the parameter's name, and returns them in a `NamedTuple`, each as a vector with a value for
+each of `n_sessions` sessions. `designs` has the design of each regression. Used by
+`HierarchicalRegressionParameters`.
 """
 Turing.@model function turing_regression_parameters(
     parameters::NamedTuple{names}, designs::NamedTuple, n_sessions

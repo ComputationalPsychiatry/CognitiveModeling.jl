@@ -17,11 +17,11 @@ session saves, by name, and whether it saves them from before the first timestep
 `states`, `inputs`, `outputs` and `output_distributions` are each the names of that kind to
 save, in a `Tuple` of `Symbol`s, a single `Symbol` or a `Vector` of them, or
 [`SaveEverything`](@ref) for all of them. The names are those in the model's attributes,
-from [`attribute_names`](@ref): for a cognitive model the inputs are its observations
-and the outputs its actions, and for an environment model the inputs are the actions it
-receives and the outputs the observations it gives. The output distributions are what the
-model gave its outputs to be sampled from, named like the outputs. A kind that isn't given
-saves nothing, so `SaveHistory()` saves nothing, which is the default everywhere, and
+from [`attribute_names`](@ref): for a cognitive model the inputs are its observations and
+the outputs its actions, and for an environment model the inputs are the actions it receives
+and the outputs the observations it gives. The output distributions are what the model gave
+its outputs to be sampled from, named like the outputs. A kind that isn't given saves
+nothing, so `SaveHistory()` saves nothing, which is the default everywhere, and
 `SaveHistory(SaveEverything())` saves everything. The selections are read as properties,
 such as `save_history.states`.
 
@@ -37,11 +37,11 @@ saving none gives an empty one, `(;)`. Before the first timestep there is no out
 distribution, so timestep 0 has `BeforeFirstTimestep()` for each name that is saved.
 
 Each model of a simulation has one: [`simulate`](@ref) and [`SessionInfo`](@ref) take
-`cognitive_save_history` and `environment_save_history`, and an
-[`InstantiatedModel`](@ref) takes `save_history`. The trajectories that a simulation or a
-session returns are named by their role: the cognitive model's inputs as `observations` and
-outputs as `actions`, and the environment's inputs as `actions` and outputs as
-`observations` under `environment`, as [`simulate`](@ref) describes.
+`cognitive_save_history` and `environment_save_history`, and an [`InstantiatedModel`](@ref)
+takes `save_history`. The trajectories that a simulation or a session returns are named by
+their role: the cognitive model's inputs as `observations` and outputs as `actions`, and the
+environment's inputs as `actions` and outputs as `observations` under `environment`, as
+[`simulate`](@ref) describes.
 
 # Examples
 ```jldoctest

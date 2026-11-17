@@ -29,9 +29,9 @@ there are, and `attribute_names` gives them. On one line, as inside a vector, a 
 its type and its kind.
 
 # Implementation
-Create a subtype and add methods of [`run_timestep`](@ref),
-[`initialize_state`](@ref) and [`attribute_names`](@ref) for it. A model can also add
-methods of [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+Create a subtype and add methods of [`run_timestep`](@ref), [`initialize_state`](@ref) and
+[`attribute_names`](@ref) for it. A model can also add methods of
+[`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
 
@@ -73,8 +73,8 @@ own kind.
 
 # Implementation
 Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
-[`run_timestep`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref),
-and optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
+[`run_timestep`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
+optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
 
@@ -218,8 +218,8 @@ struct EnvironmentStarts end
 
 The `who_starts` of a [`ModelContext`](@ref) when neither side is known to move first on a
 timestep, as when a model runs on a single input with [`simulate`](@ref), or is used outside
-a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other
-two, which a simulation or a fitted session passes on from its own `who_starts`.
+a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other two, which
+a simulation or a fitted session passes on from its own `who_starts`.
 """
 struct UnknownWhoStarts end
 
@@ -231,8 +231,8 @@ struct UnknownWhoStarts end
     ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
                  rng=default_rng(), who_starts=UnknownWhoStarts())
 
-Everything a model needs to run a single timestep, which [`run_timestep`](@ref)
-receives. The arguments can be given by name, which says what each one is, or in this order.
+Everything a model needs to run a single timestep, which [`run_timestep`](@ref) receives.
+The arguments can be given by name, which says what each one is, or in this order.
 
 Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
 model the input is its observation and the output its action, and for an environment model
@@ -390,8 +390,8 @@ it gives.
 
 Each argument is a `Tuple` of `Symbol`s, read as a property of the same name, such as
 `attributes.parameters`. A single `Symbol` is put in a tuple, and a `Vector` of them is made
-into one. All four must be given, and `()` means that the model has none of that kind.
-A name can only be used once across the four kinds, so that it says which attribute of the
+into one. All four must be given, and `()` means that the model has none of that kind. A
+name can only be used once across the four kinds, so that it says which attribute of the
 model is meant wherever the attributes are named together, and an `ArgumentError` is thrown
 otherwise.
 
@@ -437,9 +437,9 @@ end
 Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
 tuple of one. Used for the arguments that take one value or several: the names given to
 [`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref),
-[`HierarchicalGroupedParameters`](@ref) and
-[`HierarchicalRegressionParameters`](@ref), which are then asserted to be `Symbol`s,
-and the values that stand for a missing value in [`SessionInfo`](@ref).
+[`HierarchicalGroupedParameters`](@ref) and [`HierarchicalRegressionParameters`](@ref),
+which are then asserted to be `Symbol`s, and the values that stand for a missing value in
+[`SessionInfo`](@ref).
 """
 as_tuple(values::Tuple) = values
 as_tuple(values::AbstractVector) = Tuple(values)
@@ -479,7 +479,7 @@ end
     throw_duplicate_attribute_name(attributes)
 
 Throw the `ArgumentError` of [`check_unique_attribute_names`](@ref), naming the first name
-of `attributes` that is used twice and the kinds it is used for. 
+of `attributes` that is used twice and the kinds it is used for.
 """
 @noinline function throw_duplicate_attribute_name(attributes::ModelAttributes)
     kinds = (
@@ -692,9 +692,8 @@ is_discrete(::ParameterDomain{Ttype}) where {Ttype} = !(Ttype <: Real) || Ttype 
     InvalidParametersError(message)
     InvalidParametersError()
 
-An error for a model to throw from [`run_timestep`](@ref) or
-[`initialize_state`](@ref) when its parameters aren't valid, as in
-`throw(InvalidParametersError())`.
+An error for a model to throw from [`run_timestep`](@ref) or [`initialize_state`](@ref) when
+its parameters aren't valid, as in `throw(InvalidParametersError())`.
 
 The default message says that the parameters are not valid, possibly dependent on the
 observations, actions and states, and a model can give a more specific one. A simulation

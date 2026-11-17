@@ -8,14 +8,13 @@ environment model, to be used as a submodel, which returns a [`ModelOutput`](@re
 needs Turing.jl to be loaded.
 
 # Implementation
-A model can add a method of this function. The default calls [`run_timestep`](@ref).
-A model which samples within a timestep needs to add a method, however; or if any other
-changes are desired within Turing. It must sample with `~` instead of from `context.rng`.
-Otherwise the model has a different log density each time it is evaluated, with no error.
-The same holds for an environment model, which fitting uses to fill in observations that
-are [`MissingValue`](@ref) in the data: what it samples itself, such as a change of its
-state, must be sampled with `~`, while fitting samples the observations from what it
-returns.
+A model can add a method of this function. The default calls [`run_timestep`](@ref). A model
+which samples within a timestep needs to add a method, however; or if any other changes are
+desired within Turing. It must sample with `~` instead of from `context.rng`. Otherwise the
+model has a different log density each time it is evaluated, with no error. The same holds
+for an environment model, which fitting uses to fill in observations that are
+[`MissingValue`](@ref) in the data: what it samples itself, such as a change of its state,
+must be sampled with `~`, while fitting samples the observations from what it returns.
 
 # Examples
 ```julia
@@ -62,8 +61,8 @@ enough for most models, since a starting state that is fitted is simply one that
 from a parameter there: a fitted session runs it with the parameters of each evaluation, so
 a prior on the parameter is a prior on the starting state. A model which samples something
 of its own when it initializes needs to add a method, and sample it with `~`, as for
-[`turing_run_timestep`](@ref). Its variables are named under
-`initial_cognitive_state`, or `initial_environment_state` for an environment model.
+[`turing_run_timestep`](@ref). Its variables are named under `initial_cognitive_state`, or
+`initial_environment_state` for an environment model.
 
 # Examples
 ```julia
@@ -91,8 +90,8 @@ function turing_initialize_state end
 """
     turing_parameters_model(parameters_model, sessions_info::MultipleSessionsInfo)
 
-Create the Turing.jl model of `parameters_model`, a parameter model, which gives or
-samples the parameters of every session in `sessions_info`, for the cognitive model or the
+Create the Turing.jl model of `parameters_model`, a parameter model, which gives or samples
+the parameters of every session in `sessions_info`, for the cognitive model or the
 environment model of a [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
 
 The model must return a `NamedTuple` with one entry for each parameter, named as the model
@@ -102,9 +101,9 @@ CognitiveModeling.jl has a method.
 
 # Implementation
 A parameter model of another kind, such as a regression, is a subtype of
-`AbstractParametersModel` with a method of this function. It can read
-[`n_sessions`](@ref) and the data identifiers of the sessions from `sessions_info`, the
-columns of the table that the sessions were split from, when there is one, with
+`AbstractParametersModel` with a method of this function. It can read [`n_sessions`](@ref)
+and the data identifiers of the sessions from `sessions_info`, the columns of the table that
+the sessions were split from, when there is one, with
 [`CognitiveModeling.session_column_values`](@ref), such as the covariates of a regression,
 and anything else from its own fields. What it reads from the table is best read once, in a
 method of [`CognitiveModeling.prepare_parameters_model`](@ref). The full model treats it as
@@ -121,8 +120,8 @@ function turing_parameters_model end
 
 Create the Turing.jl model of `downstream_model`, the final submodel of a
 [`turing_full_model`](@ref), which is run after the sessions, with the trajectories the
-sessions saved, the cognitive parameters of every session as the parameter model
-returned them, and the sessions' `sessions_info`. This needs Turing.jl to be loaded.
+sessions saved, the cognitive parameters of every session as the parameter model returned
+them, and the sessions' `sessions_info`. This needs Turing.jl to be loaded.
 
 The model can return anything, which the full model returns as its `downstream_values`.
 [`NoDownstreamModel`](@ref) is the default, with a method which samples nothing and returns
@@ -131,9 +130,8 @@ The model can return anything, which the full model returns as its `downstream_v
 # Implementation
 A downstream model is a subtype of [`AbstractDownstreamModel`](@ref) with a method of this
 function, which can ignore any of the arguments. A regression of some measurement on a state
-of the cognitive model, for instance, reads the state from
-`saved_behavioral_trajectories`, a vector with the saved trajectories of each session as
-[`turing_behavioral_session`](@ref) returns them, so the `cognitive_save_history` of the
-sessions must select that state.
+of the cognitive model, for instance, reads the state from `saved_behavioral_trajectories`,
+a vector with the saved trajectories of each session as [`turing_behavioral_session`](@ref)
+returns them, so the `cognitive_save_history` of the sessions must select that state.
 """
 function turing_downstream_model end

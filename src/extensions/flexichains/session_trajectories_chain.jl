@@ -27,8 +27,8 @@ returns:
   downstream model returned isn't included.
 - [`turing_multiple_behavioral_sessions`](@ref), given with its `MultipleSessionsInfo`,
   named in the same way.
-- [`turing_behavioral_session`](@ref), given without a session info, with no symbol name
-  of a session in the names, such as `expected_value`.
+- [`turing_behavioral_session`](@ref), given without a session info, with no symbol name of
+  a session in the names, such as `expected_value`.
 A model of one's own around [`turing_multiple_behavioral_sessions`](@ref) or
 [`turing_behavioral_session`](@ref) gives its results in the same way when it returns what
 they return.
@@ -91,18 +91,17 @@ it, which is what one of three models returns, as for [`session_trajectories_cha
 their `MultipleSessionsInfo`, or [`turing_behavioral_session`](@ref), given without a
 session info, whose parameters are named without a session, as `learning_rate` and
 `environment.mean_reward`. The parameters are those each session was given, without the
-default values of its models. With a full model, they are those the parameter
-models gave each session, so a parameter model other than
-[`IndependentParameters`](@ref) gives parameters that aren't in the chain itself,
-such as one value for every session from [`IdenticalParameters`](@ref), and values
-from [`FixedParameters`](@ref) that were never sampled. A model of one's own around
-[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref) gives
-the parameters it passed to the sessions, such as transformations of its variables, when it
-returns what they return. The third form, in the Turing extension, takes a model made by one
-of the three functions, or such a model inside [`turing_catch_invalid_parameters`](@ref),
-and a chain sampled from it, and numbers the samples as the chain does. The result merges
-with the chain of [`session_trajectories_chain`](@ref), which has the same samples, with
-`merge`.
+default values of its models. With a full model, they are those the parameter models gave
+each session, so a parameter model other than [`IndependentParameters`](@ref) gives
+parameters that aren't in the chain itself, such as one value for every session from
+[`IdenticalParameters`](@ref), and values from [`FixedParameters`](@ref) that were never
+sampled. A model of one's own around [`turing_multiple_behavioral_sessions`](@ref) or
+[`turing_behavioral_session`](@ref) gives the parameters it passed to the sessions, such as
+transformations of its variables, when it returns what they return. The third form, in the
+Turing extension, takes a model made by one of the three functions, or such a model inside
+[`turing_catch_invalid_parameters`](@ref), and a chain sampled from it, and numbers the
+samples as the chain does. The result merges with the chain of
+[`session_trajectories_chain`](@ref), which has the same samples, with `merge`.
 
 # Examples
 ```julia

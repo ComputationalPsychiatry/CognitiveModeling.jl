@@ -33,10 +33,10 @@ end
 
 Turing.jl model which samples one parameter at a time from `parameters`, the
 [`HierarchicalParameter`](@ref) of each parameter of a
-[`HierarchicalGroupedParameters`](@ref), with
-[`turing_hierarchical_parameter`](@ref) under the parameter's name, and returns them
-in a `NamedTuple`, each as a vector with a value for every session. `groups` has the groups
-of the sessions for each parameter. Used by `HierarchicalGroupedParameters`.
+[`HierarchicalGroupedParameters`](@ref), with [`turing_hierarchical_parameter`](@ref) under
+the parameter's name, and returns them in a `NamedTuple`, each as a vector with a value for
+every session. `groups` has the groups of the sessions for each parameter. Used by
+`HierarchicalGroupedParameters`.
 """
 Turing.@model function turing_hierarchical_parameters(
     parameters::NamedTuple{names}, groups::NamedTuple
@@ -175,9 +175,9 @@ end
 
 Turing.jl model which samples a standardized value of one parameter for every session, as
 the variable `standardized`, so that under the parameter's prefix it is named like
-`learning_rate.standardized`, and returns the value of every session: the mean of its
-group plus the standardized value times the standard deviation of its group, which are the
-two group-level parameters. This is the non-centered form of a normal distribution. Used by
+`learning_rate.standardized`, and returns the value of every session: the mean of its group
+plus the standardized value times the standard deviation of its group, which are the two
+group-level parameters. This is the non-centered form of a normal distribution. Used by
 [`turing_hierarchical_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_standardized_values(

@@ -35,12 +35,11 @@ is done with the action. The same goes for a timestep where the model takes no a
 these three observations, the one action, no parameters and the state `rl_env`. Use
 [`EnvironmentStarts`](@ref), so that the model observes before it acts.
 
-A simulation stops by itself when the episode ends, since the
-[`stopping_criterion`](@ref) of the environment is `terminated` of `rl_env`, so `n_steps` is
-the most timesteps it can take. An episode that
-has ended isn't started again, and an action given to it throws an error. A new call of
-[`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref) of an
-[`InstantiatedModel`](@ref), since both reset `rl_env` through `initialize_state`.
+A simulation stops by itself when the episode ends, since the [`stopping_criterion`](@ref)
+of the environment is `terminated` of `rl_env`, so `n_steps` is the most timesteps it can
+take. An episode that has ended isn't started again, and an action given to it throws an
+error. A new call of [`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref)
+of an [`InstantiatedModel`](@ref), since both reset `rl_env` through `initialize_state`.
 
 # Examples
 ```jldoctest

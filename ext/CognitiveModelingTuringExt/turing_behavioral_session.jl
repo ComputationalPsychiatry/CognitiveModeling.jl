@@ -54,10 +54,10 @@ end
                                     include_submodel_prefixes)
 
 Warn when the attributes of the cognitive model and of the environment model of the sessions
-have a parameter of the same name, both parameter models sample, and the variables
-have no prefixes, since their variables can then have the same names, and a name that both
-use is one variable, which `sample` rejects. Whether both sample is decided by their types.
-Used by `turing_full_model` when it creates the model, outside the model's body, which is
+have a parameter of the same name, both parameter models sample, and the variables have no
+prefixes, since their variables can then have the same names, and a name that both use is
+one variable, which `sample` rejects. Whether both sample is decided by their types. Used by
+`turing_full_model` when it creates the model, outside the model's body, which is
 differentiated.
 """
 function warn_if_parameter_names_overlap(
@@ -331,12 +331,12 @@ end
     include_other_types(saved_trajectories, saved_with_other_types)
 
 Return `saved_trajectories`, what each session saved, with the trajectories in
-`saved_with_other_types` put in their places, widening the vector as
-[`store_value!`](@ref) does. A session whose saved trajectories didn't fit the type of
-`saved_trajectories` has them in its place in `saved_with_other_types`, and is left
-unassigned in `saved_trajectories`. When there are none, `saved_trajectories` is returned as
-it is. Used by [`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the
-threads are done.
+`saved_with_other_types` put in their places, widening the vector as [`store_value!`](@ref)
+does. A session whose saved trajectories didn't fit the type of `saved_trajectories` has
+them in its place in `saved_with_other_types`, and is left unassigned in
+`saved_trajectories`. When there are none, `saved_trajectories` is returned as it is. Used
+by [`turing_run_sessions`](@ref) with [`ParallelSessions`](@ref), after the threads are
+done.
 """
 function include_other_types(
     saved_trajectories::Vector, saved_with_other_types::Vector{Any}
@@ -528,10 +528,10 @@ once at the end, as observed values. Before each timestep from
 `first_timestep_to_check_stopping` of `session_info` on, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
 what it saved up to it, which is an error when the data continues. It returns the
-trajectories the session saved, as [`turing_behavioral_session`](@ref) describes them,
-which returns them under `saved_behavioral_trajectories`. Both methods of that model
-call this one, after setting up the parameters and the initial states with or without an
-environment. Used by [`turing_behavioral_session`](@ref).
+trajectories the session saved, as [`turing_behavioral_session`](@ref) describes them, which
+returns them under `saved_behavioral_trajectories`. Both methods of that model call this
+one, after setting up the parameters and the initial states with or without an environment.
+Used by [`turing_behavioral_session`](@ref).
 """
 Turing.@model function turing_run_all_timesteps(
     session_info, cognitive_parameters, environment_parameters, previous
@@ -985,8 +985,8 @@ end
     turing_model_timestep(model, context, data_columns, t)
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
-environment model: `model` runs on `context` with [`turing_run_timestep`](@ref), and
-its outputs are then taken from row `t` of `data_columns`, the data for them, where it has
+environment model: `model` runs on `context` with [`turing_run_timestep`](@ref), and its
+outputs are then taken from row `t` of `data_columns`, the data for them, where it has
 values, imputed from what the model gave where they are [`MissingValue`](@ref), as
 [`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
 otherwise, such as `UnimputedMissingValue()` or `NoValue()`. It returns the output, the

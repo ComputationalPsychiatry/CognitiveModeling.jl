@@ -3,9 +3,9 @@
 """
     NoParameters()
 
-The parameter model of a full model which gives no parameters, so that each
-parameter takes the value the model gives it in [`default_parameters`](@ref). It is the
-default for the parameters of the environment.
+The parameter model of a full model which gives no parameters, so that each parameter takes
+the value the model gives it in [`default_parameters`](@ref). It is the default for the
+parameters of the environment.
 """
 struct NoParameters <: AbstractParametersModel end
 

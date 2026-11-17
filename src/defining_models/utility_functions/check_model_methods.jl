@@ -21,8 +21,8 @@ end
 """
     check_model_output(output, model)
 
-Return `output` if it is the `ModelOutput` that an `run_timestep` method of `model`
-must return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
+Return `output` if it is the `ModelOutput` that an `run_timestep` method of `model` must
+return, and throw an error otherwise. Used on each timestep of [`simulate`](@ref),
 [`simulate!`](@ref) and fitted sessions.
 """
 function check_model_output(output::ModelOutput, ::AbstractTimestepModel)

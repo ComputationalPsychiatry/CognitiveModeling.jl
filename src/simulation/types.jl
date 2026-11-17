@@ -81,10 +81,9 @@ timestep 0, and everything that happens to it, as selected by `save_history`, a
 [`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
 stay empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs
 can only be selected by name among those in the model's attributes, since the history starts
-from those names.
-`agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved. The
-parameters are checked against their domains in [`parameter_domains`](@ref), where a value
-outside its domain throws a [`ParameterDomainError`](@ref), unless
+from those names. `agent.n_timesteps` counts the timesteps the model has simulated, whatever
+is saved. The parameters are checked against their domains in [`parameter_domains`](@ref),
+where a value outside its domain throws a [`ParameterDomainError`](@ref), unless
 `check_parameter_domains` is `false`.
 
 In the REPL, an instantiated model shows the kind and the type of its model, how many
@@ -98,8 +97,8 @@ An instantiated model is a convenience, and isn't type stable, by design: its st
 previous output can change type, as an output does from `BeforeFirstTimestep()` to a `Bool`,
 and so can what its history saves, so they are kept untyped. Each call of `simulate!` on it
 is therefore dynamically dispatched, and the compiler doesn't know what it returns, whatever
-is saved. Where that matters, use [`simulate`](@ref) on the models themselves, one
-timestep at a time or for a whole simulation.
+is saved. Where that matters, use [`simulate`](@ref) on the models themselves, one timestep
+at a time or for a whole simulation.
 
 The same type serves as the agent and as the environment of a simulation, since both are
 models. See also [`simulate!`](@ref) and [`reset!`](@ref).

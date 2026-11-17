@@ -13,26 +13,25 @@ them, and return them in a `NamedTuple` with `cognitive_parameters_model`,
 inference backend, whose full model calls it, so that what doesn't change between the
 evaluations of the model is worked out once.
 
-A parameter model can be given as a tuple of parameter models, or a
-`NamedTuple` of them, which is made into a [`CompositeParameters`](@ref) of them by
-[`as_parameters_model`](@ref), with each part of a `NamedTuple` under its name. It
-checks that the two parameter models and the downstream model are of the right
-kind. The values in `fixed_cognitive_parameters` and `fixed_environment_parameters`, such as
-`(; initial_value = 0.3)`, are given to every session for the parameters they name: each
-parameter model is combined with them in a [`CompositeParameters`](@ref), so
-a parameter is either fixed or given by its parameter model, and a fixed parameter
-must be one in the model's attributes. It checks the parameters that each parameter
-model gives, when [`CognitiveModeling.parameter_names`](@ref) knows them, against those of
-the cognitive model and of the environment model: a parameter that isn't in the model's
-attributes is an error, and so is one in its attributes which is neither given nor has a
-default value, unless it is a parameter of an environment that no session runs. It prepares
-each parameter model for the sessions with
+A parameter model can be given as a tuple of parameter models, or a `NamedTuple` of them,
+which is made into a [`CompositeParameters`](@ref) of them by [`as_parameters_model`](@ref),
+with each part of a `NamedTuple` under its name. It checks that the two parameter models and
+the downstream model are of the right kind. The values in `fixed_cognitive_parameters` and
+`fixed_environment_parameters`, such as `(; initial_value = 0.3)`, are given to every
+session for the parameters they name: each parameter model is combined with them in a
+[`CompositeParameters`](@ref), so a parameter is either fixed or given by its parameter
+model, and a fixed parameter must be one in the model's attributes. It checks the parameters
+that each parameter model gives, when [`CognitiveModeling.parameter_names`](@ref) knows
+them, against those of the cognitive model and of the environment model: a parameter that
+isn't in the model's attributes is an error, and so is one in its attributes which is
+neither given nor has a default value, unless it is a parameter of an environment that no
+session runs. It prepares each parameter model for the sessions with
 [`CognitiveModeling.prepare_parameters_model`](@ref). When `environment_parameters_model`
 estimates parameters, every session with an environment includes it in the returned
 `sessions_info`.
 
-For sessions that check the domains of their parameters, it then checks what each
-parameter model can give against the domains in [`parameter_domains`](@ref): a prior or a
+For sessions that check the domains of their parameters, it then checks what each parameter
+model can give against the domains in [`parameter_domains`](@ref): a prior or a
 transformation which can give a value outside a domain, as
 [`CognitiveModeling.parameter_value_ranges`](@ref) knows them, is an `ArgumentError`, and a
 fixed value outside its domain a [`ParameterDomainError`](@ref). The parameters of an
@@ -117,12 +116,11 @@ end
 Return `parameters_model`, a parameter model, combined with the values in
 `fixed_parameters`, which every session gets for the parameters they name: a
 [`CompositeParameters`](@ref) of its parts, which keep their names, and a
-[`FixedParameters`](@ref) without a name, or `parameters_model` itself when no values
-are fixed. It is an error when a fixed
-parameter isn't in the attributes of `model`, and when `parameters_model` gives it too,
-which is checked here when [`parameter_names`](@ref) knows its parameters, and when the full
-model runs otherwise. `keyword` is the name of the keyword argument, for the errors. Used by
-[`prepare_full_model`](@ref).
+[`FixedParameters`](@ref) without a name, or `parameters_model` itself when no values are
+fixed. It is an error when a fixed parameter isn't in the attributes of `model`, and when
+`parameters_model` gives it too, which is checked here when [`parameter_names`](@ref) knows
+its parameters, and when the full model runs otherwise. `keyword` is the name of the keyword
+argument, for the errors. Used by [`prepare_full_model`](@ref).
 """
 function with_fixed_parameters(
     parameters_model, fixed_parameters::NamedTuple, model, keyword::String
@@ -215,12 +213,12 @@ end
 """
     check_given_parameters(parameters_model, model, model_runs)
 
-Throw an informative error if `parameters_model`, a parameter model, gives a
-parameter that isn't in the attributes of `model`, a cognitive model or an environment
-model, from [`attribute_names`](@ref), or, when `model_runs` is `true`, doesn't give one in
-its attributes that has no default value in [`default_parameters`](@ref). For sessions
-without an environment, `model` is `NoEnvironment()`, and any parameter given is an error.
-Nothing is checked when [`parameter_names`](@ref) doesn't know the parameters. Used by
+Throw an informative error if `parameters_model`, a parameter model, gives a parameter that
+isn't in the attributes of `model`, a cognitive model or an environment model, from
+[`attribute_names`](@ref), or, when `model_runs` is `true`, doesn't give one in its
+attributes that has no default value in [`default_parameters`](@ref). For sessions without
+an environment, `model` is `NoEnvironment()`, and any parameter given is an error. Nothing
+is checked when [`parameter_names`](@ref) doesn't know the parameters. Used by
 [`prepare_full_model`](@ref).
 """
 function check_given_parameters(

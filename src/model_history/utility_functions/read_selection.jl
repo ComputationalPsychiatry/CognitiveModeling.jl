@@ -41,9 +41,9 @@ end
 """
     saves_initial_timestep_values(save_history)
 
-Return whether `save_history` saves the values from before the first timestep, as
-timestep 0. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref),
-[`saved_timestep_sizes`](@ref) and fitted sessions, to decide whether timestep 0 is saved.
+Return whether `save_history` saves the values from before the first timestep, as timestep
+0. Used by [`simulate`](@ref), [`InstantiatedModel`](@ref), [`saved_timestep_sizes`](@ref)
+and fitted sessions, to decide whether timestep 0 is saved.
 """
 function saves_initial_timestep_values(
     ::SaveHistory{
@@ -58,8 +58,8 @@ end
 
 Return whether `save_history` selects nothing of any kind. Whether it saves the initial
 timestep values doesn't matter, since there is nothing to save of them. Used by
-[`simulate!`](@ref),
-[`InstantiatedModel`](@ref) and fitted sessions, which save nothing at all then.
+[`simulate!`](@ref), [`InstantiatedModel`](@ref) and fitted sessions, which save nothing at
+all then.
 """
 function saves_nothing(
     ::SaveHistory{(),(),(),(),Tsave_initial_timestep_values}

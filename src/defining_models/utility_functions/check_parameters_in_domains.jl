@@ -97,9 +97,9 @@ Throw a [`ParameterDomainError`](@ref) if `value`, the value of the parameter `n
 `model`, is outside `domain`, a [`ParameterDomain`](@ref): a real number that the domain's
 type doesn't take, as [`takes_value`](@ref) decides, or that is below the lower bound or
 above the upper bound, which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides
-for a number that isn't one of Julia's own, or a value that isn't a number and isn't of
-the domain's type. Every element of an array is checked as a value of its own. A number
-that isn't a real number, and an array of them, is left alone. Used by
+for a number that isn't one of Julia's own, or a value that isn't a number and isn't of the
+domain's type. Every element of an array is checked as a value of its own. A number that
+isn't a real number, and an array of them, is left alone. Used by
 [`check_values_in_domains`](@ref).
 """
 function check_value_in_domain(

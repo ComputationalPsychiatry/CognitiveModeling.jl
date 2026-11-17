@@ -15,8 +15,8 @@ end
     turing_independent_parameters(priors, n_sessions)
 
 Turing.jl model which samples one parameter at a time from `priors`, each for every session
-with [`turing_independent_parameter`](@ref) under the parameter's name, and
-returns them in a `NamedTuple`. Used by [`IndependentParameters`](@ref).
+with [`turing_independent_parameter`](@ref) under the parameter's name, and returns them in
+a `NamedTuple`. Used by [`IndependentParameters`](@ref).
 """
 Turing.@model function turing_independent_parameters(
     priors::NamedTuple{names}, n_sessions

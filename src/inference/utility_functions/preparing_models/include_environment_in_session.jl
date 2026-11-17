@@ -19,12 +19,11 @@ end
 
 Return whether a session includes its environment, as the `include_environment` of
 [`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
-`false`, and with `nothing` only when an observation or an action is
-[`MissingValue`](@ref), the environment's history is saved, or its stopping criterion is
-checked on every timestep. A session without an environment never includes one. With
-`false`, it is an error when an observation is `MissingValue()`, the environment's history
-is saved, or its stopping criterion is checked on every timestep, since those need the
-environment. Used by
+`false`, and with `nothing` only when an observation or an action is [`MissingValue`](@ref),
+the environment's history is saved, or its stopping criterion is checked on every timestep.
+A session without an environment never includes one. With `false`, it is an error when an
+observation is `MissingValue()`, the environment's history is saved, or its stopping
+criterion is checked on every timestep, since those need the environment. Used by
 [`prepare_session`](@ref).
 """
 function decide_whether_environment_is_included(
@@ -107,8 +106,8 @@ end
 """
     remake_session_including_environment(session_info)
 
-Return the session including its environment when it has one, and everything else the
-same. A session that was prepared with `include_environment = false` is an error. Used by
+Return the session including its environment when it has one, and everything else the same.
+A session that was prepared with `include_environment = false` is an error. Used by
 [`include_environments_if_estimated`](@ref).
 """
 function remake_session_including_environment(session_info::SessionInfo)
