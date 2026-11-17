@@ -166,7 +166,7 @@ Turing.@model function turing_run_full_model(
     end
 
     #The sessions return the parameters they were given too, which are those above
-    saved_behavioral_trajectories = sessions_result.saved_behavioral_trajectories
+    saved_trajectories = sessions_result.saved_trajectories
 
     #Do the optional downstream model, with its variables under downstream_model when the prefixes are included
     if include_submodel_prefixes
@@ -174,7 +174,7 @@ Turing.@model function turing_run_full_model(
             prefix(
                 turing_downstream_model(
                     downstream_model,
-                    saved_behavioral_trajectories,
+                    saved_trajectories,
                     cognitive_parameters,
                     sessions_info,
                 ),
@@ -185,20 +185,14 @@ Turing.@model function turing_run_full_model(
     else
         downstream_values ~ to_submodel(
             turing_downstream_model(
-                downstream_model,
-                saved_behavioral_trajectories,
-                cognitive_parameters,
-                sessions_info,
+                downstream_model, saved_trajectories, cognitive_parameters, sessions_info
             ),
             false,
         )
     end
 
     return (;
-        cognitive_parameters,
-        environment_parameters,
-        saved_behavioral_trajectories,
-        downstream_values,
+        cognitive_parameters, environment_parameters, saved_trajectories, downstream_values
     )
 end
 
@@ -213,7 +207,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     parallelization=SerialSessions(),
 )
     check_environment_parameters(sessions_info, environment_parameters)
-    saved_behavioral_trajectories ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_sessions(
             parallelization, sessions_info, cognitive_parameters, environment_parameters
         ),
@@ -221,7 +215,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     )
 
     #The parameters as they were given, so that a model around the sessions which transforms its variables into them has them for each sample, with the trajectories each session saved
-    return (; cognitive_parameters, environment_parameters, saved_behavioral_trajectories)
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
 """
@@ -254,7 +248,7 @@ Turing.@model function turing_run_sessions(
         false,
     )
     saved_trajectories = initialize_storage(
-        first_session.saved_behavioral_trajectories, length(sessions)
+        first_session.saved_trajectories, length(sessions)
     )
     for i in 2:length(sessions)
         session ~ to_submodel(
@@ -269,9 +263,7 @@ Turing.@model function turing_run_sessions(
             false,
         )
         #A session whose saved trajectories have another type widens the vector
-        saved_trajectories = store_value!(
-            saved_trajectories, session.saved_behavioral_trajectories, i
-        )
+        saved_trajectories = store_value!(saved_trajectories, session.saved_trajectories, i)
     end
     return saved_trajectories
 end
@@ -299,7 +291,7 @@ Turing.@model function turing_run_sessions(
         false,
     )
     saved_trajectories = initialize_storage(
-        first_session.saved_behavioral_trajectories, length(sessions)
+        first_session.saved_trajectories, length(sessions)
     )
     #A vector can't be widened while other threads write to it, so saved trajectories of another type are put aside until the threads are done
     saved_with_other_types = Vector{Any}(undef, length(sessions))
@@ -316,7 +308,7 @@ Turing.@model function turing_run_sessions(
             ),
             false,
         )
-        saved = session.saved_behavioral_trajectories
+        saved = session.saved_trajectories
         if saved isa eltype(saved_trajectories)
             saved_trajectories[i] = saved
         else
@@ -393,7 +385,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         action=session_info.previous_action,
         environment=(; state=nothing),
     )
-    saved_behavioral_trajectories ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_all_timesteps(
             session_info, cognitive_parameters_with_defaults, (;), previous
         ),
@@ -401,9 +393,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     )
 
     #The parameters as they were given, without the defaults, so that a model around the session which transforms its variables into them has them for each sample, with the trajectories the session saved
-    return (;
-        cognitive_parameters, environment_parameters=(;), saved_behavioral_trajectories
-    )
+    return (; cognitive_parameters, environment_parameters=(;), saved_trajectories)
 end
 
 #The same with an environment, which fills in the observations that are missing in the data, and takes its parameters too
@@ -423,8 +413,8 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         return (;
             cognitive_parameters,
             environment_parameters,
-            saved_behavioral_trajectories=with_empty_environment_entry(
-                session_without_environment.saved_behavioral_trajectories
+            saved_trajectories=with_empty_environment_entry(
+                session_without_environment.saved_trajectories
             ),
         )
     end
@@ -476,7 +466,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
             action=map_names(session_info.previous_action, session_info.action_map),
         ),
     )
-    saved_behavioral_trajectories ~ to_submodel(
+    saved_trajectories ~ to_submodel(
         turing_run_all_timesteps(
             session_info,
             cognitive_parameters_with_defaults,
@@ -487,7 +477,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     )
 
     #The parameters as they were given, without the defaults, with the trajectories the session saved
-    return (; cognitive_parameters, environment_parameters, saved_behavioral_trajectories)
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
 #A session without an environment takes no environment parameters, so an empty NamedTuple passes, which lets several sessions be run alike, and anything else is an error
@@ -529,9 +519,9 @@ once at the end, as observed values. Before each timestep from
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
 what it saved up to it, which is an error when the data continues. It returns the
 trajectories the session saved, as [`turing_behavioral_session`](@ref) describes them, which
-returns them under `saved_behavioral_trajectories`. Both methods of that model call this
-one, after setting up the parameters and the initial states with or without an environment.
-Used by [`turing_behavioral_session`](@ref).
+returns them under `saved_trajectories`. Both methods of that model call this one, after
+setting up the parameters and the initial states with or without an environment. Used by
+[`turing_behavioral_session`](@ref).
 """
 Turing.@model function turing_run_all_timesteps(
     session_info, cognitive_parameters, environment_parameters, previous

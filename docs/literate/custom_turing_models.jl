@@ -113,7 +113,7 @@ sessions_info = MultipleSessionsInfo(
 # participants share one inverse temperature. The model gives
 # [`turing_multiple_behavioral_sessions`](@ref) the parameters as a `NamedTuple` with a
 # vector for each parameter, with a value for every session in the order of
-# `sessions_info.session_ids`, and returns what it returns:
+# `sessions_info.session_ids`, and returns what that submodel returns:
 
 @model function hierarchical_learning_rates(sessions_info)
     n_participants = CognitiveModeling.n_sessions(sessions_info)

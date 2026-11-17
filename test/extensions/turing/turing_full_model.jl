@@ -19,13 +19,13 @@ struct MeasurementRegression{T} <: AbstractDownstreamModel
 end
 Turing.@model function CognitiveModeling.turing_downstream_model(
     downstream_model::MeasurementRegression,
-    saved_behavioral_trajectories,
+    saved_trajectories,
     cognitive_parameters,
     sessions_info::MultipleSessionsInfo,
 )
     slope ~ Normal(0, 1)
     last_expected_rewards = [
-        saved.states[end].expected_reward for saved in saved_behavioral_trajectories
+        saved.states[end].expected_reward for saved in saved_trajectories
     ]
     downstream_model.measurements ~ MvNormal(slope .* last_expected_rewards, 1.0)
     return slope
@@ -137,7 +137,7 @@ end
         @test result.cognitive_parameters ==
               (; learning_rate=learning_rates, inverse_temperature=inverse_temperatures) &&
             result.environment_parameters == (;)
-        saved = result.saved_behavioral_trajectories
+        saved = result.saved_trajectories
         @test saved isa Vector && length(saved) == 3
         @test [length(session.states) for session in saved] == [4, 3, 5]
         @test saved[2].states[2].expected_reward ≈ 0.5 + 0.3 * (0.0 - 0.5)
@@ -185,7 +185,7 @@ end
             sessions_info,
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0]),
         )
-        saved = returned(model, (;)).saved_behavioral_trajectories
+        saved = returned(model, (;)).saved_trajectories
         @test saved[1].actions == [
             (; choice=BeforeFirstTimestep()),
             (; choice=true),
@@ -230,7 +230,7 @@ end
             (;),
         )
         #RewardsPreviousChoice gives the previous choice scaled, so the second reward of S1 is 2.0 after a choice of true, and S3's is 3.0
-        saved = result.saved_behavioral_trajectories
+        saved = result.saved_trajectories
         @test saved[1].observations[3] == (; reward=2.0) &&
             saved[3].observations[3] == (; reward=3.0)
         #The environment parameters are returned as they were given
@@ -239,7 +239,7 @@ end
         result = returned(
             turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
         )
-        @test result.saved_behavioral_trajectories[1].observations[3] == (; reward=1.0) &&
+        @test result.saved_trajectories[1].observations[3] == (; reward=1.0) &&
             result.environment_parameters == (;)
         @test_throws "Environment parameters were given, (scale = [2.0, 2.0, 2.0],), but the session has no environment." logjoint(
             turing_multiple_behavioral_sessions(
@@ -343,14 +343,14 @@ end
         @test keys(result) == (
             :cognitive_parameters,
             :environment_parameters,
-            :saved_behavioral_trajectories,
+            :saved_trajectories,
             :downstream_values,
         )
         @test result.environment_parameters === (;)
         @test result.cognitive_parameters ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
-        @test length(result.saved_behavioral_trajectories) == 3
-        @test result.saved_behavioral_trajectories[2].states[2].expected_reward ≈
+        @test length(result.saved_trajectories) == 3
+        @test result.saved_trajectories[2].states[2].expected_reward ≈
             0.5 + 0.3 * (0.0 - 0.5)
         @test result.downstream_values === nothing
     end
@@ -429,8 +429,7 @@ end
         result = returned(model, given)
         @test result.downstream_values == 0.8
         last_expected_rewards = [
-            session.states[end].expected_reward for
-            session in result.saved_behavioral_trajectories
+            session.states[end].expected_reward for session in result.saved_trajectories
         ]
         @test loglikelihood(model, given) ≈
             sessions_by_hand(FULL_TABLE, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0]) +
@@ -758,9 +757,7 @@ end
         results = returned(model, chain)
         @test length(results) == 50
         @test length(results[1].cognitive_parameters.learning_rate) == 3
-        @test [
-            length(session.states) for session in results[1].saved_behavioral_trajectories
-        ] == [4, 3, 5]
+        @test [length(session.states) for session in results[1].saved_trajectories] == [4, 3, 5]
         #With the missing choice imputed, its latent is sampled too, by a sampler for discrete variables
         with_imputed = turing_full_model(
             IndependentParameters(FULL_PRIORS), sessions_for_test()
@@ -852,8 +849,8 @@ end
         )
         threadsafe = Turing.DynamicPPL.setthreadsafe(in_parallel, true)
         @test logjoint(threadsafe, (;)) ≈ logjoint(in_sequence, (;))
-        @test returned(threadsafe, (;)).saved_behavioral_trajectories[2].states ==
-            returned(in_sequence, (;)).saved_behavioral_trajectories[2].states
+        @test returned(threadsafe, (;)).saved_trajectories[2].states ==
+            returned(in_sequence, (;)).saved_trajectories[2].states
         #Sessions whose saved trajectories have different types give what they give in sequence, since S3 saves UnimputedMissingValue() for its missing choice
         saving_actions = sessions_for_test(;
             impute_missing_actions=false,
@@ -894,14 +891,11 @@ end
         chain = sample(Xoshiro(2), unsaved, NUTS(), 20; progress=false)
         results = returned(saving, chain)
         @test length(results) == 20
-        @test [
-            length(session.states) for session in results[1].saved_behavioral_trajectories
-        ] == [4, 3, 5]
-        @test returned(unsaved, chain)[1].saved_behavioral_trajectories[1].states ==
-            fill((;), 4)
+        @test [length(session.states) for session in results[1].saved_trajectories] == [4, 3, 5]
+        @test returned(unsaved, chain)[1].saved_trajectories[1].states == fill((;), 4)
         #The first state of each session is the initial one, and the parameters are the chain's
         learning_rates = results[1].cognitive_parameters.learning_rate
-        @test results[1].saved_behavioral_trajectories[1].states[2].expected_reward ≈
+        @test results[1].saved_trajectories[1].states[2].expected_reward ≈
             0.5 + learning_rates[1] * (1.0 - 0.5)
     end
 

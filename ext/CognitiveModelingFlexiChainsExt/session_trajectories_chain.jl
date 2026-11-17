@@ -10,14 +10,14 @@ function CognitiveModeling.session_trajectories_chain(
     check_results(results)
     check_results_of_multiple_sessions(first(results), sessions_info)
 
-    #The results of a full model and of several sessions hold what each session saved under saved_behavioral_trajectories
+    #The results of a full model and of several sessions hold what each session saved under saved_trajectories
     entries = empty_entries()
     for (i, session_id) in enumerate(sessions_info.session_ids)
         add_session_entries!(
             entries,
             results,
             (session_id_to_symbol(session_id),),
-            result -> result.saved_behavioral_trajectories[i],
+            result -> result.saved_trajectories[i],
         )
     end
     return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
@@ -32,9 +32,7 @@ function CognitiveModeling.session_trajectories_chain(
     check_results(results)
     check_results_of_single_session(first(results))
     entries = empty_entries()
-    add_session_entries!(
-        entries, results, (), result -> result.saved_behavioral_trajectories
-    )
+    add_session_entries!(entries, results, (), result -> result.saved_trajectories)
     return chain_of_entries(entries, size(results)...; iter_indices, chain_indices)
 end
 
@@ -299,16 +297,16 @@ end
 Throw an informative error if `result`, the result of the first sample, isn't what the
 models of several sessions return, [`turing_full_model`](@ref) and
 [`turing_multiple_behavioral_sessions`](@ref), with what each session saved in a vector
-under `saved_behavioral_trajectories`, for as many sessions as `sessions_info` has, or what
+under `saved_trajectories`, for as many sessions as `sessions_info` has, or what
 [`turing_behavioral_session`](@ref) returns, with what the session saved under
-`saved_behavioral_trajectories`. Used by [`session_trajectories_chain`](@ref) and
+`saved_trajectories`. Used by [`session_trajectories_chain`](@ref) and
 [`session_parameters_chain`](@ref).
 """
 function check_results_of_multiple_sessions(result, sessions_info::MultipleSessionsInfo)
     if !(
         result isa NamedTuple &&
-        hasproperty(result, :saved_behavioral_trajectories) &&
-        result.saved_behavioral_trajectories isa AbstractVector
+        hasproperty(result, :saved_trajectories) &&
+        result.saved_trajectories isa AbstractVector
     )
         throw(
             ArgumentError(
@@ -316,14 +314,14 @@ function check_results_of_multiple_sessions(result, sessions_info::MultipleSessi
             ),
         )
     end
-    check_number_of_sessions(result.saved_behavioral_trajectories, sessions_info)
+    check_number_of_sessions(result.saved_trajectories, sessions_info)
     return nothing
 end
 function check_results_of_single_session(result)
     if !(
         result isa NamedTuple &&
-        hasproperty(result, :saved_behavioral_trajectories) &&
-        result.saved_behavioral_trajectories isa NamedTuple
+        hasproperty(result, :saved_trajectories) &&
+        result.saved_trajectories isa NamedTuple
     )
         throw(
             ArgumentError(

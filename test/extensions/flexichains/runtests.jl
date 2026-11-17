@@ -43,7 +43,7 @@ function chain_sessions(session_columns=:participant)
 end
 
 ## Results made by hand, so that no PPL is needed ##
-#What a session saved, in the shape turing_behavioral_session returns it under saved_behavioral_trajectories: for each kind,
+#What a session saved, in the shape turing_behavioral_session returns it under saved_trajectories: for each kind,
 #a vector over the timesteps from timestep 0, with an empty NamedTuple on every timestep when nothing of that kind is
 #saved, and the environment's record under environment when the session has one
 function saved_by_session(
@@ -107,28 +107,28 @@ end
 
 #What a full model returns, with the parameters of every session for both models
 function full_model_result(
-    cognitive_parameters, saved_behavioral_trajectories; environment_parameters=(;)
+    cognitive_parameters, saved_trajectories; environment_parameters=(;)
 )
     return (;
         cognitive_parameters,
         environment_parameters,
-        saved_behavioral_trajectories,
+        saved_trajectories,
         downstream_values=nothing,
     )
 end
 
 #What turing_multiple_behavioral_sessions returns, with the parameters of every session and a vector of what each saved
 function multiple_sessions_result(
-    cognitive_parameters, saved_behavioral_trajectories; environment_parameters=(;)
+    cognitive_parameters, saved_trajectories; environment_parameters=(;)
 )
-    return (; cognitive_parameters, environment_parameters, saved_behavioral_trajectories)
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
 #What turing_behavioral_session returns, with the parameters of the session and what it saved
 function single_session_result(
-    cognitive_parameters, saved_behavioral_trajectories; environment_parameters=(;)
+    cognitive_parameters, saved_trajectories; environment_parameters=(;)
 )
-    return (; cognitive_parameters, environment_parameters, saved_behavioral_trajectories)
+    return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
 
 #The results of two samples, as two iterations of one chain
