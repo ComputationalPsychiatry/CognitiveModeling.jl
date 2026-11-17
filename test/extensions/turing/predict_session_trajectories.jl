@@ -87,6 +87,53 @@
         )
     end
 
+    @testset "Sessions of different lengths are simulated with their own timesteps, with an environment too" begin
+        different_lengths = turing_full_model(
+            IndependentParameters(FULL_PRIORS),
+            sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
+        )
+        prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
+            Xoshiro(9),
+            different_lengths,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; outputs=:choice),
+        )
+        #Every choice of each session is simulated, on each of its own timesteps
+        for (name, n_timesteps) in
+            ((@varname(S1.choice), 1), (@varname(S2.choice), 2), (@varname(S3.choice), 5))
+            @test all(
+                choices ->
+                    length(choices) == n_timesteps + 1 &&
+                    all(choice -> choice isa Bool, choices[2:end]),
+                vec(simulated[name]),
+            )
+        end
+
+        #With an environment, the rewards are simulated on each timestep of each session too, from the simulated choices
+        with_environment = turing_full_model(
+            IndependentParameters(FULL_PRIORS),
+            sessions_for_test(
+                SessionRescorlaWagner(),
+                DIFFERENT_LENGTHS_TABLE;
+                environment=RewardsPreviousChoice(),
+            ),
+        )
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
+            Xoshiro(10),
+            with_environment,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; inputs=:reward, outputs=:choice),
+        )
+        rewards = vec(simulated[@varname(S3.reward)])
+        choices = vec(simulated[@varname(S3.choice)])
+        @test all(sample_rewards -> length(sample_rewards) == 6, rewards)
+        @test all(
+            sample -> rewards[sample][2:end] == [0.5; float.(choices[sample][2:(end - 1)])],
+            eachindex(rewards),
+        )
+    end
+
     @testset "A chain that isn't a FlexiChain is an error, with or without a random number generator" begin
         not_a_chain = (; learning_rate=[0.3])
         @test_throws "predict_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." predict_session_trajectories(

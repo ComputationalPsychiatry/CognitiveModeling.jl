@@ -10,6 +10,13 @@ function expected_rewards_by_hand(rewards, learning_rate)
     return expected_rewards
 end
 
+#Three sessions of one, two and five timesteps, where the choices on the last timestep of S2 and of S3 are missing and imputed, so that the variables of a session sit at timesteps which the sessions before it don't have
+const DIFFERENT_LENGTHS_TABLE = (;
+    id=["S1", "S2", "S2", "S3", "S3", "S3", "S3", "S3"],
+    reward=[1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0],
+    choice=Union{Missing,Bool}[true, false, missing, true, true, false, true, missing],
+)
+
 @testset "get_session_trajectories" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
     sessions_info = sessions_for_test(; impute_missing_actions=false)
@@ -226,6 +233,43 @@ end
             imputing, prior_chain; cognitive_save_history=SaveHistory(; outputs=:choice)
         )
         @test length(session_trajectories[@varname(S3.choice)][1]) == 5
+    end
+
+    @testset "Sessions of different lengths each keep their own timesteps, also with values imputed at timesteps that the sessions before them don't have" begin
+        different_lengths = turing_full_model(
+            IndependentParameters(FULL_PRIORS),
+            sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
+        )
+        prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
+        session_trajectories = @test_logs match_mode = :any get_session_trajectories(
+            different_lengths,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; states=:expected_reward, outputs=:choice),
+        )
+        #Each entry has timestep 0 and the timesteps of its own session, for every sample
+        for (name, n_timesteps) in (
+            (@varname(S1.expected_reward), 1),
+            (@varname(S2.expected_reward), 2),
+            (@varname(S3.expected_reward), 5),
+        )
+            @test all(
+                rewards -> length(rewards) == n_timesteps + 1,
+                vec(session_trajectories[name]),
+            )
+        end
+        #The imputed choices are read like the recorded ones
+        @test all(
+            choices -> length(choices) == 3 && choices[3] isa Bool,
+            vec(session_trajectories[@varname(S2.choice)]),
+        )
+        @test all(
+            choices -> length(choices) == 6 && choices[6] isa Bool,
+            vec(session_trajectories[@varname(S3.choice)]),
+        )
+        #The parameters of the sessions are read in the same way
+        parameters = get_session_parameters(different_lengths, prior_chain)
+        @test vec(parameters[@varname(S3.learning_rate)]) ==
+            map(rates -> rates[3], vec(prior_chain[@varname(learning_rate.session)]))
     end
 
     @testset "A model of one's own is an error" begin
