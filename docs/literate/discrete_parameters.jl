@@ -11,7 +11,7 @@
 using CognitiveModeling
 using LogExpFunctions: logistic
 using Turing
-using Turing: Bijectors
+using Turing: Bijectors, DynamicPPL
 
 # ## A model with a discrete parameter
 #
@@ -56,7 +56,7 @@ end
 # ## Sampling a discrete parameter
 #
 # A sampler which uses gradients, such as NUTS, can't sample a discrete parameter. With
-# `Gibbs`, each kind of parameter gets a sampler of its own. Here every session has its own
+# `Gibbs`, each kind of variable gets a sampler of its own. Here every session has its own
 # parameters, with `sessions_info` made from a table as on the other pages:
 
 parameters_model = IndependentParameters((;
@@ -64,11 +64,36 @@ parameters_model = IndependentParameters((;
 ))
 model = turing_full_model(parameters_model, sessions_info)
 
-sampler = Gibbs(
-    @varname(learning_rate.session) => NUTS(), @varname(uses_rewards.session) => MH()
-)
-chain = sample(model, sampler, 1000)
+# The names of the variables of each kind can be read from the model. DynamicPPL.jl, which
+# Turing.jl is built on, gives the distribution that every variable is sampled from, and a
+# variable is discrete when its distribution is. A function of one's own keeps the lines
+# together:
 
+function discrete_and_continuous_variable_names(model)
+    distributions = DynamicPPL.extract_priors(model)
+    variable_names = collect(keys(distributions))
+    is_discrete = map(name -> distributions[name] isa DiscreteDistribution, variable_names)
+    return (;
+        discrete=variable_names[is_discrete], continuous=variable_names[.!is_discrete]
+    )
+end
+
+variable_names = discrete_and_continuous_variable_names(model)
+
+# This finds every discrete variable of the model, also a choice that wasn't recorded and
+# is imputed, which is a variable without being a parameter. Each kind then gets its
+# sampler:
+
+sampler = Gibbs(variable_names.continuous => NUTS(), variable_names.discrete => MH())
+chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
+
+# Inside a `Gibbs` sampler, NUTS only adapts its step size when `sample` is given `nadapts`,
+# and the samples of those steps are kept unless `discard_initial` is given too. Without
+# `nadapts`, it may never move, see
+# [Turing.jl's issue 2874](https://github.com/TuringLang/Turing.jl/issues/2874). `Gibbs`
+# also takes no sampler without variables, so a model without discrete variables is sampled
+# with NUTS alone.
+#
 # The share of the samples in which a session's `uses_rewards` is `true` is the posterior
 # probability that the session learned from its rewards.
 
@@ -98,11 +123,9 @@ model = turing_full_model(parameters_model, sessions_info)
 # The coefficients are continuous and the values of the sessions discrete, so each kind
 # gets its sampler again:
 
-sampler = Gibbs(
-    (@varname(learning_rate.coef), @varname(uses_rewards.coef)) => NUTS(),
-    @varname(uses_rewards.session) => MH(),
-)
-chain = sample(model, sampler, 1000)
+variable_names = discrete_and_continuous_variable_names(model)
+sampler = Gibbs(variable_names.continuous => NUTS(), variable_names.discrete => MH())
+chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
 
 # ## Ordered levels and counts
 #
