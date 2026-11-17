@@ -6,22 +6,24 @@ cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, 
 actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
 states, with a state changed in place, with a selection of what is saved, with maps of names
 between the model and the environment, with an environment which ends the simulation, with
-a reward that isn't given on every timestep, and on single observations, and agents
-simulated with an environment or on single observations, with and without a history, and
-with a state saved with `deepcopy`. Code in the package's extensions is differentiated in
+a reward that isn't given on every timestep, with parameter domains, and on single
+observations, and agents simulated with an environment or on single observations, with and
+without a history, and with a state saved with `deepcopy`. Code in the package's extensions
+is differentiated in
 suites of its own, each with its own environment, beside the other tests of the extension.
 The one for Turing.jl, in `test/extensions/turing/ad`, differentiates the log density of
 Turing.jl models of a session, in its `turing_cases.jl`: with the agent or the environment
 starting, with imputed actions, with an environment filling in observations, with an
 environment which doesn't run because nothing in the data is missing, with observations
 imputed from an environment's distributions, with a reward that isn't given on every
-timestep, with three observations, also with one that isn't given on every timestep, and
-with a model which samples within each timestep, and of the full model of several sessions,
-also with three parameters, with an environment parameter shared by the sessions, and with
-parameters from the distributions of groups and from regressions. That keeps the package's
-own code tested without Turing.jl, since the backends work without it and with other
-probabilistic programming languages. Every gradient is compared with finite
-differences. Zygote isn't supported, because the package uses for loops.
+timestep, with three observations, also with one that isn't given on every timestep, with
+parameter domains, and with a model which samples within each timestep, and of the full
+model of several sessions, also with three parameters, with parameter domains, with an
+environment parameter shared by the sessions, and with parameters from the distributions of
+groups and from regressions. That keeps the package's own code tested without Turing.jl,
+since the backends work without it and with other probabilistic programming languages.
+Every gradient is compared with finite differences. Zygote isn't supported, because the
+package uses for loops.
 
 | Backend | Forms tested |
 |---|---|

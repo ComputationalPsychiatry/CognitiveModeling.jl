@@ -526,6 +526,112 @@ end
 
 Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs)
 
+## The values a parameter can take ##
+
+"""
+    ParameterDomain(; type=Real, lower=-Inf, upper=Inf)
+
+The values that a parameter of a cognitive model or an environment model can take, which
+the model gives for it in [`parameter_domains`](@ref): values of `type`, between `lower` and
+`upper` when they are real numbers.
+
+# Keyword arguments
+- `type=Real`: the type of the parameter's values. An abstract type takes every type of its
+  kind, so with `Real` a value can be a `Float32`, a `Float64` or a number of an automatic
+  differentiation package alike, and no value is converted. A type of whole numbers, such as
+  `Integer`, takes every whole number, also in another number type, such as `3.0`, and
+  `Bool` takes `true`, `false`, 0 and 1. A type that isn't a type of numbers, such as
+  `AbstractString` or `Symbol`, is for a parameter such as the name of a strategy. A type of
+  floating-point numbers, such as `Float64`, is an error: give `Real`, which takes them all.
+- `lower=-Inf` and `upper=Inf`: the smallest and the largest value of a parameter that is a
+  real number, which are both in the domain. A parameter of another type has no bounds.
+
+A parameter that is an array has every element in the domain, so `type` is the type of an
+element. A parameter is discrete when its type is a type of whole numbers, or isn't a type
+of real numbers, and continuous otherwise, as
+[`CognitiveModeling.discrete_parameter_names`](@ref) and
+[`CognitiveModeling.continuous_parameter_names`](@ref) read it. The arguments are kept as
+`domain.type`, `domain.lower` and `domain.upper`.
+
+# Examples
+```jldoctest
+julia> learning_rate = ParameterDomain(; lower = 0, upper = 1)
+ParameterDomain(; lower = 0, upper = 1)
+
+julia> learning_rate.type, learning_rate.lower, learning_rate.upper
+(Real, 0, 1)
+
+julia> ParameterDomain(; type = Integer, lower = 1)
+ParameterDomain(; type = Integer, lower = 1)
+```
+"""
+struct ParameterDomain{Ttype,Tlower<:Real,Tupper<:Real}
+    lower::Tlower
+    upper::Tupper
+
+    #Takes the type of the values and the bounds, and checks that they fit together. The type is kept in the type of the domain, so that a value is checked against it without looking it up when a model runs
+    function ParameterDomain(; type::Type=Real, lower::Real=(-Inf), upper::Real=Inf)
+
+        #A type of floating-point numbers would leave out the other ones, and the numbers of automatic differentiation packages
+        if type <: AbstractFloat
+            throw(
+                ArgumentError(
+                    "A ParameterDomain was given type = $type, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
+                ),
+            )
+        end
+
+        #Only real numbers have bounds
+        if !(type <: Real) && (lower != -Inf || upper != Inf)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain with type = $type was given the bounds lower = $lower and upper = $upper, but only a parameter that is a real number has bounds.",
+                ),
+            )
+        end
+
+        #The bounds are numbers, with the lower one at most the upper one
+        if isnan(lower) || isnan(upper) || lower > upper
+            throw(
+                ArgumentError(
+                    "The lower bound of a ParameterDomain is at most its upper bound, but it was given lower = $lower and upper = $upper.",
+                ),
+            )
+        end
+        return new{type,typeof(lower),typeof(upper)}(lower, upper)
+    end
+end
+
+#Reads the type of the values, which is in the type of the domain, as a property next to the bounds
+function Base.getproperty(domain::ParameterDomain{Ttype}, name::Symbol) where {Ttype}
+    name === :type && return Ttype
+    return getfield(domain, name)
+end
+
+Base.propertynames(::ParameterDomain) = (:type, :lower, :upper)
+
+#Shows the domain as it is written, with the arguments that aren't the defaults
+function Base.show(io::IO, domain::ParameterDomain)
+    arguments = String[]
+    domain.type === Real || push!(arguments, "type = $(domain.type)")
+    domain.lower == -Inf || push!(arguments, "lower = $(domain.lower)")
+    domain.upper == Inf || push!(arguments, "upper = $(domain.upper)")
+    print(io, "ParameterDomain(")
+    isempty(arguments) || print(io, "; ", join(arguments, ", "))
+    print(io, ")")
+    return nothing
+end
+
+"""
+    is_discrete(domain)
+
+Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when its
+type is a type of whole numbers, or isn't a type of real numbers. Used by
+[`discrete_parameter_names`](@ref), by the display of a model and by the warnings of an
+inference backend about priors.
+"""
+is_discrete(::ParameterDomain{Ttype}) where {Ttype} = !(Ttype <: Real) || Ttype <: Integer
+
 ## Errors ##
 
 """
@@ -569,5 +675,34 @@ end
 #Prints the message when the error isn't caught
 function Base.showerror(io::IO, error::InvalidParametersError)
     print(io, "InvalidParametersError: ", error.message)
+    return nothing
+end
+
+"""
+    ParameterDomainError(message)
+
+The error that is thrown when a parameter of a cognitive model or an environment model has a
+value outside its domain in [`parameter_domains`](@ref): of another type than the domain's,
+or below its lower bound or above its upper bound.
+
+A simulation and a fit stop with it. A fit which catches an
+[`InvalidParametersError`](@ref), to give the parameters of a sample a probability of zero,
+doesn't catch this one. Give the parameters priors or transformations that stay within the
+domains instead, or leave the check out with `check_parameter_domains = false` in
+[`simulate`](@ref), [`InstantiatedModel`](@ref) or [`SessionInfo`](@ref).
+
+# Examples
+```jldoctest
+julia> sprint(showerror, ParameterDomainError("The parameter learning_rate is 1.5, which is outside its domain, from 0 to 1."))
+"ParameterDomainError: The parameter learning_rate is 1.5, which is outside its domain, from 0 to 1."
+```
+"""
+struct ParameterDomainError <: Exception
+    message::String
+end
+
+#Prints the message when the error isn't caught
+function Base.showerror(io::IO, error::ParameterDomainError)
+    print(io, "ParameterDomainError: ", error.message)
     return nothing
 end

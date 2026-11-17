@@ -571,6 +571,105 @@ function read_history_in_place(x, model=LearnsInPlace())
     return total
 end
 
+# A Rescorla-Wagner model which also forgets, with its learning rate and its forgetting rate in one vector, and
+# an environment, both with domains for their parameters. The parameters are checked against the domains before
+# anything runs, with the number types and the arrays that each backend gives
+struct LearnsAndForgetsWithinDomains <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::LearnsAndForgetsWithinDomains, parameters
+)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.apply_timestep_model(
+    model::LearnsAndForgetsWithinDomains, context::ModelContext
+)
+    V₋₁ = context.previous_state.expected_reward
+    α = context.parameters.rates
+    β = context.parameters.inverse_temperature
+    Vₜ = if context.input.reward isa AbstractNoValue
+        V₋₁
+    else
+        V₋₁ + α[1] * (context.input.reward - V₋₁) + α[2] * (0.5 - V₋₁)
+    end
+    return ModelOutput(
+        (; choice=Deterministic(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward=Vₜ)
+    )
+end
+function CognitiveModeling.attribute_names(model::LearnsAndForgetsWithinDomains)
+    return ModelAttributes(;
+        parameters=(:rates, :inverse_temperature),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end
+function CognitiveModeling.parameter_domains(model::LearnsAndForgetsWithinDomains)
+    return (;
+        rates=ParameterDomain(; lower=0, upper=1),
+        inverse_temperature=ParameterDomain(; lower=0),
+    )
+end
+struct RewardsWithinDomain <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::RewardsWithinDomain, parameters) = (;)
+function CognitiveModeling.apply_timestep_model(
+    environment::RewardsWithinDomain, context::ModelContext
+)
+    action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
+    return ModelOutput((; reward=Deterministic(context.parameters.reward_size * action)))
+end
+function CognitiveModeling.attribute_names(environment::RewardsWithinDomain)
+    return ModelAttributes(;
+        parameters=:reward_size, states=(), inputs=:choice, outputs=:reward
+    )
+end
+function CognitiveModeling.parameter_domains(environment::RewardsWithinDomain)
+    return (; reward_size=ParameterDomain(; lower=0),)
+end
+
+# A simulation of models with parameter domains, with the parameters from a vector, of which the two rates are passed on as a vector
+function simulate_within_domains(x, who_starts)
+    simulation = simulate(
+        LearnsAndForgetsWithinDomains(),
+        RewardsWithinDomain();
+        who_starts,
+        n_steps=20,
+        cognitive_parameters=(; rates=x[1:2], inverse_temperature=x[3]),
+        environment_parameters=(; reward_size=x[4]),
+        cognitive_save_history=SaveHistory(SaveEverything()),
+    )
+    return sum_expected_rewards(simulation.states)
+end
+
+# An agent with parameter domains simulated on one observation at a time, with the parameters from a vector
+function simulate_agent_within_domains(x)
+    agent = InstantiatedModel(
+        LearnsAndForgetsWithinDomains(), (; rates=x[1:2], inverse_temperature=x[3])
+    )
+    total = zero(x[1])
+    for reward in (1.0, 0.0, 1.0, 1.0, 0.0)
+        total += simulate!(agent, (; reward)).choice
+    end
+    return total
+end
+
+# A model with parameter domains run on one observation at a time with simulate, with the parameters from a vector
+function simulate_on_observations_within_domains(x)
+    parameters = (; rates=x[1:2], inverse_temperature=x[3])
+    action, state = simulate(LearnsAndForgetsWithinDomains(), (; reward=1.0); parameters)
+    total = action.choice
+    for reward in (0.0, 1.0, 1.0, 0.0)
+        action, state = simulate(
+            LearnsAndForgetsWithinDomains(),
+            (; reward);
+            parameters,
+            previous_state=state,
+            previous_output=action,
+        )
+        total += action.choice
+    end
+    return total
+end
+
 # What the AD and Reactant tests check. In each entry,
 # f takes a vector x and returns a number, such as a model's log likelihood for example data.
 # Set reactant = false for what can't run on Reactant. Here that's Xoshiro, which Reactant doesn't support.
@@ -811,6 +910,30 @@ const TEST_CASES = [
             x, AgentStarts(), SaveHistory(; states=:expected_reward)
         ),
         x=[0.3, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with parameter domains, environment starts",
+        f=x -> simulate_within_domains(x, EnvironmentStarts()),
+        x=[0.3, 0.1, 2.0, 0.8],
+        reactant=true,
+    ),
+    (;
+        name="simulate with parameter domains, agent starts",
+        f=x -> simulate_within_domains(x, AgentStarts()),
+        x=[0.3, 0.1, 2.0, 0.8],
+        reactant=true,
+    ),
+    (;
+        name="simulate! on single observations with parameter domains",
+        f=simulate_agent_within_domains,
+        x=[0.3, 0.1, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate on single observations with parameter domains",
+        f=simulate_on_observations_within_domains,
+        x=[0.3, 0.1, 2.0],
         reactant=true,
     ),
 ]

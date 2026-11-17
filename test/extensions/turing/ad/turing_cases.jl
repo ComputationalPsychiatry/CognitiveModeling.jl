@@ -59,6 +59,28 @@ function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithInitia
     )
 end
 
+# The Rescorla-Wagner model with domains for its parameters, which a session checks them against on every evaluation, with the number types of each backend
+struct TuringRescorlaWagnerWithinDomains <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::TuringRescorlaWagnerWithinDomains, parameters
+)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.apply_timestep_model(
+    model::TuringRescorlaWagnerWithinDomains, context::ModelContext
+)
+    return CognitiveModeling.apply_timestep_model(TuringRescorlaWagner(), context)
+end
+function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithinDomains)
+    return CognitiveModeling.attribute_names(TuringRescorlaWagner())
+end
+function CognitiveModeling.parameter_domains(model::TuringRescorlaWagnerWithinDomains)
+    return (;
+        learning_rate=ParameterDomain(; lower=0, upper=1),
+        inverse_temperature=ParameterDomain(; lower=0),
+    )
+end
+
 # Three observations, so that a row of the data has three columns, of which the bonus can be NoValue
 struct TuringThreeObservations <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TuringThreeObservations, parameters)
@@ -162,6 +184,25 @@ function CognitiveModeling.apply_timestep_model(
 end
 function CognitiveModeling.attribute_names(environment::TuringNoisyRewards)
     return ModelAttributes(; parameters=:scale, states=(), inputs=:choice, outputs=:reward)
+end
+
+# The same environment with a domain for its scale
+struct TuringNoisyRewardsWithinDomain <: AbstractEnvironmentModel end
+function CognitiveModeling.initialize_state(
+    environment::TuringNoisyRewardsWithinDomain, parameters
+)
+    return (;)
+end
+function CognitiveModeling.apply_timestep_model(
+    environment::TuringNoisyRewardsWithinDomain, context::ModelContext
+)
+    return CognitiveModeling.apply_timestep_model(TuringNoisyRewards(), context)
+end
+function CognitiveModeling.attribute_names(environment::TuringNoisyRewardsWithinDomain)
+    return CognitiveModeling.attribute_names(TuringNoisyRewards())
+end
+function CognitiveModeling.parameter_domains(environment::TuringNoisyRewardsWithinDomain)
+    return (; scale=ParameterDomain(; lower=0),)
 end
 
 const TURING_REWARDS = (; reward=[1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0])
@@ -308,6 +349,21 @@ const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
     )),
     MultipleSessionsInfo(
         TuringRescorlaWagnerWithInitialValue(),
+        TURING_TABLE;
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+
+# The same sessions with the model whose parameters have domains, and priors that stay within them, so that making the model gives no warning
+const TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS = turing_full_model(
+    IndependentSessionParameters((;
+        learning_rate=Uniform(0, 1), inverse_temperature=Turing.FlatPos(0.0)
+    )),
+    MultipleSessionsInfo(
+        TuringRescorlaWagnerWithinDomains(),
         TURING_TABLE;
         observation_columns=:reward,
         action_columns=:choice,
@@ -469,6 +525,23 @@ function imputed_observations_session()
         environment=TuringNoisyRewards(),
     )
 end
+function parameter_domains_session()
+    return SessionInfo(
+        TuringRescorlaWagnerWithinDomains(),
+        TURING_REWARDS,
+        TURING_CHOICES;
+        who_starts=EnvironmentStarts(),
+    )
+end
+function parameter_domains_with_environment_session()
+    return SessionInfo(
+        TuringRescorlaWagnerWithinDomains(),
+        TURING_MISSING_REWARDS,
+        TURING_CHOICES;
+        who_starts=EnvironmentStarts(),
+        environment=TuringNoisyRewardsWithinDomain(),
+    )
+end
 function noise_in_timesteps_session()
     return SessionInfo(
         TuringNoisyModel(),
@@ -559,6 +632,26 @@ const TURING_CASES = [
         name="turing session with noise in each timestep",
         f=log_density_of(fit_with_imputed_actions(noise_in_timesteps_session())),
         x=[0.3, 0.8, 0.1, -0.2, 0.05, 0.3, -0.1, 0.2, 0.0, -0.3, 0.15, 0.1],
+        reactant=false,
+    ),
+    (;
+        name="turing session with parameter domains",
+        f=log_density_of(fit_rescorla_wagner(parameter_domains_session())),
+        x=[0.3, 2.0],
+        reactant=false,
+    ),
+    (;
+        name="turing session with parameter domains and an environment",
+        f=log_density_of(
+            fit_with_environment(parameter_domains_with_environment_session())
+        ),
+        x=[0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with parameter domains",
+        f=log_density_of(TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0],
         reactant=false,
     ),
     (;

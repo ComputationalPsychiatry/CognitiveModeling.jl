@@ -158,6 +158,9 @@ table.
   timesteps after the last one with data. With `true`, it is checked before every timestep,
   and a criterion that is met while the data continues is an error. With `false`, it is
   never checked. The extended help says why.
+- `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
+  against their domains in [`parameter_domains`](@ref) each time the session runs, where a
+  value outside its domain throws a [`ParameterDomainError`](@ref), which stops a fit.
 - `missing_observation_values=(missing,)` and `missing_action_values=(missing,)`: the
   values in the data which stand for a missing observation or action, as one value, such as
   `-1`, or several in a tuple or a vector, such as `(missing, -1)`. Each is replaced by
@@ -270,6 +273,7 @@ struct SessionInfo{
     environment_save_history::Tenvironment_save_history
     check_stopping_criterion::Union{Nothing,Bool}
     first_timestep_to_check_stopping::Int
+    check_parameter_domains::Bool
     previous_observation::Tprevious_observation
     previous_action::Tprevious_action
     previous_environment_observation::Tprevious_environment_observation
@@ -303,6 +307,7 @@ function SessionInfo(
         cognitive_save_history,
         environment_save_history,
         check_stopping_criterion=session_info.check_stopping_criterion,
+        check_parameter_domains=session_info.check_parameter_domains,
         previous_observation=session_info.previous_observation,
         previous_action=session_info.previous_action,
     )
@@ -329,6 +334,7 @@ function prepare_session(
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
     check_stopping_criterion::Union{Nothing,Bool}=nothing,
+    check_parameter_domains::Bool=true,
     missing_observation_values=(missing,),
     missing_action_values=(missing,),
     impute_missing_observations::Bool=true,
@@ -416,6 +422,7 @@ function prepare_session(
         environment_save_history,
         check_stopping_criterion,
         first_timestep_to_check,
+        check_parameter_domains,
         previous_observation,
         previous_action,
         previous_environment_observation,

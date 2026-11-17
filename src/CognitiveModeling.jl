@@ -11,7 +11,7 @@ include("defining_models/functions_to_call.jl")
 include("defining_models/utility_functions/check_model_methods.jl")
 include("defining_models/utility_functions/compare_names.jl")
 include("defining_models/utility_functions/check_attributes_against_names.jl")
-include("defining_models/utility_functions/check_parameter_domains.jl")
+include("defining_models/utility_functions/check_parameters_in_domains.jl")
 include("defining_models/utility_functions/outputs_and_inputs_before_first_timestep.jl")
 include("defining_models/utility_functions/display_models.jl")
 include("model_history/types.jl")
@@ -62,6 +62,7 @@ export AbstractCognitiveModel, AbstractEnvironmentModel
 export AbstractNoValue, NoValue, BeforeFirstTimestep
 export MissingValue, UnimputedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
+export ParameterDomain, ParameterDomainError
 export CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap

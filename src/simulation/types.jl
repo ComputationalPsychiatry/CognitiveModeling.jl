@@ -60,8 +60,10 @@ received_name(names::Pair{Symbol,Symbol}) = last(names)
 ## Instantiated models ##
 
 """
-    InstantiatedModel(model, parameters; save_history=SaveHistory())
-    InstantiatedModel(model, parameters, state, previous_output; save_history=SaveHistory())
+    InstantiatedModel(model, parameters; save_history=SaveHistory(),
+                      check_parameter_domains=true)
+    InstantiatedModel(model, parameters, state, previous_output;
+                      save_history=SaveHistory(), check_parameter_domains=true)
 
 A cognitive model or an environment model with its parameters, current state and previous
 output, which [`simulate!`](@ref) can update iteratively.
@@ -80,7 +82,10 @@ timestep 0, and everything that happens to it, as selected by `save_history`, a
 stay empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs
 can only be selected by name among those in the model's attributes, since the history starts
 from those names.
-`agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved.
+`agent.n_timesteps` counts the timesteps the model has simulated, whatever is saved. The
+parameters are checked against their domains in [`parameter_domains`](@ref), where a value
+outside its domain throws a [`ParameterDomainError`](@ref), unless
+`check_parameter_domains` is `false`.
 
 In the REPL, an instantiated model shows the kind and the type of its model, how many
 timesteps it has simulated, and the values of its parameters and of its state, with only how
@@ -143,7 +148,10 @@ end
 
 #Starts the model from its initial state, with nothing given yet
 function InstantiatedModel(
-    model::AbstractTimestepModel, parameters; save_history::SaveHistory=SaveHistory()
+    model::AbstractTimestepModel,
+    parameters;
+    save_history::SaveHistory=SaveHistory(),
+    check_parameter_domains::Bool=true,
 )
     parameters = merge_default_parameters(model, parameters)
     return InstantiatedModel(
@@ -152,6 +160,7 @@ function InstantiatedModel(
         initialize_state(model, parameters),
         output_before_first_timestep(model);
         save_history,
+        check_parameter_domains,
     )
 end
 
@@ -162,14 +171,15 @@ function InstantiatedModel(
     state,
     previous_output;
     save_history::SaveHistory=SaveHistory(),
+    check_parameter_domains::Bool=true,
 )
 
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check that the parameters, the state and the previous output have the names in the model's attributes, and that each parameter is within its domain
+    #Check that the parameters, the state and the previous output have the names in the model's attributes, and that each parameter is within its domain, unless that check is left out
     check_match_attribute_names(model, parameters, state, previous_output)
-    check_parameter_domains(model, parameters)
+    check_parameter_domains && check_parameters_in_domains(model, parameters)
 
     #Check that the inputs and outputs selected for the history are among those in the model's attributes
     check_savehistory_selection_names(save_history, model)

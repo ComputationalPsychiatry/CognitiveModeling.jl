@@ -957,22 +957,63 @@ function CognitiveModeling.attribute_names(model::BoundedRescorlaWagner)
     return CognitiveModeling.attribute_names(SessionRescorlaWagner())
 end
 function CognitiveModeling.parameter_domains(model::BoundedRescorlaWagner)
-    return (; learning_rate=(; lower=0, upper=1), inverse_temperature=(; lower=0))
+    return (;
+        learning_rate=ParameterDomain(; lower=0, upper=1),
+        inverse_temperature=ParameterDomain(; lower=0),
+    )
 end
 
-#A model with a discrete parameter, for the warning about its prior
+#The environment with rewards around a mean, with a domain for the mean
+struct BoundedRewardsAroundMean <: AbstractEnvironmentModel end
+function CognitiveModeling.initialize_state(::BoundedRewardsAroundMean, parameters)
+    return (;)
+end
+function CognitiveModeling.apply_timestep_model(
+    ::BoundedRewardsAroundMean, context::ModelContext
+)
+    return apply_timestep_model(RewardsAroundMean(), context)
+end
+function CognitiveModeling.attribute_names(::BoundedRewardsAroundMean)
+    return CognitiveModeling.attribute_names(RewardsAroundMean())
+end
+function CognitiveModeling.parameter_domains(::BoundedRewardsAroundMean)
+    return (; mean_reward=ParameterDomain(; lower=0, upper=1),)
+end
+
+#A model with a parameter that is a whole number and one that is a name, for the warnings about their priors
 struct CountsOptions <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::CountsOptions)
+    return ModelAttributes(;
+        parameters=(:n_options, :bias, :strategy), states=(), inputs=(), outputs=()
+    )
+end
 function CognitiveModeling.parameter_domains(::CountsOptions)
+    return (;
+        n_options=ParameterDomain(; type=Integer, lower=1),
+        strategy=ParameterDomain(; type=Symbol),
+    )
+end
+
+#A model whose domains aren't ParameterDomains
+struct DomainsAsNamedTuples <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::DomainsAsNamedTuples)
+    return ModelAttributes(; parameters=:n_options, states=(), inputs=(), outputs=())
+end
+function CognitiveModeling.parameter_domains(::DomainsAsNamedTuples)
     return (; n_options=(; lower=1, discrete=true),)
 end
 
-@testset "Parameter domains in a full model" begin
+@testset "Parameter domains in fits" begin
     sessions_info = sessions_for_test(BoundedRescorlaWagner(); impute_missing_actions=false)
+    unchecked_sessions = sessions_for_test(
+        BoundedRescorlaWagner(); impute_missing_actions=false, check_parameter_domains=false
+    )
     within_domains = IndependentSessionParameters((;
         learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
     ))
+    outside_domains = FixedSessionParameters((; learning_rate=1.5, inverse_temperature=2.0))
 
-    @testset "A value outside its domain stops the evaluation, or rejects the sample when invalid parameters are caught" begin
+    @testset "A value outside its domain stops the evaluation, also when invalid parameters are caught" begin
         model = @test_logs turing_full_model(within_domains, sessions_info)
         @test isfinite(
             logjoint(
@@ -983,25 +1024,113 @@ end
                 ),
             ),
         )
-        outside = FixedSessionParameters((; learning_rate=1.5, inverse_temperature=2.0))
-        @test_throws InvalidParametersError(
+        @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
-        ) logjoint(turing_full_model(outside, sessions_info), (;))
-        @test logjoint(
-            turing_full_model(outside, sessions_info; catch_invalid_parameters=true), (;)
-        ) == -Inf
+        ) logjoint(turing_full_model(outside_domains, sessions_info), (;))
+        #The error isn't the one that rejects a sample, so it stops the evaluation there too
+        @test_throws ParameterDomainError logjoint(
+            turing_full_model(
+                outside_domains, sessions_info; catch_invalid_parameters=true
+            ),
+            (;),
+        )
+        #A value that a sampler proposes is checked in the same way
+        @test_throws ParameterDomainError logjoint(
+            model,
+            Dict(
+                @varname(learning_rate.session) => [0.3, 0.3, 1.5],
+                @varname(inverse_temperature.session) => fill(2.0, 3),
+            ),
+        )
+    end
+
+    @testset "Sessions that don't check the domains run with any value" begin
+        unchecked = logjoint(turing_full_model(outside_domains, unchecked_sessions), (;))
+        @test isfinite(unchecked)
+        #The log density is that of the same model without domains
+        @test unchecked == logjoint(
+            turing_full_model(
+                outside_domains, sessions_for_test(; impute_missing_actions=false)
+            ),
+            (;),
+        )
+    end
+
+    @testset "The parameters of an environment that runs are checked too" begin
+        with_environment = sessions_for_test(
+            BoundedRescorlaWagner();
+            environment=BoundedRewardsAroundMean(),
+            include_environment=true,
+            impute_missing_actions=false,
+        )
+        cognitive_parameters = FixedSessionParameters((;
+            learning_rate=0.3, inverse_temperature=2.0
+        ))
+        @test isfinite(
+            logjoint(
+                turing_full_model(
+                    cognitive_parameters,
+                    with_environment;
+                    environment_parameters_model=FixedSessionParameters((;
+                        mean_reward=0.5
+                    )),
+                ),
+                (;),
+            ),
+        )
+        @test_throws ParameterDomainError(
+            "The parameter mean_reward of an environment model of type BoundedRewardsAroundMean is 2.0, which is outside its domain, from 0 to 1.",
+        ) logjoint(
+            turing_full_model(
+                cognitive_parameters,
+                with_environment;
+                environment_parameters_model=FixedSessionParameters((; mean_reward=2.0)),
+            ),
+            (;),
+        )
+        #The cognitive model's parameters are checked in a session with an environment as well
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+        ) logjoint(
+            turing_full_model(
+                outside_domains,
+                with_environment;
+                environment_parameters_model=FixedSessionParameters((; mean_reward=0.5)),
+            ),
+            (;),
+        )
+    end
+
+    @testset "A single session checks its parameters, and turing_catch_invalid_parameters doesn't catch the error" begin
+        session_info = first(sessions_info.sessions)
+        parameters = (; learning_rate=1.5, inverse_temperature=2.0)
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+        ) logjoint(turing_behavioral_session(session_info, parameters), (;))
+        @test_throws ParameterDomainError logjoint(
+            turing_catch_invalid_parameters(
+                turing_behavioral_session(session_info, parameters)
+            ),
+            (;),
+        )
+        @test isfinite(
+            logjoint(
+                turing_behavioral_session(first(unchecked_sessions.sessions), parameters),
+                (;),
+            ),
+        )
     end
 
     @testset "A prior or a transformation that reaches outside a domain gives a warning when the model is made" begin
+        outside_priors = IndependentSessionParameters((;
+            learning_rate=Normal(0, 1), inverse_temperature=LogNormal(0, 0.5)
+        ))
         @test_logs (
             :warn,
-            r"The parameter learning_rate can be given values from -Inf to Inf, by its prior, .*, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1\.",
-        ) turing_full_model(
-            IndependentSessionParameters((;
-                learning_rate=Normal(0, 1), inverse_temperature=LogNormal(0, 0.5)
-            )),
-            sessions_info,
-        )
+            r"The parameter learning_rate can be given values from -Inf to Inf, by its prior, .*, but its domain in a cognitive model of type BoundedRescorlaWagner is from 0 to 1\. A value outside the domain is a ParameterDomainError when a session runs, which stops the fit, also with catch_invalid_parameters = true\. A prior or a transformation that stays within the domain avoids this\.",
+        ) turing_full_model(outside_priors, sessions_info)
+        #Sessions that don't check the domains give no warning either
+        @test_logs turing_full_model(outside_priors, unchecked_sessions)
         #A hierarchical parameter is judged by what its transformation makes of the two ends of the real line
         @test_logs (
             :warn,
@@ -1028,13 +1157,20 @@ end
         extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
         @test_logs (:warn, r"The parameter n_options can be given values from -Inf to Inf") (
             :warn,
-            r"The parameter n_options is discrete in a cognitive model of type CountsOptions, but it is given values that aren't whole numbers by its prior",
+            r"The parameter n_options is discrete in a cognitive model of type CountsOptions, with values of type Integer, but it is given continuous values by its prior, .*\. A value of another type is a ParameterDomainError when a session runs, which stops the fit\.",
         ) extension.warn_if_values_outside_domains(
             IndependentSessionParameters((; n_options=Normal(0, 1))), CountsOptions()
         )
         @test_logs extension.warn_if_values_outside_domains(
             IndependentSessionParameters((; n_options=DiscreteUniform(1, 4))),
             CountsOptions(),
+        )
+        #A parameter that isn't a number is discrete, and has no bounds to reach outside of
+        @test_logs (
+            :warn,
+            r"The parameter strategy is discrete in a cognitive model of type CountsOptions, with values of type Symbol, but it is given continuous values by its prior",
+        ) extension.warn_if_values_outside_domains(
+            IndependentSessionParameters((; strategy=Normal(0, 1))), CountsOptions()
         )
         #The parts of a composite are each judged, and given values are left to the check when a session runs
         @test_logs (:warn, r"The parameter n_options can be given values from 0 to Inf") extension.warn_if_values_outside_domains(
@@ -1043,6 +1179,21 @@ end
                 FixedSessionParameters((; bias=0.5)),
             ),
             CountsOptions(),
+        )
+        #A model without domains and a session without an environment have nothing to warn about
+        @test_logs extension.warn_if_values_outside_domains(
+            IndependentSessionParameters((; learning_rate=Normal(0, 1))),
+            SessionRescorlaWagner(),
+        )
+        @test_logs extension.warn_if_values_outside_domains(
+            IndependentSessionParameters((; mean_reward=Normal(0, 1))), NoEnvironment()
+        )
+    end
+
+    @testset "Domains that aren't ParameterDomains are an error when the model is made" begin
+        extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
+        @test_throws "parameter_domains of a cognitive model of type DomainsAsNamedTuples returns (n_options = (lower = 1, discrete = true),), but it must return a NamedTuple with a ParameterDomain under the name of each parameter that has a domain" extension.warn_if_values_outside_domains(
+            IndependentSessionParameters((; n_options=Poisson(3))), DomainsAsNamedTuples()
         )
     end
 end

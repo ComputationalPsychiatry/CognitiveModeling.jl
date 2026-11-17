@@ -196,36 +196,49 @@ end
     parameter_domains(model::AbstractTimestepModel)
 
 Return the values that the parameters of `model`, a cognitive model or an environment
-model, can take: a `NamedTuple` from the name of a parameter to its domain, which is a
-`NamedTuple` with any of `lower`, the smallest value it can have, `upper`, the largest, and
-`discrete`, whether it must be a whole number. What a domain leaves out is unbounded and
-continuous, and so is a parameter without a domain.
+model, can take: a `NamedTuple` with a [`ParameterDomain`](@ref) under the name of each
+parameter that has one. A parameter without a domain can take any value.
 
 The parameters of a simulation and of a fitted session are checked against their domains
-before anything runs, and a value outside its domain throws an
-[`InvalidParametersError`](@ref). An inference backend can also warn before a fit when a
-prior gives values outside a domain. [`CognitiveModeling.discrete_parameter_names`](@ref)
-gives the discrete parameters, and [`CognitiveModeling.continuous_parameter_names`](@ref)
-the continuous ones, which are sampled in different ways.
+before anything runs, and a value outside its domain throws a
+[`ParameterDomainError`](@ref), unless [`simulate`](@ref), [`InstantiatedModel`](@ref) or
+[`SessionInfo`](@ref) is given `check_parameter_domains = false`. An inference backend can
+also warn before a fit when a prior gives values outside a domain.
+[`CognitiveModeling.discrete_parameter_names`](@ref) gives the discrete parameters, and
+[`CognitiveModeling.continuous_parameter_names`](@ref) the continuous ones, which are
+sampled in different ways. The display of a model shows each domain after the name of its
+parameter.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
 that every parameter can take any value. A domain is best kept to the values the model
-can't run without, since a value outside it can't be fitted at all.
+can't run without, since a value outside it stops a fit.
 
 # Examples
 ```jldoctest
 julia> struct CountsOptions <: AbstractCognitiveModel end
 
+julia> function CognitiveModeling.attribute_names(model::CountsOptions)
+           return ModelAttributes(; parameters = (:learning_rate, :n_options, :bias), states = (), inputs = (), outputs = ())
+       end;
+
 julia> function CognitiveModeling.parameter_domains(model::CountsOptions)
            return (;
-               learning_rate = (; lower = 0, upper = 1),
-               n_options = (; lower = 1, discrete = true),
+               learning_rate = ParameterDomain(; lower = 0, upper = 1),
+               n_options = ParameterDomain(; type = Integer, lower = 1),
            )
        end;
 
 julia> CognitiveModeling.discrete_parameter_names(CountsOptions())
 (:n_options,)
+
+julia> CountsOptions()
+-- Cognitive model --
+Type: CountsOptions
+Parameters: learning_rate ∈ [0, 1], n_options ∈ {1, 2, …}, bias
+States: none
+Inputs: none
+Outputs: none
 ```
 """
 function parameter_domains(model::AbstractTimestepModel)

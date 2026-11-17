@@ -744,19 +744,102 @@ function CognitiveModeling.attribute_names(::LearnsWithinDomain)
     )
 end
 function CognitiveModeling.parameter_domains(::LearnsWithinDomain)
-    return (; learning_rate=(; lower=0, upper=1),)
+    return (; learning_rate=ParameterDomain(; lower=0, upper=1),)
+end
+
+#An environment whose reward probability has a domain, and which gives the reward 1.0 on every timestep
+struct RewardsWithinDomain <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(::RewardsWithinDomain, parameters) = (;)
+function CognitiveModeling.apply_timestep_model(
+    ::RewardsWithinDomain, context::ModelContext
+)
+    return ModelOutput((; reward=Deterministic(1.0)))
+end
+function CognitiveModeling.attribute_names(::RewardsWithinDomain)
+    return ModelAttributes(;
+        parameters=:reward_probability, states=(), inputs=:choice, outputs=:reward
+    )
+end
+function CognitiveModeling.parameter_domains(::RewardsWithinDomain)
+    return (; reward_probability=ParameterDomain(; lower=0, upper=1),)
 end
 
 @testset "A parameter outside its domain is an error before anything runs" begin
-    @test simulate(
-        LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=0.5)
-    )[2] == (; value=0.5)
-    @test_throws InvalidParametersError(
-        "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
-    ) simulate(LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=1.5))
-    @test_throws InvalidParametersError InstantiatedModel(
-        LearnsWithinDomain(), (; learning_rate=-0.1)
-    )
+    @testset "A single timestep checks its parameters, unless it is told not to" begin
+        @test simulate(
+            LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=0.5)
+        )[2] == (; value=0.5)
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
+        ) simulate(LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=1.5))
+        @test simulate(
+            LearnsWithinDomain(),
+            (; reward=1.0);
+            parameters=(; learning_rate=1.5),
+            check_parameter_domains=false,
+        )[2] == (; value=1.5)
+    end
+
+    @testset "A whole simulation checks the parameters of both models, unless it is told not to" begin
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
+        ) simulate(
+            LearnsWithinDomain(),
+            RewardsWithinDomain();
+            who_starts=EnvironmentStarts(),
+            n_steps=2,
+            cognitive_parameters=(; learning_rate=1.5),
+            environment_parameters=(; reward_probability=0.5),
+        )
+        @test_throws ParameterDomainError(
+            "The parameter reward_probability of an environment model of type RewardsWithinDomain is -0.5, which is outside its domain, from 0 to 1.",
+        ) simulate(
+            LearnsWithinDomain(),
+            RewardsWithinDomain();
+            who_starts=EnvironmentStarts(),
+            n_steps=2,
+            cognitive_parameters=(; learning_rate=0.5),
+            environment_parameters=(; reward_probability=-0.5),
+        )
+        simulation = simulate(
+            LearnsWithinDomain(),
+            RewardsWithinDomain();
+            who_starts=EnvironmentStarts(),
+            n_steps=2,
+            cognitive_parameters=(; learning_rate=1.5),
+            environment_parameters=(; reward_probability=-0.5),
+            cognitive_save_history=EVERY_TIMESTEP,
+            check_parameter_domains=false,
+        )
+        @test simulation.states == [(; value=1.5), (; value=1.5)]
+    end
+
+    @testset "An instantiated model checks its parameters when it is created, unless it is told not to" begin
+        @test InstantiatedModel(LearnsWithinDomain(), (; learning_rate=1)).parameters ==
+            (; learning_rate=1)
+        @test_throws ParameterDomainError(
+            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is -0.1, which is outside its domain, from 0 to 1.",
+        ) InstantiatedModel(LearnsWithinDomain(), (; learning_rate=-0.1))
+        @test_throws ParameterDomainError InstantiatedModel(
+            LearnsWithinDomain(),
+            (; learning_rate=-0.1),
+            (; value=0.0),
+            (; choice=BeforeFirstTimestep()),
+        )
+        agent = InstantiatedModel(
+            LearnsWithinDomain(), (; learning_rate=-0.1); check_parameter_domains=false
+        )
+        @test agent.parameters == (; learning_rate=-0.1)
+        simulate!(agent, (; reward=1.0))
+        @test agent.state == (; value=-0.1)
+        @test InstantiatedModel(
+            LearnsWithinDomain(),
+            (; learning_rate=-0.1),
+            (; value=0.0),
+            (; choice=BeforeFirstTimestep());
+            check_parameter_domains=false,
+        ).parameters == (; learning_rate=-0.1)
+    end
 end
 
 @testset "simulate" begin

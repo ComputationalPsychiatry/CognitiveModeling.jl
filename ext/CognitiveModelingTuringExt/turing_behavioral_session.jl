@@ -38,12 +38,16 @@ function CognitiveModeling.turing_full_model(
         fixed_environment_parameters,
     )
 
-    #Warn when a prior or a transformation can give a parameter a value outside its domain
+    #Warn when a prior or a transformation can give a parameter a value outside its domain, when the sessions check the domains
     first_session = first(sessions_info.sessions)
-    warn_if_values_outside_domains(
-        cognitive_parameters_model, first_session.cognitive_model
-    )
-    warn_if_values_outside_domains(environment_parameters_model, first_session.environment)
+    if first_session.check_parameter_domains
+        warn_if_values_outside_domains(
+            cognitive_parameters_model, first_session.cognitive_model
+        )
+        warn_if_values_outside_domains(
+            environment_parameters_model, first_session.environment
+        )
+    end
     return turing_run_full_model(
         prepared.cognitive_parameters_model,
         prepared.sessions_info;
@@ -111,22 +115,25 @@ Warn when `parameters_model`, a session parameter model, can give a parameter of
 value outside its domain in `parameter_domains`: values below its lower bound or above its
 upper bound, or values of a continuous distribution for a discrete parameter. What a
 parameter can be given is found by [`sampled_ranges`](@ref). A value outside its domain is
-an `InvalidParametersError` when a session runs. Used by `turing_full_model` when it creates
-the model.
+a `ParameterDomainError` when a session runs, which stops the fit. Domains that don't fit
+the model are an `ArgumentError`. Used by `turing_full_model` when it creates the model, for
+sessions that check the domains.
 """
 function warn_if_values_outside_domains(parameters_model, model::AbstractTimestepModel)
+
+    #Read the domains, which must be ParameterDomains under the names of parameters of the model
     domains = parameter_domains(model)
-    isempty(domains) && return nothing
+    check_domains_fit_model(model, domains)
+
+    #Compare what each parameter can be given with its domain
     for (name, range) in sampled_ranges(parameters_model)
         haskey(domains, name) || continue
         domain = getproperty(domains, name)
-        lower = get(domain, :lower, -Inf)
-        upper = get(domain, :upper, Inf)
-        if range.lower < lower || range.upper > upper
-            @warn "The parameter $name can be given values from $(range.lower) to $(range.upper), by $(range.source), but its domain in $(describe_model(model)) is from $lower to $upper. A value outside the domain is an InvalidParametersError when a session runs, which stops the fit, or rejects the sample with catch_invalid_parameters = true. A prior or a transformation that stays within the domain avoids this."
+        if range.lower < domain.lower || range.upper > domain.upper
+            @warn "The parameter $name can be given values from $(range.lower) to $(range.upper), by $(range.source), but its domain in $(describe_model(model)) is from $(domain.lower) to $(domain.upper). A value outside the domain is a ParameterDomainError when a session runs, which stops the fit, also with catch_invalid_parameters = true. A prior or a transformation that stays within the domain avoids this."
         end
-        if get(domain, :discrete, false) && !range.discrete
-            @warn "The parameter $name is discrete in $(describe_model(model)), but it is given values that aren't whole numbers by $(range.source). Such a value is an InvalidParametersError when a session runs."
+        if is_discrete(domain) && !range.discrete
+            @warn "The parameter $name is discrete in $(describe_model(model)), with values of type $(domain.type), but it is given continuous values by $(range.source). A value of another type is a ParameterDomainError when a session runs, which stops the fit."
         end
     end
     return nothing
@@ -501,7 +508,9 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         initial_cognitive_state,
         session_info.previous_action,
     )
-    check_parameter_domains(cognitive_model, cognitive_parameters_with_defaults)
+    if session_info.check_parameter_domains
+        check_parameters_in_domains(cognitive_model, cognitive_parameters_with_defaults)
+    end
 
     #Run the timesteps from where the session starts, with the values arranged as those of a timestep
     previous = (;
@@ -576,9 +585,11 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         session_info.previous_environment_observation,
     )
 
-    #Check that each parameter of both models is within its domain
-    check_parameter_domains(cognitive_model, cognitive_parameters_with_defaults)
-    check_parameter_domains(environment, environment_parameters_with_defaults)
+    #Check that each parameter of both models is within its domain, unless the session leaves the check out
+    if session_info.check_parameter_domains
+        check_parameters_in_domains(cognitive_model, cognitive_parameters_with_defaults)
+        check_parameters_in_domains(environment, environment_parameters_with_defaults)
+    end
 
     #Run the timesteps from where the session starts, with the values arranged as those of a timestep: the environment's are under environment, in its own names
     previous = (;

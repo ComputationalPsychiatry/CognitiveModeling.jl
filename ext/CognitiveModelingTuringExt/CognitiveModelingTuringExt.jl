@@ -19,7 +19,9 @@ using CognitiveModeling:
 using CognitiveModeling:
     merge_default_parameters,
     check_match_attribute_names,
-    check_parameter_domains,
+    check_parameters_in_domains,
+    check_domains_fit_model,
+    is_discrete,
     parameter_domains,
     check_model_output,
     map_names

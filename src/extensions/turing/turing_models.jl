@@ -253,7 +253,8 @@ of a measurement on a state. This needs Turing.jl to be loaded.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
   session rejects the sample instead of stopping the sampler, by running the sessions inside
   [`turing_catch_invalid_parameters`](@ref). If the first draw is rejected and the
-  downstream model has variables of its own, give the sampler valid `initial_params`.
+  downstream model has variables of its own, give the sampler valid `initial_params`. A
+  [`ParameterDomainError`](@ref) isn't caught, and stops the sampler.
 - `parallelization=SerialSessions()`: whether the sessions run over the threads Julia was
   started with, with `ParallelSessions()`. **The model must then be marked with
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
@@ -364,7 +365,8 @@ Create a Turing.jl model which runs `model`, any Turing.jl model, inside a `try`
 [`InvalidParametersError`](@ref) thrown by a cognitive model or an environment model then
 gives the parameters a log density of `-Inf`, so that a sampler rejects the sample instead
 of stopping, and the model returns `nothing` for that sample. Otherwise it returns what
-`model` returns. This needs Turing.jl to be loaded.
+`model` returns. Any other error is thrown as it is, also a [`ParameterDomainError`](@ref)
+for a parameter outside its domain. This needs Turing.jl to be loaded.
 
 It goes around the part of a model that can throw, with the parameters sampled outside it,
 as in

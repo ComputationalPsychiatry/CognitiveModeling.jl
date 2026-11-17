@@ -20,7 +20,7 @@ end
     include("check_model_methods.jl")
     include("compare_names.jl")
     include("check_attributes_against_names.jl")
-    include("check_parameter_domains.jl")
+    include("check_parameters_in_domains.jl")
     include("outputs_and_inputs_before_first_timestep.jl")
     include("display_models.jl")
 end

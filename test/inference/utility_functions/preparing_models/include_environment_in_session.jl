@@ -46,4 +46,21 @@
             ).sessions,
         )
     end
+
+    @testset "A session that is made again keeps whether its parameters are checked against their domains" begin
+        for check_parameter_domains in (true, false)
+            session_info = SessionInfo(
+                SessionCounter(),
+                COUNTER_REWARDS,
+                COUNTER_CHOICES;
+                who_starts=EnvironmentStarts(),
+                environment=GivesReward(),
+                check_parameter_domains,
+            )
+            including = CognitiveModeling.remake_session_including_environment(session_info)
+            without = CognitiveModeling.remake_session_without_environment(session_info)
+            @test including.check_parameter_domains === check_parameter_domains
+            @test without.check_parameter_domains === check_parameter_domains
+        end
+    end
 end

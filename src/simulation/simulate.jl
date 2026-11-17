@@ -933,6 +933,9 @@ the timesteps that ran.
   under the same names.
 - `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
   models is checked before each timestep. With `false`, all of `n_steps` timesteps run.
+- `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
+  against their domains in [`parameter_domains`](@ref) before the simulation, where a value
+  outside its domain throws a [`ParameterDomainError`](@ref).
 - `previous_cognitive_state=initialize_state(cognitive_model, ...)`: the state of
   `cognitive_model` before the first timestep, by default its initial state from the full
   parameters. A state that `cognitive_model` changes in place will be changed.
@@ -1034,6 +1037,7 @@ function simulate(
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
     check_stopping_criterion::Bool=true,
+    check_parameter_domains::Bool=true,
     previous_cognitive_state=initialize_state(
         cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
     ),
@@ -1060,9 +1064,11 @@ function simulate(
     )
     check_names_fit(cognitive_model, environment, observation_map, action_map)
 
-    #Check that each parameter is within its domain
-    check_parameter_domains(cognitive_model, cognitive_parameters)
-    check_parameter_domains(environment, environment_parameters)
+    #Check that each parameter is within its domain, unless the check is left out
+    if check_parameter_domains
+        check_parameters_in_domains(cognitive_model, cognitive_parameters)
+        check_parameters_in_domains(environment, environment_parameters)
+    end
     check_savehistory_selection_names(cognitive_save_history, cognitive_model)
     check_savehistory_selection_names(environment_save_history, environment)
 
@@ -1374,6 +1380,8 @@ simulation.
   place will be changed.
 - `previous_output=output_before_first_timestep(model)`: the output before this timestep.
   By default every output is [`BeforeFirstTimestep`](@ref).
+- `check_parameter_domains::Bool=true`: whether the parameters are checked against their
+  domains in [`parameter_domains`](@ref), as for a whole simulation.
 
 # Examples
 ```jldoctest
@@ -1425,14 +1433,15 @@ function simulate(
     rng::AbstractRNG=default_rng(),
     previous_state=initialize_state(model, merge_default_parameters(model, parameters)),
     previous_output=output_before_first_timestep(model),
+    check_parameter_domains::Bool=true,
 )
 
     #Fill in the default parameters
     parameters = merge_default_parameters(model, parameters)
 
-    #Check the names of the parameters, the state and the previous output against attribute_names, and that each parameter is within its domain
+    #Check the names of the parameters, the state and the previous output against attribute_names, and that each parameter is within its domain, unless that check is left out
     check_match_attribute_names(model, parameters, previous_state, previous_output)
-    check_parameter_domains(model, parameters)
+    check_parameter_domains && check_parameters_in_domains(model, parameters)
 
     #Simulate the timestep, where nothing is selected for saving, since everything is returned
     timestep_values = simulate_timestep(

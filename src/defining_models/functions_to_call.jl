@@ -10,9 +10,8 @@ since a discrete parameter needs another kind of sampler than a continuous one.
 """
 function discrete_parameter_names(model::AbstractTimestepModel)
     domains = parameter_domains(model)
-    return Tuple(
-        name for name in keys(domains) if get(getproperty(domains, name), :discrete, false)
-    )
+    check_domains_fit_model(model, domains)
+    return Tuple(name for name in keys(domains) if is_discrete(getproperty(domains, name)))
 end
 
 """

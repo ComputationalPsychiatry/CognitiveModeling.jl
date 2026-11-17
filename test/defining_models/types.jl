@@ -291,4 +291,86 @@ using Random: Xoshiro, default_rng
             "The learning rate must be between 0 and 1."
         @test_throws InvalidParametersError throw(InvalidParametersError())
     end
+
+    @testset "ParameterDomain takes every real number by default, and keeps its type and its bounds" begin
+        domain = ParameterDomain()
+        @test domain.type === Real
+        @test domain.lower === -Inf
+        @test domain.upper === Inf
+        @test propertynames(domain) === (:type, :lower, :upper)
+        bounded = ParameterDomain(; lower=0, upper=1)
+        @test (bounded.type, bounded.lower, bounded.upper) === (Real, 0, 1)
+        @test ParameterDomain(; lower=0.5).lower === 0.5
+        whole = ParameterDomain(; type=Integer, lower=1)
+        @test (whole.type, whole.lower, whole.upper) === (Integer, 1, Inf)
+        @test ParameterDomain(; type=Symbol).type === Symbol
+        #The bounds can be equal, for a parameter with one value
+        @test ParameterDomain(; lower=1, upper=1).upper === 1
+    end
+
+    @testset "ParameterDomain keeps the type of its values in its own type, and holds its bounds directly" begin
+        @test ParameterDomain(; type=Integer, lower=1) isa
+            ParameterDomain{Integer,Int,Float64}
+        @test ParameterDomain(; type=AbstractString) isa ParameterDomain{AbstractString}
+        @test isbitstype(typeof(ParameterDomain(; lower=0, upper=1)))
+        @test isbitstype(typeof(ParameterDomain(; type=Symbol)))
+        from_literals() = ParameterDomain(; type=Integer, lower=1)
+        @test @inferred(from_literals()) isa ParameterDomain
+    end
+
+    @testset "ParameterDomain only takes types and bounds that fit together" begin
+        @test_throws ArgumentError(
+            "A ParameterDomain was given type = Float64, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
+        ) ParameterDomain(; type=Float64)
+        @test_throws ArgumentError ParameterDomain(; type=AbstractFloat, lower=0)
+        @test_throws ArgumentError(
+            "A ParameterDomain with type = Symbol was given the bounds lower = 0 and upper = Inf, but only a parameter that is a real number has bounds.",
+        ) ParameterDomain(; type=Symbol, lower=0)
+        @test_throws ArgumentError ParameterDomain(; type=AbstractString, upper=3)
+        @test_throws ArgumentError(
+            "The lower bound of a ParameterDomain is at most its upper bound, but it was given lower = 1 and upper = 0.",
+        ) ParameterDomain(; lower=1, upper=0)
+        @test_throws ArgumentError ParameterDomain(; lower=NaN)
+        @test_throws ArgumentError ParameterDomain(; upper=NaN)
+        #A misspelled keyword, the old discrete flag and bounds without their names are errors
+        @test_throws MethodError ParameterDomain(; lowest=0)
+        @test_throws MethodError ParameterDomain(; lower=1, discrete=true)
+        @test_throws MethodError ParameterDomain(0, 1)
+        @test_throws TypeError ParameterDomain(; type=:Integer)
+        @test_throws TypeError ParameterDomain(; lower="0")
+    end
+
+    @testset "ParameterDomain is shown as it is written, without the defaults" begin
+        @test repr(ParameterDomain()) == "ParameterDomain()"
+        @test repr(ParameterDomain(; lower=0, upper=1)) ==
+            "ParameterDomain(; lower = 0, upper = 1)"
+        @test repr(ParameterDomain(; upper=0.5)) == "ParameterDomain(; upper = 0.5)"
+        @test repr(ParameterDomain(; type=Integer, lower=1)) ==
+            "ParameterDomain(; type = Integer, lower = 1)"
+        @test repr(ParameterDomain(; type=Symbol)) == "ParameterDomain(; type = Symbol)"
+        @test repr("text/plain", ParameterDomain(; type=Bool)) ==
+            "ParameterDomain(; type = Bool)"
+    end
+
+    @testset "A parameter is discrete when its type is one of whole numbers, or isn't one of real numbers" begin
+        @test !CognitiveModeling.is_discrete(ParameterDomain())
+        @test !CognitiveModeling.is_discrete(ParameterDomain(; lower=0, upper=1))
+        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=Rational))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Integer))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Int, lower=1))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Bool))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Symbol))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractString))
+    end
+
+    @testset "ParameterDomainError has the message it is given" begin
+        error = ParameterDomainError("The parameter learning_rate is 1.5.")
+        @test error isa Exception
+        @test error.message == "The parameter learning_rate is 1.5."
+        @test sprint(showerror, error) ==
+            "ParameterDomainError: The parameter learning_rate is 1.5."
+        @test_throws ParameterDomainError throw(error)
+        #It needs a message, since only the check of a domain knows what was wrong
+        @test_throws MethodError ParameterDomainError()
+    end
 end

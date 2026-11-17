@@ -21,6 +21,16 @@
         @test predictive.timestep_sizes == [1.0, 2.0, 1.0]
         @test predictive.cognitive_save_history === session_info.cognitive_save_history
         @test predictive.previous_observation === session_info.previous_observation
+        @test predictive.check_parameter_domains === true
+        #A session that doesn't check its parameters against their domains still doesn't
+        unchecked = SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            check_parameter_domains=false,
+        )
+        @test prepare_for_prediction(unchecked).check_parameter_domains === false
     end
 
     @testset "With an environment, every observation is missing too, so the environment runs" begin

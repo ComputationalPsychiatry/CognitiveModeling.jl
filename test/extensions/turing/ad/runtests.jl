@@ -44,6 +44,8 @@ const KNOWN_FAILURES = [
             "turing session with an environment which doesn't run, since nothing in the data is missing",
             "turing session with imputed observations",
             "turing session with noise in each timestep",
+            "turing session with parameter domains and an environment",
+            "turing full model with parameter domains",
             "turing full model with three sessions and independent priors",
             "turing full model with three parameters",
             "turing full model with an environment parameter shared by the sessions",

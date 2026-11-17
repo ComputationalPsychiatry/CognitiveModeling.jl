@@ -89,6 +89,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.environment_save_history === SaveHistory()
         @test session_info.check_stopping_criterion === nothing
         @test session_info.first_timestep_to_check_stopping == 4
+        @test session_info.check_parameter_domains === true
         @test session_info.previous_observation === (; reward=BeforeFirstTimestep())
         @test session_info.previous_action === (; choice=BeforeFirstTimestep())
         @test !CognitiveModeling.has_environment(session_info)
@@ -184,6 +185,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
             environment_save_history=SaveHistory(; outputs=:reward),
             check_stopping_criterion=false,
+            check_parameter_domains=false,
             previous_action=(; choice=false),
         )
         @test session_info.environment === GivesReward() &&
@@ -197,6 +199,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.environment_save_history === SaveHistory(; outputs=:reward)
         @test session_info.check_stopping_criterion === false
         @test session_info.first_timestep_to_check_stopping == 4
+        @test session_info.check_parameter_domains === false
         @test session_info.previous_action === (; choice=false)
         #The observations to condition on leave out the missing one, and are named for scoring with an environment
         @test session_info.observations_to_condition_on == (; reward=[1.0, 1.0])
@@ -222,6 +225,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
             timestep_sizes=0.5,
             check_stopping_criterion=false,
+            check_parameter_domains=false,
         )
         copy = SessionInfo(
             session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
@@ -236,6 +240,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test copy.who_starts === EnvironmentStarts() && copy.timestep_sizes == 0.5
         @test copy.check_stopping_criterion === false &&
             copy.first_timestep_to_check_stopping == 4
+        @test copy.check_parameter_domains === false
         #Saving the environment's history makes a session with one run its environment
         with_environment = SessionInfo(
             SessionCounter(),
@@ -780,12 +785,19 @@ const COUNTER_TABLE = (;
             timestep_sizes=:dt,
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
             impute_missing_actions=false,
+            check_parameter_domains=false,
         )
         @test all(
             session ->
                 session.who_starts === AgentStarts() &&
-                session.cognitive_save_history === SaveHistory(; states=:n_timesteps),
+                session.cognitive_save_history === SaveHistory(; states=:n_timesteps) &&
+                session.check_parameter_domains === false,
             sessions_info.sessions,
+        )
+        #A copy of the sessions with other save histories keeps the setting
+        @test all(
+            session -> session.check_parameter_domains === false,
+            MultipleSessionsInfo(sessions_info; cognitive_save_history=SaveHistory()).sessions,
         )
         @test sessions_info.sessions[1].timestep_sizes == [1.0, 0.5] &&
             sessions_info.sessions[2].timestep_sizes == [1.0, 2.0, 1.0]

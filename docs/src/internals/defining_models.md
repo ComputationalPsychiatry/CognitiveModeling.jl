@@ -43,7 +43,7 @@ Pages = ["defining_models/utility_functions/check_attributes_against_names.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["defining_models/utility_functions/check_parameter_domains.jl"]
+Pages = ["defining_models/utility_functions/check_parameters_in_domains.jl"]
 ```
 
 ### Outputs and inputs before the first timestep

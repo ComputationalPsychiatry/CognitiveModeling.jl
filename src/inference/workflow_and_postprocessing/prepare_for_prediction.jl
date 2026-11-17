@@ -60,6 +60,7 @@ function prepare_for_prediction(
         cognitive_save_history=session_info.cognitive_save_history,
         environment_save_history=session_info.environment_save_history,
         check_stopping_criterion,
+        check_parameter_domains=session_info.check_parameter_domains,
         previous_observation=session_info.previous_observation,
         previous_action=session_info.previous_action,
     )
