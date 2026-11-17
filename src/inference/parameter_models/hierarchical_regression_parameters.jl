@@ -484,13 +484,177 @@ struct DefaultRegressionSettings
 end
 
 """
-    RegressionParameter(terms...; transformation=identity, family_distribution=nothing,
-                        family_distribution_priors=(;),
+    RegressionOutcome()
+
+The marker for the outcome of the regression, which is the transformed sum of each session,
+among the parameters of the distribution of a [`RegressionFamily`](@ref): it stands in the
+place of the prior of the parameter that the regression gives.
+"""
+struct RegressionOutcome end
+
+"""
+    RegressionFamily(distribution_parameters; distribution)
+
+The family of a [`RegressionParameter`](@ref): the distribution that the value of each
+session is sampled from, with one of its parameters given by the regression, as in a
+generalized linear model.
+
+# Arguments
+- `distribution_parameters::NamedTuple`: the parameters of the distribution, in the order
+  in which it takes them, as the priors of a [`HierarchicalParameter`](@ref) are, with
+  [`RegressionOutcome`](@ref) for the one that the regression gives and a prior for each of
+  the others, such as `(; mean = RegressionOutcome(), sd = Exponential(1))`. Each of the
+  others is sampled once, for every session, and their names name their variables.
+
+# Keyword arguments
+- `distribution`: the distribution, as a function of its parameters, such as `Normal`,
+  `OrderedLogistic` or
+  `(mean, dispersion) -> NegativeBinomial(dispersion, dispersion / (dispersion + mean))`.
+
+The argument is kept in the field `distribution_parameters`, and the distribution in
+`distribution`, inside a function which makes it when it is given as a type. The field
+`priors` has the priors among the parameters, without the outcome of the regression.
+
+# Examples
+```jldoctest
+julia> using Distributions: Normal, Exponential
+
+julia> family = RegressionFamily((; mean = RegressionOutcome(), sd = Exponential(1)); distribution = Normal);
+
+julia> keys(family.priors)
+(:sd,)
+```
+"""
+struct RegressionFamily{
+    Tdistribution_parameters<:NamedTuple,Tpriors<:NamedTuple,Tdistribution
+}
+    distribution_parameters::Tdistribution_parameters
+    priors::Tpriors
+    distribution::Tdistribution
+
+    #Checks that one parameter is the outcome of the regression, and keeps the priors of the others on their own, in their order
+    function RegressionFamily(distribution_parameters; distribution)
+
+        #The parameters of the distribution must be given
+        if !(distribution_parameters isa NamedTuple) || isempty(distribution_parameters)
+            throw(
+                ArgumentError(
+                    "A RegressionFamily takes the parameters of its distribution in a NamedTuple, in the order in which the distribution takes them, with RegressionOutcome() for the one that the regression gives and a prior for each of the others, such as (; mean = RegressionOutcome(), sd = Exponential(1)), but it was given $(repr(distribution_parameters)).",
+                ),
+            )
+        end
+
+        #The regression gives one of them
+        outcome_names = Tuple(
+            name for (name, parameter) in pairs(distribution_parameters) if
+            parameter isa RegressionOutcome
+        )
+        if length(outcome_names) != 1
+            throw(
+                ArgumentError(
+                    "A RegressionFamily has RegressionOutcome() in the place of the one parameter of its distribution that the regression gives, as in (; mean = RegressionOutcome(), sd = Exponential(1)), but it has it for $(isempty(outcome_names) ? "none" : join(outcome_names, " and ")) of $(keys(distribution_parameters)).",
+                ),
+            )
+        end
+
+        #The priors of the parameters that are sampled, in the order of the distribution
+        prior_names = Tuple(
+            name for (name, parameter) in pairs(distribution_parameters) if
+            !(parameter isa RegressionOutcome)
+        )
+        priors = NamedTuple{prior_names}(distribution_parameters)
+
+        #A distribution given as a type, such as Normal, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
+        kept_distribution = if distribution isa Type
+            ConstructorOf{distribution}()
+        else
+            distribution
+        end
+        return new{typeof(distribution_parameters),typeof(priors),typeof(kept_distribution)}(
+            distribution_parameters, priors, kept_distribution
+        )
+    end
+end
+
+"""
+    as_regression_family(family)
+
+Return `family`, what the keyword argument `family` of a [`RegressionParameter`](@ref) was
+given, as a [`RegressionFamily`](@ref) or `nothing`: itself when it is one of them, and
+otherwise a `RegressionFamily` of the distribution `family`, whose only parameter is the
+outcome of the regression, such as `BernoulliLogit`. Used by the constructor of
+`RegressionParameter`.
+"""
+as_regression_family(::Nothing) = nothing
+as_regression_family(family::RegressionFamily) = family
+function as_regression_family(distribution)
+    return RegressionFamily((; value=RegressionOutcome()); distribution)
+end
+
+"""
+    build_family_distribution(family, regression_outcome, sampled_values)
+
+Return the distribution that the value of one session is sampled from: the distribution of
+`family`, a [`RegressionFamily`](@ref), with `regression_outcome`, the transformed sum of
+the session, in the place of [`RegressionOutcome`](@ref), and `sampled_values`, the values
+of the other parameters in the order of their priors, as a `NamedTuple` or a tuple, in the
+places of their priors, as [`merge_family_arguments`](@ref) arranges them. Used by the
+models of the inference backends.
+"""
+function build_family_distribution(
+    family::RegressionFamily, regression_outcome, sampled_values
+)
+    return family.distribution(
+        merge_family_arguments(
+            values(family.distribution_parameters),
+            regression_outcome,
+            values(sampled_values),
+        )...,
+    )
+end
+
+"""
+    merge_family_arguments(distribution_parameters, regression_outcome, sampled_values)
+
+Return the arguments of the distribution of a [`RegressionFamily`](@ref), as a tuple in the
+order of `distribution_parameters`, a tuple of its parameters: `regression_outcome` in the
+place of [`RegressionOutcome`](@ref), and the next of `sampled_values`, a tuple, in the
+place of each prior. Used by [`build_family_distribution`](@ref).
+"""
+merge_family_arguments(::Tuple{}, regression_outcome, ::Tuple{}) = ()
+
+#Each call takes the first of the parameters and calls itself with the remaining ones, so that the compiler knows the type of every argument
+function merge_family_arguments(
+    distribution_parameters::Tuple{RegressionOutcome,Vararg{Any}},
+    regression_outcome,
+    sampled_values::Tuple,
+)
+    return (
+        regression_outcome,
+        merge_family_arguments(
+            Base.tail(distribution_parameters), regression_outcome, sampled_values
+        )...,
+    )
+end
+function merge_family_arguments(
+    distribution_parameters::Tuple, regression_outcome, sampled_values::Tuple
+)
+    return (
+        first(sampled_values),
+        merge_family_arguments(
+            Base.tail(distribution_parameters),
+            regression_outcome,
+            Base.tail(sampled_values),
+        )...,
+    )
+end
+
+"""
+    RegressionParameter(terms...; transformation=identity, family=nothing,
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings(), name=nothing)
     RegressionParameter(formula, terms...; categorical_predictors=(), priors=(;),
-                        transformation=identity, family_distribution=nothing,
-                        family_distribution_priors=(;),
+                        transformation=identity, family=nothing,
                         default_priors=DefaultRegressionPriors(),
                         default_settings=DefaultRegressionSettings())
 
@@ -509,12 +673,11 @@ columns that identify them, such as `VaryingEffects(:id, Intercept(Exponential(1
 give each session a value of its own. Without them, sessions with the same values in every
 column that is used have the same value of the parameter.
 
-With a `family_distribution`, the value of a session is sampled from a distribution around
-its transformed sum instead, as the outcome is in a generalized linear model. A discrete
-parameter needs one, since a sum is never discrete: with `transformation = logistic` and
-`family_distribution = Bernoulli`, the transformed sum is the probability that the
-parameter is `true` in a session. The values of the sessions are then variables of their
-own.
+With a `family`, the value of a session is sampled from a distribution instead, one of
+whose parameters is the transformed sum of the session, as in a generalized linear model. A
+discrete parameter needs one, since a sum is never discrete: with
+`family = BernoulliLogit`, the sum is the log odds that the parameter is `true` in a
+session. The values of the sessions are then variables of their own.
 
 Every term has a name of its own, which its coefficients or its variables are named after.
 A term is named after its column or columns, and an interaction after its predictors, unless
@@ -524,15 +687,13 @@ it is given another name.
 - `transformation=identity`: a function applied to the sum for each session, such as `exp`
   for a parameter that must be positive or `logistic` for one between 0 and 1, as an
   inverse link function does in a regression.
-- `family_distribution=nothing`: the distribution that the value of each session is sampled
-  from, as a function of the transformed sum of the session, such as `Bernoulli`, `Poisson`
-  or `value -> Binomial(7, value)`. A distribution with other parameters takes them after
-  the transformed sum, in the order of `family_distribution_priors`, as `Normal` takes a
-  standard deviation after its mean. With `nothing`, the value of a session is its
-  transformed sum.
-- `family_distribution_priors=(;)`: the priors of the other parameters of the family
-  distribution, in a `NamedTuple`, such as `(; sd = Exponential(1))`. Each is sampled once,
-  for every session.
+- `family=nothing`: the distribution that the value of each session is sampled from. A
+  distribution whose only parameter is the transformed sum of the session is given as it
+  is, as a function of that sum, such as `BernoulliLogit`, `LogPoisson` or
+  `logit -> BinomialLogit(7, logit)`. One with other parameters is given as a
+  [`RegressionFamily`](@ref), which has the priors of the others, such as
+  `RegressionFamily((; mean = RegressionOutcome(), sd = Exponential(1)); distribution = Normal)`.
+  With `nothing`, the value of a session is its transformed sum.
 - `default_priors=DefaultRegressionPriors()`: the priors of the terms that are given
   without one, by their kind, as a [`DefaultRegressionPriors`](@ref).
 - `default_settings=DefaultRegressionSettings()`: the coding of the categorical predictors
@@ -545,8 +706,8 @@ it is given another name.
 The terms are kept in the field `terms`, as a `NamedTuple` with each term under its name,
 those without a prior with the one from `default_priors`, and those without a coding or a
 choice of centering with the ones from `default_settings`. The transformation, the family
-distribution, its priors and the name are kept in fields of the same name, with a
-`family_distribution` that is given as a type inside a function which makes it.
+and the name are kept in fields of the same name, with a `family` that is given as a
+distribution in a [`RegressionFamily`](@ref) of it.
 
 # Formulas
 With StatsModels.jl loaded, the terms can be written as a `@formula`, in the syntax of
@@ -592,16 +753,20 @@ julia> keys(learning_rate.terms)
 (:intercept, :age, :diagnosis, :age_by_diagnosis, :participant)
 ```
 
-A discrete parameter, which is `true` in a session with a probability that depends on the
-age:
+A discrete parameter, which is `true` in a session with log odds that depend on the age,
+and a parameter whose value in a session is sampled around the sum of its regression, with
+a standard deviation that is sampled too:
 ```julia
-using LogExpFunctions: logistic
-
 uses_rewards = RegressionParameter(
-    Intercept(Normal(0, 1)),
-    ContinuousPredictor(:age, Normal(0, 0.5));
-    transformation = logistic,
-    family_distribution = Bernoulli,
+    Intercept(Normal(0, 1)), ContinuousPredictor(:age, Normal(0, 0.5));
+    family = BernoulliLogit,
+)
+
+bias = RegressionParameter(
+    Intercept(Normal(0, 1)), ContinuousPredictor(:age, Normal(0, 0.5));
+    family = RegressionFamily(
+        (; mean = RegressionOutcome(), sd = Exponential(1)); distribution = Normal
+    ),
 )
 ```
 
@@ -620,23 +785,18 @@ learning_rate = RegressionParameter(
 ```
 """
 struct RegressionParameter{
-    Tterms<:NamedTuple,
-    Ttransformation,
-    Tfamily_distribution,
-    Tfamily_distribution_priors<:NamedTuple,
+    Tterms<:NamedTuple,Ttransformation,Tfamily<:Union{Nothing,RegressionFamily}
 }
     terms::Tterms
     transformation::Ttransformation
-    family_distribution::Tfamily_distribution
-    family_distribution_priors::Tfamily_distribution_priors
+    family::Tfamily
     name::Union{Nothing,Symbol}
 
-    #Gives the default priors and settings to the terms without them, checks the terms and keeps them under their names, with the family distribution and its priors
+    #Gives the default priors and settings to the terms without them, checks the terms and keeps them under their names, with the family as a RegressionFamily
     function RegressionParameter(
         terms...;
         transformation=identity,
-        family_distribution=nothing,
-        family_distribution_priors::NamedTuple=(;),
+        family=nothing,
         default_priors::DefaultRegressionPriors=DefaultRegressionPriors(),
         default_settings::DefaultRegressionSettings=DefaultRegressionSettings(),
         name::Union{Nothing,Symbol}=nothing,
@@ -670,42 +830,20 @@ struct RegressionParameter{
             )
         end
 
-        #The priors of the other parameters of a family distribution need the distribution
-        if family_distribution === nothing && !isempty(family_distribution_priors)
-            throw(
-                ArgumentError(
-                    "A RegressionParameter was given family_distribution_priors, with the priors of $(keys(family_distribution_priors)), but no family_distribution, whose other parameters they are the priors of.",
-                ),
-            )
-        end
+        #A distribution on its own is the family whose only parameter is the one that the regression gives
+        regression_family = as_regression_family(family)
 
-        #With a family distribution, the values of the sessions are named session under the parameter's name, and the other parameters of the distribution family, so varying effects can't take those names
-        if family_distribution !== nothing
+        #With a family, the values of the sessions are named session under the parameter's name, and the other parameters of its distribution family, so varying effects can't take those names
+        if regression_family !== nothing
             check_no_varying_effects_named(
                 terms_by_name, :session, "the values of the sessions"
             )
             check_no_varying_effects_named(
-                terms_by_name, :family, "the other parameters of the family distribution"
+                terms_by_name, :family, "the other parameters of the family"
             )
         end
-
-        #A distribution given as a type, such as Bernoulli, is kept inside a function which has the type in its own type. A type on its own is only known to be a type when a model is compiled, so that the method to call is looked up on every call, which is slower
-        kept_family_distribution = if family_distribution isa Type
-            ConstructorOf{family_distribution}()
-        else
-            family_distribution
-        end
-        return new{
-            typeof(terms_by_name),
-            typeof(transformation),
-            typeof(kept_family_distribution),
-            typeof(family_distribution_priors),
-        }(
-            terms_by_name,
-            transformation,
-            kept_family_distribution,
-            family_distribution_priors,
-            name,
+        return new{typeof(terms_by_name),typeof(transformation),typeof(regression_family)}(
+            terms_by_name, transformation, regression_family, name
         )
     end
 end
@@ -714,7 +852,7 @@ end
     check_no_varying_effects_named(terms_by_name, reserved_name, named_so)
 
 Throw an informative error if `terms_by_name`, the terms of a [`RegressionParameter`](@ref)
-with a family distribution under their names, has [`VaryingEffects`](@ref) named
+with a family under their names, has [`VaryingEffects`](@ref) named
 `reserved_name`, which is the name of the variable that `named_so` describes, such as
 `"the values of the sessions"`. Used by the constructor of `RegressionParameter`.
 """
@@ -725,7 +863,7 @@ function check_no_varying_effects_named(
     getproperty(terms_by_name, reserved_name) isa VaryingEffects || return nothing
     return throw(
         ArgumentError(
-            "VaryingEffects of a RegressionParameter with a family distribution can't be named $reserved_name, which is the name of $named_so. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session).",
+            "VaryingEffects of a RegressionParameter with a family can't be named $reserved_name, which is the name of $named_so. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session).",
         ),
     )
 end

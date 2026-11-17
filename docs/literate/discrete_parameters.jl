@@ -75,21 +75,25 @@ chain = sample(model, sampler, 1000)
 # ## A regression on a discrete parameter
 #
 # A [`RegressionParameter`](@ref) gives a number for each session, which a discrete
-# parameter can't be. With a `family_distribution`, the value of each session is sampled
-# from a distribution around that number instead, as a variable of its own. Here the
-# regression gives the probability that a session uses its rewards, and a session is more
-# or less likely to use them with age:
+# parameter can't be. With a `family`, the value of each session is sampled from a
+# distribution instead, as a variable of its own, and the regression gives a parameter of
+# that distribution. Here it gives the log odds that a session uses its rewards, which
+# rise or fall with age:
 
 parameters_model = HierarchicalRegressionParameters((;
     learning_rate=RegressionParameter(Intercept(Normal(0, 1)); transformation=logistic),
     uses_rewards=RegressionParameter(
         Intercept(Normal(0, 1)),
         ContinuousPredictor(:age, Normal(0, 0.5));
-        transformation=logistic,
-        family_distribution=Bernoulli,
+        family=BernoulliLogit,
     ),
 ))
 model = turing_full_model(parameters_model, sessions_info)
+
+# A distribution which takes the sum of the regression as it is, such as `BernoulliLogit`,
+# is the safe choice. With `transformation = logistic` and `Bernoulli`, a sampler which
+# uses ForwardDiff.jl for its gradients stops with an error as soon as it tries a sum that
+# is high enough for the probability to be exactly 1.
 
 # The coefficients are continuous and the values of the sessions discrete, so each kind
 # gets its sampler again:
@@ -104,19 +108,26 @@ chain = sample(model, sampler, 1000)
 #
 # A parameter with ordered levels, such as a number of planning steps from one to four,
 # needs one regression and a cutpoint between each pair of neighboring levels, as in an
-# ordinal regression. The cutpoints are other parameters of the family distribution, with a
-# prior of their own, and are the same for every session. The regression has no intercept,
-# since the cutpoints take its place:
+# ordinal regression. The cutpoints are other parameters of the family's distribution, with
+# a prior of their own, and are the same for every session. A [`RegressionFamily`](@ref) has
+# the parameters of the distribution in the order in which it takes them, with
+# [`RegressionOutcome`](@ref) for the one that the regression gives and a prior for each of
+# the others. The regression has no intercept, since the cutpoints take its place:
 
 planning_steps = RegressionParameter(
     ContinuousPredictor(:age, Normal(0, 1));
-    family_distribution=OrderedLogistic,
-    family_distribution_priors=(; cutpoints=Bijectors.ordered(filldist(Normal(0, 2), 3))),
+    family=RegressionFamily(
+        (;
+            location=RegressionOutcome(),
+            cutpoints=Bijectors.ordered(filldist(Normal(0, 2), 3)),
+        );
+        distribution=OrderedLogistic,
+    ),
 )
 
-# A count works in the same way: a number of items out of seven as
-# `value -> Binomial(7, value)` with `transformation = logistic`, and a count without an
-# upper bound as `Poisson` with `transformation = exp`.
+# A count needs no other parameters: a number of items out of seven is
+# `family = logit -> BinomialLogit(7, logit)`, and a count without an upper bound is
+# `family = LogPoisson`.
 
 # ## Unordered categories (planned)
 #

@@ -471,8 +471,8 @@ const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
     TURING_REGRESSION_SESSIONS,
 )
 
-# The inverse temperature of each session sampled from a family distribution around its regression, a log-normal one
-# whose standard deviation has a prior, next to a learning rate from a regression without one
+# The inverse temperature of each session sampled from the distribution of a family, a log-normal one whose mean
+# the regression gives and whose standard deviation has a prior, next to a learning rate from a regression without one
 const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
     HierarchicalRegressionParameters((;
         learning_rate=RegressionParameter(
@@ -482,8 +482,9 @@ const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
         ),
         inverse_temperature=RegressionParameter(
             Intercept(Normal(0, 1));
-            family_distribution=LogNormal,
-            family_distribution_priors=(; sd=Exponential(1)),
+            family=RegressionFamily(
+                (; mean=RegressionOutcome(), sd=Exponential(1)); distribution=LogNormal
+            ),
         ),
     )),
     TURING_REGRESSION_SESSIONS,

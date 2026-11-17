@@ -70,8 +70,8 @@ Turing.jl model which gives one parameter to every session, as `regression_param
 predictors and the interactions with [`turing_regression_coefficients`](@ref) and the
 deviations of the varying effects with [`turing_regression_varying_effects`](@ref), and
 returns the sum of their effects on every session, with the transformation applied to each.
-With a family distribution, it returns the values that
-[`turing_regression_family_values`](@ref) samples around the transformed sums instead.
+With a family, it returns the values that [`turing_regression_family_values`](@ref) samples
+from the family's distribution instead.
 `design` has the columns and the levels of the regression, for each of `n_sessions`
 sessions. Used by [`turing_regression_parameters`](@ref).
 """
@@ -94,51 +94,60 @@ Turing.@model function turing_regression_parameter(regression_parameter, design,
         regression_parameter.transformation, non_varying_effects .+ varying_effects
     )
 
-    #Without a family distribution, the transformed sums are the values of the sessions
-    family_distribution = regression_parameter.family_distribution
-    if family_distribution === nothing
+    #Without a family, the transformed sums are the values of the sessions
+    regression_family = regression_parameter.family
+    if regression_family === nothing
         return transformed_sums
     end
 
-    #With one, sample its other parameters, and the value of every session around its transformed sum
+    #With one, sample the other parameters of its distribution, and the value of every session from the distribution of its transformed sum
     values ~ to_submodel(
         turing_regression_family_values(
-            family_distribution,
-            regression_parameter.family_distribution_priors,
-            transformed_sums,
+            regression_family, regression_family.priors, transformed_sums
         ),
         false,
     )
     return values
 end
 
+#The family is named regression_family here, since the variable of the other parameters is named family, and a variable with the name of an argument of a Turing.jl model is taken as observed
 """
-    turing_regression_family_values(family_distribution, family_distribution_priors,
-                                    transformed_sums)
+    turing_regression_family_values(regression_family, priors, transformed_sums)
 
-Turing.jl model which samples the value of a parameter for every session from the family
-distribution of its regression. The other parameters of the distribution are sampled once
-from `family_distribution_priors`, as one variable `family` whose value is a `NamedTuple`
-with each under its name, so that under the parameter's prefix one is named like
-`learning_rate.family.sd`. The values of the sessions are the variable `session`, a vector
-with a value for every session, named like `learning_rate.session`, each from the
-distribution that `family_distribution` makes of the session's value in `transformed_sums`
-and of the other parameters, in the order of their priors. Without other parameters, only
-`session` is sampled. Used by [`turing_regression_parameter`](@ref).
+Turing.jl model which samples the value of a parameter for every session from
+`regression_family`, the [`RegressionFamily`](@ref) of its regression. The other parameters
+of the family's distribution are sampled once from `priors`, as one variable `family` whose
+value is a `NamedTuple` with each under its name, so that under the parameter's prefix one
+is named like `learning_rate.family.sd`. The values of the sessions are the variable
+`session`, a vector with a value for every session, named like `learning_rate.session`,
+each from the distribution that [`CognitiveModeling.build_family_distribution`](@ref) makes
+of the session's value in `transformed_sums` and of the other parameters. Without other
+parameters, only `session` is sampled. Used by [`turing_regression_parameter`](@ref).
 """
 Turing.@model function turing_regression_family_values(
-    family_distribution, family_distribution_priors::NamedTuple, transformed_sums
+    regression_family::RegressionFamily, priors::NamedTuple, transformed_sums
 )
-    family ~ product_distribution(family_distribution_priors)
-    session ~
-    arraydist(map(value -> family_distribution(value, values(family)...), transformed_sums))
+    family ~ product_distribution(priors)
+    session ~ arraydist(
+        map(
+            regression_outcome ->
+                build_family_distribution(regression_family, regression_outcome, family),
+            transformed_sums,
+        ),
+    )
     return session
 end
 
 Turing.@model function turing_regression_family_values(
-    family_distribution, family_distribution_priors::NamedTuple{()}, transformed_sums
+    regression_family::RegressionFamily, priors::NamedTuple{()}, transformed_sums
 )
-    session ~ arraydist(map(family_distribution, transformed_sums))
+    session ~ arraydist(
+        map(
+            regression_outcome ->
+                build_family_distribution(regression_family, regression_outcome, ()),
+            transformed_sums,
+        ),
+    )
     return session
 end
 

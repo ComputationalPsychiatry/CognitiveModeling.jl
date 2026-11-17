@@ -249,23 +249,26 @@ end
             terms.participant.terms.age.prior === 0.125
     end
 
-    @testset "The family distribution and its priors are given as for a regression written with terms" begin
+    @testset "The family is given as for a regression written with terms" begin
         value_and_spread(value, spread) = (value, spread)
+        family = RegressionFamily(
+            (; value=RegressionOutcome(), spread=2); distribution=value_and_spread
+        )
         from_formula = RegressionParameter(
-            @formula(learning_rate ~ 1 + age);
-            family_distribution=value_and_spread,
-            family_distribution_priors=(; spread=2),
-            default_priors=FORMULA_PRIORS,
+            @formula(learning_rate ~ 1 + age); family, default_priors=FORMULA_PRIORS
         )
         @test from_formula === RegressionParameter(
             Intercept(),
             ContinuousPredictor(:age);
-            family_distribution=value_and_spread,
-            family_distribution_priors=(; spread=2),
+            family,
             default_priors=FORMULA_PRIORS,
             name=:learning_rate,
         )
-        @test from_formula.family_distribution === value_and_spread
+        @test from_formula.family === family
+        #A distribution on its own is taken too
+        @test RegressionParameter(
+            @formula(learning_rate ~ 1); family=identity, default_priors=FORMULA_PRIORS
+        ).family === RegressionFamily((; value=RegressionOutcome()); distribution=identity)
     end
 
     @testset "Terms that a formula can't express are given after it" begin

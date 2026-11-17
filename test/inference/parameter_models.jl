@@ -281,21 +281,18 @@ const REGRESSION_TABLE = merge(
             regression_parameter.name === nothing
         @test RegressionParameter(Intercept(1)).transformation === identity
         @test RegressionParameter(Intercept(1); name=:probability).name === :probability
-        #Without a family distribution, the value of a session is its transformed sum
-        @test regression_parameter.family_distribution === nothing &&
-            regression_parameter.family_distribution_priors === (;)
-        #A family distribution is kept with the priors of its other parameters, and one that is given as a type inside a function which makes it
+        #Without a family, the value of a session is its transformed sum
+        @test regression_parameter.family === nothing
+        #A family is kept as it is given, and a distribution on its own as the family whose only parameter is the one that the regression gives
         value_and_spread(value, spread) = (value, spread)
-        with_family = RegressionParameter(
-            Intercept(1);
-            family_distribution=value_and_spread,
-            family_distribution_priors=(; spread=2),
+        family = RegressionFamily(
+            (; value=RegressionOutcome(), spread=2); distribution=value_and_spread
         )
-        @test with_family.family_distribution === value_and_spread &&
-            with_family.family_distribution_priors === (; spread=2)
-        from_type = RegressionParameter(Intercept(1); family_distribution=Pair)
-        @test from_type.family_distribution === CognitiveModeling.ConstructorOf{Pair}()
-        @test from_type.family_distribution(1, 2) === (1 => 2)
+        @test RegressionParameter(Intercept(1); family).family === family
+        @test RegressionParameter(Intercept(1); family=identity).family ===
+            RegressionFamily((; value=RegressionOutcome()); distribution=identity)
+        @test RegressionParameter(Intercept(1); family=Pair).family.distribution ===
+            CognitiveModeling.ConstructorOf{Pair}()
         #The terms of varying effects without a prior get the default prior of the standard deviation of their kind, and keep their settings
         with_varying_defaults = RegressionParameter(
             VaryingEffects(
@@ -391,6 +388,52 @@ const REGRESSION_TABLE = merge(
         @test_throws "The coding of a DefaultRegressionSettings is :dummy, where each coefficient is the difference between a level and the reference level, :effects, where each is the difference between a level and the mean of the levels, or :full_dummy, where every level has a coefficient, but it was given :sum_to_zero." DefaultRegressionSettings(;
             coding=:sum_to_zero
         )
+    end
+
+    @testset "A RegressionFamily has the parameters of its distribution in their order, with RegressionOutcome for the one that the regression gives" begin
+        value_and_spread(value, spread) = (value, spread)
+        family = RegressionFamily(
+            (; value=RegressionOutcome(), spread=2); distribution=value_and_spread
+        )
+        @test family.distribution_parameters === (; value=RegressionOutcome(), spread=2)
+        @test family.priors === (; spread=2)
+        @test family.distribution === value_and_spread
+        #A distribution that is given as a type is kept inside a function which makes it
+        from_type = RegressionFamily(
+            (; first=1, second=RegressionOutcome()); distribution=Pair
+        )
+        @test from_type.distribution === CognitiveModeling.ConstructorOf{Pair}()
+        @test from_type.priors === (; first=1)
+
+        #The distribution of a session has the outcome of the regression in the place of RegressionOutcome, wherever it is, and the sampled values in the places of their priors, given as a NamedTuple or a tuple
+        build = CognitiveModeling.build_family_distribution
+        @test build(family, 0.5, (; spread=3)) === (0.5, 3)
+        @test build(from_type, 0.5, (; first=3)) === (3 => 0.5)
+        @test build(from_type, 0.5, (3,)) === (3 => 0.5)
+        in_the_middle = RegressionFamily(
+            (; before=1, value=RegressionOutcome(), after=2); distribution=tuple
+        )
+        @test in_the_middle.priors === (; before=1, after=2)
+        @test (@inferred build(in_the_middle, 0.5, (; before=10, after=20))) ===
+            (10, 0.5, 20)
+        only_the_value = RegressionFamily((; value=RegressionOutcome()); distribution=tuple)
+        @test only_the_value.priors === (;)
+        @test build(only_the_value, 0.5, ()) === (0.5,)
+
+        #What it can't take: something other than a NamedTuple of parameters, none or several from the regression, and no distribution
+        @test_throws "A RegressionFamily takes the parameters of its distribution in a NamedTuple, in the order in which the distribution takes them, with RegressionOutcome() for the one that the regression gives and a prior for each of the others, such as (; mean = RegressionOutcome(), sd = Exponential(1)), but it was given 2." RegressionFamily(
+            2; distribution=tuple
+        )
+        @test_throws "but it was given NamedTuple()." RegressionFamily(
+            (;); distribution=tuple
+        )
+        @test_throws "A RegressionFamily has RegressionOutcome() in the place of the one parameter of its distribution that the regression gives, as in (; mean = RegressionOutcome(), sd = Exponential(1)), but it has it for none of (:mean, :sd)." RegressionFamily(
+            (; mean=1, sd=2); distribution=tuple
+        )
+        @test_throws "but it has it for mean and sd of (:mean, :sd)." RegressionFamily(
+            (; mean=RegressionOutcome(), sd=RegressionOutcome()); distribution=tuple
+        )
+        @test_throws UndefKeywordError RegressionFamily((; mean=RegressionOutcome()))
     end
 
     @testset "A regression with a name must be given for the parameter of that name" begin
@@ -497,24 +540,17 @@ const REGRESSION_TABLE = merge(
         @test_throws "VaryingEffects of a RegressionParameter can't be named coef, which is the name of the coefficients of the regression." RegressionParameter(
             VaryingEffects(:coef, Intercept(1))
         )
-        #With a family distribution, the values of the sessions and its other parameters have names that varying effects can't take, while a predictor can, whose coefficient is under coef
-        @test_throws "VaryingEffects of a RegressionParameter with a family distribution can't be named session, which is the name of the values of the sessions. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session)." RegressionParameter(
-            Intercept(1),
-            VaryingEffects(:id, Intercept(2); name=:session);
-            family_distribution=Pair,
+        #With a family, the values of the sessions and its other parameters have names that varying effects can't take, while a predictor can, whose coefficient is under coef
+        @test_throws "VaryingEffects of a RegressionParameter with a family can't be named session, which is the name of the values of the sessions. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session)." RegressionParameter(
+            Intercept(1), VaryingEffects(:id, Intercept(2); name=:session); family=Pair
         )
-        @test_throws "VaryingEffects of a RegressionParameter with a family distribution can't be named family, which is the name of the other parameters of the family distribution." RegressionParameter(
-            VaryingEffects(:family, Intercept(2)); family_distribution=Pair
+        @test_throws "VaryingEffects of a RegressionParameter with a family can't be named family, which is the name of the other parameters of the family." RegressionParameter(
+            VaryingEffects(:family, Intercept(2)); family=Pair
         )
         @test RegressionParameter(VaryingEffects(:id, Intercept(2); name=:session)) isa
             RegressionParameter
-        @test RegressionParameter(
-            ContinuousPredictor(:session, 1); family_distribution=Pair
-        ) isa RegressionParameter
-        #The priors of the other parameters of a family distribution need the distribution
-        @test_throws "A RegressionParameter was given family_distribution_priors, with the priors of (:sd,), but no family_distribution, whose other parameters they are the priors of." RegressionParameter(
-            Intercept(1); family_distribution_priors=(; sd=2)
-        )
+        @test RegressionParameter(ContinuousPredictor(:session, 1); family=Pair) isa
+            RegressionParameter
         @test_throws "HierarchicalRegressionParameters takes a RegressionParameter for each parameter, such as RegressionParameter(Intercept(Normal(0, 1)), VaryingEffects(:participant, Intercept(Exponential(1)))), but for probability it was given 1." HierarchicalRegressionParameters((;
             probability=1
         ))

@@ -7,8 +7,7 @@ function CognitiveModeling.RegressionParameter(
     categorical_predictors=(),
     priors::NamedTuple=(;),
     transformation=identity,
-    family_distribution=nothing,
-    family_distribution_priors::NamedTuple=(;),
+    family=nothing,
     default_priors::DefaultRegressionPriors=DefaultRegressionPriors(),
     default_settings::DefaultRegressionSettings=DefaultRegressionSettings(),
 )
@@ -32,8 +31,7 @@ function CognitiveModeling.RegressionParameter(
         formula_terms_with_priors...,
         terms...;
         transformation,
-        family_distribution,
-        family_distribution_priors,
+        family,
         default_priors,
         default_settings,
         name=parameter_name,

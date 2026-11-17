@@ -5,8 +5,8 @@
 
 A function which makes an object of the type `T` from its arguments, so that
 `ConstructorOf{Normal}()(0, 1)` is `Normal(0, 1)`. Used by [`HierarchicalParameter`](@ref)
-for a group-level distribution that is given as a type, and by
-[`RegressionParameter`](@ref) for a family distribution that is.
+for a group-level distribution that is given as a type, and by [`RegressionFamily`](@ref)
+for a distribution that is.
 """
 struct ConstructorOf{T} end
 (::ConstructorOf{T})(arguments...) where {T} = T(arguments...)

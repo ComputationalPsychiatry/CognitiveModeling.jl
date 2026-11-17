@@ -38,7 +38,8 @@ using CognitiveModeling:
     prepare_parameters_model,
     parameter_names,
     merge_parameters_of_parts,
-    part_names
+    part_names,
+    build_family_distribution
 using CognitiveModeling:
     initialize_output_distributions_for_conditioning,
     store_output_distributions_for_conditioning,

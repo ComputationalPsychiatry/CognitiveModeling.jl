@@ -575,18 +575,28 @@ end
         @test returned(model, given).environment_parameters.mean_reward ≈ [0.6, 0.4, 0.6]
     end
 
-    @testset "With a family distribution, the value of every session is sampled around its transformed sum, as name.session" begin
+    @testset "With a family, the value of every session is sampled from its distribution, as name.session" begin
         with_family = HierarchicalRegressionParameters((;
+            #A distribution on its own, whose only parameter is the sum of the regression
             uses_rewards=RegressionParameter(
                 Intercept(Normal(0, 1)),
                 ContinuousPredictor(:age, Normal(0, 0.05));
-                transformation=to_unit_interval,
-                family_distribution=Bernoulli,
+                family=BernoulliLogit,
             ),
+            #A distribution with another parameter after the one that the regression gives
             inverse_temperature=RegressionParameter(
                 Intercept(Normal(0, 1));
-                family_distribution=LogNormal,
-                family_distribution_priors=(; sd=Exponential(1)),
+                family=RegressionFamily(
+                    (; mean=RegressionOutcome(), sd=Exponential(1)); distribution=LogNormal
+                ),
+            ),
+            #A distribution with another parameter before the one that the regression gives
+            bias=RegressionParameter(
+                Intercept(Normal(0, 1));
+                transformation=exp,
+                family=RegressionFamily(
+                    (; mean=Normal(0, 2), sd=RegressionOutcome()); distribution=Normal
+                ),
             ),
         ))
         model = CognitiveModeling.turing_parameters_model(
@@ -599,32 +609,44 @@ end
             @varname(inverse_temperature.coef) => (; intercept=0.7),
             @varname(inverse_temperature.family) => (; sd=0.4),
             @varname(inverse_temperature.session) => [1.5, 2.0, 2.5],
+            @varname(bias.coef) => (; intercept=0.1),
+            @varname(bias.family) => (; mean=-0.3),
+            @varname(bias.session) => [0.2, -0.5, 0.9],
         )
         #The values of the sessions are a variable of their own, and the other parameters of the distribution are one variable, under family
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         #The model gives the sampled values, which are of the type that the distribution gives
         parameters = returned(model, given)
-        @test parameters ==
-            (; uses_rewards=[true, false, true], inverse_temperature=[1.5, 2.0, 2.5])
+        @test parameters == (;
+            uses_rewards=[true, false, true],
+            inverse_temperature=[1.5, 2.0, 2.5],
+            bias=[0.2, -0.5, 0.9],
+        )
         @test rand(Xoshiro(1), model)[@varname(uses_rewards.session)] isa Vector{Bool}
-        #Each is scored against the distribution of its transformed sum: the ages of the sessions are 20, 30 and 40
-        probabilities = to_unit_interval.(0.5 .- 0.01 .* [20, 30, 40])
+        #Each is scored against the distribution of its transformed sum, which is in the place of RegressionOutcome: the ages of the sessions are 20, 30 and 40
+        log_odds = 0.5 .- 0.01 .* [20, 30, 40]
         @test logjoint(model, given) ≈
             logpdf(Normal(0, 1), 0.5) +
               logpdf(Normal(0, 0.05), -0.01) +
-              sum(logpdf.(Bernoulli.(probabilities), [true, false, true])) +
+              sum(logpdf.(BernoulliLogit.(log_odds), [true, false, true])) +
               logpdf(Normal(0, 1), 0.7) +
               logpdf(Exponential(1), 0.4) +
-              sum(logpdf.(LogNormal(0.7, 0.4), [1.5, 2.0, 2.5]))
+              sum(logpdf.(LogNormal(0.7, 0.4), [1.5, 2.0, 2.5])) +
+              logpdf(Normal(0, 1), 0.1) +
+              logpdf(Normal(0, 2), -0.3) +
+              sum(logpdf.(Normal(-0.3, exp(0.1)), [0.2, -0.5, 0.9]))
     end
 
-    @testset "The other parameters of a family distribution can be of any kind, such as the cutpoints between ordered levels" begin
+    @testset "The other parameters of a family can be of any kind, such as the cutpoints between ordered levels" begin
         ordered_levels = HierarchicalRegressionParameters((;
             planning_steps=RegressionParameter(
                 ContinuousPredictor(:age, Normal(0, 0.05));
-                family_distribution=OrderedLogistic,
-                family_distribution_priors=(;
-                    cutpoints=Turing.Bijectors.ordered(filldist(Normal(0, 2), 3))
+                family=RegressionFamily(
+                    (;
+                        location=RegressionOutcome(),
+                        cutpoints=Turing.Bijectors.ordered(filldist(Normal(0, 2), 3)),
+                    );
+                    distribution=OrderedLogistic,
                 ),
             ),
         ))
@@ -662,8 +684,7 @@ end
         uses_rewards = RegressionParameter(
             Intercept(Normal(0, 1)),
             ContinuousPredictor(:age, Normal(0, 0.05));
-            transformation=to_unit_interval,
-            family_distribution=Bernoulli,
+            family=BernoulliLogit,
         )
         model = turing_full_model(
             HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
@@ -677,22 +698,24 @@ end
         @test returned(model, given).cognitive_parameters.uses_rewards ==
             [true, false, true]
         #A session that doesn't use its rewards is one with a learning rate of 0
-        probabilities = to_unit_interval.(0.5 .- 0.01 .* [20, 30, 40])
+        log_odds = 0.5 .- 0.01 .* [20, 30, 40]
         log_prior =
             logpdf(Normal(0, 1), 0.2) +
             logpdf(Normal(0, 1), 0.5) +
             logpdf(Normal(0, 0.05), -0.01) +
-            sum(logpdf.(Bernoulli.(probabilities), [true, false, true]))
+            sum(logpdf.(BernoulliLogit.(log_odds), [true, false, true]))
         learning_rates = [to_unit_interval(0.2), 0.0, to_unit_interval(0.2)]
         @test logjoint(model, given) ≈
             log_prior + sessions_by_hand(FULL_TABLE, learning_rates, fill(5.0, 3))
 
-        #The coefficients are sampled with gradients, and the values of the sessions without
+        #The coefficients are sampled with gradients, and the values of the sessions without. Inside Gibbs, NUTS only adapts when sample is given the number of adaptation steps
         sampler = Gibbs(
             (@varname(learning_rate.coef), @varname(uses_rewards.coef)) => NUTS(),
             @varname(uses_rewards.session) => MH(),
         )
-        chain = sample(Xoshiro(1), model, sampler, 20; progress=false)
+        chain = sample(
+            Xoshiro(1), model, sampler, 20; nadapts=20, discard_initial=20, progress=false
+        )
         @test size(chain, 1) == 20
         @test all(
             sampled -> sampled.cognitive_parameters.uses_rewards isa Vector{Bool},
