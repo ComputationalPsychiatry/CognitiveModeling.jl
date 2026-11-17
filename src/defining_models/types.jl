@@ -531,29 +531,54 @@ Base.propertynames(::ModelAttributes) = (:parameters, :states, :inputs, :outputs
 """
     AbstractAttributeKind
 
+Supertype of the kinds of attributes of a model: [`ParameterKind`](@ref) for its parameters,
+[`StateKind`](@ref) for its states, and the subtypes of
+[`AbstractObservableAttributeKind`](@ref), [`ObservationKind`](@ref) for the observations
+and [`ActionKind`](@ref) for the actions. Used to say which kind of attribute something is.
+"""
+abstract type AbstractAttributeKind end
+
+"""
+    AbstractObservableAttributeKind
+
 Supertype of the kinds of attributes that the data of a session has:
 [`ObservationKind`](@ref) for the observations, which are the inputs in the attributes of
 its cognitive model, and [`ActionKind`](@ref) for the actions, which are its outputs. Used
 when a table is split into sessions and when the data of a session is named, to say which
 of the two a column or a vector of data is.
 """
-abstract type AbstractAttributeKind end
+abstract type AbstractObservableAttributeKind <: AbstractAttributeKind end
 
 """
     ObservationKind()
 
 The kind of attribute that the observations of a session are, see
-[`AbstractAttributeKind`](@ref).
+[`AbstractObservableAttributeKind`](@ref).
 """
-struct ObservationKind <: AbstractAttributeKind end
+struct ObservationKind <: AbstractObservableAttributeKind end
 
 """
     ActionKind()
 
 The kind of attribute that the actions of a session are, see
+[`AbstractObservableAttributeKind`](@ref).
+"""
+struct ActionKind <: AbstractObservableAttributeKind end
+
+"""
+    ParameterKind()
+
+The kind of attribute that the parameters of a model are, see
 [`AbstractAttributeKind`](@ref).
 """
-struct ActionKind <: AbstractAttributeKind end
+struct ParameterKind <: AbstractAttributeKind end
+
+"""
+    StateKind()
+
+The kind of attribute that the states of a model are, see [`AbstractAttributeKind`](@ref).
+"""
+struct StateKind <: AbstractAttributeKind end
 
 ## The values a parameter can take ##
 

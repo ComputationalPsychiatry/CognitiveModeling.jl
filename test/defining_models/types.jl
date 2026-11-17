@@ -280,11 +280,25 @@ using Random: Xoshiro, default_rng
         @test sizeof(from_literals()) == 0
     end
 
-    @testset "The kinds of attributes that the data of a session has are types of their own" begin
-        @test CognitiveModeling.ObservationKind() isa
+    @testset "The kinds of attributes are types of their own, with those that the data of a session has under a supertype" begin
+        observable_kinds = (
+            CognitiveModeling.ObservationKind(), CognitiveModeling.ActionKind()
+        )
+        other_kinds = (CognitiveModeling.ParameterKind(), CognitiveModeling.StateKind())
+        @test all(
+            kind -> kind isa CognitiveModeling.AbstractObservableAttributeKind,
+            observable_kinds,
+        )
+        @test !any(
+            kind -> kind isa CognitiveModeling.AbstractObservableAttributeKind, other_kinds
+        )
+        @test all(
+            kind -> kind isa CognitiveModeling.AbstractAttributeKind,
+            (observable_kinds..., other_kinds...),
+        )
+        @test CognitiveModeling.AbstractObservableAttributeKind <:
             CognitiveModeling.AbstractAttributeKind
-        @test CognitiveModeling.ActionKind() isa CognitiveModeling.AbstractAttributeKind
-        @test CognitiveModeling.ObservationKind() !== CognitiveModeling.ActionKind()
+        @test allunique((observable_kinds..., other_kinds...))
     end
 
     @testset "InvalidParametersError has a default message, and takes another" begin
