@@ -173,6 +173,35 @@ end
         ).participant
         @test keys(varying_interaction.terms) ===
             (:intercept, :age, :diagnosis, :age_by_diagnosis)
+
+        #A column of an interaction that isn't a term of its own in the sum is given to the interaction itself, which then comes without that main effect
+        without_main_effects = regression_terms_of(
+            @formula(learning_rate ~ age & diagnosis);
+            categorical_coding=(; diagnosis=:full_dummy),
+        )
+        @test keys(without_main_effects) === (:intercept, :age_by_diagnosis)
+        @test without_main_effects.age_by_diagnosis === Interaction(
+            (
+                ContinuousPredictor(:age),
+                CategoricalPredictor(:diagnosis; coding=:full_dummy),
+            ),
+            4,
+        )
+        with_one_main_effect = regression_terms_of(
+            @formula(learning_rate ~ age + age & diagnosis);
+            categorical_reference_levels=(; diagnosis="control"),
+        )
+        @test keys(with_one_main_effect) === (:intercept, :age, :age_by_diagnosis)
+        @test with_one_main_effect.age_by_diagnosis.predictors === (
+            :age, CategoricalPredictor(:diagnosis; coding=:dummy, reference_level="control")
+        )
+        #The terms of their own of varying effects are those before the bar
+        in_varying_effects = regression_terms_of(
+            @formula(learning_rate ~ age + (1 + age & condition | participant));
+            categorical_coding=(; condition=:dummy),
+        ).participant
+        @test in_varying_effects.terms.age_by_condition.predictors ===
+            (ContinuousPredictor(:age), CategoricalPredictor(:condition; coding=:dummy))
     end
 
     @testset "Priors are given by the names of the terms, with a NamedTuple for varying effects, and the other terms have the default priors" begin
@@ -254,9 +283,9 @@ end
         @test_throws "The varying effects of the formula of learning_rate are over :(participant / block), but varying effects are over a column, as in (1 | participant), or over the combinations of the values of several, as in (1 | participant & block)." regression_terms_of(
             @formula(learning_rate ~ (1 | participant / block))
         )
-        #An interaction of predictors that aren't terms of their own, which the regression needs
-        @test_throws "The interaction age_by_iq of a RegressionParameter multiplies age, which isn't one of its terms." regression_terms_of(
-            @formula(learning_rate ~ age & iq)
+        #An interaction of something other than columns
+        @test_throws "An interaction in the formula of learning_rate multiplies columns, as in diagnosis & condition, but it has" regression_terms_of(
+            @formula(learning_rate ~ age & log(iq))
         )
     end
 end

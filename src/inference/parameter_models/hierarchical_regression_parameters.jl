@@ -178,26 +178,34 @@ function check_coding(coding::Symbol, description::String)
 end
 
 """
-    Interaction(terms, prior=nothing; name)
+    Interaction(predictors, prior=nothing; name)
 
-An interaction of the predictors named in `terms`, a tuple of the names of two or more
+An interaction of the predictors in `predictors`, a tuple of two or more
 [`ContinuousPredictor`](@ref)s or [`CategoricalPredictor`](@ref)s of the same
-[`RegressionParameter`](@ref) or [`VaryingEffects`](@ref). Each of them must be a term there
-itself, so an interaction always comes with the main effects of its predictors. It has a
-coefficient for each combination of one coefficient of each predictor, which is multiplied
-by the product of their values, as the predictors give them after coding the levels, with
-`prior` as its prior, such as `Normal(0, 0.5)`, or with `nothing` the regression's default
-prior for an interaction, from its [`DefaultRegressionPriors`](@ref). Two continuous
-predictors give one coefficient, a continuous and a categorical predictor one for each
-coefficient of the categorical predictor, and two categorical predictors one for each
-combination of their coefficients. In `VaryingEffects` it gives varying slopes, and `prior`
-is the prior of the standard deviation of their deviations.
+[`RegressionParameter`](@ref) or [`VaryingEffects`](@ref), each given by its name or itself.
+A predictor given by its name, such as `:age`, is a term there itself, with coefficients of
+its own, which are its main effect. A predictor given itself, such as
+`ContinuousPredictor(:age)`, is part of the interaction only, which then comes without that
+main effect: it has no coefficients of its own, so it is given without a prior, and a
+categorical one has a coding and a reference level of its own. With
+`Interaction((ContinuousPredictor(:age), CategoricalPredictor(:diagnosis; coding = :full_dummy)))`,
+each diagnosis has its own slope of the age.
+
+The interaction has a coefficient for each combination of one coefficient of each
+predictor, which is multiplied by the product of their values, as the predictors give them
+after coding the levels, with `prior` as its prior, such as `Normal(0, 0.5)`, or with
+`nothing` the regression's default prior for an interaction, from its
+[`DefaultRegressionPriors`](@ref). Two continuous predictors give one coefficient, a
+continuous and a categorical predictor one for each coefficient of the categorical
+predictor, and two categorical predictors one for each combination of their coefficients.
+In `VaryingEffects` it gives varying slopes, and `prior` is the prior of the standard
+deviation of their deviations.
 
 The interaction is named `name`. By default, that is the names of its predictors joined by
 `_by_`, as in `diagnosis_by_condition`. Each of its coefficients is named after the
 coefficients it multiplies, joined by `_by_`, such as
 `diagnosis_clinical_by_condition_punishment`, whatever the interaction itself is named. Each
-argument is kept in a field of the same name, with `terms` as a tuple.
+argument is kept in a field of the same name, with `predictors` as a tuple.
 
 # Examples
 ```jldoctest
@@ -205,26 +213,75 @@ julia> using Distributions: Normal
 
 julia> Interaction((:diagnosis, :condition), Normal(0, 0.5)).name
 :diagnosis_by_condition
+
+julia> Interaction((ContinuousPredictor(:age), :diagnosis), Normal(0, 0.5)).name
+:age_by_diagnosis
 ```
 """
-struct Interaction{Tterms<:Tuple{Vararg{Symbol}},Tprior} <: AbstractRegressionTerm
-    terms::Tterms
+struct Interaction{Tpredictors<:Tuple,Tprior} <: AbstractRegressionTerm
+    predictors::Tpredictors
     prior::Tprior
     name::Symbol
 
-    #Takes the names of two or more different predictors and the prior, and is named after the predictors unless another name is given
-    function Interaction(terms, prior=nothing; name::Union{Nothing,Symbol}=nothing)
-        terms_tuple = as_tuple(terms)::Tuple{Vararg{Symbol}}
-        if length(terms_tuple) < 2 || !allunique(terms_tuple)
+    #Takes two or more different predictors, each by its name or itself, and the prior, and is named after the predictors unless another name is given
+    function Interaction(predictors, prior=nothing; name::Union{Nothing,Symbol}=nothing)
+        predictors_tuple = as_tuple(predictors)
+        are_predictors = all(
+            predictor ->
+                predictor isa Union{Symbol,ContinuousPredictor,CategoricalPredictor},
+            predictors_tuple,
+        )
+        if !are_predictors ||
+            length(predictors_tuple) < 2 ||
+            !allunique(map(name_of_predictor, predictors_tuple))
             throw(
                 ArgumentError(
-                    "An Interaction multiplies two or more different predictors, given by their names, such as Interaction((:diagnosis, :condition), Normal(0, 0.5)), but it was given $(repr(terms)).",
+                    "An Interaction multiplies two or more different predictors, each given by its name or itself, such as Interaction((:diagnosis, :condition), Normal(0, 0.5)), but it was given $(repr(predictors)).",
                 ),
             )
         end
-        interaction_name = something(name, Symbol(join(terms_tuple, "_by_")))
-        return new{typeof(terms_tuple),typeof(prior)}(terms_tuple, prior, interaction_name)
+
+        #A predictor that is given itself has no coefficients of its own, and so no prior
+        foreach(check_has_no_prior_of_its_own, predictors_tuple)
+        interaction_name = something(
+            name, Symbol(join(map(name_of_predictor, predictors_tuple), "_by_"))
+        )
+        return new{typeof(predictors_tuple),typeof(prior)}(
+            predictors_tuple, prior, interaction_name
+        )
     end
+end
+
+"""
+    name_of_predictor(predictor)
+
+Return the name of `predictor`, a predictor given to an [`Interaction`](@ref): the name
+itself for one given by its name, and the name of a [`ContinuousPredictor`](@ref) or a
+[`CategoricalPredictor`](@ref) that is given itself. Used by the constructor of
+`Interaction`.
+"""
+name_of_predictor(name::Symbol) = name
+function name_of_predictor(predictor::Union{ContinuousPredictor,CategoricalPredictor})
+    return predictor.name
+end
+
+"""
+    check_has_no_prior_of_its_own(predictor)
+
+Throw an informative error if `predictor`, a predictor given to an [`Interaction`](@ref)
+itself, has a prior, since it has no coefficients of its own there. A predictor given by its
+name passes. Used by the constructor of `Interaction`.
+"""
+check_has_no_prior_of_its_own(name::Symbol) = nothing
+function check_has_no_prior_of_its_own(
+    predictor::Union{ContinuousPredictor,CategoricalPredictor}
+)
+    predictor.prior === nothing && return nothing
+    return throw(
+        ArgumentError(
+            "The predictor $(predictor.name) was given to an Interaction with the prior $(repr(predictor.prior)), but a predictor that is given to an interaction itself has no coefficients of its own, and so no prior. The prior of the interaction comes after its predictors, as in Interaction((ContinuousPredictor(:age), :diagnosis), Normal(0, 0.5)).",
+        ),
+    )
 end
 
 """
@@ -242,8 +299,8 @@ for varying slopes, as in the examples below. A term without a prior has the reg
 default prior for a varying intercept or a varying slope, from its
 [`DefaultRegressionPriors`](@ref). Each coefficient has a standard deviation of its own. A
 varying slope needs values that differ between the sessions of a level, such as a condition
-that changes between the blocks of a participant, and an interaction in varying effects
-multiplies predictors of the same varying effects.
+that changes between the blocks of a participant, and a predictor that an interaction in
+varying effects names is a term of the same varying effects.
 
 # Keyword arguments
 - `group_by=nothing`: a column of the table that the sessions were split from, or a tuple of
@@ -480,11 +537,14 @@ MixedModels.jl, such as
 `@formula(learning_rate ~ 1 + age + diagnosis + (1 + condition | participant))`. Its
 left-hand side is the name of the parameter. An intercept is included unless the formula has
 `0 +`, and the same holds within varying effects. Columns joined by `&` are an
-`Interaction`, and `a * b` gives `a`, `b` and their interaction. `(terms | columns)` are
-`VaryingEffects` over `columns`, or over the combinations of the values of several columns
-joined by `&`, as in `(1 | participant & block)`, and their deviations are independent,
-where MixedModels.jl correlates those within one bar. Terms that a formula can't express,
-such as `VaryingEffects` with `group_by`, are given after the formula.
+`Interaction`, and `a * b` gives `a`, `b` and their interaction. A column of an interaction
+that isn't a term of its own in the same sum is given to the `Interaction` itself, so that
+`age & diagnosis` on its own is the interaction without the main effects.
+`(terms | columns)` are `VaryingEffects` over `columns`, or over the combinations of the
+values of several columns joined by `&`, as in `(1 | participant & block)`, and their
+deviations are independent, where MixedModels.jl correlates those within one bar. Terms
+that a formula can't express, such as `VaryingEffects` with `group_by`, are given after the
+formula.
 
 A column is a `ContinuousPredictor`, unless `categorical_coding` or
 `categorical_reference_levels` names it, which makes it a `CategoricalPredictor`. Both are
@@ -598,7 +658,8 @@ each parameter:
   continuous predictor, and those of the coefficients of a categorical predictor and of an
   interaction, as [`CategoricalPredictor`](@ref) and [`Interaction`](@ref) describe them.
 - `reference_levels`: the reference level of each categorical predictor, which is `nothing`
-  with the coding `:full_dummy`.
+  with the coding `:full_dummy`, and under the name of an interaction those of the
+  categorical predictors it was given themselves, in a `NamedTuple`.
 - `varying_effects`: for the varying effects of each column, the prior of the standard
   deviation of the deviations of each of their coefficients, `coefficient_sd_priors`, which
   is a `NamedTuple` with the prior under the symbol name of each group when the levels are
@@ -773,11 +834,11 @@ end
 
 Return `term`, a term given to a [`RegressionParameter`](@ref), with the settings in
 `default_settings`, a [`DefaultRegressionSettings`](@ref), that it was given without: the
-coding of a [`CategoricalPredictor`](@ref), and for [`VaryingEffects`](@ref) whether they
-are centered and the coding of their categorical predictors. A term's own settings are
-kept, and anything else is returned as it is. A reference level is an error when the
-default coding is `:full_dummy`, which has none. Used by the constructor of
-`RegressionParameter`.
+coding of a [`CategoricalPredictor`](@ref), also of one that an [`Interaction`](@ref) was
+given itself, and for [`VaryingEffects`](@ref) whether they are centered and the coding of
+their categorical predictors. A term's own settings are kept, and anything else is returned
+as it is. A reference level is an error when the default coding is `:full_dummy`, which has
+none. Used by the constructor of `RegressionParameter`.
 """
 with_default_settings(term, ::DefaultRegressionSettings) = term
 function with_default_settings(
@@ -800,6 +861,15 @@ function with_default_settings(
         coding=default_settings.coding,
         name=predictor.name,
     )
+end
+function with_default_settings(
+    interaction::Interaction, default_settings::DefaultRegressionSettings
+)
+    predictors = map(
+        predictor -> with_default_settings(predictor, default_settings),
+        interaction.predictors,
+    )
+    return Interaction(predictors, interaction.prior; name=interaction.name)
 end
 function with_default_settings(
     varying_effects::VaryingEffects, default_settings::DefaultRegressionSettings
@@ -895,7 +965,9 @@ function with_prior(term::CategoricalPredictor, prior)
         name=term.name,
     )
 end
-with_prior(term::Interaction, prior) = Interaction(term.terms, prior; name=term.name)
+function with_prior(term::Interaction, prior)
+    return Interaction(term.predictors, prior; name=term.name)
+end
 
 """
     collect_terms_by_name(terms, description)
@@ -904,8 +976,9 @@ Return `terms`, the terms given to a [`RegressionParameter`](@ref) or to
 [`VaryingEffects`](@ref), as a `NamedTuple` with each term under its name, after checking
 that each is an [`AbstractRegressionTerm`](@ref), that their names differ, that there is one
 [`Intercept`](@ref) at most, and that each [`Interaction`](@ref) multiplies predictors among
-them. `description` says what was given the terms, such as `"a RegressionParameter"`, for
-the errors. Used by the constructors of `RegressionParameter` and `VaryingEffects`.
+them, or ones it was given themselves. `description` says what was given the terms, such as
+`"a RegressionParameter"`, for the errors. Used by the constructors of `RegressionParameter`
+and `VaryingEffects`.
 """
 function collect_terms_by_name(terms::Tuple, description::String)
 
@@ -959,19 +1032,21 @@ end
 """
     check_interaction_terms(interaction, terms_by_name, description)
 
-Throw an informative error if `interaction`, an [`Interaction`](@ref), multiplies a term
-that isn't in `terms_by_name`, the terms given to `description` under their names, or one
-that isn't a [`ContinuousPredictor`](@ref) or a [`CategoricalPredictor`](@ref). Used by
-[`collect_terms_by_name`](@ref).
+Throw an informative error if `interaction`, an [`Interaction`](@ref), multiplies a
+predictor given by its name that isn't in `terms_by_name`, the terms given to `description`
+under their names, or that isn't a [`ContinuousPredictor`](@ref) or a
+[`CategoricalPredictor`](@ref) there. A predictor that the interaction was given itself
+needs no term. Used by [`collect_terms_by_name`](@ref).
 """
 function check_interaction_terms(
     interaction::Interaction, terms_by_name::NamedTuple, description::String
 )
-    for name in interaction.terms
+    for name in interaction.predictors
+        name isa Symbol || continue
         if !haskey(terms_by_name, name)
             throw(
                 ArgumentError(
-                    "The interaction $(interaction.name) of $description multiplies $name, which isn't one of its terms. Its terms are $(keys(terms_by_name)).",
+                    "The interaction $(interaction.name) of $description multiplies $name, which isn't one of its terms. Its terms are $(keys(terms_by_name)). A predictor without a term of its own is given to the interaction itself, as in Interaction((ContinuousPredictor(:age), :diagnosis)).",
                 ),
             )
         end
@@ -1063,9 +1138,11 @@ interactions of `description`, such as `"the regression of learning_rate"`, for 
 sessions in `sessions_info`, as a `NamedTuple` with the prior of each coefficient, `priors`,
 and the values it is multiplied by in every session, `columns`, both under the name of the
 coefficient and in the order of the terms, and with the reference level of each categorical
-predictor, `reference_levels`, under the names of the predictors. The coefficients of each
-term come from [`build_term_columns`](@ref) and [`build_interaction_columns`](@ref), and
-must have names of their own. Used by [`build_regression_design`](@ref) and
+predictor, `reference_levels`, under the names of the predictors, and those of the
+categorical predictors that an interaction was given themselves in a `NamedTuple` under the
+name of the interaction. The coefficients of each term come from
+[`build_term_columns`](@ref) and [`build_interaction_columns`](@ref), and must have names of
+their own. Used by [`build_regression_design`](@ref) and
 [`build_varying_effects_design`](@ref).
 """
 function build_coefficients(
@@ -1091,7 +1168,9 @@ function build_coefficients(
     reference_levels = Pair{Symbol,Any}[]
     for (name, term) in pairs(terms)
         columns_of_term = if term isa Interaction
-            build_interaction_columns(term, columns_of_predictors, description)
+            build_interaction_columns(
+                sessions_info, term, columns_of_predictors, parameter_name, description
+            )
         else
             columns_of_predictors[name]
         end
@@ -1100,6 +1179,8 @@ function build_coefficients(
         append!(coefficient_priors, fill(term.prior, length(columns_of_term.names)))
         if term isa CategoricalPredictor
             push!(reference_levels, name => columns_of_term.reference_level)
+        elseif term isa Interaction && !isempty(columns_of_term.reference_levels)
+            push!(reference_levels, name => columns_of_term.reference_levels)
         end
     end
 
@@ -1272,21 +1353,33 @@ function build_contrast_columns(
 end
 
 """
-    build_interaction_columns(interaction, columns_of_predictors, description)
+    build_interaction_columns(sessions_info, interaction, columns_of_predictors,
+                              parameter_name, description)
 
 Return the coefficients of `interaction`, an [`Interaction`](@ref) of `description`, such as
 `"the regression of learning_rate"`, as [`build_term_columns`](@ref) returns those of a
-predictor: one for each combination of one coefficient of each of its predictors, whose
-coefficients are in `columns_of_predictors` under the names of the predictors, named after
-the coefficients it multiplies joined by `_by_`, with the product of their columns. The
+predictor: one for each combination of one coefficient of each of its predictors, named
+after the coefficients it multiplies joined by `_by_`, with the product of their columns.
+The coefficients of each predictor come from [`columns_of_interaction_predictor`](@ref). The
 combinations are in the order of the coefficients of the first predictor, then of the
-second, and so on. A column that is zero in every session is an error, since no session
-informs its coefficient. Used by [`build_coefficients`](@ref).
+second, and so on. The reference levels of the categorical predictors that the interaction
+was given themselves are returned as `reference_levels`, under their names. A column that
+is zero in every session is an error, since no session informs its coefficient. Used by
+[`build_coefficients`](@ref).
 """
 function build_interaction_columns(
-    interaction::Interaction, columns_of_predictors::AbstractDict, description::String
+    sessions_info::MultipleSessionsInfo,
+    interaction::Interaction,
+    columns_of_predictors::AbstractDict,
+    parameter_name::Symbol,
+    description::String,
 )
-    columns_of_each_predictor = map(name -> columns_of_predictors[name], interaction.terms)
+    columns_of_each_predictor = map(
+        predictor -> columns_of_interaction_predictor(
+            sessions_info, predictor, columns_of_predictors, parameter_name
+        ),
+        interaction.predictors,
+    )
 
     #One coefficient for each combination of one coefficient of each predictor, with the coefficients of the first predictor changing slowest
     ranges_of_coefficients = map(
@@ -1326,7 +1419,42 @@ function build_interaction_columns(
         push!(names, name)
         push!(columns, column)
     end
-    return (; names, columns)
+
+    #The reference levels of the categorical predictors that the interaction was given themselves, which aren't terms
+    reference_levels = Pair{Symbol,Any}[]
+    for (predictor, columns_of_predictor) in
+        zip(interaction.predictors, columns_of_each_predictor)
+        predictor isa CategoricalPredictor || continue
+        push!(reference_levels, predictor.name => columns_of_predictor.reference_level)
+    end
+    return (; names, columns, reference_levels=(; reference_levels...))
+end
+
+"""
+    columns_of_interaction_predictor(sessions_info, predictor, columns_of_predictors,
+                                     parameter_name)
+
+Return the coefficients of `predictor`, a predictor of an [`Interaction`](@ref), as
+[`build_term_columns`](@ref) returns them: those in `columns_of_predictors` under its name
+for a predictor given by its name, which is a term of its own, and those that
+`build_term_columns` builds for a predictor that the interaction was given itself. Used by
+[`build_interaction_columns`](@ref).
+"""
+function columns_of_interaction_predictor(
+    sessions_info::MultipleSessionsInfo,
+    name::Symbol,
+    columns_of_predictors::AbstractDict,
+    parameter_name::Symbol,
+)
+    return columns_of_predictors[name]
+end
+function columns_of_interaction_predictor(
+    sessions_info::MultipleSessionsInfo,
+    predictor::Union{ContinuousPredictor,CategoricalPredictor},
+    columns_of_predictors::AbstractDict,
+    parameter_name::Symbol,
+)
+    return build_term_columns(sessions_info, predictor, parameter_name)
 end
 
 """

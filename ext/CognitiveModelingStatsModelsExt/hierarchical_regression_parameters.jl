@@ -83,15 +83,17 @@ as_tuple_of_terms(term) = (term,)
 
 Return the terms of a regression that `formula_terms`, a tuple of the terms of a sum in a
 formula, are, with an [`Intercept`](@ref) first unless the sum has `0` or `-1`, as
-`translate_term` translates each. Used by the formula form of `RegressionParameter`, and by
+`translate_term` translates each, with the columns that are terms of their own in the sum,
+for its interactions. Used by the formula form of `RegressionParameter`, and by
 `translate_term` for the terms of varying effects.
 """
 function translate_terms(
     formula_terms::Tuple, categorical_settings::NamedTuple, description::String
 )
     intercept = includes_intercept(formula_terms, description) ? (Intercept(),) : ()
+    columns_with_terms = Tuple(term.sym for term in formula_terms if term isa Term)
     others = Tuple(
-        translate_term(term, categorical_settings, description) for
+        translate_term(term, categorical_settings, description, columns_with_terms) for
         term in formula_terms if !(term isa ConstantTerm)
     )
     return (intercept..., others...)
@@ -119,37 +121,70 @@ function includes_intercept(formula_terms::Tuple, description::String)
 end
 
 """
-    translate_term(term, categorical_settings, description)
+    translate_term(term, categorical_settings, description, columns_with_terms)
 
 Return the term of a regression that `term`, a term of a formula other than a constant, is:
 a column is a [`ContinuousPredictor`](@ref), or a [`CategoricalPredictor`](@ref) when
 `categorical_settings` has a coding or a reference level for it, as `predictor_of_column`
-decides, columns joined by `&` are an [`Interaction`](@ref), and `(terms | columns)` are
+decides, columns joined by `&` are an [`Interaction`](@ref), whose predictors
+`predictor_in_interaction` gives by their names or themselves, and `(terms | columns)` are
 [`VaryingEffects`](@ref) over `columns`, with an intercept unless `terms` has `0`. Anything
 else, such as a function of a column, is an error. `description` says which formula the
-term is in, for the errors. Used by `translate_terms`.
+term is in, for the errors, and `columns_with_terms` has the columns that are terms of
+their own in the same sum. Used by `translate_terms`.
 """
-function translate_term(term::Term, categorical_settings::NamedTuple, description::String)
+function translate_term(
+    term::Term,
+    categorical_settings::NamedTuple,
+    description::String,
+    columns_with_terms::Tuple,
+)
     return predictor_of_column(term.sym, categorical_settings, description)
 end
 
 #An interaction is an InteractionTerm, and within a call, as in varying effects, a call of &
 function translate_term(
-    interaction::InteractionTerm, categorical_settings::NamedTuple, description::String
+    interaction::InteractionTerm,
+    categorical_settings::NamedTuple,
+    description::String,
+    columns_with_terms::Tuple,
 )
-    return Interaction(map(part -> read_column(part, description), interaction.terms))
+    return Interaction(
+        map(
+            part -> predictor_in_interaction(
+                read_column(part, description),
+                columns_with_terms,
+                categorical_settings,
+                description,
+            ),
+            interaction.terms,
+        ),
+    )
 end
 function translate_term(
     interaction::FunctionTerm{typeof(&)},
     categorical_settings::NamedTuple,
     description::String,
+    columns_with_terms::Tuple,
 )
-    return Interaction(Tuple(read_column(part, description) for part in interaction.args))
+    return Interaction(
+        Tuple(
+            predictor_in_interaction(
+                read_column(part, description),
+                columns_with_terms,
+                categorical_settings,
+                description,
+            ) for part in interaction.args
+        ),
+    )
 end
 
 #Varying effects are written as in MixedModels.jl, with the terms whose coefficients vary before the bar and the columns whose levels they vary between after it
 function translate_term(
-    varying::FunctionTerm{typeof(|)}, categorical_settings::NamedTuple, description::String
+    varying::FunctionTerm{typeof(|)},
+    categorical_settings::NamedTuple,
+    description::String,
+    columns_with_terms::Tuple,
 )
     terms_side, columns_side = varying.args
     columns = read_varying_effects_columns(columns_side, description)
@@ -162,12 +197,33 @@ function translate_term(
 end
 
 #Anything else isn't a term of a regression
-function translate_term(term, categorical_settings::NamedTuple, description::String)
+function translate_term(
+    term, categorical_settings::NamedTuple, description::String, columns_with_terms::Tuple
+)
     return throw(
         ArgumentError(
             "The term $term of $description isn't a term of a RegressionParameter. A formula has columns, interactions of columns as in diagnosis & condition, and varying effects as in (1 + condition | participant). A column whose values are transformed, such as with log(age), is given as a column of the table with the transformed values.",
         ),
     )
+end
+
+"""
+    predictor_in_interaction(column, columns_with_terms, categorical_settings, description)
+
+Return how `column` of an interaction in a formula is given to the [`Interaction`](@ref):
+by its name when it is a term of its own in the same sum, whose columns are in
+`columns_with_terms`, and otherwise as the predictor itself, as `predictor_of_column` makes
+it, so that the interaction comes without the main effect of that column. Used by
+`translate_term`.
+"""
+function predictor_in_interaction(
+    column::Symbol,
+    columns_with_terms::Tuple,
+    categorical_settings::NamedTuple,
+    description::String,
+)
+    column in columns_with_terms && return column
+    return predictor_of_column(column, categorical_settings, description)
 end
 
 """
@@ -242,8 +298,8 @@ end
 Throw an informative error if `settings`, what the keyword argument `keyword` gives the
 columns of categorical predictors, names something that isn't a column of a predictor in
 `formula_terms`, the terms of the right-hand side of a formula, as when the name is
-misspelled: a column that is a term of its own, or of varying effects. Used by the formula
-form of `RegressionParameter`.
+misspelled: a column that is a term of its own, of an interaction or of varying effects.
+Used by the formula form of `RegressionParameter`.
 """
 function check_names_predictors(
     keyword::String, settings::NamedTuple, formula_terms::Tuple, description::String
@@ -265,19 +321,23 @@ end
     columns_of_predictors(formula_terms)
 
 Return the columns that are predictors in `formula_terms`, the terms of a sum in a formula,
-as a vector of names: a column that is a term of its own, and those in the terms of varying
-effects. Used by `check_names_predictors`.
+as a vector of names without repeats: a column that is a term of its own, those of an
+interaction, and those in the terms of varying effects. Used by `check_names_predictors`.
 """
 function columns_of_predictors(formula_terms::Tuple)
     columns = Symbol[]
     for term in formula_terms
         if term isa Term
             push!(columns, term.sym)
+        elseif term isa InteractionTerm
+            append!(columns, (part.sym for part in term.terms if part isa Term))
+        elseif term isa FunctionTerm{typeof(&)}
+            append!(columns, (part.sym for part in term.args if part isa Term))
         elseif term isa FunctionTerm{typeof(|)}
             append!(columns, columns_of_predictors(as_tuple_of_terms(first(term.args))))
         end
     end
-    return columns
+    return unique(columns)
 end
 
 ### THE PRIORS OF THE TERMS BY THEIR NAMES ###

@@ -218,10 +218,24 @@ const REGRESSION_TABLE = merge(
             cell.reference_level == (; diagnosis="control", site=1) &&
             cell.coding === :effects
         interaction = Interaction((:age, :diagnosis), 4)
-        @test interaction.terms === (:age, :diagnosis) &&
+        @test interaction.predictors === (:age, :diagnosis) &&
             interaction.prior === 4 &&
             interaction.name === :age_by_diagnosis
         @test Interaction([:age, :diagnosis, :site]; name=:three_way).name === :three_way
+        #A predictor can be given to an interaction itself, and names the interaction as one given by its name does
+        slope_of_each_diagnosis = Interaction(
+            (
+                ContinuousPredictor(:age),
+                CategoricalPredictor(:diagnosis; coding=:full_dummy),
+            ),
+            4,
+        )
+        @test slope_of_each_diagnosis.predictors === (
+            ContinuousPredictor(:age), CategoricalPredictor(:diagnosis; coding=:full_dummy)
+        )
+        @test slope_of_each_diagnosis.name === :age_by_diagnosis
+        @test Interaction((ContinuousPredictor(:age; name=:years), :diagnosis)).name ===
+            :years_by_diagnosis
         #Varying effects keep their terms under their names, and their columns and their groups as tuples
         by_participant = VaryingEffects(
             :participant,
@@ -286,6 +300,17 @@ const REGRESSION_TABLE = merge(
         @test participant.group_by === (:site,) &&
             participant.centered === true &&
             participant.name === :participant
+        #A categorical predictor that an interaction was given itself takes the default coding, and keeps a coding of its own
+        with_predictors_themselves = RegressionParameter(
+            ContinuousPredictor(:age, 1),
+            Interaction((:age, CategoricalPredictor(:diagnosis)), 2),
+            Interaction((:age, CategoricalPredictor(:site; coding=:full_dummy)), 2);
+            default_settings=DefaultRegressionSettings(; coding=:effects),
+        )
+        @test with_predictors_themselves.terms.age_by_diagnosis.predictors ===
+            (:age, CategoricalPredictor(:diagnosis; coding=:effects))
+        @test with_predictors_themselves.terms.age_by_site.predictors ===
+            (:age, CategoricalPredictor(:site; coding=:full_dummy))
         #Default priors that aren't given are nothing
         no_defaults = DefaultRegressionPriors()
         @test all(
@@ -400,12 +425,22 @@ const REGRESSION_TABLE = merge(
             Intercept(1), Intercept(2; name=:baseline)
         )
         #An interaction multiplies two or more different predictors of the same regression
-        @test_throws "An Interaction multiplies two or more different predictors, given by their names, such as Interaction((:diagnosis, :condition), Normal(0, 0.5)), but it was given :age." Interaction(
+        @test_throws "An Interaction multiplies two or more different predictors, each given by its name or itself, such as Interaction((:diagnosis, :condition), Normal(0, 0.5)), but it was given :age." Interaction(
             :age, 1
         )
         @test_throws "but it was given (:age, :age)." Interaction((:age, :age), 1)
-        @test_throws "The interaction age_by_iq of a RegressionParameter multiplies iq, which isn't one of its terms. Its terms are (:age, :age_by_iq)." RegressionParameter(
+        @test_throws "An Interaction multiplies two or more different predictors" Interaction(
+            (ContinuousPredictor(:age), :age), 1
+        )
+        @test_throws "An Interaction multiplies two or more different predictors" Interaction(
+            (Intercept(), :age), 1
+        )
+        @test_throws "The interaction age_by_iq of a RegressionParameter multiplies iq, which isn't one of its terms. Its terms are (:age, :age_by_iq). A predictor without a term of its own is given to the interaction itself, as in Interaction((ContinuousPredictor(:age), :diagnosis))." RegressionParameter(
             ContinuousPredictor(:age, 1), Interaction((:age, :iq), 2)
+        )
+        #A predictor that is given to an interaction itself has no coefficients of its own, and so no prior
+        @test_throws "The predictor age was given to an Interaction with the prior 1, but a predictor that is given to an interaction itself has no coefficients of its own, and so no prior. The prior of the interaction comes after its predictors, as in Interaction((ContinuousPredictor(:age), :diagnosis), Normal(0, 0.5))." Interaction(
+            (ContinuousPredictor(:age, 1), :diagnosis), 2
         )
         @test_throws "The interaction intercept_by_age of a RegressionParameter multiplies intercept, which is of type Intercept, but an interaction multiplies ContinuousPredictors and CategoricalPredictors." RegressionParameter(
             Intercept(1), ContinuousPredictor(:age, 1), Interaction((:intercept, :age), 2)
@@ -706,6 +741,53 @@ const REGRESSION_TABLE = merge(
         )
         @test crossed.design_columns.condition_c_by_group_y ==
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        #Predictors that an interaction is given themselves have no coefficients of their own: here each diagnosis has a slope of the age, and no slope is shared
+        slope_of_each_diagnosis = design_of(
+            Interaction(
+                (
+                    ContinuousPredictor(:age),
+                    CategoricalPredictor(:diagnosis; coding=:full_dummy),
+                ),
+                3,
+            ),
+        )
+        @test slope_of_each_diagnosis.coefficient_priors ===
+            (; age_by_diagnosis_clinical=3, age_by_diagnosis_control=3)
+        @test slope_of_each_diagnosis.design_columns == (;
+            age_by_diagnosis_clinical=[30.0, 0.0, 50.0, 0.0],
+            age_by_diagnosis_control=[0.0, 40.0, 0.0, 60.0],
+        )
+        #Their reference levels are kept under the name of the interaction
+        @test slope_of_each_diagnosis.reference_levels ==
+            (; age_by_diagnosis=(; diagnosis=nothing))
+        #One predictor by its name and one itself give the main effect of the first only
+        with_one_main_effect = design_of(
+            ContinuousPredictor(:age, 1),
+            Interaction(
+                (:age, CategoricalPredictor(:diagnosis; reference_level="control")), 3
+            ),
+        )
+        @test with_one_main_effect.coefficient_priors ===
+            (; age=1, age_by_diagnosis_clinical=3)
+        @test with_one_main_effect.design_columns.age_by_diagnosis_clinical ==
+            [30.0, 0.0, 50.0, 0.0]
+        @test with_one_main_effect.reference_levels ==
+            (; age_by_diagnosis=(; diagnosis="control"))
+        #A predictor that is given itself can have the name of a term, and another coding
+        coded_twice = design_of(
+            CategoricalPredictor(:diagnosis, 2),
+            Interaction(
+                (
+                    ContinuousPredictor(:age),
+                    CategoricalPredictor(:diagnosis; coding=:full_dummy),
+                ),
+                3,
+            ),
+        )
+        @test keys(coded_twice.coefficient_priors) ===
+            (:diagnosis_control, :age_by_diagnosis_clinical, :age_by_diagnosis_control)
+        @test coded_twice.reference_levels ==
+            (; diagnosis="clinical", age_by_diagnosis=(; diagnosis=nothing))
         #In varying effects, an interaction multiplies predictors of the same varying effects, and gives varying slopes
         in_varying_effects = design_of(
             VaryingEffects(
@@ -720,6 +802,20 @@ const REGRESSION_TABLE = merge(
             (; intercept=1, age=2, diagnosis_control=3, age_by_diagnosis_control=4)
         @test in_varying_effects.varying_effects.participant.design_columns.age_by_diagnosis_control ==
             [0.0, 40.0, 0.0, 60.0]
+        #Or predictors that it is given themselves, which then have no varying slopes of their own
+        themselves_in_varying_effects = design_of(
+            VaryingEffects(
+                :participant,
+                Intercept(1),
+                Interaction(
+                    (ContinuousPredictor(:age), CategoricalPredictor(:diagnosis)), 4
+                ),
+            ),
+        )
+        @test themselves_in_varying_effects.varying_effects.participant.coefficient_sd_priors ===
+            (; intercept=1, age_by_diagnosis_control=4)
+        @test themselves_in_varying_effects.varying_effects.participant.reference_levels ==
+            (; age_by_diagnosis=(; diagnosis="clinical"))
     end
 
     @testset "The columns of a regression must have one value for each session, of the kind its term needs, and inform every coefficient" begin
