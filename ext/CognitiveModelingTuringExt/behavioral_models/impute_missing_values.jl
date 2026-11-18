@@ -6,29 +6,22 @@
 Turing.jl model which fills in the outputs of one model on one timestep: each value that is
 [`MissingValue`](@ref) in `data` is imputed as a latent variable named after it, such as
 `choice.imputed`, with the distribution the model gives for it in `distributions`, and the
-rest are taken from the data. The data is returned as it is when nothing is missing on the
-timestep. For an environment it runs under the prefix `environment`, so that an observation
-and an action with the same name get a latent variable each. Used by
+rest are taken from the data. It goes through the names of `data` one at a time and imputes
+each value with [`turing_impute_value`](@ref), and returns the rest of the data as it is
+once nothing in it is missing. For an environment it runs under the prefix `environment`,
+so that an observation and an action with the same name get a latent variable each. Used by
 [`turing_timestep_one_perspective`](@ref).
 """
-Turing.@model function turing_impute_missing_values(data, distributions)
-    if has_missing_value(data)
-        imputed ~ to_submodel(turing_impute_each_value(data, distributions), false)
-        return imputed
-    else
-        return data
-    end
-end
-
-"""
-    turing_impute_each_value(data, distributions)
-
-Turing.jl model which goes through the names of `data` one at a time, and imputes each value
-with [`turing_impute_value`](@ref). Used by [`turing_impute_missing_values`](@ref).
-"""
-Turing.@model function turing_impute_each_value(
+Turing.@model function turing_impute_missing_values(
     data::NamedTuple{names}, distributions
 ) where {names}
+
+    #The data as it is when nothing in it is missing
+    if !has_missing_value(data)
+        return data
+    end
+
+    #The first value, imputed under its name when it is missing, and then the rest of the data
     name = first(names)
     value ~ to_submodel(
         prefix(
@@ -37,11 +30,11 @@ Turing.@model function turing_impute_each_value(
         ),
         false,
     )
-    rest ~ to_submodel(turing_impute_each_value(Base.tail(data), distributions), false)
-    return merge(build_named_entry(Val(name), value), rest)
+    rest ~ to_submodel(turing_impute_missing_values(Base.tail(data), distributions), false)
+    return NamedTuple{names}((value, Tuple(rest)...))
 end
 
-Turing.@model function turing_impute_each_value(data::NamedTuple{()}, distributions)
+Turing.@model function turing_impute_missing_values(data::NamedTuple{()}, distributions)
     return (;)
 end
 
@@ -51,7 +44,7 @@ end
 Turing.jl model for one value of the data: a value that is there is taken as it is, and so
 is any marker but [`MissingValue`](@ref), which is a latent variable named `imputed` with
 `distribution`, the value of a [`Deterministic`](@ref), or the marker itself when the model
-gives [`NoValue`](@ref) on that timestep. Used by [`turing_impute_each_value`](@ref).
+gives [`NoValue`](@ref) on that timestep. Used by [`turing_impute_missing_values`](@ref).
 """
 Turing.@model function turing_impute_value(data_value, distribution)
     return data_value
