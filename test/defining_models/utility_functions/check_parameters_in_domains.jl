@@ -10,10 +10,10 @@ function CognitiveModeling.attribute_names(model::ModelWithDomains)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithDomains)
     return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        n_options=ParameterDomain(; type=Integer, lower=1),
-        strategy=ParameterDomain(; type=Symbol),
-        is_greedy=ParameterDomain(; type=Bool),
+        learning_rate=Domain(; lower=0, upper=1),
+        n_options=Domain(; type=Integer, lower=1),
+        strategy=Domain(; type=Symbol),
+        is_greedy=Domain(; type=Bool),
     )
 end
 
@@ -29,13 +29,13 @@ function CognitiveModeling.attribute_names(model::ModelWithArrayDomains)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithArrayDomains)
     return (;
-        probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        counts=ParameterDomain(; type=AbstractVector{Integer}, lower=0),
-        weights=ParameterDomain(; type=AbstractMatrix{Real}, upper=1),
-        pair=ParameterDomain(; type=NTuple{2,Real}, lower=0),
-        rates=ParameterDomain(; type=Tuple{Vararg{Real}}, lower=0, upper=1),
-        names=ParameterDomain(; type=AbstractVector{Symbol}),
-        values=ParameterDomain(; type=AbstractArray{Real}, lower=-1, upper=1),
+        probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        counts=Domain(; type=AbstractVector{Integer}, lower=0),
+        weights=Domain(; type=AbstractMatrix{Real}, upper=1),
+        pair=Domain(; type=NTuple{2,Real}, lower=0),
+        rates=Domain(; type=Tuple{Vararg{Real}}, lower=0, upper=1),
+        names=Domain(; type=AbstractVector{Symbol}),
+        values=Domain(; type=AbstractArray{Real}, lower=-1, upper=1),
     )
 end
 
@@ -45,7 +45,7 @@ function CognitiveModeling.attribute_names(model::ModelWithNestedArrays)
     return ModelAttributes(; parameters=:vectors, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(model::ModelWithNestedArrays)
-    return (; vectors=ParameterDomain(; type=AbstractVector{Vector{Symbol}}))
+    return (; vectors=Domain(; type=AbstractVector{Vector{Symbol}}))
 end
 
 #Constraints on the whole value of a parameter: probabilities that sum to one, and a pair whose first number is below its second, and a constraint that returns a number and not true or false
@@ -74,18 +74,16 @@ function CognitiveModeling.attribute_names(model::ModelWithPossibleValues)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithPossibleValues)
     return (;
-        strategy=ParameterDomain(; possible_values=(:greedy, :random)),
-        n_options=ParameterDomain(; possible_values=(2, 4, 8)),
-        step_size=ParameterDomain(; possible_values=0.0:0.25:1.0),
-        levels=ParameterDomain(; type=AbstractVector{Integer}, possible_values=1:3),
-        sides=ParameterDomain(;
-            type=NTuple{2,Symbol}, possible_values=(:left, :middle, :right)
-        ),
-        probabilities=ParameterDomain(;
+        strategy=Domain(; possible_values=(:greedy, :random)),
+        n_options=Domain(; possible_values=(2, 4, 8)),
+        step_size=Domain(; possible_values=0.0:0.25:1.0),
+        levels=Domain(; type=AbstractVector{Integer}, possible_values=1:3),
+        sides=Domain(; type=NTuple{2,Symbol}, possible_values=(:left, :middle, :right)),
+        probabilities=Domain(;
             type=AbstractVector{Real}, lower=0, upper=1, constraint=sums_to_one
         ),
-        pair=ParameterDomain(; type=NTuple{2,Real}, constraint=is_increasing),
-        thresholds=ParameterDomain(;
+        pair=Domain(; type=NTuple{2,Real}, constraint=is_increasing),
+        thresholds=Domain(;
             type=AbstractVector{Real}, constraint=values -> issorted(values)
         ),
     )
@@ -97,16 +95,16 @@ function CognitiveModeling.attribute_names(model::ModelWithConstraintOfNumbers)
     return ModelAttributes(; parameters=:weights, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(model::ModelWithConstraintOfNumbers)
-    return (; weights=ParameterDomain(; type=AbstractVector{Real}, constraint=total_of))
+    return (; weights=Domain(; type=AbstractVector{Real}, constraint=total_of))
 end
 
-#Models whose domains don't fit them: a parameter that isn't in the model's attributes, a domain that isn't a ParameterDomain, and domains that aren't in a NamedTuple
+#Models whose domains don't fit them: a parameter that isn't in the model's attributes, a domain that isn't a Domain, and domains that aren't in a NamedTuple
 struct ModelWithUnknownDomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithUnknownDomain)
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(::ModelWithUnknownDomain)
-    return (; noise=ParameterDomain(; lower=0),)
+    return (; noise=Domain(; lower=0),)
 end
 struct ModelWithNamedTupleDomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithNamedTupleDomain)
@@ -120,7 +118,7 @@ function CognitiveModeling.attribute_names(model::ModelWithUnnamedDomains)
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(::ModelWithUnnamedDomains)
-    return [ParameterDomain(; lower=0, upper=1)]
+    return [Domain(; lower=0, upper=1)]
 end
 
 #A number that isn't a real number, as the numbers that Reactant.jl traces aren't, which can't be compared with anything
@@ -267,10 +265,10 @@ end
         @test_throws ParameterDomainError check(NumberWithDerivative(NaN, 0.0))
         #A side without a bound has nothing beyond it
         @test !CognitiveModeling.is_beyond_bounds(
-            NumberWithDerivative(Inf, 2.0), ParameterDomain(; lower=0)
+            NumberWithDerivative(Inf, 2.0), Domain(; lower=0)
         )
         @test !CognitiveModeling.is_beyond_bounds(
-            NumberWithDerivative(-Inf, -2.0), ParameterDomain(; upper=0)
+            NumberWithDerivative(-Inf, -2.0), Domain(; upper=0)
         )
         #Julia's own numbers are compared with the bounds as they are, however close they are
         @test_throws ParameterDomainError check(big"1.0" + big"1e-30")
@@ -525,14 +523,14 @@ end
         )
     end
 
-    @testset "The domains must be ParameterDomains under the names of parameters in the model's attributes" begin
+    @testset "The domains must be Domains under the names of parameters in the model's attributes" begin
         @test_throws ArgumentError(
             "parameter_domains of a cognitive model of type ModelWithUnknownDomain has domains for (:noise,), but the parameters in its attributes are (:learning_rate,).",
         ) CognitiveModeling.check_parameters_in_domains(
             ModelWithUnknownDomain(), (; learning_rate=0.5)
         )
         @test_throws ArgumentError(
-            "parameter_domains of a cognitive model of type ModelWithNamedTupleDomain returns (learning_rate = (lower = 0, upper = 1),), but it must return a NamedTuple with a ParameterDomain under the name of each parameter that has a domain, such as (; learning_rate = ParameterDomain(; lower = 0, upper = 1)).",
+            "parameter_domains of a cognitive model of type ModelWithNamedTupleDomain returns (learning_rate = (lower = 0, upper = 1),), but it must return a NamedTuple with a Domain under the name of each parameter that has a domain, such as (; learning_rate = Domain(; lower = 0, upper = 1)).",
         ) CognitiveModeling.check_parameters_in_domains(
             ModelWithNamedTupleDomain(), (; learning_rate=0.5)
         )

@@ -24,8 +24,8 @@ function CognitiveModeling.attribute_names(model::ChoosesWithProbabilities)
 end
 function CognitiveModeling.parameter_domains(model::ChoosesWithProbabilities)
     return (;
-        choice_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        lapse_rate=ParameterDomain(; lower=0, upper=1),
+        choice_probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        lapse_rate=Domain(; lower=0, upper=1),
     )
 end
 CognitiveModeling.default_parameters(model::ChoosesWithProbabilities) = (; lapse_rate=0.0)

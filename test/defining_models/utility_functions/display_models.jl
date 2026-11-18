@@ -44,10 +44,10 @@ function CognitiveModeling.attribute_names(model::ModelWithDisplayedDomains)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithDisplayedDomains)
     return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        inverse_temperature=ParameterDomain(; lower=0),
-        n_options=ParameterDomain(; type=Integer, lower=1),
-        strategy=ParameterDomain(; type=Symbol),
+        learning_rate=Domain(; lower=0, upper=1),
+        inverse_temperature=Domain(; lower=0),
+        n_options=Domain(; type=Integer, lower=1),
+        strategy=Domain(; type=Symbol),
     )
 end
 function CognitiveModeling.default_parameters(model::ModelWithDisplayedDomains)
@@ -76,16 +76,16 @@ function CognitiveModeling.attribute_names(model::ModelWithManyParametersAndADom
     )
 end
 function CognitiveModeling.parameter_domains(model::ModelWithManyParametersAndADomain)
-    return (; b=ParameterDomain(; lower=0),)
+    return (; b=Domain(; lower=0),)
 end
 
-#Models whose domains aren't right: not in a NamedTuple, and not ParameterDomains
+#Models whose domains aren't right: not in a NamedTuple, and not Domains
 struct ModelWithDomainsInAVector <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithDomainsInAVector)
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(model::ModelWithDomainsInAVector)
-    return [ParameterDomain(; lower=0)]
+    return [Domain(; lower=0)]
 end
 struct ModelWithDomainsAsNamedTuples <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithDomainsAsNamedTuples)
@@ -212,75 +212,68 @@ Outputs: none"""
     end
 
     @testset "A parameter has more to show than its name when it has a domain or a default value" begin
-        domains = (; learning_rate=ParameterDomain(; lower=0), noise=(; lower=0))
+        domains = (; learning_rate=Domain(; lower=0), noise=(; lower=0))
         defaults = (; bias=0.5)
         @test CognitiveModeling.has_domain_or_default(:learning_rate, domains, defaults)
         @test CognitiveModeling.has_domain_or_default(:bias, domains, defaults)
         @test !CognitiveModeling.has_domain_or_default(:temperature, domains, defaults)
-        #A domain that isn't a ParameterDomain isn't shown
+        #A domain that isn't a Domain isn't shown
         @test !CognitiveModeling.has_domain_or_default(:noise, domains, defaults)
     end
 
     @testset "A domain is written as an interval, as whole numbers, or as a type" begin
         describe = CognitiveModeling.describe_domain
-        @test describe(ParameterDomain()) == "(-∞, ∞)"
-        @test describe(ParameterDomain(; lower=0, upper=1)) == "[0, 1]"
-        @test describe(ParameterDomain(; lower=0.0, upper=0.5)) == "[0.0, 0.5]"
-        @test describe(ParameterDomain(; lower=0)) == "[0, ∞)"
-        @test describe(ParameterDomain(; upper=0.5)) == "(-∞, 0.5]"
-        @test describe(ParameterDomain(; type=Integer)) == "{…, -1, 0, 1, …}"
-        @test describe(ParameterDomain(; type=Integer, lower=1)) == "{1, 2, …}"
-        @test describe(ParameterDomain(; type=Integer, upper=4)) == "{…, 3, 4}"
-        @test describe(ParameterDomain(; type=Integer, lower=0, upper=5)) == "{0, 1, …, 5}"
-        @test describe(ParameterDomain(; type=Int, lower=1, upper=3)) == "{1, 2, 3}"
-        @test describe(ParameterDomain(; type=Integer, lower=2, upper=2)) == "{2}"
+        @test describe(Domain()) == "(-∞, ∞)"
+        @test describe(Domain(; lower=0, upper=1)) == "[0, 1]"
+        @test describe(Domain(; lower=0.0, upper=0.5)) == "[0.0, 0.5]"
+        @test describe(Domain(; lower=0)) == "[0, ∞)"
+        @test describe(Domain(; upper=0.5)) == "(-∞, 0.5]"
+        @test describe(Domain(; type=Integer)) == "{…, -1, 0, 1, …}"
+        @test describe(Domain(; type=Integer, lower=1)) == "{1, 2, …}"
+        @test describe(Domain(; type=Integer, upper=4)) == "{…, 3, 4}"
+        @test describe(Domain(; type=Integer, lower=0, upper=5)) == "{0, 1, …, 5}"
+        @test describe(Domain(; type=Int, lower=1, upper=3)) == "{1, 2, 3}"
+        @test describe(Domain(; type=Integer, lower=2, upper=2)) == "{2}"
         #Bounds that aren't whole numbers are rounded to the whole numbers within them
-        @test describe(ParameterDomain(; type=Integer, lower=0.5, upper=9.5)) ==
-            "{1, 2, …, 9}"
-        @test describe(ParameterDomain(; type=Bool)) == "{false, true}"
-        @test describe(ParameterDomain(; type=Symbol)) == "Symbol"
-        @test describe(ParameterDomain(; type=AbstractString)) == "AbstractString"
+        @test describe(Domain(; type=Integer, lower=0.5, upper=9.5)) == "{1, 2, …, 9}"
+        @test describe(Domain(; type=Bool)) == "{false, true}"
+        @test describe(Domain(; type=Symbol)) == "Symbol"
+        @test describe(Domain(; type=AbstractString)) == "AbstractString"
     end
 
     @testset "A domain of arrays or tuples is written as the values of each element" begin
         describe = CognitiveModeling.describe_domain
-        @test describe(ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
+        @test describe(Domain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
             "[0, 1] for each element of a vector"
-        @test describe(ParameterDomain(; type=AbstractMatrix{Integer}, lower=1)) ==
+        @test describe(Domain(; type=AbstractMatrix{Integer}, lower=1)) ==
             "{1, 2, …} for each element of a matrix"
-        @test describe(ParameterDomain(; type=AbstractArray{Real})) ==
+        @test describe(Domain(; type=AbstractArray{Real})) ==
             "(-∞, ∞) for each element of an array"
-        @test describe(ParameterDomain(; type=NTuple{3,Real}, lower=0)) ==
+        @test describe(Domain(; type=NTuple{3,Real}, lower=0)) ==
             "[0, ∞) for each element of a tuple of 3"
-        @test describe(ParameterDomain(; type=Tuple{Vararg{Bool}})) ==
+        @test describe(Domain(; type=Tuple{Vararg{Bool}})) ==
             "{false, true} for each element of a tuple"
-        @test describe(ParameterDomain(; type=AbstractVector{Symbol})) ==
+        @test describe(Domain(; type=AbstractVector{Symbol})) ==
             "Symbol for each element of a vector"
     end
 
     @testset "A domain with possible values is written as them, and a constraint is named after the values" begin
         describe = CognitiveModeling.describe_domain
-        @test describe(ParameterDomain(; possible_values=(:greedy, :random))) ==
-            "{:greedy, :random}"
-        @test describe(ParameterDomain(; possible_values=(2, 4, 8))) == "{2, 4, 8}"
-        @test describe(ParameterDomain(; possible_values=("low", "high"))) ==
-            "{\"low\", \"high\"}"
+        @test describe(Domain(; possible_values=(:greedy, :random))) == "{:greedy, :random}"
+        @test describe(Domain(; possible_values=(2, 4, 8))) == "{2, 4, 8}"
+        @test describe(Domain(; possible_values=("low", "high"))) == "{\"low\", \"high\"}"
         #A range of more than three values is written with its first two and its last
-        @test describe(ParameterDomain(; possible_values=1:3)) == "{1, 2, 3}"
-        @test describe(ParameterDomain(; possible_values=1:10)) == "{1, 2, …, 10}"
-        @test describe(ParameterDomain(; possible_values=0.0:0.25:1.0)) ==
-            "{0.0, 0.25, …, 1.0}"
+        @test describe(Domain(; possible_values=1:3)) == "{1, 2, 3}"
+        @test describe(Domain(; possible_values=1:10)) == "{1, 2, …, 10}"
+        @test describe(Domain(; possible_values=0.0:0.25:1.0)) == "{0.0, 0.25, …, 1.0}"
+        @test describe(Domain(; type=NTuple{2,Symbol}, possible_values=(:a, :b))) ==
+            "{:a, :b} for each element of a tuple of 2"
         @test describe(
-            ParameterDomain(; type=NTuple{2,Symbol}, possible_values=(:a, :b))
-        ) == "{:a, :b} for each element of a tuple of 2"
-        @test describe(
-            ParameterDomain(;
-                type=AbstractVector{Real}, lower=0, upper=1, constraint=sums_to_one
-            ),
+            Domain(; type=AbstractVector{Real}, lower=0, upper=1, constraint=sums_to_one)
         ) == "[0, 1] for each element of a vector, with the constraint sums_to_one"
-        @test describe(ParameterDomain(; lower=0, constraint=isinteger)) ==
+        @test describe(Domain(; lower=0, constraint=isinteger)) ==
             "[0, ∞), with the constraint isinteger"
-        @test describe(ParameterDomain(; constraint=value -> value != 0)) ==
+        @test describe(Domain(; constraint=value -> value != 0)) ==
             "(-∞, ∞), with a constraint"
         @test occursin(
             "  strategy ∈ {:greedy, :random}\n  n_options ∈ {2, 4, 8}\n",

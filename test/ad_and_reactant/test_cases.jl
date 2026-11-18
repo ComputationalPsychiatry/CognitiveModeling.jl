@@ -595,8 +595,8 @@ function CognitiveModeling.attribute_names(model::LearnsAndForgetsWithinDomains)
 end
 function CognitiveModeling.parameter_domains(model::LearnsAndForgetsWithinDomains)
     return (;
-        rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        inverse_temperature=ParameterDomain(; lower=0),
+        rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        inverse_temperature=Domain(; lower=0),
     )
 end
 struct RewardsWithinDomain <: AbstractEnvironmentModel end
@@ -613,7 +613,7 @@ function CognitiveModeling.attribute_names(environment::RewardsWithinDomain)
     )
 end
 function CognitiveModeling.parameter_domains(environment::RewardsWithinDomain)
-    return (; reward_size=ParameterDomain(; lower=0),)
+    return (; reward_size=Domain(; lower=0),)
 end
 
 # A simulation of models with parameter domains, with the parameters from a vector, of which the two rates are passed on as a vector
@@ -735,8 +735,8 @@ function CognitiveModeling.attribute_names(model::LearnsEachOptionDeterministica
 end
 function CognitiveModeling.parameter_domains(model::LearnsEachOptionDeterministically)
     return (;
-        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        rating_scale=ParameterDomain(; lower=0),
+        learning_rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_scale=Domain(; lower=0),
     )
 end
 struct PaysForRatings <: AbstractEnvironmentModel end
@@ -763,9 +763,7 @@ function CognitiveModeling.attribute_names(environment::PaysForRatings)
 end
 function CognitiveModeling.parameter_domains(environment::PaysForRatings)
     return (;
-        payoff_sizes=ParameterDomain(;
-            type=AbstractVector{Real}, lower=0, constraint=issorted
-        ),
+        payoff_sizes=Domain(; type=AbstractVector{Real}, lower=0, constraint=issorted),
     )
 end
 

@@ -5,7 +5,7 @@
 Print a line for each kind of attribute in `attributes`, a [`ModelAttributes`](@ref), with
 `none` if it has no names of that kind. With `shorten`, a kind with more names than
 [`shows_every_name`](@ref) allows shows only how many there are. When a parameter has a
-[`ParameterDomain`](@ref) in `domains` or a default value in `defaults`, the parameters are
+[`Domain`](@ref) in `domains` or a default value in `defaults`, the parameters are
 listed one on a line instead, as [`print_parameter_lines`](@ref) writes them.
 
 The `show` methods of a `ModelAttributes`, of a cognitive model and of an environment model
@@ -45,13 +45,13 @@ end
 """
     has_domain_or_default(name, domains, defaults)
 
-Return whether the parameter `name` has a [`ParameterDomain`](@ref) in `domains` or a
+Return whether the parameter `name` has a [`Domain`](@ref) in `domains` or a
 default value in `defaults`, so that the display of a model has more to show of it than its
 name. Used by [`print_attribute_names`](@ref).
 """
 function has_domain_or_default(name::Symbol, domains::NamedTuple, defaults::NamedTuple)
     return haskey(defaults, name) ||
-           (haskey(domains, name) && getproperty(domains, name) isa ParameterDomain)
+           (haskey(domains, name) && getproperty(domains, name) isa Domain)
 end
 
 """
@@ -75,7 +75,7 @@ function print_parameter_lines(
     for index in 1:n_listed
         name = names[index]
         print(io, "\n  ", name)
-        if haskey(domains, name) && getproperty(domains, name) isa ParameterDomain
+        if haskey(domains, name) && getproperty(domains, name) isa Domain
             print(io, " ∈ ", describe_domain(getproperty(domains, name)))
         end
         if haskey(defaults, name)
@@ -104,7 +104,7 @@ end
 """
     describe_domain(domain)
 
-Return `domain`, a [`ParameterDomain`](@ref), as the display of a model writes it after the
+Return `domain`, a [`Domain`](@ref), as the display of a model writes it after the
 name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or `[0, ∞)`,
 the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, the possible
 values of a parameter that has them, such as `{:greedy, :random}`, and the type of a
@@ -114,7 +114,7 @@ constraint follows the values, such as `, with the constraint sums_to_one`, or
 `, with a constraint` for an anonymous function. Used by
 [`print_parameter_lines`](@ref).
 """
-function describe_domain(domain::ParameterDomain{Ttype,Telement}) where {Ttype,Telement}
+function describe_domain(domain::Domain{Ttype,Telement}) where {Ttype,Telement}
 
     #The values of a single value, or of each element of an array or a tuple: its possible values, or the values of its type within its bounds
     values = if domain.possible_values === nothing
@@ -138,7 +138,7 @@ end
 """
     describe_possible_values(possible_values)
 
-Return the possible values of a [`ParameterDomain`](@ref) as [`describe_domain`](@ref)
+Return the possible values of a [`Domain`](@ref) as [`describe_domain`](@ref)
 writes them: every one of them for a tuple, such as `{:greedy, :random}`, and for a range of
 at most three values, and the first two and the last one for a longer range, such as
 `{1, 2, …, 10}`.

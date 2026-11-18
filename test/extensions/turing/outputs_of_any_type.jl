@@ -42,10 +42,7 @@ function CognitiveModeling.attribute_names(model::RespondsWithChoiceAndTime)
     )
 end
 function CognitiveModeling.parameter_domains(model::RespondsWithChoiceAndTime)
-    return (;
-        choice_probability=ParameterDomain(; lower=0, upper=1),
-        rate=ParameterDomain(; lower=0),
-    )
+    return (; choice_probability=Domain(; lower=0, upper=1), rate=Domain(; lower=0))
 end
 
 #The responses of three sessions, with the choice and the response time in two columns, and a confidence

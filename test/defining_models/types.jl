@@ -313,8 +313,8 @@ using Random: Xoshiro, default_rng
         @test_throws InvalidParametersError throw(InvalidParametersError())
     end
 
-    @testset "ParameterDomain takes every real number by default, and keeps its type and its bounds" begin
-        domain = ParameterDomain()
+    @testset "Domain takes every real number by default, and keeps its type and its bounds" begin
+        domain = Domain()
         @test domain.type === Real
         @test domain.lower === -Inf
         @test domain.upper === Inf
@@ -322,66 +322,65 @@ using Random: Xoshiro, default_rng
         @test domain.constraint === nothing
         @test propertynames(domain) ===
             (:type, :lower, :upper, :possible_values, :constraint)
-        bounded = ParameterDomain(; lower=0, upper=1)
+        bounded = Domain(; lower=0, upper=1)
         @test (bounded.type, bounded.lower, bounded.upper) === (Real, 0, 1)
-        @test ParameterDomain(; lower=0.5).lower === 0.5
-        whole = ParameterDomain(; type=Integer, lower=1)
+        @test Domain(; lower=0.5).lower === 0.5
+        whole = Domain(; type=Integer, lower=1)
         @test (whole.type, whole.lower, whole.upper) === (Integer, 1, Inf)
-        @test ParameterDomain(; type=Symbol).type === Symbol
+        @test Domain(; type=Symbol).type === Symbol
         #The bounds can be equal, for a parameter with one value
-        @test ParameterDomain(; lower=1, upper=1).upper === 1
+        @test Domain(; lower=1, upper=1).upper === 1
     end
 
-    @testset "ParameterDomain keeps the type of its values in its own type, and holds its bounds directly" begin
-        @test ParameterDomain(; type=Integer, lower=1) isa
-            ParameterDomain{Integer,Integer,Int,Float64}
-        @test ParameterDomain(; type=AbstractVector{Real}, upper=1) isa
-            ParameterDomain{AbstractVector{Real},Real,Float64,Int}
-        @test ParameterDomain(; type=AbstractString) isa ParameterDomain{AbstractString}
-        @test isbitstype(typeof(ParameterDomain(; lower=0, upper=1)))
-        @test isbitstype(typeof(ParameterDomain(; type=Symbol)))
-        from_literals() = ParameterDomain(; type=Integer, lower=1)
-        @test @inferred(from_literals()) isa ParameterDomain
+    @testset "Domain keeps the type of its values in its own type, and holds its bounds directly" begin
+        @test Domain(; type=Integer, lower=1) isa Domain{Integer,Integer,Int,Float64}
+        @test Domain(; type=AbstractVector{Real}, upper=1) isa
+            Domain{AbstractVector{Real},Real,Float64,Int}
+        @test Domain(; type=AbstractString) isa Domain{AbstractString}
+        @test isbitstype(typeof(Domain(; lower=0, upper=1)))
+        @test isbitstype(typeof(Domain(; type=Symbol)))
+        from_literals() = Domain(; type=Integer, lower=1)
+        @test @inferred(from_literals()) isa Domain
     end
 
-    @testset "ParameterDomain only takes types and bounds that fit together" begin
+    @testset "Domain only takes types and bounds that fit together" begin
         @test_throws ArgumentError(
-            "A ParameterDomain was given type = Float64, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
-        ) ParameterDomain(; type=Float64)
-        @test_throws ArgumentError ParameterDomain(; type=AbstractFloat, lower=0)
+            "A Domain was given type = Float64, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
+        ) Domain(; type=Float64)
+        @test_throws ArgumentError Domain(; type=AbstractFloat, lower=0)
         @test_throws ArgumentError(
-            "A ParameterDomain with type = Symbol was given the bounds lower = 0 and upper = Inf, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
-        ) ParameterDomain(; type=Symbol, lower=0)
-        @test_throws ArgumentError ParameterDomain(; type=AbstractString, upper=3)
+            "A Domain with type = Symbol was given the bounds lower = 0 and upper = Inf, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
+        ) Domain(; type=Symbol, lower=0)
+        @test_throws ArgumentError Domain(; type=AbstractString, upper=3)
         @test_throws ArgumentError(
-            "The lower bound of a ParameterDomain is at most its upper bound, but it was given lower = 1 and upper = 0.",
-        ) ParameterDomain(; lower=1, upper=0)
-        @test_throws ArgumentError ParameterDomain(; lower=NaN)
-        @test_throws ArgumentError ParameterDomain(; upper=NaN)
+            "The lower bound of a Domain is at most its upper bound, but it was given lower = 1 and upper = 0.",
+        ) Domain(; lower=1, upper=0)
+        @test_throws ArgumentError Domain(; lower=NaN)
+        @test_throws ArgumentError Domain(; upper=NaN)
         #A misspelled keyword, the old discrete flag and bounds without their names are errors
-        @test_throws MethodError ParameterDomain(; lowest=0)
-        @test_throws MethodError ParameterDomain(; lower=1, discrete=true)
-        @test_throws MethodError ParameterDomain(0, 1)
-        @test_throws TypeError ParameterDomain(; type=:Integer)
-        @test_throws TypeError ParameterDomain(; lower="0")
+        @test_throws MethodError Domain(; lowest=0)
+        @test_throws MethodError Domain(; lower=1, discrete=true)
+        @test_throws MethodError Domain(0, 1)
+        @test_throws TypeError Domain(; type=:Integer)
+        @test_throws TypeError Domain(; lower="0")
     end
 
-    @testset "ParameterDomain takes array types and tuple types, with the bounds for each element" begin
-        vector = ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
+    @testset "Domain takes array types and tuple types, with the bounds for each element" begin
+        vector = Domain(; type=AbstractVector{Real}, lower=0, upper=1)
         @test (vector.type, vector.lower, vector.upper) === (AbstractVector{Real}, 0, 1)
-        @test ParameterDomain(; type=AbstractMatrix{Integer}, lower=1).type ===
+        @test Domain(; type=AbstractMatrix{Integer}, lower=1).type ===
             AbstractMatrix{Integer}
         #A type of the elements that is left open is an error, since it is made anew on every call
         @test_throws ArgumentError(
-            "A ParameterDomain was given type = AbstractVector{<:Real}, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
-        ) ParameterDomain(; type=AbstractVector{<:Real}, lower=0, upper=1)
-        @test_throws ArgumentError ParameterDomain(; type=AbstractVector)
-        @test_throws ArgumentError ParameterDomain(; type=Vector{<:Integer})
-        @test_throws ArgumentError ParameterDomain(; type=NTuple{3})
-        @test ParameterDomain(; type=AbstractVector{Any}).type === AbstractVector{Any}
-        @test ParameterDomain(; type=NTuple{3,Real}, lower=0).type === NTuple{3,Real}
-        @test ParameterDomain(; type=Tuple{Vararg{Real}}).type === Tuple{Vararg{Real}}
-        @test ParameterDomain(; type=AbstractVector{Symbol}).type === AbstractVector{Symbol}
+            "A Domain was given type = AbstractVector{<:Real}, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
+        ) Domain(; type=AbstractVector{<:Real}, lower=0, upper=1)
+        @test_throws ArgumentError Domain(; type=AbstractVector)
+        @test_throws ArgumentError Domain(; type=Vector{<:Integer})
+        @test_throws ArgumentError Domain(; type=NTuple{3})
+        @test Domain(; type=AbstractVector{Any}).type === AbstractVector{Any}
+        @test Domain(; type=NTuple{3,Real}, lower=0).type === NTuple{3,Real}
+        @test Domain(; type=Tuple{Vararg{Real}}).type === Tuple{Vararg{Real}}
+        @test Domain(; type=AbstractVector{Symbol}).type === AbstractVector{Symbol}
         #The type of the elements is read from the type, also when it is left open
         type_of_elements = CognitiveModeling.type_of_elements
         @test type_of_elements(Real) === Real
@@ -395,125 +394,120 @@ using Random: Xoshiro, default_rng
         @test type_of_elements(Tuple{Vararg{Integer}}) === Integer
         #Elements that are floating-point numbers leave out the others, as a single one does
         @test_throws ArgumentError(
-            "A ParameterDomain was given type = Vector{Float64}, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
-        ) ParameterDomain(; type=Vector{Float64})
-        @test_throws ArgumentError ParameterDomain(; type=AbstractVector{<:AbstractFloat})
-        @test_throws ArgumentError ParameterDomain(; type=NTuple{2,Float64})
+            "A Domain was given type = Vector{Float64}, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
+        ) Domain(; type=Vector{Float64})
+        @test_throws ArgumentError Domain(; type=AbstractVector{<:AbstractFloat})
+        @test_throws ArgumentError Domain(; type=NTuple{2,Float64})
         #Only elements that are real numbers have bounds
-        @test_throws ArgumentError ParameterDomain(; type=AbstractVector{Symbol}, lower=0)
-        @test_throws ArgumentError ParameterDomain(;
+        @test_throws ArgumentError Domain(; type=AbstractVector{Symbol}, lower=0)
+        @test_throws ArgumentError Domain(;
             type=AbstractVector{<:AbstractVector{<:Real}}, upper=1
         )
-        @test_throws ArgumentError ParameterDomain(; type=AbstractVector, lower=0)
+        @test_throws ArgumentError Domain(; type=AbstractVector, lower=0)
     end
 
-    @testset "ParameterDomain takes possible values in a tuple or a range, and has their type unless it is given one" begin
-        strategy = ParameterDomain(; possible_values=(:greedy, :random))
+    @testset "Domain takes possible values in a tuple or a range, and has their type unless it is given one" begin
+        strategy = Domain(; possible_values=(:greedy, :random))
         @test (strategy.type, strategy.possible_values) === (Symbol, (:greedy, :random))
         @test (strategy.lower, strategy.upper) === (-Inf, Inf)
         #Numbers have the abstract type of their kind, so that any number type is taken
-        @test ParameterDomain(; possible_values=(2, 4, 8)).type === Integer
-        @test ParameterDomain(; possible_values=1:4).type === Integer
-        @test ParameterDomain(; possible_values=0.0:0.25:1.0).type === Real
-        @test ParameterDomain(; possible_values=(0.5, 1)).type === Real
-        @test ParameterDomain(; possible_values=(true, false)).type === Bool
-        @test ParameterDomain(; possible_values=("low", "high")).type === AbstractString
-        @test ParameterDomain(; possible_values=(:low, "high")).type === Any
+        @test Domain(; possible_values=(2, 4, 8)).type === Integer
+        @test Domain(; possible_values=1:4).type === Integer
+        @test Domain(; possible_values=0.0:0.25:1.0).type === Real
+        @test Domain(; possible_values=(0.5, 1)).type === Real
+        @test Domain(; possible_values=(true, false)).type === Bool
+        @test Domain(; possible_values=("low", "high")).type === AbstractString
+        @test Domain(; possible_values=(:low, "high")).type === Any
         #A type that is given is kept, and an array type or a tuple type has the possible values of each element
-        @test ParameterDomain(; type=Real, possible_values=(1, 2)).type === Real
-        levels = ParameterDomain(; type=AbstractVector{Integer}, possible_values=1:3)
+        @test Domain(; type=Real, possible_values=(1, 2)).type === Real
+        levels = Domain(; type=AbstractVector{Integer}, possible_values=1:3)
         @test (levels.type, levels.possible_values) === (AbstractVector{Integer}, 1:3)
-        @test ParameterDomain(; type=NTuple{2,Symbol}, possible_values=(:a, :b)).type ===
+        @test Domain(; type=NTuple{2,Symbol}, possible_values=(:a, :b)).type ===
             NTuple{2,Symbol}
         #The possible values are kept in the type of the domain, so the check is compiled for them
         @test typeof(strategy) ===
-            ParameterDomain{Symbol,Symbol,Float64,Float64,Tuple{Symbol,Symbol},Nothing}
+            Domain{Symbol,Symbol,Float64,Float64,Tuple{Symbol,Symbol},Nothing}
     end
 
-    @testset "ParameterDomain only takes possible values in a tuple or a range, without bounds, and of its type" begin
+    @testset "Domain only takes possible values in a tuple or a range, without bounds, and of its type" begin
         @test_throws ArgumentError(
-            "A ParameterDomain takes its possible values in a tuple, such as (:greedy, :random), or in a range, such as 1:4, but it was given possible_values = [1, 2].",
-        ) ParameterDomain(; possible_values=[1, 2])
-        @test_throws ArgumentError ParameterDomain(; possible_values=:greedy)
-        @test_throws ArgumentError ParameterDomain(; possible_values=Set([1, 2]))
+            "A Domain takes its possible values in a tuple, such as (:greedy, :random), or in a range, such as 1:4, but it was given possible_values = [1, 2].",
+        ) Domain(; possible_values=[1, 2])
+        @test_throws ArgumentError Domain(; possible_values=:greedy)
+        @test_throws ArgumentError Domain(; possible_values=Set([1, 2]))
         @test_throws ArgumentError(
-            "A ParameterDomain takes at least one possible value, but it was given possible_values = ().",
-        ) ParameterDomain(; possible_values=())
-        @test_throws ArgumentError ParameterDomain(; possible_values=1:0)
+            "A Domain takes at least one possible value, but it was given possible_values = ().",
+        ) Domain(; possible_values=())
+        @test_throws ArgumentError Domain(; possible_values=1:0)
         @test_throws ArgumentError(
-            "A ParameterDomain takes possible values or bounds, but it was given possible_values = (1, 2) and the bounds lower = 0 and upper = Inf.",
-        ) ParameterDomain(; possible_values=(1, 2), lower=0)
-        @test_throws ArgumentError ParameterDomain(; possible_values=1:3, upper=3)
+            "A Domain takes possible values or bounds, but it was given possible_values = (1, 2) and the bounds lower = 0 and upper = Inf.",
+        ) Domain(; possible_values=(1, 2), lower=0)
+        @test_throws ArgumentError Domain(; possible_values=1:3, upper=3)
         @test_throws ArgumentError(
-            "A ParameterDomain with type = Symbol was given possible_values = (1, 2), but each of them must be a value of type Symbol.",
-        ) ParameterDomain(; type=Symbol, possible_values=(1, 2))
-        @test_throws ArgumentError ParameterDomain(; type=Integer, possible_values=(1, 2.5))
-        @test_throws ArgumentError ParameterDomain(;
+            "A Domain with type = Symbol was given possible_values = (1, 2), but each of them must be a value of type Symbol.",
+        ) Domain(; type=Symbol, possible_values=(1, 2))
+        @test_throws ArgumentError Domain(; type=Integer, possible_values=(1, 2.5))
+        @test_throws ArgumentError Domain(;
             type=AbstractVector{Integer}, possible_values=(:a,)
         )
         #A whole number in another number type is a possible value of a type of whole numbers
-        @test ParameterDomain(; type=Integer, possible_values=(1.0, 2.0)).type === Integer
+        @test Domain(; type=Integer, possible_values=(1.0, 2.0)).type === Integer
     end
 
-    @testset "ParameterDomain keeps a constraint, which is any function of the whole value" begin
-        domain = ParameterDomain(; type=AbstractVector{Real}, constraint=issorted)
+    @testset "Domain keeps a constraint, which is any function of the whole value" begin
+        domain = Domain(; type=AbstractVector{Real}, constraint=issorted)
         @test domain.constraint === issorted
         @test (domain.type, domain.lower, domain.upper) ===
             (AbstractVector{Real}, -Inf, Inf)
         #A constraint goes with bounds and with possible values alike
-        @test ParameterDomain(; lower=0, constraint=isinteger).constraint === isinteger
-        @test ParameterDomain(;
+        @test Domain(; lower=0, constraint=isinteger).constraint === isinteger
+        @test Domain(;
             type=NTuple{2,Integer}, possible_values=1:3, constraint=allunique
         ).constraint === allunique
     end
 
-    @testset "ParameterDomain is shown as it is written, without the defaults" begin
-        @test repr(ParameterDomain()) == "ParameterDomain()"
-        @test repr(ParameterDomain(; lower=0, upper=1)) ==
-            "ParameterDomain(; lower = 0, upper = 1)"
-        @test repr(ParameterDomain(; upper=0.5)) == "ParameterDomain(; upper = 0.5)"
-        @test repr(ParameterDomain(; type=Integer, lower=1)) ==
-            "ParameterDomain(; type = Integer, lower = 1)"
-        @test repr(ParameterDomain(; type=Symbol)) == "ParameterDomain(; type = Symbol)"
-        @test repr("text/plain", ParameterDomain(; type=Bool)) ==
-            "ParameterDomain(; type = Bool)"
-        @test repr(ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
-            "ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)"
+    @testset "Domain is shown as it is written, without the defaults" begin
+        @test repr(Domain()) == "Domain()"
+        @test repr(Domain(; lower=0, upper=1)) == "Domain(; lower = 0, upper = 1)"
+        @test repr(Domain(; upper=0.5)) == "Domain(; upper = 0.5)"
+        @test repr(Domain(; type=Integer, lower=1)) == "Domain(; type = Integer, lower = 1)"
+        @test repr(Domain(; type=Symbol)) == "Domain(; type = Symbol)"
+        @test repr("text/plain", Domain(; type=Bool)) == "Domain(; type = Bool)"
+        @test repr(Domain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
+            "Domain(; type = AbstractVector{Real}, lower = 0, upper = 1)"
         #The type of the possible values isn't shown, a type that differs from it is, and a constraint is shown by its name
-        @test repr(ParameterDomain(; possible_values=(:greedy, :random))) ==
-            "ParameterDomain(; possible_values = (:greedy, :random))"
-        @test repr(ParameterDomain(; type=Real, possible_values=1:3)) ==
-            "ParameterDomain(; type = Real, possible_values = 1:3)"
-        @test repr(ParameterDomain(; type=AbstractVector{Real}, constraint=issorted)) ==
-            "ParameterDomain(; type = AbstractVector{Real}, constraint = issorted)"
-        @test repr(ParameterDomain(; constraint=value -> value != 0)) ==
-            "ParameterDomain(; constraint = an anonymous function)"
+        @test repr(Domain(; possible_values=(:greedy, :random))) ==
+            "Domain(; possible_values = (:greedy, :random))"
+        @test repr(Domain(; type=Real, possible_values=1:3)) ==
+            "Domain(; type = Real, possible_values = 1:3)"
+        @test repr(Domain(; type=AbstractVector{Real}, constraint=issorted)) ==
+            "Domain(; type = AbstractVector{Real}, constraint = issorted)"
+        @test repr(Domain(; constraint=value -> value != 0)) ==
+            "Domain(; constraint = an anonymous function)"
     end
 
     @testset "A parameter is discrete when it has possible values, or when its type, or the type of its elements, is one of whole numbers, or isn't one of real numbers" begin
-        @test !CognitiveModeling.is_discrete(ParameterDomain())
-        @test !CognitiveModeling.is_discrete(ParameterDomain(; lower=0, upper=1))
-        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=Rational))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Integer))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Int, lower=1))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Bool))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=Symbol))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractString))
+        @test !CognitiveModeling.is_discrete(Domain())
+        @test !CognitiveModeling.is_discrete(Domain(; lower=0, upper=1))
+        @test !CognitiveModeling.is_discrete(Domain(; type=Rational))
+        @test CognitiveModeling.is_discrete(Domain(; type=Integer))
+        @test CognitiveModeling.is_discrete(Domain(; type=Int, lower=1))
+        @test CognitiveModeling.is_discrete(Domain(; type=Bool))
+        @test CognitiveModeling.is_discrete(Domain(; type=Symbol))
+        @test CognitiveModeling.is_discrete(Domain(; type=AbstractString))
         #An array or a tuple is discrete when its elements are
-        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Real}))
-        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=NTuple{2,Real}))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Integer}))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractMatrix{Bool}))
-        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Symbol}))
+        @test !CognitiveModeling.is_discrete(Domain(; type=AbstractVector{Real}))
+        @test !CognitiveModeling.is_discrete(Domain(; type=NTuple{2,Real}))
+        @test CognitiveModeling.is_discrete(Domain(; type=AbstractVector{Integer}))
+        @test CognitiveModeling.is_discrete(Domain(; type=AbstractMatrix{Bool}))
+        @test CognitiveModeling.is_discrete(Domain(; type=AbstractVector{Symbol}))
         #Possible values make a parameter discrete, also when they are real numbers, and a constraint doesn't change it
-        @test CognitiveModeling.is_discrete(ParameterDomain(; possible_values=(0.5, 1.0)))
+        @test CognitiveModeling.is_discrete(Domain(; possible_values=(0.5, 1.0)))
         @test CognitiveModeling.is_discrete(
-            ParameterDomain(; type=AbstractVector{Real}, possible_values=0.0:0.5:1.0)
+            Domain(; type=AbstractVector{Real}, possible_values=0.0:0.5:1.0)
         )
-        @test !CognitiveModeling.is_discrete(ParameterDomain(; constraint=isfinite))
-        @test CognitiveModeling.is_discrete(
-            ParameterDomain(; type=Integer, constraint=iseven)
-        )
+        @test !CognitiveModeling.is_discrete(Domain(; constraint=isfinite))
+        @test CognitiveModeling.is_discrete(Domain(; type=Integer, constraint=iseven))
     end
 
     @testset "ParameterDomainError has the message it is given" begin

@@ -63,7 +63,7 @@ export AbstractCognitiveModel, AbstractEnvironmentModel
 export AbstractNoValue, NoValue, BeforeFirstTimestep
 export MissingValue, UnimputedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
-export ParameterDomain, ParameterDomainError
+export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap

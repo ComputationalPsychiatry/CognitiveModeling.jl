@@ -1044,8 +1044,7 @@ function CognitiveModeling.attribute_names(model::BoundedRescorlaWagner)
 end
 function CognitiveModeling.parameter_domains(model::BoundedRescorlaWagner)
     return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        inverse_temperature=ParameterDomain(; lower=0),
+        learning_rate=Domain(; lower=0, upper=1), inverse_temperature=Domain(; lower=0)
     )
 end
 
@@ -1061,7 +1060,7 @@ function CognitiveModeling.attribute_names(::BoundedRewardsAroundMean)
     return CognitiveModeling.attribute_names(RewardsAroundMean())
 end
 function CognitiveModeling.parameter_domains(::BoundedRewardsAroundMean)
-    return (; mean_reward=ParameterDomain(; lower=0, upper=1),)
+    return (; mean_reward=Domain(; lower=0, upper=1),)
 end
 
 @testset "Parameter domains in fits" begin

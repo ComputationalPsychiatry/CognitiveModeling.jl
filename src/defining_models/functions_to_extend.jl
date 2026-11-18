@@ -196,7 +196,7 @@ end
     parameter_domains(model::AbstractTimestepModel)
 
 Return the values that the parameters of `model`, a cognitive model or an environment
-model, can take: a `NamedTuple` with a [`ParameterDomain`](@ref) under the name of each
+model, can take: a `NamedTuple` with a [`Domain`](@ref) under the name of each
 parameter that has one. A parameter without a domain can take any value.
 
 The parameters of a simulation and of a fitted session are checked against their domains
@@ -223,8 +223,8 @@ julia> function CognitiveModeling.attribute_names(model::CountsOptions)
 
 julia> function CognitiveModeling.parameter_domains(model::CountsOptions)
            return (;
-               learning_rate = ParameterDomain(; lower = 0, upper = 1),
-               n_options = ParameterDomain(; type = Integer, lower = 1),
+               learning_rate = Domain(; lower = 0, upper = 1),
+               n_options = Domain(; type = Integer, lower = 1),
            )
        end;
 

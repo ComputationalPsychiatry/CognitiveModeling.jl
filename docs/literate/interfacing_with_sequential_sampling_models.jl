@@ -64,9 +64,9 @@ end
 
 function CognitiveModeling.parameter_domains(model::DriftDiffusion)
     return (;
-        boundary_separation=ParameterDomain(; lower=0),
-        starting_point=ParameterDomain(; lower=0, upper=1),
-        non_decision_time=ParameterDomain(; lower=0),
+        boundary_separation=Domain(; lower=0),
+        starting_point=Domain(; lower=0, upper=1),
+        non_decision_time=Domain(; lower=0),
     )
 end
 

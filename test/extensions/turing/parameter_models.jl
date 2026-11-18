@@ -324,10 +324,7 @@ function CognitiveModeling.attribute_names(model::LearnsOrNot)
     )
 end
 function CognitiveModeling.parameter_domains(model::LearnsOrNot)
-    return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        uses_rewards=ParameterDomain(; type=Bool),
-    )
+    return (; learning_rate=Domain(; lower=0, upper=1), uses_rewards=Domain(; type=Bool))
 end
 
 @testset "HierarchicalRegressionParameters" begin

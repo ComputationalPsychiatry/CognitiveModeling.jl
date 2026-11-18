@@ -708,7 +708,7 @@ function CognitiveModeling.attribute_names(::LearnsWithinDomain)
     )
 end
 function CognitiveModeling.parameter_domains(::LearnsWithinDomain)
-    return (; learning_rate=ParameterDomain(; lower=0, upper=1),)
+    return (; learning_rate=Domain(; lower=0, upper=1),)
 end
 
 #An environment whose reward probability has a domain, and which gives the reward 1.0 on every timestep
@@ -723,7 +723,7 @@ function CognitiveModeling.attribute_names(::RewardsWithinDomain)
     )
 end
 function CognitiveModeling.parameter_domains(::RewardsWithinDomain)
-    return (; reward_probability=ParameterDomain(; lower=0, upper=1),)
+    return (; reward_probability=Domain(; lower=0, upper=1),)
 end
 
 @testset "A parameter outside its domain is an error before anything runs" begin
@@ -828,9 +828,7 @@ function CognitiveModeling.attribute_names(model::ChoosesAmongOptions)
     )
 end
 function CognitiveModeling.parameter_domains(model::ChoosesAmongOptions)
-    return (;
-        option_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
-    )
+    return (; option_probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1))
 end
 
 @testset "A parameter that is a vector is simulated with, and checked against its domain" begin
@@ -922,8 +920,8 @@ function CognitiveModeling.attribute_names(model::LearnsEachOption)
 end
 function CognitiveModeling.parameter_domains(model::LearnsEachOption)
     return (;
-        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        rating_noise=ParameterDomain(; lower=0),
+        learning_rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_noise=Domain(; lower=0),
     )
 end
 
@@ -954,10 +952,8 @@ function CognitiveModeling.attribute_names(environment::PaysEachOption)
 end
 function CognitiveModeling.parameter_domains(environment::PaysEachOption)
     return (;
-        payoff_sizes=ParameterDomain(;
-            type=AbstractVector{Real}, lower=0, constraint=issorted
-        ),
-        payoff_probability=ParameterDomain(; lower=0, upper=1),
+        payoff_sizes=Domain(; type=AbstractVector{Real}, lower=0, constraint=issorted),
+        payoff_probability=Domain(; lower=0, upper=1),
     )
 end
 

@@ -35,8 +35,8 @@ function CognitiveModeling.attribute_names(model::RatesAndChoosesOptions)
 end
 function CognitiveModeling.parameter_domains(model::RatesAndChoosesOptions)
     return (;
-        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        rating_noise=ParameterDomain(; lower=0),
+        learning_rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_noise=Domain(; lower=0),
     )
 end
 const IDENTITY_3 = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]

@@ -7,8 +7,7 @@ function CognitiveModeling.attribute_names(model::ModelWithDiscreteParameter)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithDiscreteParameter)
     return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        n_options=ParameterDomain(; type=Integer, lower=1),
+        learning_rate=Domain(; lower=0, upper=1), n_options=Domain(; type=Integer, lower=1)
     )
 end
 #A model with parameters that aren't numbers, and with a parameter that is true or false
@@ -23,10 +22,10 @@ function CognitiveModeling.attribute_names(model::ModelWithNamedStrategy)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithNamedStrategy)
     return (;
-        strategy=ParameterDomain(; type=Symbol),
-        learning_rate=ParameterDomain(),
-        label=ParameterDomain(; type=AbstractString),
-        is_greedy=ParameterDomain(; type=Bool),
+        strategy=Domain(; type=Symbol),
+        learning_rate=Domain(),
+        label=Domain(; type=AbstractString),
+        is_greedy=Domain(; type=Bool),
     )
 end
 #A model whose parameters are arrays and tuples, of real numbers, of whole numbers and of true or false
@@ -41,9 +40,9 @@ function CognitiveModeling.attribute_names(model::ModelWithArrayParameters)
 end
 function CognitiveModeling.parameter_domains(model::ModelWithArrayParameters)
     return (;
-        choice_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        counts=ParameterDomain(; type=AbstractVector{Integer}, lower=0),
-        flags=ParameterDomain(; type=NTuple{2,Bool}),
+        choice_probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        counts=Domain(; type=AbstractVector{Integer}, lower=0),
+        flags=Domain(; type=NTuple{2,Bool}),
     )
 end
 #A model whose parameters have possible values, names and real numbers, or a constraint
@@ -55,9 +54,9 @@ function CognitiveModeling.attribute_names(model::ModelWithPossibleValuesAndCons
 end
 function CognitiveModeling.parameter_domains(model::ModelWithPossibleValuesAndConstraint)
     return (;
-        strategy=ParameterDomain(; possible_values=(:greedy, :random)),
-        step_size=ParameterDomain(; possible_values=(0.5, 1.0)),
-        thresholds=ParameterDomain(; type=AbstractVector{Real}, constraint=issorted),
+        strategy=Domain(; possible_values=(:greedy, :random)),
+        step_size=Domain(; possible_values=(0.5, 1.0)),
+        thresholds=Domain(; type=AbstractVector{Real}, constraint=issorted),
     )
 end
 #Models whose domains don't fit them: one for a parameter that isn't in the attributes, and domains in the form of NamedTuples
@@ -66,7 +65,7 @@ function CognitiveModeling.attribute_names(model::ModelWithDomainForUnknownParam
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
 end
 function CognitiveModeling.parameter_domains(::ModelWithDomainForUnknownParameter)
-    return (; n_options=ParameterDomain(; type=Integer),)
+    return (; n_options=Domain(; type=Integer),)
 end
 struct ModelWithOldFormOfDomains <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithOldFormOfDomains)
@@ -83,7 +82,7 @@ function CognitiveModeling.attribute_names(model::ModelWithDomainForOneParameter
     )
 end
 function CognitiveModeling.parameter_domains(model::ModelWithDomainForOneParameter)
-    return (; n_options=ParameterDomain(; type=Integer, lower=1),)
+    return (; n_options=Domain(; type=Integer, lower=1),)
 end
 struct ModelWithoutDomains <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithoutDomains)
@@ -117,7 +116,7 @@ end
         @test_throws "parameter_domains of a cognitive model of type ModelWithDomainForUnknownParameter has domains for (:n_options,), but the parameters in its attributes are (:learning_rate,)." CognitiveModeling.discrete_parameter_names(
             ModelWithDomainForUnknownParameter()
         )
-        @test_throws "it must return a NamedTuple with a ParameterDomain under the name of each parameter that has a domain" CognitiveModeling.discrete_parameter_names(
+        @test_throws "it must return a NamedTuple with a Domain under the name of each parameter that has a domain" CognitiveModeling.discrete_parameter_names(
             ModelWithOldFormOfDomains()
         )
         @test_throws ArgumentError CognitiveModeling.continuous_parameter_names(

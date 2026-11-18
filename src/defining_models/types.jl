@@ -583,7 +583,7 @@ struct StateKind <: AbstractAttributeKind end
 ## The values a parameter can take ##
 
 """
-    ParameterDomain(; type, lower=-Inf, upper=Inf, possible_values=nothing,
+    Domain(; type, lower=-Inf, upper=Inf, possible_values=nothing,
                     constraint=nothing)
 
 The values that a parameter of a cognitive model or an environment model can take, which
@@ -632,39 +632,37 @@ otherwise, as [`CognitiveModeling.discrete_parameter_names`](@ref) and
 
 # Examples
 ```jldoctest
-julia> learning_rate = ParameterDomain(; lower = 0, upper = 1)
-ParameterDomain(; lower = 0, upper = 1)
+julia> learning_rate = Domain(; lower = 0, upper = 1)
+Domain(; lower = 0, upper = 1)
 
 julia> learning_rate.type, learning_rate.lower, learning_rate.upper
 (Real, 0, 1)
 
-julia> ParameterDomain(; type = Integer, lower = 1)
-ParameterDomain(; type = Integer, lower = 1)
+julia> Domain(; type = Integer, lower = 1)
+Domain(; type = Integer, lower = 1)
 
-julia> ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
-ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
+julia> Domain(; type = AbstractVector{Real}, lower = 0, upper = 1)
+Domain(; type = AbstractVector{Real}, lower = 0, upper = 1)
 
-julia> strategy = ParameterDomain(; possible_values = (:greedy, :random));
+julia> strategy = Domain(; possible_values = (:greedy, :random));
 
 julia> strategy.type, strategy.possible_values
 (Symbol, (:greedy, :random))
 
 julia> sums_to_one(values) = sum(values) ≈ 1;
 
-julia> ParameterDomain(; type = AbstractVector{Real}, constraint = sums_to_one)
-ParameterDomain(; type = AbstractVector{Real}, constraint = sums_to_one)
+julia> Domain(; type = AbstractVector{Real}, constraint = sums_to_one)
+Domain(; type = AbstractVector{Real}, constraint = sums_to_one)
 ```
 """
-struct ParameterDomain{
-    Ttype,Telement,Tlower<:Real,Tupper<:Real,Tpossible_values,Tconstraint
-}
+struct Domain{Ttype,Telement,Tlower<:Real,Tupper<:Real,Tpossible_values,Tconstraint}
     lower::Tlower
     upper::Tupper
     possible_values::Tpossible_values
     constraint::Tconstraint
 
     #Takes the type of the values, the bounds, the possible values and the constraint, and checks that they fit together. The type and the type of its elements are kept in the type of the domain, so that a value is checked against them without looking them up when a model runs
-    function ParameterDomain(;
+    function Domain(;
         type::Union{Type,Nothing}=nothing,
         lower::Real=(-Inf),
         upper::Real=Inf,
@@ -676,13 +674,13 @@ struct ParameterDomain{
         if !(possible_values isa Union{Nothing,Tuple,AbstractRange})
             throw(
                 ArgumentError(
-                    "A ParameterDomain takes its possible values in a tuple, such as (:greedy, :random), or in a range, such as 1:4, but it was given possible_values = $(repr(possible_values)).",
+                    "A Domain takes its possible values in a tuple, such as (:greedy, :random), or in a range, such as 1:4, but it was given possible_values = $(repr(possible_values)).",
                 ),
             )
         elseif possible_values !== nothing && isempty(possible_values)
             throw(
                 ArgumentError(
-                    "A ParameterDomain takes at least one possible value, but it was given possible_values = $(repr(possible_values)).",
+                    "A Domain takes at least one possible value, but it was given possible_values = $(repr(possible_values)).",
                 ),
             )
         end
@@ -694,7 +692,7 @@ struct ParameterDomain{
         if has_open_element_type(type)
             throw(
                 ArgumentError(
-                    "A ParameterDomain was given type = $type, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
+                    "A Domain was given type = $type, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
                 ),
             )
         end
@@ -706,13 +704,13 @@ struct ParameterDomain{
         if type <: AbstractFloat
             throw(
                 ArgumentError(
-                    "A ParameterDomain was given type = $type, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
+                    "A Domain was given type = $type, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
                 ),
             )
         elseif element_type <: AbstractFloat
             throw(
                 ArgumentError(
-                    "A ParameterDomain was given type = $type, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
+                    "A Domain was given type = $type, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
                 ),
             )
         end
@@ -721,7 +719,7 @@ struct ParameterDomain{
         if !(element_type <: Real) && (lower != -Inf || upper != Inf)
             throw(
                 ArgumentError(
-                    "A ParameterDomain with type = $type was given the bounds lower = $lower and upper = $upper, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
+                    "A Domain with type = $type was given the bounds lower = $lower and upper = $upper, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
                 ),
             )
         end
@@ -730,7 +728,7 @@ struct ParameterDomain{
         if isnan(lower) || isnan(upper) || lower > upper
             throw(
                 ArgumentError(
-                    "The lower bound of a ParameterDomain is at most its upper bound, but it was given lower = $lower and upper = $upper.",
+                    "The lower bound of a Domain is at most its upper bound, but it was given lower = $lower and upper = $upper.",
                 ),
             )
         end
@@ -739,7 +737,7 @@ struct ParameterDomain{
         if possible_values !== nothing && (lower != -Inf || upper != Inf)
             throw(
                 ArgumentError(
-                    "A ParameterDomain takes possible values or bounds, but it was given possible_values = $(repr(possible_values)) and the bounds lower = $lower and upper = $upper.",
+                    "A Domain takes possible values or bounds, but it was given possible_values = $(repr(possible_values)) and the bounds lower = $lower and upper = $upper.",
                 ),
             )
         end
@@ -749,7 +747,7 @@ struct ParameterDomain{
             !all(value -> is_value_of_type(value, element_type), possible_values)
             throw(
                 ArgumentError(
-                    "A ParameterDomain with type = $type was given possible_values = $(repr(possible_values)), but each of them must be a value of type $element_type.",
+                    "A Domain with type = $type was given possible_values = $(repr(possible_values)), but each of them must be a value of type $element_type.",
                 ),
             )
         end
@@ -769,7 +767,7 @@ end
 """
     type_of_possible_values(possible_values)
 
-Return the type that a [`ParameterDomain`](@ref) with `possible_values` and no type has:
+Return the type that a [`Domain`](@ref) with `possible_values` and no type has:
 `Real` without possible values, and otherwise the type of the possible values, widened to
 `Integer` for whole numbers, `Real` for other numbers and `AbstractString` for strings, so
 that `(2, 4, 8)` is `Integer` and `(:greedy, :random)` is `Symbol`.
@@ -787,9 +785,9 @@ end
 """
     is_value_of_type(value, type)
 
-Return whether `value` is a value of `type`, as a [`ParameterDomain`](@ref) takes it: a real
+Return whether `value` is a value of `type`, as a [`Domain`](@ref) takes it: a real
 number as [`takes_value`](@ref) decides, and any other value when it is of the type. Used by
-`ParameterDomain` for its possible values.
+`Domain` for its possible values.
 """
 is_value_of_type(value::Real, type::Type) = type <: Real && takes_value(type, value)
 is_value_of_type(value, type::Type) = value isa type
@@ -799,7 +797,7 @@ is_value_of_type(value, type::Type) = value isa type
 
 Return the type of the elements of `type` when it is an array type or a tuple type, such as
 `Real` for `AbstractVector{Real}` or `NTuple{3,Real}`, and `type` itself otherwise. Used by
-[`ParameterDomain`](@ref).
+[`Domain`](@ref).
 """
 function type_of_elements(type::Type)
     type <: Union{AbstractArray,Tuple} && return eltype(type)
@@ -812,7 +810,7 @@ end
 
 Return whether `type` is an array type which leaves the type of its elements open, such as
 `AbstractVector{<:Real}` or `AbstractVector`, or a tuple type with a type variable, such as
-`NTuple{3}`. Used by [`ParameterDomain`](@ref).
+`NTuple{3}`. Used by [`Domain`](@ref).
 """
 function has_open_element_type(type::Type)
     type <: AbstractArray && return eltype(type) === Any && !(type <: AbstractArray{Any})
@@ -821,17 +819,17 @@ function has_open_element_type(type::Type)
 end
 
 #Reads the type of the values, which is in the type of the domain, as a property next to the bounds
-function Base.getproperty(domain::ParameterDomain{Ttype}, name::Symbol) where {Ttype}
+function Base.getproperty(domain::Domain{Ttype}, name::Symbol) where {Ttype}
     name === :type && return Ttype
     return getfield(domain, name)
 end
 
-function Base.propertynames(::ParameterDomain)
+function Base.propertynames(::Domain)
     return (:type, :lower, :upper, :possible_values, :constraint)
 end
 
 #Shows the domain as it is written, with the arguments that aren't the defaults
-function Base.show(io::IO, domain::ParameterDomain)
+function Base.show(io::IO, domain::Domain)
     arguments = String[]
     domain.type === type_of_possible_values(domain.possible_values) ||
         push!(arguments, "type = $(domain.type)")
@@ -843,7 +841,7 @@ function Base.show(io::IO, domain::ParameterDomain)
         name = something(name_of_constraint(domain.constraint), "an anonymous function")
         push!(arguments, "constraint = $name")
     end
-    print(io, "ParameterDomain(")
+    print(io, "Domain(")
     isempty(arguments) || print(io, "; ", join(arguments, ", "))
     print(io, ")")
     return nothing
@@ -852,13 +850,13 @@ end
 """
     is_discrete(domain)
 
-Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when it
+Return whether a parameter with `domain`, a [`Domain`](@ref), is discrete: when it
 has possible values, or when its type, or the type of its elements when it is an array type
 or a tuple type, is a type of whole numbers, or isn't a type of real numbers. Used by
 [`discrete_parameter_names`](@ref) and by the display of a model.
 """
 function is_discrete(
-    ::ParameterDomain{Ttype,Telement,Tlower,Tupper,Tpossible_values}
+    ::Domain{Ttype,Telement,Tlower,Tupper,Tpossible_values}
 ) where {Ttype,Telement,Tlower,Tupper,Tpossible_values}
     return Tpossible_values !== Nothing || !(Telement <: Real) || Telement <: Integer
 end
@@ -866,7 +864,7 @@ end
 """
     name_of_constraint(constraint)
 
-Return the name of `constraint`, the constraint of a [`ParameterDomain`](@ref), as errors and
+Return the name of `constraint`, the constraint of a [`Domain`](@ref), as errors and
 the display of a model write it: the name of a function, such as `sums_to_one`, `nothing` for
 an anonymous function, and the object as it is shown otherwise.
 """

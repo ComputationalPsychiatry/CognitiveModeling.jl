@@ -75,8 +75,7 @@ function CognitiveModeling.attribute_names(model::TuringRescorlaWagnerWithinDoma
 end
 function CognitiveModeling.parameter_domains(model::TuringRescorlaWagnerWithinDomains)
     return (;
-        learning_rate=ParameterDomain(; lower=0, upper=1),
-        inverse_temperature=ParameterDomain(; lower=0),
+        learning_rate=Domain(; lower=0, upper=1), inverse_temperature=Domain(; lower=0)
     )
 end
 
@@ -201,7 +200,7 @@ function CognitiveModeling.attribute_names(environment::TuringNoisyRewardsWithin
     return CognitiveModeling.attribute_names(TuringNoisyRewards())
 end
 function CognitiveModeling.parameter_domains(environment::TuringNoisyRewardsWithinDomain)
-    return (; scale=ParameterDomain(; lower=0),)
+    return (; scale=Domain(; lower=0),)
 end
 
 const TURING_REWARDS = (; reward=[1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0])
@@ -676,9 +675,7 @@ function CognitiveModeling.attribute_names(model::TuringChoosesWithProbabilities
     )
 end
 function CognitiveModeling.parameter_domains(model::TuringChoosesWithProbabilities)
-    return (;
-        choice_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
-    )
+    return (; choice_probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1))
 end
 
 # Three sessions of ten choices, with the trial as the observation, and the first and the third in one group
@@ -849,8 +846,8 @@ function CognitiveModeling.attribute_names(model::TuringRatesAndChoosesOptions)
 end
 function CognitiveModeling.parameter_domains(model::TuringRatesAndChoosesOptions)
     return (;
-        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
-        rating_noise=ParameterDomain(; lower=0),
+        learning_rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_noise=Domain(; lower=0),
     )
 end
 
