@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794998227234,
+  "lastUpdate": 1795040954370,
   "repoUrl": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl",
   "entries": {
     "CognitiveModeling.jl": [
@@ -768,6 +768,102 @@ window.BENCHMARK_DATA = {
             "value": 3059.1111111111113,
             "unit": "ns",
             "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "committer": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "distinct": true,
+          "id": "510371c03299169217f07bc4f689b23c2665afba",
+          "message": "Describe the cause of Enzyme's IllegalTypeAnalysisException for an imputed action that is a vector correctly, in the known failures of the tests of the Turing.jl extension and on the page on automatic differentiation: the imputed vector is a view of the vector of parameters, which meets the recorded vectors in the loop over the timesteps, and not the Union of the column of actions",
+          "timestamp": "2026-11-18T23:19:11+01:00",
+          "tree_id": "1d93244800c6a59074e517783dae1e51d41a66dd",
+          "url": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/commit/510371c03299169217f07bc4f689b23c2665afba"
+        },
+        "date": 1795040953585,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "simulate/saving everything",
+            "value": 4208.75,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4160\nallocs=16\nparams={\"evals\":8,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "simulate/saving nothing",
+            "value": 2692.222222222222,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=512\nallocs=16\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Enzyme",
+            "value": 174442,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=200176\nallocs=698\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ForwardDiff",
+            "value": 150049,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=339488\nallocs=392\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Mooncake",
+            "value": 144987.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=92496\nallocs=980\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ReverseDiff",
+            "value": 2203736,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1556528\nallocs=42516\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/log density",
+            "value": 27507,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=22752\nallocs=175\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Enzyme",
+            "value": 9881,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16688\nallocs=29\nparams={\"evals\":4,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ForwardDiff",
+            "value": 5426.25,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4904\nallocs=16\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Mooncake",
+            "value": 9254.166666666668,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5936\nallocs=51\nparams={\"evals\":3,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ReverseDiff",
+            "value": 227168,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=155296\nallocs=4245\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/log density",
+            "value": 2450.6000000000004,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
         ]
       }
