@@ -76,6 +76,8 @@ jobs:
             path: test/tutorials/pomdps
           - name: juliacontrol tutorial
             path: test/tutorials/juliacontrol
+          - name: sequential sampling models tutorial
+            path: test/tutorials/sequential_sampling_models
           - name: docs examples
             path: test/examples
     steps:

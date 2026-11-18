@@ -69,6 +69,10 @@ julia --project=test/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include(
 julia --project=test/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/juliacontrol/runtests.jl")'
 ```
 
+```bash
+julia --project=test/tutorials/sequential_sampling_models -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/sequential_sampling_models/runtests.jl")'
+```
+
 The examples in `docs/examples` run to the end in an environment of their own:
 
 ```bash

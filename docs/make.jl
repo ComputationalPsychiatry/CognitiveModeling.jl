@@ -10,6 +10,7 @@ const NOT_RUN = [
     "interfacing_with_reinforcement_learning.jl",
     "interfacing_with_pomdps.jl",
     "interfacing_with_juliacontrol.jl",
+    "interfacing_with_sequential_sampling_models.jl",
     "discrete_parameters.jl",
 ]
 
