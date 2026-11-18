@@ -1,7 +1,7 @@
 name = "CognitiveModeling"
 uuid = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
 authors = ["Peter Thestrup Waade <peter@waade.net>"]
-version = "0.1.0-DEV"
+version = "0.1.0"
 
 [workspace]
 projects = ["test"]
