@@ -4,14 +4,17 @@
 # the drift diffusion model (DDM). A value of one is a `NamedTuple` with both, such as
 # `(choice = 1, rt = 0.53)`. This page uses a DDM as the distribution that a cognitive model
 # samples its response from, simulates the model on a task with two choices, and fits it to
-# the responses of three simulated participants with Turing.jl. It was run with
-# SequentialSamplingModels.jl 0.13.3. Both packages export a function named `simulate`, so
-# only `DDM` is taken from SequentialSamplingModels.jl.
+# the responses of three simulated participants with Turing.jl, also when a response has
+# only its choice or only its time. It was run with SequentialSamplingModels.jl 0.13.3.
+# Both packages export a function named `simulate`, so only `DDM` is taken from
+# SequentialSamplingModels.jl.
 
 using CognitiveModeling
 using SequentialSamplingModels: DDM
 using Turing
-using Random: Xoshiro
+using Distributions: Distributions
+using LogExpFunctions: logsumexp
+using Random: AbstractRNG, Xoshiro
 using Statistics: mean
 
 # ## The cognitive model
@@ -225,6 +228,107 @@ sessions_info_with_missing = MultipleSessionsInfo(
     impute_missing_actions=false,
 )
 first(sessions_info_with_missing.sessions).actions.response[4:6]
+
+# ### A response with only one of its parts
+#
+# A trial whose choice was recorded without its response time, or the other way round,
+# still says something. A distribution of one's own can split the DDM's distribution of a
+# response into its parts, and score only the part that is known: the probability of the
+# choice when the time is missing, and the density of the time, summed over both choices,
+# when the choice is missing. Its draws are those of the DDM, so the model simulates as
+# before.
+
+#The DDM's distribution of a response, which scores a response with a missing part by the part that is known
+struct ResponseWithMissingParts{Tddm} <:
+       Distributions.Distribution{Distributions.Multivariate,Distributions.ValueSupport}
+    ddm::Tddm
+end
+function Base.rand(rng::AbstractRNG, distribution::ResponseWithMissingParts)
+    return rand(rng, distribution.ddm)
+end
+
+#The probability that the evidence ends at the boundary of a choice, choice 1 being the upper boundary, as in the DDM
+function choice_probability(ddm::DDM, choice)
+    (; ν, α, z) = ddm
+    upper_boundary = expm1(-2 * ν * α * z) / expm1(-2 * ν * α)
+    return choice == 1 ? upper_boundary : 1 - upper_boundary
+end
+
+function Distributions.logpdf(distribution::ResponseWithMissingParts, response::NamedTuple)
+    (; choice, rt) = response
+    ddm = distribution.ddm
+
+    #Without its time, the probability of the choice
+    ismissing(rt) && return log(choice_probability(ddm, choice))
+
+    #Without its choice, the density of the time, summed over both choices
+    ismissing(choice) && return logsumexp((logpdf(ddm, 1, rt), logpdf(ddm, 2, rt)))
+
+    return logpdf(ddm, choice, rt)
+end
+
+# The cognitive model is the first one, with its DDM in that distribution:
+
+struct DriftDiffusionWithMissingParts <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::DriftDiffusionWithMissingParts, parameters
+)
+    return (;)
+end
+function CognitiveModeling.run_timestep(
+    model::DriftDiffusionWithMissingParts, context::ModelContext
+)
+    #The DDM of the first model
+    parameters = context.parameters
+    drift_rate = if context.input.stimulus == 1
+        parameters.drift_rate
+    else
+        -parameters.drift_rate
+    end
+    ddm = DDM(
+        drift_rate,
+        parameters.boundary_separation,
+        parameters.starting_point,
+        parameters.non_decision_time,
+    )
+    return ModelOutput((; response=ResponseWithMissingParts(ddm)))
+end
+function CognitiveModeling.attribute_names(model::DriftDiffusionWithMissingParts)
+    return CognitiveModeling.attribute_names(DriftDiffusion())
+end
+function CognitiveModeling.parameter_domains(model::DriftDiffusionWithMissingParts)
+    return CognitiveModeling.parameter_domains(DriftDiffusion())
+end
+
+# The responses are read from one column of `NamedTuple`s, so that a response with only one
+# part keeps it, where the two columns above make it missing as a whole. A function among
+# the `missing_action_values` makes a response missing when both of its parts are, and
+# such a response is left out:
+
+#The responses in one column, where the fifth trial has only its choice, and the sixth only its time
+responses = Any[(; choice, rt) for (choice, rt) in zip(data.choice, data.rt)]
+responses[5] = (; choice=data.choice[5], rt=missing)
+responses[6] = (; choice=missing, rt=data.rt[6])
+data_with_parts = merge(data, (; response=responses))
+
+sessions_info_with_parts = MultipleSessionsInfo(
+    DriftDiffusionWithMissingParts(),
+    data_with_parts;
+    observation_columns=:stimulus,
+    action_columns=:response,
+    session_columns=:participant,
+    who_starts=EnvironmentStarts(),
+    missing_action_values=(missing, response -> all(ismissing, response)),
+    impute_missing_actions=false,
+)
+first(sessions_info_with_parts.sessions).actions.response[4:7]
+
+# The model is fitted as before, and the two trials count with the part they have:
+
+model_with_parts = full_model(
+    TuringBackend(), IndependentParameters(priors), sessions_info_with_parts
+)
+chain_with_parts = sample(Xoshiro(2), model_with_parts, NUTS(), 500)
 
 # ## Automatic differentiation
 #

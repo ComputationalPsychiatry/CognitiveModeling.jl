@@ -1,5 +1,7 @@
 [deps]
 CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SequentialSamplingModels = "0e71a2a6-2b30-4447-8742-d083a85e82d1"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -10,6 +12,8 @@ Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 CognitiveModeling = {path = "../../.."}
 
 [compat]
+Distributions = "0.25"
+LogExpFunctions = "1"
 Random = "1"
 SequentialSamplingModels = "0.13"
 Statistics = "1"
