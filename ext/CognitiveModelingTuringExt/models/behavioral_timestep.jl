@@ -14,12 +14,12 @@ environment's are under `environment`, in its own names: its `state`, its `obser
 `observations_to_condition_on_at_timestep`. Without an environment, `environment` only has a
 `state`, which is `nothing`.
 
-Each model runs as [`turing_model_timestep`](@ref), the environment's under the prefix
-`environment`. Without an environment, the observation comes from the data: the model acts
-on this timestep's observation when the environment starts, and on the previous one when the
-agent starts. With an environment, the environment gives the observation in response to the
-action, before the model acts when the environment starts, and after when the agent starts.
-Used by [`turing_run_all_timesteps`](@ref).
+Each model runs as [`turing_timestep_one_perspective`](@ref), the environment's under the
+prefix `environment`. Without an environment, the observation comes from the data: the
+model acts on this timestep's observation when the environment starts, and on the previous
+one when the agent starts. With an environment, the environment gives the observation in
+response to the action, before the model acts when the environment starts, and after when
+the agent starts. Used by [`turing_run_all_timesteps`](@ref).
 """
 Turing.@model function turing_behavioral_timestep(
     session_info::SessionInfo{<:Any,NoEnvironment},
@@ -37,7 +37,7 @@ Turing.@model function turing_behavioral_timestep(
         previous.observation
     end
     cognitive ~ to_submodel(
-        turing_model_timestep(
+        turing_timestep_one_perspective(
             session_info.cognitive_model,
             ModelContext(
                 observation,
@@ -81,7 +81,7 @@ Turing.@model function turing_behavioral_timestep(
     if who_starts isa EnvironmentStarts
         environment ~ to_submodel(
             prefix(
-                turing_model_timestep(
+                turing_timestep_one_perspective(
                     session_info.environment,
                     ModelContext(
                         map_names(previous.action, session_info.action_map),
@@ -107,7 +107,7 @@ Turing.@model function turing_behavioral_timestep(
 
     #Run the cognitive model on the observation
     cognitive ~ to_submodel(
-        turing_model_timestep(
+        turing_timestep_one_perspective(
             session_info.cognitive_model,
             ModelContext(
                 observation,
@@ -130,7 +130,7 @@ Turing.@model function turing_behavioral_timestep(
     if who_starts isa AgentStarts
         environment ~ to_submodel(
             prefix(
-                turing_model_timestep(
+                turing_timestep_one_perspective(
                     session_info.environment,
                     ModelContext(
                         environment_action,
@@ -178,7 +178,7 @@ end
 
 #The row is taken here, since it can have one of two types when a column holds a MissingValue, which the compiler splits within a function but not across a model's arguments
 """
-    turing_model_timestep(model, context, data_columns, t)
+    turing_timestep_one_perspective(model, context, data_columns, t)
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
 environment model: `model` runs on `context` with [`turing_run_timestep`](@ref), and its
@@ -191,7 +191,7 @@ at the timestep, as [`find_outputs_to_condition_on`](@ref) gives it, so that the
 can be scored against the distributions at the end of the session. The row is taken here and
 not given. Used by [`turing_behavioral_timestep`](@ref).
 """
-Turing.@model function turing_model_timestep(model, context, data_columns, t)
+Turing.@model function turing_timestep_one_perspective(model, context, data_columns, t)
     #Take this timestep's row of the data for the model's outputs
     data_output = select_row(data_columns, t)
 

@@ -5,8 +5,8 @@
 #
 # The Reactant suite compiles these sessions, since the Turing.jl models can't be compiled with Reactant, so that
 # the functions are known to work with an inference backend which can. The steps follow turing_behavioral_session,
-# turing_run_all_timesteps, turing_behavioral_timestep and turing_model_timestep in ext/CognitiveModelingTuringExt, so
-# a change in what those call belongs here too.
+# turing_run_all_timesteps, turing_behavioral_timestep and turing_timestep_one_perspective in
+# ext/CognitiveModelingTuringExt, so a change in what those call belongs here too.
 using CognitiveModeling:
     AbstractTimestepModel,
     run_timestep,

@@ -9,7 +9,7 @@ Turing.jl model which fills in the outputs of one model on one timestep: each va
 rest are taken from the data. The data is returned as it is when nothing is missing on the
 timestep. For an environment it runs under the prefix `environment`, so that an observation
 and an action with the same name get a latent variable each. Used by
-[`turing_model_timestep`](@ref).
+[`turing_timestep_one_perspective`](@ref).
 """
 Turing.@model function turing_impute_missing_values(data, distributions)
     if has_missing_value(data)
