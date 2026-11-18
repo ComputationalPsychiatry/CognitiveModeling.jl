@@ -67,7 +67,8 @@ as the variable `session`, named like `learning_rate.session` under the paramete
 Non-centered, a standard normal value is sampled for every session, as the variable
 `session_z`, named like `learning_rate.session_z`, and the value of the session is the mean
 of its group plus that value times the standard deviation of its group. It returns the
-values with the transformation applied to each. Used by
+value of each session, with [`values_of_sessions`](@ref), with the transformation applied to
+each. Used by
 [`turing_hierarchical_grouped_parameters`](@ref).
 """
 Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
@@ -82,7 +83,10 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
         session ~ arraydist(
             map(
                 group -> group_level_distribution(
-                    hierarchical_parameter.distribution, group_parameters, group
+                    hierarchical_parameter.distribution,
+                    group_parameters,
+                    groups.group_priors,
+                    group,
                 ),
                 group_of_each_session,
             ),
@@ -91,13 +95,16 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
     else
         session_z ~ filldist(Normal(), length(group_of_each_session))
         means, standard_deviations = values(group_parameters)
+        mean_prior, standard_deviation_prior = values(groups.group_priors)
         session_values =
-            select_by_group(means, group_of_each_session) .+
-            select_by_group(standard_deviations, group_of_each_session) .* session_z
+            select_by_group(means, group_of_each_session, mean_prior) .+
+            select_by_group(
+                standard_deviations, group_of_each_session, standard_deviation_prior
+            ) .* session_z
     end
 
-    #Transform every value to the scale of the parameter
-    return map(hierarchical_parameter.transformation, session_values)
+    #Transform the value of each session to the scale of the parameter, also when the parameter is an array
+    return map(hierarchical_parameter.transformation, values_of_sessions(session_values))
 end
 
 """
@@ -149,31 +156,40 @@ Turing.@model function turing_group_level_parameter(priors_of_groups::NamedTuple
 end
 
 """
-    group_level_distribution(distribution, group_parameters, group)
+    group_level_distribution(distribution, group_parameters, group_priors, group)
 
 Return the distribution of the group numbered `group`, made by `distribution` from the
-values that the group has in `group_parameters`, a `NamedTuple` with a vector over the
-groups, or one value without groups, for each parameter of the distribution, in the order
-the distribution takes them. `nothing` makes a normal distribution. Used by
-[`turing_hierarchical_grouped_parameter`](@ref).
+values that the group has in `group_parameters`, a `NamedTuple` with the values of each
+parameter of the distribution, in the order the distribution takes them, which
+[`select_by_group`](@ref) reads with the priors in `group_priors`. `nothing` makes a normal
+distribution. Used by [`turing_hierarchical_grouped_parameter`](@ref).
 """
-function group_level_distribution(distribution, group_parameters::NamedTuple, group)
+function group_level_distribution(
+    distribution, group_parameters::NamedTuple, group_priors::NamedTuple, group
+)
     return distribution(
-        map(values -> select_by_group(values, group), Tuple(group_parameters))...
+        map(
+            (values, prior) -> select_by_group(values, group, prior),
+            Tuple(group_parameters),
+            Tuple(group_priors),
+        )...,
     )
 end
-function group_level_distribution(::Nothing, group_parameters::NamedTuple, group)
-    return group_level_distribution(Normal, group_parameters, group)
+function group_level_distribution(
+    ::Nothing, group_parameters::NamedTuple, group_priors::NamedTuple, group
+)
+    return group_level_distribution(Normal, group_parameters, group_priors, group)
 end
 
+#Whether a group-level parameter has a value for each group is in the type of its prior, so a value that is itself a vector, such as the concentrations of a Dirichlet distribution, isn't taken for values of groups
 """
-    select_by_group(values, groups)
+    select_by_group(values, groups, prior)
 
-Return the values in `values`, a vector with a value for every group, of the groups
-numbered in `groups`, which is one group number or a vector of them, as `values[groups]`
-does. Without groups, `values` is one value that every group has, and is returned as it is.
-Used by [`turing_hierarchical_grouped_parameter`](@ref) and
-[`group_level_distribution`](@ref).
+Return the values in `values` of the groups numbered in `groups`, which is one group number
+or a vector of them, as `values[groups]` does, when `prior` is a `NamedTuple` with the prior
+of each group. Otherwise there are no groups, and `values` is the one value that every group
+has, a number or an array, and is returned as it is. Used by
+[`turing_hierarchical_grouped_parameter`](@ref) and [`group_level_distribution`](@ref).
 """
-select_by_group(values::AbstractVector, groups) = values[groups]
-select_by_group(value::Real, _) = value
+select_by_group(values, groups, ::NamedTuple) = values[groups]
+select_by_group(value, groups, prior) = value

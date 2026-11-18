@@ -81,7 +81,9 @@ include("utility_functions/behavioral_session.jl")
 
 #The Turing.jl models of the parameter models, which give or sample the parameters of every session, each
 #in a file named as the file of its type in the package. The same kinds serve the parameters of the cognitive model and
-#those of the environment model, and each returns one vector for each parameter, with a value for every session
+#those of the environment model, and each returns one vector for each parameter, with a value for every session, which
+#the helpers in their own file split from an array when the parameter is an array
+include("utility_functions/parameter_models.jl")
 include("parameter_models/no_parameters.jl")
 include("parameter_models/fixed_parameters.jl")
 include("parameter_models/sessionwise_fixed_parameters.jl")
