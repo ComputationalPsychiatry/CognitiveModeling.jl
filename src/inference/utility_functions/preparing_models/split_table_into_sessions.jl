@@ -259,8 +259,9 @@ end
 Return the column of an attribute for every row of `table`, as [`columns_used`](@ref)
 describes the specification, with the values that are missing replaced by their marker, as
 [`mark_missing_values`](@ref) does: the column itself, or one built row by row from several,
-where a missing value in any of them makes the whole value of the row missing. The column is
-made for the whole table, so that every session gets the same element type. Used by
+where a missing value in any of them makes the whole value of the row missing, and whose
+arrays are narrowed as [`narrow_arrays_in_values`](@ref) does. The column is made for the
+whole table, so that every session gets the same element type. Used by
 [`build_columns`](@ref).
 """
 function build_column(table::NamedTuple, specification::Symbol, missing_values, impute)
@@ -297,7 +298,7 @@ function build_column(
         is_missing = any(value -> is_missing_data_value(value, missing_values), values)
         return is_missing ? marker : combine(values...)
     end
-    return narrow_element_type(built)
+    return narrow_arrays_in_values(narrow_element_type(built))
 end
 
 """

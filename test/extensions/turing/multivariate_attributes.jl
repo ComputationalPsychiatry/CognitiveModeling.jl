@@ -225,6 +225,62 @@ const OPTIONS_VALUES = Dict(
         )
     end
 
+    @testset "A vector with a missing element, in a column of vectors, is missing as a whole when a function among the missing values says so: imputed as a vector, or left out" begin
+        #Every vector of ratings can hold a missing value by its type, and the second rating of the fourth row is missing
+        ratings = Vector{Union{Missing,Float64}}[
+            [
+                OPTIONS_TABLE.rating_1[row],
+                OPTIONS_TABLE.rating_2[row],
+                OPTIONS_TABLE.rating_3[row],
+            ] for row in eachindex(OPTIONS_TABLE.id)
+        ]
+        ratings[4][2] = missing
+        table = (; OPTIONS_TABLE..., ratings)
+        has_missing_element(value) = value isa AbstractVector && any(ismissing, value)
+        function sessions_with_a_column_of_ratings(; keywords...)
+            return MultipleSessionsInfo(
+                RatesAndChoosesOptions(),
+                table;
+                observation_columns=(
+                    (:payoff_1, :payoff_2, :payoff_3) => vector_of_three => :payoffs, :trial
+                ),
+                action_columns=(:ratings, :choice),
+                session_columns=:id,
+                who_starts=EnvironmentStarts(),
+                missing_action_values=(missing, has_missing_element),
+                keywords...,
+            )
+        end
+        #The vectors of the other rows hold only their numbers
+        sessions_info = sessions_with_a_column_of_ratings()
+        @test sessions_info.sessions[2].actions.ratings ==
+            [[0.4, 1.4, 0.3], MissingValue(), [0.9, 1.5, 0.9]]
+        @test eltype(sessions_info.sessions[1].actions.ratings) ==
+            Union{MissingValue,Vector{Float64}}
+        imputed = full_model(
+            TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
+        )
+        imputed_name = @varname(session[2].timestep[2].ratings.imputed)
+        values_with_imputed = merge(OPTIONS_VALUES, Dict(imputed_name => [0.1, 0.2, 0.3]))
+        @test logjoint(imputed, values_with_imputed) ≈
+            options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
+              options_by_hand(
+            OPTIONS_LEARNING_RATES,
+            OPTIONS_RATING_NOISES;
+            imputed_ratings=Dict(4 => [0.1, 0.2, 0.3]),
+        )
+        left_out = full_model(
+            TuringBackend(),
+            IndependentParameters(OPTIONS_PRIORS),
+            sessions_with_a_column_of_ratings(; impute_missing_actions=false),
+        )
+        @test logjoint(left_out, OPTIONS_VALUES) ≈
+            options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
+              options_by_hand(
+            OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES; ratings_left_out=(4,)
+        )
+    end
+
     @testset "A fit with NUTS gives the trajectories of the vector states and actions of each session, which follow from each draw" begin
         model = full_model(
             TuringBackend(), IndependentParameters(OPTIONS_PRIORS), options_sessions()

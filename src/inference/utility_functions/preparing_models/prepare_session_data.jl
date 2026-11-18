@@ -68,15 +68,30 @@ function narrow_element_type(column::AbstractVector)
 end
 
 """
-    column_can_hold(column, value)
+    column_can_hold(column, missing_value)
 
-Return whether `column` can hold `value`, by its element type, or holds a value which is
-equal to it without having its type, such as `-1.0` for `-1`, as `isequal` compares them.
-Used by [`mark_missing_values`](@ref).
+Return whether `column` can hold `missing_value`, by its element type, or holds a value which
+is equal to it without having its type, such as `-1.0` for `-1`, as `isequal` compares them.
+For a function, return whether `column` holds a value it returns `true` for. Used by
+[`mark_missing_values`](@ref).
 """
-function column_can_hold(column::AbstractVector, value)
-    return typeof(value) <: eltype(column) || any(isequal(value), column)
+function column_can_hold(column::AbstractVector, missing_value)
+    return typeof(missing_value) <: eltype(column) || any(isequal(missing_value), column)
 end
+function column_can_hold(column::AbstractVector, missing_value::Function)
+    return any(value -> matches_missing_value(missing_value, value), column)
+end
+
+"""
+    matches_missing_value(missing_value, value)
+
+Return whether `value` in the data stands for a missing one by `missing_value`, one of the
+values given for missing ones: whether `missing_value` returns `true` for `value` when it
+is a function, and whether the two are equal, as `isequal` compares them, otherwise. Used by
+[`is_missing_data_value`](@ref) and [`mark_missing_values`](@ref).
+"""
+matches_missing_value(missing_value, value) = isequal(missing_value, value)
+matches_missing_value(missing_value::Function, value) = missing_value(value) === true
 
 """
     missing_value_marker(impute)
@@ -90,31 +105,77 @@ missing_value_marker(impute::Bool) = impute ? MissingValue() : UnimputedMissingV
 """
     is_missing_data_value(value, missing_values)
 
-Return whether `value` is missing in the data: [`MissingValue`](@ref) itself, or equal to
-one of `missing_values`, as `isequal` compares them. Used by [`build_column`](@ref), for a
-value which is built from several columns.
+Return whether `value` is missing in the data: [`MissingValue`](@ref) itself, or matched by
+one of `missing_values`, as [`matches_missing_value`](@ref) says. Used by
+[`build_column`](@ref), for a value which is built from several columns.
 """
 function is_missing_data_value(value, missing_values::Tuple)
     return value isa MissingValue ||
-           any(missing_value -> isequal(missing_value, value), missing_values)
+           any(missing_value -> matches_missing_value(missing_value, value), missing_values)
+end
+
+"""
+    narrow_parts(value)
+
+Return `value` with each array in it narrowed to the types it holds, such as a
+`Vector{Float64}` for a `Vector{Union{Missing,Float64}}` without a missing element, and
+`value` itself when there is nothing to narrow. Used by
+[`narrow_arrays_in_values`](@ref).
+"""
+narrow_parts(value) = value
+narrow_parts(value::Union{Tuple,NamedTuple}) = map(narrow_parts, value)
+function narrow_parts(value::AbstractArray)
+    #An array whose element type is concrete and has no parts is narrow already
+    T = eltype(value)
+    isconcretetype(T) && !(T <: Union{AbstractArray,Tuple,NamedTuple}) && return value
+
+    #Otherwise, a new array gets its element type from the values it holds, unless it is narrow already
+    narrowed = map(narrow_parts, value)
+    return typeof(narrowed) == typeof(value) ? value : narrowed
+end
+
+"""
+    narrow_arrays_in_values(column)
+
+Return `column` with the arrays in its values narrowed by [`narrow_parts`](@ref), and its
+element type made to match them, keeping its other types, such as that of a marker.
+`column` itself is returned when no value changes, so that a column marked for a whole
+table keeps its element type in each session. Used by [`mark_missing_values`](@ref) and
+[`build_column`](@ref).
+"""
+function narrow_arrays_in_values(column::AbstractVector)
+    #Asserted to be a Bool, since for an AbstractVector of unknown type any could return something else, which JET reports
+    any(value -> value isa Union{AbstractArray,Tuple,NamedTuple}, column)::Bool ||
+        return column
+    narrowed = map(narrow_parts, column)
+    all(((new, old),) -> new === old, zip(narrowed, column)) && return column
+
+    #The element type loses the types with parts, and gets those of the narrowed values
+    T = Base.typesplit(eltype(column), Union{AbstractArray,Tuple,NamedTuple})
+    for value in narrowed
+        value isa Union{AbstractArray,Tuple,NamedTuple} && (T = Union{T,typeof(value)})
+    end
+    return convert(Vector{T}, narrowed)
 end
 
 """
     mark_missing_values(columns, missing_values, impute)
 
 Return `columns`, a `NamedTuple` with one vector per name, or a single vector, with every
-value which is equal to one of `missing_values`, as `isequal` compares them, replaced by the
-marker for a missing value: [`MissingValue`](@ref) when `impute` is `true`. When it is
-`false`, the marker is [`UnimputedMissingValue`](@ref), which every `MissingValue()` that
-is in the data already becomes too.
+value which is matched by one of `missing_values`, as [`matches_missing_value`](@ref) says,
+replaced by the marker for a missing value: [`MissingValue`](@ref) when `impute` is `true`.
+When it is `false`, the marker is [`UnimputedMissingValue`](@ref), which every
+`MissingValue()` that is in the data already becomes too. The arrays in the values that are
+kept are narrowed to the types they hold, by [`narrow_arrays_in_values`](@ref).
 
 A column gets the type of the marker in its element type when its element type allows one
 of the values, whether it holds one or not, so that sessions whose columns have the same
 types keep them, or when it holds a value equal to one of them of another type, such as
-`-1.0` for `-1`. Any other column is kept as it is, after [`narrow_element_type`](@ref).
-Anything that isn't a `NamedTuple` of vectors is returned as it is, for
-[`check_data_fits`](@ref) to report. Used by [`SessionInfo`](@ref) on the observations and
-the actions, and by [`build_column`](@ref).
+`-1.0` for `-1`, or a value that one of them, a function, returns `true` for. Any other
+column is kept as it is, after [`narrow_element_type`](@ref). Anything that isn't a
+`NamedTuple` of vectors is returned as it is, for [`check_data_fits`](@ref) to report. Used
+by [`SessionInfo`](@ref) on the observations and the actions, and by
+[`build_column`](@ref).
 """
 function mark_missing_values(columns::NamedTuple, missing_values::Tuple, impute::Bool)
     return map(column -> mark_missing_values(column, missing_values, impute), columns)
@@ -129,19 +190,22 @@ function mark_missing_values(column::AbstractVector, missing_values::Tuple, impu
 
     #Only the values that the column can hold are replaced in it
     replaced_values = filter(value -> column_can_hold(column, value), values)
-    isempty(replaced_values) && return column
+    isempty(replaced_values) && return narrow_arrays_in_values(column)
 
     #The element type loses a replaced value which is the only one of its type, such as Missing, and gets the type of the marker
     T = eltype(column)
     for value in replaced_values
+        value isa Function && continue
         Base.issingletontype(typeof(value)) && (T = Base.typesplit(T, typeof(value)))
     end
     marked = Vector{Union{T,typeof(marker)}}(undef, length(column))
     for i in eachindex(column)
-        is_replaced = any(value -> isequal(value, column[i]), replaced_values)
+        is_replaced = any(value -> matches_missing_value(value, column[i]), replaced_values)
         marked[i] = is_replaced ? marker : column[i]
     end
-    return marked
+
+    #The arrays of the values that are kept, such as vectors which a function didn't find missing, hold only their own types
+    return narrow_arrays_in_values(marked)
 end
 
 mark_missing_values(x, missing_values::Tuple, impute::Bool) = x

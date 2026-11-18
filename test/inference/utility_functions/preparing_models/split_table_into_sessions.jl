@@ -139,6 +139,19 @@
         @test CognitiveModeling.build_column(
             composite, (:choicecol, :cue), (missing, 2), false
         ) == [(true, 1), UnimputedMissingValue(), UnimputedMissingValue()]
+        #A function among them is called on the value of each column used
+        @test CognitiveModeling.build_column(
+            composite,
+            (:rtcol, :cue),
+            (missing, value -> value isa Float64 && value > 0.8),
+            true,
+        ) == [(0.5, 1), (0.7, 2), MissingValue()]
+        #A column given by its name alone is marked as mark_missing_values does, with its arrays narrowed
+        ratings = (; ratings=Vector{Union{Missing,Float64}}[[0.1, missing], [0.3, 0.4]])
+        has_missing_element(value) = value isa AbstractVector && any(ismissing, value)
+        @test CognitiveModeling.build_column(
+            ratings, :ratings, (missing, has_missing_element), true
+        ) == [MissingValue(), [0.3, 0.4]]
         #Without values to replace, the values are combined as they are
         @test isequal(
             CognitiveModeling.build_column(composite, (:choicecol, :cue), (), true),

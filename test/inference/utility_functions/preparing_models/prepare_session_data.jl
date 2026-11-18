@@ -102,6 +102,65 @@
         ).choice isa Vector{Union{UnimputedMissingValue,Bool}}
     end
 
+    @testset "A function among the values that stand for a missing one marks each value it returns true for, and the arrays of the values kept are narrowed" begin
+        has_missing_element(value) = value isa AbstractVector && any(ismissing, value)
+        #Every vector of ratings can hold a missing value by its type, and the first holds one
+        ratings = Vector{Union{Missing,Float64}}[[0.1, missing, 0.2], [0.3, 0.4, 0.5]]
+        marked = CognitiveModeling.mark_missing_values(
+            ratings, (missing, has_missing_element), true
+        )
+        @test marked == [MissingValue(), [0.3, 0.4, 0.5]]
+        @test marked isa Vector{Union{MissingValue,Vector{Float64}}}
+        @test CognitiveModeling.mark_missing_values(
+            ratings, (missing, has_missing_element), false
+        ) == [UnimputedMissingValue(), [0.3, 0.4, 0.5]]
+        #A single function is taken too, and the data isn't changed
+        @test CognitiveModeling.mark_missing_values(
+            ratings, CognitiveModeling.as_tuple(has_missing_element), true
+        ) == marked
+        @test isequal(ratings[1], [0.1, missing, 0.2]) &&
+            ratings[2] isa Vector{Union{Missing,Float64}}
+        #Without the function, the vector with a missing element is kept, and the other is narrowed
+        kept = CognitiveModeling.mark_missing_values(ratings, (missing,), true)
+        @test isequal(kept, ratings) && kept[2] isa Vector{Float64}
+        #A function on numbers, beside a value compared with isequal, and a function which returns missing counts as false
+        @test CognitiveModeling.mark_missing_values(
+            [0.5, -0.2, 0.7, -1.0], (value -> value < 0 && value > -1, -1), true
+        ) == [0.5, MissingValue(), 0.7, MissingValue()]
+        @test CognitiveModeling.mark_missing_values([0.5, -0.2], (<(0),), true) isa
+            Vector{Union{MissingValue,Float64}}
+        @test isequal(
+            CognitiveModeling.mark_missing_values([1.0, missing], (<(0),), true),
+            [1.0, missing],
+        )
+        #A function that finds nothing missing adds no marker to the type
+        @test CognitiveModeling.mark_missing_values([0.5, 0.7], (<(0),), true) isa
+            Vector{Float64}
+        #Tuples and NamedTuples are narrowed in their arrays too
+        @test CognitiveModeling.mark_missing_values(
+            [(; ratings=Union{Missing,Float64}[0.1, 0.2], choice=1)], (missing,), true
+        )[1].ratings isa Vector{Float64}
+        #Marking the rows of a session again, as each session of a table is, keeps the element type of the whole column
+        @test CognitiveModeling.mark_missing_values(marked[2:2], (), true) isa
+            Vector{Union{MissingValue,Vector{Float64}}}
+        responses = Union{MissingValue,@NamedTuple{choice::Int,rt::Float64}}[(;
+            choice=2, rt=0.4
+        )]
+        @test CognitiveModeling.mark_missing_values(responses, (), true) === responses
+        @test CognitiveModeling.is_missing_data_value([missing], (has_missing_element,)) &&
+            !CognitiveModeling.is_missing_data_value([1.0], (has_missing_element,))
+        @test CognitiveModeling.matches_missing_value(<(0), -1) &&
+            !CognitiveModeling.matches_missing_value(<(0), missing) &&
+            CognitiveModeling.matches_missing_value(-1, -1.0)
+        #An array whose parts are narrow already is kept as it is
+        numbers = [1.0, 2.0]
+        @test CognitiveModeling.narrow_parts(numbers) === numbers
+        vectors = [[1.0], [2.0]]
+        @test CognitiveModeling.narrow_parts(vectors) === vectors
+        @test CognitiveModeling.narrow_parts([Union{Missing,Float64}[1.0]]) isa
+            Vector{Vector{Float64}}
+    end
+
     @testset "A value is missing when it is the marker itself, or equal to one of the values that stand for a missing one" begin
         @test CognitiveModeling.is_missing_data_value(MissingValue(), ()) &&
             CognitiveModeling.is_missing_data_value(-1.0, (missing, -1)) &&

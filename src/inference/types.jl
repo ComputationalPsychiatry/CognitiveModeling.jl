@@ -137,7 +137,12 @@ table.
   values in the data which stand for a missing observation or action, as one value, such as
   `-1`, or several in a tuple or a vector, such as `(missing, -1)`. Each is replaced by
   `MissingValue()`. A value is compared to them with `isequal`, and `()` keeps every value
-  as it is, `missing` too. `MissingValue()` can also be put in the data directly.
+  as it is, `missing` too. A function among them is called on each value instead, which is
+  then missing when it returns `true`, such as
+  `value -> value isa AbstractVector && any(ismissing, value)` for a vector with a missing
+  element. `MissingValue()` can also be put in the data directly. The arrays in the values
+  that are kept are narrowed to the types they hold, such as a `Vector{Float64}` for a
+  `Vector{Union{Missing,Float64}}` without a missing element.
 - `impute_missing_observations::Bool=true` and `impute_missing_actions::Bool=true`: whether
   the observations and the actions that are `MissingValue()` are imputed, as latent
   variables. With `false`, nothing is sampled for them, and they are replaced by
