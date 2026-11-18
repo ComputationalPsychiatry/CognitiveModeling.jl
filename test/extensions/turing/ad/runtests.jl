@@ -72,7 +72,7 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="Enzyme with runtime activity throws an IllegalTypeAnalysisException for a session with a vector action that is missing on one timestep and imputed, so that the actions are a Vector{Union{MissingValue, Vector{Float64}}}, whose elements are boxed. A missing action that is a number is right",
+        bug="Enzyme with runtime activity throws an IllegalTypeAnalysisException for a session with a vector action that is missing on one timestep and imputed: the imputed vector is a view of the vector of parameters, a SubArray, which meets the recorded actions, each a Vector{Float64}, in the loop over the timesteps, where Enzyme's type analysis can't merge the two. A missing action that is a number is right, since it is imputed as a Float64, the type of the recorded ones",
         backends=["Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
         cases=["turing full model with a missing action that is a vector, imputed"],
     ),
