@@ -35,7 +35,6 @@ using CognitiveModeling:
     collect_parameters_in_session_order,
     prepare_full_model,
     as_parameters_model,
-    prepare_parameters_model,
     parameter_names,
     merge_parameters_of_parts,
     part_names,

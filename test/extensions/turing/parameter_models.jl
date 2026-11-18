@@ -1,5 +1,13 @@
 ## The parameter models on their own, with the three sessions of FULL_TABLE, S1, S2 and S3 ##
 
+#The Turing.jl model of a parameter model prepared for the sessions, as the full model prepares it
+function prepared_turing_model(parameters_model, sessions_info)
+    return CognitiveModeling.turing_parameters_model(
+        CognitiveModeling.prepare_parameters_model(parameters_model, sessions_info),
+        sessions_info,
+    )
+end
+
 @testset "turing_parameters_model" begin
     sessions_info = sessions_for_test(; impute_missing_actions=false)
 
@@ -141,10 +149,10 @@ end
             sum(logpdf.(Normal(0, 1), [0.5, -1.0, 0.3])) +
               sum(logpdf.(Exponential(1), [1.0, 2.0, 0.5])) +
               sum(logpdf.(Normal(), [0.1, 0.2, -0.3, 1.0, 0.0, -1.0]))
-        #A model that wasn't prepared finds the groups when it runs, and gives the same
-        unprepared = CognitiveModeling.turing_parameters_model(hierarchical, sessions_info)
-        @test returned(unprepared, values) == parameters
-        @test logjoint(unprepared, values) ≈ logjoint(model, values)
+        #A model that wasn't prepared is an error, which says how to prepare it
+        @test_throws "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does." CognitiveModeling.turing_parameters_model(
+            hierarchical, sessions_info
+        )
     end
 
     @testset "A centered parameter is sampled from the distribution of its group, as name.session" begin
@@ -385,10 +393,10 @@ end
         @test parameters.learning_rate ≈ learning_rates
         @test parameters.inverse_temperature ≈ fill(exp(0.7), 3)
         @test logjoint(model, values) ≈ log_prior
-        #A model that wasn't prepared builds the designs when it runs, and gives the same
-        unprepared = CognitiveModeling.turing_parameters_model(regression, sessions_info)
-        @test returned(unprepared, values) == parameters
-        @test logjoint(unprepared, values) ≈ log_prior
+        #A model that wasn't prepared is an error, which says how to prepare it
+        @test_throws "A HierarchicalRegressionParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does." CognitiveModeling.turing_parameters_model(
+            regression, sessions_info
+        )
     end
 
     @testset "Centered varying effects are sampled as deviation, and grouped ones have a standard deviation for each group, under the group's name" begin
@@ -400,9 +408,7 @@ end
                 ),
             ),
         ))
-        model = CognitiveModeling.turing_parameters_model(
-            centered_and_grouped, sessions_info
-        )
+        model = prepared_turing_model(centered_and_grouped, sessions_info)
         given = Dict(
             @varname(learning_rate.participant.intercept.sd) => 2.0,
             @varname(learning_rate.participant.intercept.deviation) => [0.6, -0.8],
@@ -430,7 +436,7 @@ end
                 ),
             ),
         ))
-        model = CognitiveModeling.turing_parameters_model(both, sessions_info)
+        model = prepared_turing_model(both, sessions_info)
         given = Dict(
             @varname(learning_rate.session.intercept.sd) => (; a=0.5, b=3.0),
             @varname(learning_rate.session.intercept.deviation) => [0.1, 0.2, -0.3],
@@ -446,7 +452,7 @@ end
 
     @testset "With an intercept and a varying intercept over the sessions alone, it gives what HierarchicalGroupedParameters gives without groups" begin
         for centered in (false, true)
-            as_regression = CognitiveModeling.turing_parameters_model(
+            as_regression = prepared_turing_model(
                 HierarchicalRegressionParameters((;
                     learning_rate=RegressionParameter(
                         Intercept(GROUP_PRIORS.mean),
@@ -458,7 +464,7 @@ end
                 )),
                 sessions_info,
             )
-            as_groups = CognitiveModeling.turing_parameters_model(
+            as_groups = prepared_turing_model(
                 HierarchicalGroupedParameters((;
                     learning_rate=HierarchicalParameter(
                         GROUP_PRIORS; transformation=to_unit_interval, centered
@@ -494,7 +500,7 @@ end
     end
 
     @testset "With a coefficient for every level of a categorical predictor and no intercept, the coefficient of each level is its value" begin
-        every_level = CognitiveModeling.turing_parameters_model(
+        every_level = prepared_turing_model(
             HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(
                     CategoricalPredictor(:group, Normal(0, 1); coding=:full_dummy);

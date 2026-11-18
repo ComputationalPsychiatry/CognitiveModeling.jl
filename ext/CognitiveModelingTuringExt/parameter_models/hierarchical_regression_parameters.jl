@@ -14,18 +14,15 @@ Turing.@model function CognitiveModeling.turing_parameters_model(
     return parameters
 end
 
-#The same when it wasn't prepared, which builds the design of every regression on each evaluation
-Turing.@model function CognitiveModeling.turing_parameters_model(
-    parameters_model::HierarchicalRegressionParameters{<:NamedTuple,Nothing},
-    sessions_info::MultipleSessionsInfo,
+#One that wasn't prepared is an error when its model is made, since it would build the design of every regression on each evaluation
+function CognitiveModeling.turing_parameters_model(
+    ::HierarchicalRegressionParameters{<:NamedTuple,Nothing}, ::MultipleSessionsInfo
 )
-    parameters ~ to_submodel(
-        CognitiveModeling.turing_parameters_model(
-            prepare_parameters_model(parameters_model, sessions_info), sessions_info
+    return throw(
+        ArgumentError(
+            "A HierarchicalRegressionParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does.",
         ),
-        false,
     )
-    return parameters
 end
 
 """
@@ -67,7 +64,7 @@ end
 
 Turing.jl model which gives one parameter to every session, as `regression_parameter`, a
 [`RegressionParameter`](@ref), says. It samples the coefficients of the intercept, the
-predictors and the interactions with [`turing_regression_coefficients`](@ref) and the
+predictors and the interactions with [`turing_regression_non_varying_effects`](@ref) and the
 deviations of the varying effects with [`turing_regression_varying_effects`](@ref), and
 returns the sum of their effects on every session, with the transformation applied to each.
 With a family, it returns the values that [`turing_regression_family_values`](@ref) samples
@@ -79,7 +76,7 @@ Turing.@model function turing_regression_parameter(regression_parameter, design,
 
     #Sample the coefficients of the intercept, the predictors and the interactions, and add up their effects on every session
     non_varying_effects ~ to_submodel(
-        turing_regression_coefficients(
+        turing_regression_non_varying_effects(
             design.coefficient_priors, design.design_columns, n_sessions
         ),
         false,
@@ -152,7 +149,7 @@ Turing.@model function turing_regression_family_values(
 end
 
 """
-    turing_regression_coefficients(coefficient_priors, design_columns, n_sessions)
+    turing_regression_non_varying_effects(coefficient_priors, design_columns, n_sessions)
 
 Turing.jl model which samples the coefficients of the intercept, the predictors and the
 interactions of a regression from `coefficient_priors`, as one variable `coef` whose value
@@ -162,14 +159,14 @@ its column in `design_columns`, from [`add_up_effects`](@ref), as a vector with 
 each of `n_sessions` sessions, which is zero without coefficients. Used by
 [`turing_regression_parameter`](@ref).
 """
-Turing.@model function turing_regression_coefficients(
+Turing.@model function turing_regression_non_varying_effects(
     coefficient_priors::NamedTuple, design_columns::NamedTuple, n_sessions
 )
     coef ~ product_distribution(coefficient_priors)
     return add_up_effects(coef, design_columns, n_sessions)
 end
 
-Turing.@model function turing_regression_coefficients(
+Turing.@model function turing_regression_non_varying_effects(
     coefficient_priors::NamedTuple{()}, design_columns::NamedTuple, n_sessions
 )
     return zeros(n_sessions)
@@ -180,7 +177,7 @@ end
 
 Return the sum of each coefficient in `coefficients`, a `NamedTuple`, times the column of
 the same name in `design_columns`, as a vector with a value for each of `n_sessions`
-sessions. Used by [`turing_regression_coefficients`](@ref).
+sessions. Used by [`turing_regression_non_varying_effects`](@ref).
 """
 function add_up_effects(
     coefficients::NamedTuple, design_columns::NamedTuple{names}, n_sessions
@@ -280,7 +277,7 @@ level: their standard deviation with [`turing_regression_standard_deviation`](@r
 then every deviation from a normal distribution around zero, with
 [`turing_regression_centered_deviations`](@ref) when `centered` is `true`, or as a
 standardized value which the standard deviation scales, with
-[`turing_regression_standardized_deviations`](@ref). It returns the deviation of every
+[`turing_regression_non_centered_deviations`](@ref). It returns the deviation of every
 level. `sd_prior` is the prior of the standard deviation, a `NamedTuple` with the prior of
 each group when the levels are grouped, and `levels` has the number of levels and their
 groups. Used by [`turing_regression_varying_coefficients`](@ref).
@@ -298,7 +295,7 @@ Turing.@model function turing_regression_deviations(sd_prior, levels, centered)
         )
     else
         deviations ~ to_submodel(
-            turing_regression_standardized_deviations(sd_of_levels, levels.n_levels), false
+            turing_regression_non_centered_deviations(sd_of_levels, levels.n_levels), false
         )
     end
     return deviations
@@ -347,7 +344,7 @@ Turing.@model function turing_regression_centered_deviations(sd_of_levels, n_lev
 end
 
 """
-    turing_regression_standardized_deviations(sd_of_levels, n_levels)
+    turing_regression_non_centered_deviations(sd_of_levels, n_levels)
 
 Turing.jl model which samples a standardized value for each of `n_levels` levels of varying
 effects, as the variable `standardized`, so that under the prefixes of the parameter, the
@@ -357,7 +354,7 @@ level: its standardized value times `sd_of_levels`, the standard deviation, as o
 with a value for every level. This is the non-centered form of a normal distribution. Used
 by [`turing_regression_deviations`](@ref).
 """
-Turing.@model function turing_regression_standardized_deviations(sd_of_levels, n_levels)
+Turing.@model function turing_regression_non_centered_deviations(sd_of_levels, n_levels)
     standardized ~ filldist(Normal(), n_levels)
     return sd_of_levels .* standardized
 end

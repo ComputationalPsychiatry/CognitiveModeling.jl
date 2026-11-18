@@ -14,18 +14,15 @@ Turing.@model function CognitiveModeling.turing_parameters_model(
     return parameters
 end
 
-#The same when it wasn't prepared, which finds the group of every session on each evaluation
-Turing.@model function CognitiveModeling.turing_parameters_model(
-    parameters_model::HierarchicalGroupedParameters{<:NamedTuple,Nothing},
-    sessions_info::MultipleSessionsInfo,
+#One that wasn't prepared is an error when its model is made, since it would find the group of every session on each evaluation
+function CognitiveModeling.turing_parameters_model(
+    ::HierarchicalGroupedParameters{<:NamedTuple,Nothing}, ::MultipleSessionsInfo
 )
-    parameters ~ to_submodel(
-        CognitiveModeling.turing_parameters_model(
-            prepare_parameters_model(parameters_model, sessions_info), sessions_info
+    return throw(
+        ArgumentError(
+            "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does.",
         ),
-        false,
     )
-    return parameters
 end
 
 """
@@ -70,7 +67,7 @@ a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distr
 each group, with [`turing_hierarchical_group_parameters`](@ref) from the priors in
 `groups`, then the value of every session from the distribution of its group, with
 [`turing_hierarchical_centered_values`](@ref) or
-[`turing_hierarchical_standardized_values`](@ref), and returns the values with the
+[`turing_hierarchical_non_centered_values`](@ref), and returns the values with the
 transformation applied to each. Used by [`turing_hierarchical_grouped_parameters`](@ref).
 """
 Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
@@ -91,7 +88,7 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
         )
     else
         session_values ~ to_submodel(
-            turing_hierarchical_standardized_values(
+            turing_hierarchical_non_centered_values(
                 group_parameters, groups.group_of_each_session
             ),
             false,
@@ -174,7 +171,7 @@ Turing.@model function turing_hierarchical_centered_values(
 end
 
 """
-    turing_hierarchical_standardized_values(group_parameters, group_of_each_session)
+    turing_hierarchical_non_centered_values(group_parameters, group_of_each_session)
 
 Turing.jl model which samples a standardized value of one parameter for every session, as
 the variable `standardized`, so that under the parameter's prefix it is named like
@@ -183,7 +180,7 @@ plus the standardized value times the standard deviation of its group, which are
 group-level parameters. This is the non-centered form of a normal distribution. Used by
 [`turing_hierarchical_grouped_parameter`](@ref).
 """
-Turing.@model function turing_hierarchical_standardized_values(
+Turing.@model function turing_hierarchical_non_centered_values(
     group_parameters::NamedTuple, group_of_each_session
 )
     standardized ~ filldist(Normal(), length(group_of_each_session))
@@ -216,7 +213,7 @@ end
 Return the values in `values`, a vector with a value for every group, of the groups
 numbered in `groups`, which is one group number or a vector of them, as `values[groups]`
 does. Without groups, `values` is one value that every group has, and is returned as it is.
-Used by [`turing_hierarchical_standardized_values`](@ref) and
+Used by [`turing_hierarchical_non_centered_values`](@ref) and
 [`group_level_distribution`](@ref).
 """
 select_by_group(values::AbstractVector, groups) = values[groups]
