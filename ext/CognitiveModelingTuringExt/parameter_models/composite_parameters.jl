@@ -25,7 +25,8 @@ Turing.@model function turing_composite_parameters(
     parts::Tuple, ::Val{Tpart_names}, sessions_info::MultipleSessionsInfo
 ) where {Tpart_names}
     parameters ~ to_submodel(
-        turing_part_model(first(parts), Val(first(Tpart_names)), sessions_info), false
+        turing_part_parameters_model(first(parts), Val(first(Tpart_names)), sessions_info),
+        false,
     )
     other_parameters ~ to_submodel(
         turing_composite_parameters(
@@ -43,16 +44,18 @@ Turing.@model function turing_composite_parameters(
 end
 
 """
-    turing_part_model(part, Val(name), sessions_info)
+    turing_part_parameters_model(part, Val(name), sessions_info)
 
 Return the Turing.jl model of `part`, a part of a [`CompositeParameters`](@ref), with its
 variables under `name`, or as the part names them itself when `name` is `nothing`. Used by
 [`turing_composite_parameters`](@ref).
 """
-function turing_part_model(part, ::Val{nothing}, sessions_info::MultipleSessionsInfo)
+function turing_part_parameters_model(
+    part, ::Val{nothing}, sessions_info::MultipleSessionsInfo
+)
     return CognitiveModeling.turing_parameters_model(part, sessions_info)
 end
-function turing_part_model(
+function turing_part_parameters_model(
     part, ::Val{name}, sessions_info::MultipleSessionsInfo
 ) where {name}
     return prefix(

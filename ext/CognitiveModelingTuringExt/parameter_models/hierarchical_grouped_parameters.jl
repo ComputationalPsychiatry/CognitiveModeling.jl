@@ -6,7 +6,7 @@ Turing.@model function CognitiveModeling.turing_parameters_model(
     sessions_info::MultipleSessionsInfo,
 )
     parameters ~ to_submodel(
-        turing_hierarchical_parameters(
+        turing_hierarchical_grouped_parameters(
             parameters_model.parameters, parameters_model.groups
         ),
         false,
@@ -29,39 +29,41 @@ Turing.@model function CognitiveModeling.turing_parameters_model(
 end
 
 """
-    turing_hierarchical_parameters(parameters, groups)
+    turing_hierarchical_grouped_parameters(parameters, groups)
 
 Turing.jl model which samples one parameter at a time from `parameters`, the
 [`HierarchicalParameter`](@ref) of each parameter of a
-[`HierarchicalGroupedParameters`](@ref), with [`turing_hierarchical_parameter`](@ref) under
-the parameter's name, and returns them in a `NamedTuple`, each as a vector with a value for
-every session. `groups` has the groups of the sessions for each parameter. Used by
-`HierarchicalGroupedParameters`.
+[`HierarchicalGroupedParameters`](@ref), with
+[`turing_hierarchical_grouped_parameter`](@ref) under the parameter's name, and returns them
+in a `NamedTuple`, each as a vector with a value for every session. `groups` has the groups
+of the sessions for each parameter. Used by `HierarchicalGroupedParameters`.
 """
-Turing.@model function turing_hierarchical_parameters(
+Turing.@model function turing_hierarchical_grouped_parameters(
     parameters::NamedTuple{names}, groups::NamedTuple
 ) where {names}
     name = first(names)
     values ~ to_submodel(
         prefix(
-            turing_hierarchical_parameter(first(parameters), first(groups)), VarName{name}()
+            turing_hierarchical_grouped_parameter(first(parameters), first(groups)),
+            VarName{name}(),
         ),
         false,
     )
     other_values ~ to_submodel(
-        turing_hierarchical_parameters(Base.tail(parameters), Base.tail(groups)), false
+        turing_hierarchical_grouped_parameters(Base.tail(parameters), Base.tail(groups)),
+        false,
     )
     return merge(NamedTuple{(name,)}((values,)), other_values)
 end
 
-Turing.@model function turing_hierarchical_parameters(
+Turing.@model function turing_hierarchical_grouped_parameters(
     parameters::NamedTuple{()}, groups::NamedTuple
 )
     return (;)
 end
 
 """
-    turing_hierarchical_parameter(hierarchical_parameter, groups)
+    turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
 
 Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
 a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
@@ -69,9 +71,9 @@ each group, with [`turing_hierarchical_group_parameters`](@ref) from the priors 
 `groups`, then the value of every session from the distribution of its group, with
 [`turing_hierarchical_centered_values`](@ref) or
 [`turing_hierarchical_standardized_values`](@ref), and returns the values with the
-transformation applied to each. Used by [`turing_hierarchical_parameters`](@ref).
+transformation applied to each. Used by [`turing_hierarchical_grouped_parameters`](@ref).
 """
-Turing.@model function turing_hierarchical_parameter(hierarchical_parameter, groups)
+Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
 
     #Sample the parameters of the group-level distribution, each with a value for every group, or one value without groups
     group_parameters ~
@@ -107,7 +109,7 @@ Turing.jl model which samples one parameter of a group-level distribution at a t
 `group_priors`, the priors of the parameters under their names, each for every group with
 [`turing_hierarchical_group_parameter`](@ref) under the name of its prior, and returns them
 in a `NamedTuple`, each as a vector with a value for every group, or as one value without
-groups. Used by [`turing_hierarchical_parameter`](@ref).
+groups. Used by [`turing_hierarchical_grouped_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_group_parameters(
     group_priors::NamedTuple{names}
@@ -150,13 +152,14 @@ Turing.@model function turing_hierarchical_group_parameter(priors_of_groups::Nam
 end
 
 """
-    turing_hierarchical_centered_values(distribution, group_parameters, group_of_each_session)
+    turing_hierarchical_centered_values(distribution, group_parameters,
+                                        group_of_each_session)
 
 Turing.jl model which samples the value of one parameter for every session from the
 distribution of the session's group, as the variable `session`, so that under the
 parameter's prefix it is named like `learning_rate.session`. `distribution` makes the
 distribution of a group from its parameters, and `nothing` is a normal distribution. Used by
-[`turing_hierarchical_parameter`](@ref).
+[`turing_hierarchical_grouped_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_centered_values(
     distribution, group_parameters::NamedTuple, group_of_each_session
@@ -178,7 +181,7 @@ the variable `standardized`, so that under the parameter's prefix it is named li
 `learning_rate.standardized`, and returns the value of every session: the mean of its group
 plus the standardized value times the standard deviation of its group, which are the two
 group-level parameters. This is the non-centered form of a normal distribution. Used by
-[`turing_hierarchical_parameter`](@ref).
+[`turing_hierarchical_grouped_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_standardized_values(
     group_parameters::NamedTuple, group_of_each_session
