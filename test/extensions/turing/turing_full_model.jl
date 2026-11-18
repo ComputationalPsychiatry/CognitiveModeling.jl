@@ -67,6 +67,11 @@ const FULL_TABLE = (;
 )
 const FULL_PRIORS = (; learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5))
 
+#The same, where S1 and S3 each miss a reward, so that with an environment only they run it
+const TWO_MISSING_REWARDS_TABLE = (;
+    FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, missing, 0.0, 1.0]
+)
+
 #Maps the real line to the values between 0 and 1, as a transformation for a learning rate
 to_unit_interval(x) = 1 / (1 + exp(-x))
 
@@ -689,6 +694,62 @@ end
               sum(logpdf.(LogNormal(0, 0.5), [1.0, 2.0, 3.0])) +
               sum(logpdf.(Normal(0.6, 1.0), [1.0, 0.8, 1.0])) +
               sessions_by_hand(with_imputed, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0])
+    end
+
+    @testset "Sessions that run their environment and a session that doesn't save their trajectories in one vector, also in parallel" begin
+        #S1 and S3 run their environment, whose mean is fixed, to impute a reward each, and S2 doesn't run it
+        sessions_info = sessions_for_test(
+            SessionRescorlaWagner(),
+            TWO_MISSING_REWARDS_TABLE;
+            environment=RewardsAroundMean(),
+            impute_missing_actions=false,
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
+        )
+        @test [session.includes_environment for session in sessions_info.sessions] == [true, false, true]
+        in_sequence = saving_full_model(
+            IndependentParameters(FULL_PRIORS),
+            sessions_info;
+            fixed_environment_parameters=(; mean_reward=0.6),
+        )
+        given = Dict(
+            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(session[1].timestep[2].environment.reward.imputed) => 0.8,
+            @varname(session[3].timestep[2].environment.reward.imputed) => 0.1,
+        )
+
+        #The rewards of S1 and S3, imputed and recorded, are scored against the environment, and those of S2 aren't
+        with_imputed = (;
+            TWO_MISSING_REWARDS_TABLE...,
+            reward=[1.0, 0.8, 1.0, 0.0, 1.0, 1.0, 0.1, 0.0, 1.0],
+        )
+        @test logjoint(in_sequence, given) ≈
+            sum(logpdf.(Beta(2, 2), [0.2, 0.3, 0.4])) +
+              sum(logpdf.(LogNormal(0, 0.5), [1.0, 2.0, 3.0])) +
+              sum(logpdf.(Normal(0.6, 1.0), [1.0, 0.8, 1.0, 1.0, 0.1, 0.0, 1.0])) +
+              sessions_by_hand(with_imputed, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0])
+
+        #One vector of one type holds what each session saved: the states from the imputed rewards, and a record of the environment, which saves nothing, for every saved timestep, empty for S2 too
+        saved = returned(in_sequence, given).saved_trajectories
+        @test isconcretetype(eltype(saved))
+        @test saved[1].states[3].expected_reward ≈ 0.6 + 0.2 * (0.8 - 0.6)
+        @test saved[3].states[3].expected_reward ≈ 0.7 + 0.4 * (0.1 - 0.7)
+        @test saved[1].environment.states == fill((;), 4)
+        @test saved[2].environment.states == fill((;), 3)
+        @test saved[2].environment.observations == fill((;), 3)
+
+        #In parallel, the log density and what the sessions saved are the same
+        in_parallel = Turing.DynamicPPL.setthreadsafe(
+            saving_full_model(
+                IndependentParameters(FULL_PRIORS),
+                sessions_info;
+                fixed_environment_parameters=(; mean_reward=0.6),
+                parallelization=ParallelSessions(),
+            ),
+            true,
+        )
+        @test logjoint(in_parallel, given) ≈ logjoint(in_sequence, given)
+        @test returned(in_parallel, given).saved_trajectories == saved
     end
 
     @testset "A warning says when both parameter models sample a parameter which the cognitive model and the environment share, unless the prefixes are included" begin

@@ -490,6 +490,83 @@ const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
     TURING_REGRESSION_SESSIONS,
 )
 
+# Sets of sessions where only some have latent variables. The first and the third session of three impute their missing
+# actions, which the model gives continuously, and the second has all of its own
+const TURING_COMPLETE_CONTINUOUS_CHOICES = (;
+    choice=[0.3, 0.6, 0.5, 0.4, 0.7, 0.4, 0.5, 0.2, 0.8, 0.6]
+)
+const TURING_FULL_MODEL_WITH_SOME_SESSIONS_IMPUTING_ACTIONS = turing_full_model(
+    IndependentParameters((; learning_rate=Turing.Flat(), noise_scale=Turing.Flat())),
+    MultipleSessionsInfo(
+        TuringContinuousAction(),
+        (;
+            id=repeat([1, 2, 3]; inner=10),
+            reward=TURING_TABLE.reward,
+            choice=[
+                TURING_CONTINUOUS_CHOICES.choice
+                TURING_COMPLETE_CONTINUOUS_CHOICES.choice
+                reverse(TURING_CONTINUOUS_CHOICES.choice)
+            ],
+        );
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+
+# The first and the third session run their environment, whose scale is fixed, to impute their missing rewards, and the
+# second, which has all of its rewards, doesn't run it
+const TURING_FULL_MODEL_WITH_SOME_SESSIONS_RUNNING_THE_ENVIRONMENT = turing_full_model(
+    IndependentParameters((;
+        learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
+    )),
+    MultipleSessionsInfo(
+        TuringRescorlaWagner(),
+        (;
+            id=repeat([1, 2, 3]; inner=10),
+            reward=[
+                TURING_MISSING_REWARDS.reward
+                reverse(TURING_REWARDS.reward)
+                reverse(TURING_MISSING_REWARDS.reward)
+            ],
+            choice=TURING_TABLE.choice,
+        );
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+        environment=TuringNoisyRewards(),
+    );
+    fixed_environment_parameters=(; scale=1.0),
+)
+
+# Sessions of three, six and ten timesteps, where only the second and the third impute missing actions, at the same
+# timesteps
+const TURING_FULL_MODEL_WITH_SESSIONS_OF_DIFFERENT_LENGTHS = turing_full_model(
+    IndependentParameters((; learning_rate=Turing.Flat(), noise_scale=Turing.Flat())),
+    MultipleSessionsInfo(
+        TuringContinuousAction(),
+        (;
+            id=[fill(1, 3); fill(2, 6); fill(3, 10)],
+            reward=[
+                TURING_REWARDS.reward[1:3]
+                TURING_REWARDS.reward[1:6]
+                TURING_REWARDS.reward
+            ],
+            choice=[
+                TURING_COMPLETE_CONTINUOUS_CHOICES.choice[1:3]
+                TURING_CONTINUOUS_CHOICES.choice[1:6]
+                TURING_CONTINUOUS_CHOICES.choice
+            ],
+        );
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+
 #The session of each case, prepared once
 function rescorla_wagner_session(who_starts)
     return SessionInfo(TuringRescorlaWagner(), TURING_REWARDS, TURING_CHOICES; who_starts)
@@ -731,6 +808,24 @@ const TURING_CASES = [
             0.2,
             -0.1,
         ],
+        reactant=false,
+    ),
+    (;
+        name="turing full model where only the first and the third session impute missing actions",
+        f=log_density_of(TURING_FULL_MODEL_WITH_SOME_SESSIONS_IMPUTING_ACTIONS),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.5, 0.4, 0.6, 0.3],
+        reactant=false,
+    ),
+    (;
+        name="turing full model where only the first and the third session run their environment",
+        f=log_density_of(TURING_FULL_MODEL_WITH_SOME_SESSIONS_RUNNING_THE_ENVIRONMENT),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.6, 0.2, 0.8, -0.1, 0.5, 0.3, 0.9, 0.1],
+        reactant=false,
+    ),
+    (;
+        name="turing full model of sessions of different lengths, where only the second and the third impute missing actions",
+        f=log_density_of(TURING_FULL_MODEL_WITH_SESSIONS_OF_DIFFERENT_LENGTHS),
+        x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0, 0.5, 0.4, 0.6, 0.3],
         reactant=false,
     ),
 ]

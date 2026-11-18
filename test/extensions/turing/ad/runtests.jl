@@ -53,6 +53,18 @@ const KNOWN_FAILURES = [
             "turing full model with a composite of centered group parameters and independent ones",
             "turing full model with parameters from regressions",
             "turing full model with a regression with a family distribution",
+            "turing full model where only the first and the third session impute missing actions",
+            "turing full model where only the first and the third session run their environment",
+            "turing full model of sessions of different lengths, where only the second and the third impute missing actions",
+        ],
+    ),
+    (;
+        bug="Mooncake forward throws an UndefRefError on a full model where only some sessions have latent variables. Preparing its cache, it reads every element of the arrays that the differentiated function holds, here through the closure over the LogDensityFunction, and DynamicPPL's GrowableArray has elements that aren't assigned for the sessions without latent variables. Turing.jl's samplers, which differentiate through LogDensityFunction(model; adtype), aren't affected",
+        backends=["Mooncake forward"],
+        cases=[
+            "turing full model where only the first and the third session impute missing actions",
+            "turing full model where only the first and the third session run their environment",
+            "turing full model of sessions of different lengths, where only the second and the third impute missing actions",
         ],
     ),
     (;

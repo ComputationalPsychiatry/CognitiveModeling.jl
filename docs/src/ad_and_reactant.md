@@ -59,14 +59,15 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, Revers
 | Enzyme forward and reverse without runtime activity | `simulate` with a [`FixedObservationsEnvironment`](@ref) whose observations have two types, such as a reward that is `NoValue` on some timesteps | throws an `EnzymeRuntimeActivityError` | use runtime activity, which is right. Observations of one type pass |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
 | Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session with one observation, which is `NoValue` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine, and so is a session with three observations of which one is `NoValue` on some timesteps |
+| Mooncake forward | the log density of a Turing.jl full model where only some sessions have latent variables, such as imputed values, differentiated as a function that holds the model's `LogDensityFunction` | throws an `UndefRefError` | a bug in Mooncake.jl; Turing.jl's samplers aren't affected, since they differentiate through `LogDensityFunction(model; adtype)`, which is right |
 
 A state which depends on the parameters from the start isn't affected, and neither is
 `simulate!` on single observations. A simulation where an observation isn't made on every
 timestep is right on every backend when the observations aren't saved, and on Enzyme's
 forward mode when they are. The other forms of Enzyme, and the other backends, are right on
-all of these cases. ForwardDiff, ReverseDiff and Mooncake are right on every Turing.jl case,
-and so are both forms of Enzyme with runtime activity on a session where every column of the
-data has one type.
+all of these cases. ForwardDiff, ReverseDiff and Mooncake's reverse mode are right on every
+Turing.jl case, Mooncake's forward mode on every case but those above, and both forms of
+Enzyme with runtime activity on a session where every column of the data has one type.
 
 ## Pitfalls
 

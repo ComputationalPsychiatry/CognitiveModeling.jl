@@ -134,6 +134,26 @@
         )
     end
 
+    @testset "A fit where only some sessions run their environment is simulated with the environment of every session" begin
+        some_running = some_sessions_running_environment()
+        prior_chain = sample(Xoshiro(11), some_running, Prior(), 5; progress=false)
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
+            Xoshiro(12),
+            some_running,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; inputs=:reward),
+        )
+
+        #Every session observes rewards that its environment gives for each of its timesteps, S2 too, which didn't run it in the fit, so that its rewards aren't those in the data
+        for (name, n_timesteps) in
+            ((@varname(S1.reward), 3), (@varname(S2.reward), 2), (@varname(S3.reward), 4))
+            @test all(rewards -> length(rewards) == n_timesteps + 1, vec(simulated[name]))
+        end
+        @test all(
+            rewards -> rewards[2:end] != [0.0, 1.0], vec(simulated[@varname(S2.reward)])
+        )
+    end
+
     @testset "A chain that isn't a FlexiChain is an error, with or without a random number generator" begin
         not_a_chain = (; learning_rate=[0.3])
         @test_throws "predict_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." predict_session_trajectories(

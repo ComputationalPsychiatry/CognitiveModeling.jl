@@ -17,6 +17,20 @@ const DIFFERENT_LENGTHS_TABLE = (;
     choice=Union{Missing,Bool}[true, false, missing, true, true, false, true, missing],
 )
 
+#A full model of the sessions of TWO_MISSING_REWARDS_TABLE, where S1 and S3 run their environment, whose mean is fixed, to impute a reward each, and S2 doesn't run it
+function some_sessions_running_environment()
+    return turing_full_model(
+        IndependentParameters(FULL_PRIORS),
+        sessions_for_test(
+            SessionRescorlaWagner(),
+            TWO_MISSING_REWARDS_TABLE;
+            environment=RewardsAroundMean(),
+            impute_missing_actions=false,
+        );
+        fixed_environment_parameters=(; mean_reward=0.6),
+    )
+end
+
 @testset "get_session_trajectories" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
     sessions_info = sessions_for_test(; impute_missing_actions=false)
@@ -270,6 +284,44 @@ const DIFFERENT_LENGTHS_TABLE = (;
         parameters = get_session_parameters(different_lengths, prior_chain)
         @test vec(parameters[@varname(S3.learning_rate)]) ==
             map(rates -> rates[3], vec(prior_chain[@varname(learning_rate.session)]))
+    end
+
+    @testset "A fit where only some sessions run their environment can be read, also with the record of every session's environment" begin
+        some_running = some_sessions_running_environment()
+        prior_chain = sample(Xoshiro(9), some_running, Prior(), 5; progress=false)
+        session_trajectories = @test_logs match_mode = :any get_session_trajectories(
+            some_running,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; inputs=:reward),
+            environment_save_history=SaveHistory(; outputs=:reward),
+        )
+
+        #On their second timestep, S1 and S3 observed the rewards imputed in the fit, and S2 observed those in the data
+        @test map(rewards -> rewards[3], vec(session_trajectories[@varname(S1.reward)])) ==
+            vec(prior_chain[@varname(session[1].timestep[2].environment.reward.imputed)])
+        @test map(rewards -> rewards[3], vec(session_trajectories[@varname(S3.reward)])) ==
+            vec(prior_chain[@varname(session[3].timestep[2].environment.reward.imputed)])
+        @test all(
+            rewards -> rewards[2:end] == [0.0, 1.0],
+            vec(session_trajectories[@varname(S2.reward)]),
+        )
+
+        #Every session's environment, which runs for its record, S2's too, gave the same rewards
+        for (environment_name, cognitive_name) in (
+            (@varname(S1.environment.reward), @varname(S1.reward)),
+            (@varname(S2.environment.reward), @varname(S2.reward)),
+            (@varname(S3.environment.reward), @varname(S3.reward)),
+        )
+            @test vec(session_trajectories[environment_name]) ==
+                vec(session_trajectories[cognitive_name])
+        end
+
+        #The parameters of the sessions are read in the same way
+        parameters = get_session_parameters(some_running, prior_chain)
+        @test vec(parameters[@varname(S2.inverse_temperature)]) == map(
+            temperatures -> temperatures[2],
+            vec(prior_chain[@varname(inverse_temperature.session)]),
+        )
     end
 
     @testset "A model of one's own is an error" begin
