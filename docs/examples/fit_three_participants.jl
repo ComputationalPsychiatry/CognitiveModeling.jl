@@ -17,7 +17,7 @@ function CognitiveModeling.initialize_state(model::PredictingRescorlaWagner, par
     return (; expected_value=parameters.initial_value)
 end
 
-function CognitiveModeling.apply_timestep_model(
+function CognitiveModeling.run_timestep(
     model::PredictingRescorlaWagner, context::ModelContext
 )
 
@@ -109,7 +109,7 @@ sessions_info = MultipleSessionsInfo(
 
 #Each participant has their own parameters, all from the same priors. The initial value isn't fitted, so it takes its default.
 #The parameters are named after the parameters model's names, so the learning rate of the third participant is learning_rate.session[3]
-cognitive_parameters_model = IndependentSessionParameters((;
+cognitive_parameters_model = IndependentParameters((;
     learning_rate=Beta(2, 2), noise=LogNormal(-2, 1)
 ))
 

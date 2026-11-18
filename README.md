@@ -69,6 +69,12 @@ julia --project=test/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include(
 julia --project=test/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/juliacontrol/runtests.jl")'
 ```
 
+The examples in `docs/examples` run to the end in an environment of their own:
+
+```bash
+julia --project=test/examples -e 'using Pkg; Pkg.instantiate(); include("test/examples/runtests.jl")'
+```
+
 Run the benchmarks of simulating and of fitting with each automatic differentiation backend. The `Benchmarks` workflow runs them on every push to `dev` and `main`, and keeps a history of the results with charts at <https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/benchmarks/>:
 
 ```bash

@@ -57,7 +57,8 @@ jobs:
         # Each suite has its own environment. The Turing.jl extension's tests have one because Turing.jl holds
         # FlexiChains.jl at an older version than the main suite tests, and they run as the main suite does, with
         # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own inside it.
-        # The tutorials that the documentation shows without running have one each, with the packages they use
+        # The tutorials that the documentation shows without running have one each, with the packages they use, and so do
+        # the examples in docs/examples, which run to the end
         include:
           - name: ad
             path: test/ad_and_reactant/ad
@@ -75,6 +76,8 @@ jobs:
             path: test/tutorials/pomdps
           - name: juliacontrol tutorial
             path: test/tutorials/juliacontrol
+          - name: docs examples
+            path: test/examples
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3

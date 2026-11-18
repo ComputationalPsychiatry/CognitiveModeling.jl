@@ -6,6 +6,7 @@
 /test/ad_and_reactant/**/Manifest*.toml
 /test/extensions/**/Manifest*.toml
 /test/tutorials/**/Manifest*.toml
+/test/examples/Manifest*.toml
 /benchmark/Manifest*.toml
 /benchmark/results.json
 /docs/build/
