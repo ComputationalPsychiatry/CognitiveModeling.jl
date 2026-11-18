@@ -1,17 +1,13 @@
 ### EACH PARAMETER SAMPLED FROM THE DISTRIBUTION OF A GROUP OF SESSIONS ###
 
-#Each parameter of every session sampled from the distribution of its group, with the group of every session found when the full model was prepared
-Turing.@model function CognitiveModeling.turing_parameters_model(
+#Each parameter of every session sampled from the distribution of its group, with the group of every session found when the full model was prepared, by the model that goes through the parameters
+function CognitiveModeling.turing_parameters_model(
     parameters_model::HierarchicalGroupedParameters{<:NamedTuple,<:NamedTuple},
-    sessions_info::MultipleSessionsInfo,
+    ::MultipleSessionsInfo,
 )
-    parameters ~ to_submodel(
-        turing_hierarchical_grouped_parameters(
-            parameters_model.parameters, parameters_model.groups
-        ),
-        false,
+    return turing_hierarchical_grouped_parameters(
+        parameters_model.parameters, parameters_model.groups
     )
-    return parameters
 end
 
 #One that wasn't prepared is an error when its model is made, since it would find the group of every session on each evaluation
@@ -65,10 +61,14 @@ end
 Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
 a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
 each group, with [`turing_hierarchical_group_parameters`](@ref) from the priors in
-`groups`, then the value of every session from the distribution of its group, with
-[`turing_hierarchical_centered_values`](@ref) or
-[`turing_hierarchical_non_centered_values`](@ref), and returns the values with the
-transformation applied to each. Used by [`turing_hierarchical_grouped_parameters`](@ref).
+`groups`, and then the value of every session. Centered, the value of every session is
+sampled from the distribution of its group, which [`group_level_distribution`](@ref) makes,
+as the variable `session`, named like `learning_rate.session` under the parameter's prefix.
+Non-centered, a standard normal value is sampled for every session, as the variable
+`session_z`, named like `learning_rate.session_z`, and the value of the session is the mean
+of its group plus that value times the standard deviation of its group. It returns the
+values with the transformation applied to each. Used by
+[`turing_hierarchical_grouped_parameters`](@ref).
 """
 Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
 
@@ -76,23 +76,24 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
     group_parameters ~
     to_submodel(turing_hierarchical_group_parameters(groups.group_priors), false)
 
-    #Sample the value of every session, from the distribution of its group, or non-centered, as a standard normal value
+    #Sample the value of every session from the distribution of its group, or non-centered, as a standard normal value which the group's mean shifts and its standard deviation scales
+    group_of_each_session = groups.group_of_each_session
     if hierarchical_parameter.centered
-        session_values ~ to_submodel(
-            turing_hierarchical_centered_values(
-                hierarchical_parameter.distribution,
-                group_parameters,
-                groups.group_of_each_session,
+        session ~ arraydist(
+            map(
+                group -> group_level_distribution(
+                    hierarchical_parameter.distribution, group_parameters, group
+                ),
+                group_of_each_session,
             ),
-            false,
         )
+        session_values = session
     else
-        session_values ~ to_submodel(
-            turing_hierarchical_non_centered_values(
-                group_parameters, groups.group_of_each_session
-            ),
-            false,
-        )
+        session_z ~ filldist(Normal(), length(group_of_each_session))
+        means, standard_deviations = values(group_parameters)
+        session_values =
+            select_by_group(means, group_of_each_session) .+
+            select_by_group(standard_deviations, group_of_each_session) .* session_z
     end
 
     #Transform every value to the scale of the parameter
@@ -149,54 +150,13 @@ Turing.@model function turing_hierarchical_group_parameter(priors_of_groups::Nam
 end
 
 """
-    turing_hierarchical_centered_values(distribution, group_parameters,
-                                        group_of_each_session)
-
-Turing.jl model which samples the value of one parameter for every session from the
-distribution of the session's group, as the variable `session`, so that under the
-parameter's prefix it is named like `learning_rate.session`. `distribution` makes the
-distribution of a group from its parameters, and `nothing` is a normal distribution. Used by
-[`turing_hierarchical_grouped_parameter`](@ref).
-"""
-Turing.@model function turing_hierarchical_centered_values(
-    distribution, group_parameters::NamedTuple, group_of_each_session
-)
-    session ~ arraydist(
-        map(
-            group -> group_level_distribution(distribution, group_parameters, group),
-            group_of_each_session,
-        ),
-    )
-    return session
-end
-
-"""
-    turing_hierarchical_non_centered_values(group_parameters, group_of_each_session)
-
-Turing.jl model which samples a standard normal value of one parameter for every session,
-as the variable `session_z`, so that under the parameter's prefix it is named like
-`learning_rate.session_z`, and returns the value of every session: the mean of its group
-plus that value times the standard deviation of its group, which are the two group-level
-parameters. This is the non-centered form of a normal distribution. Used by
-[`turing_hierarchical_grouped_parameter`](@ref).
-"""
-Turing.@model function turing_hierarchical_non_centered_values(
-    group_parameters::NamedTuple, group_of_each_session
-)
-    session_z ~ filldist(Normal(), length(group_of_each_session))
-    means, standard_deviations = values(group_parameters)
-    return select_by_group(means, group_of_each_session) .+
-           select_by_group(standard_deviations, group_of_each_session) .* session_z
-end
-
-"""
     group_level_distribution(distribution, group_parameters, group)
 
 Return the distribution of the group numbered `group`, made by `distribution` from the
 values that the group has in `group_parameters`, a `NamedTuple` with a vector over the
 groups, or one value without groups, for each parameter of the distribution, in the order
 the distribution takes them. `nothing` makes a normal distribution. Used by
-[`turing_hierarchical_centered_values`](@ref).
+[`turing_hierarchical_grouped_parameter`](@ref).
 """
 function group_level_distribution(distribution, group_parameters::NamedTuple, group)
     return distribution(
@@ -213,7 +173,7 @@ end
 Return the values in `values`, a vector with a value for every group, of the groups
 numbered in `groups`, which is one group number or a vector of them, as `values[groups]`
 does. Without groups, `values` is one value that every group has, and is returned as it is.
-Used by [`turing_hierarchical_non_centered_values`](@ref) and
+Used by [`turing_hierarchical_grouped_parameter`](@ref) and
 [`group_level_distribution`](@ref).
 """
 select_by_group(values::AbstractVector, groups) = values[groups]
