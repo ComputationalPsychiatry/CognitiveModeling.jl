@@ -11,6 +11,9 @@ A Julia package for computational modeling of cognition and behavior. It is a re
 
 Pre-created models live in a separate package, [PremadeCognitiveModels.jl](https://github.com/ComputationalPsychiatry/PremadeCognitiveModels.jl).
 
+## Use of generative AI
+This package has been written with assistance from Large Language Models, but under close supervision, and all generated code has been hand-reviewed. 
+
 ## Development
 
 Work happens on `dev`, and `main` holds released code, so open pull requests against `dev`.
