@@ -112,17 +112,15 @@ function store_output_distributions_for_conditioning(
     distributions_for_conditioning::NamedTuple,
     outputs_to_condition_on::NamedTuple,
 ) where {names}
+
+    #Go through the values of each output, in the order of the vectors, so that each keeps its own types
     return NamedTuple{names}(
         map(
-            name -> if getproperty(outputs_to_condition_on, name)
-                push_value!(
-                    getproperty(distributions, name),
-                    getproperty(distributions_for_conditioning, name),
-                )
-            else
-                getproperty(distributions, name)
-            end,
-            names,
+            (vector, distribution, to_condition_on) ->
+                to_condition_on ? push_value!(vector, distribution) : vector,
+            values(distributions),
+            values(NamedTuple{names}(distributions_for_conditioning)),
+            values(NamedTuple{names}(outputs_to_condition_on)),
         ),
     )
 end
