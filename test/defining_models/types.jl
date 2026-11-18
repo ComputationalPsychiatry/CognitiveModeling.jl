@@ -331,7 +331,9 @@ using Random: Xoshiro, default_rng
 
     @testset "ParameterDomain keeps the type of its values in its own type, and holds its bounds directly" begin
         @test ParameterDomain(; type=Integer, lower=1) isa
-            ParameterDomain{Integer,Int,Float64}
+            ParameterDomain{Integer,Integer,Int,Float64}
+        @test ParameterDomain(; type=AbstractVector{Real}, upper=1) isa
+            ParameterDomain{AbstractVector{Real},Real,Float64,Int}
         @test ParameterDomain(; type=AbstractString) isa ParameterDomain{AbstractString}
         @test isbitstype(typeof(ParameterDomain(; lower=0, upper=1)))
         @test isbitstype(typeof(ParameterDomain(; type=Symbol)))
@@ -345,7 +347,7 @@ using Random: Xoshiro, default_rng
         ) ParameterDomain(; type=Float64)
         @test_throws ArgumentError ParameterDomain(; type=AbstractFloat, lower=0)
         @test_throws ArgumentError(
-            "A ParameterDomain with type = Symbol was given the bounds lower = 0 and upper = Inf, but only a parameter that is a real number has bounds.",
+            "A ParameterDomain with type = Symbol was given the bounds lower = 0 and upper = Inf, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
         ) ParameterDomain(; type=Symbol, lower=0)
         @test_throws ArgumentError ParameterDomain(; type=AbstractString, upper=3)
         @test_throws ArgumentError(
@@ -361,6 +363,47 @@ using Random: Xoshiro, default_rng
         @test_throws TypeError ParameterDomain(; lower="0")
     end
 
+    @testset "ParameterDomain takes array types and tuple types, with the bounds for each element" begin
+        vector = ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
+        @test (vector.type, vector.lower, vector.upper) === (AbstractVector{Real}, 0, 1)
+        @test ParameterDomain(; type=AbstractMatrix{Integer}, lower=1).type ===
+            AbstractMatrix{Integer}
+        #A type of the elements that is left open is an error, since it is made anew on every call
+        @test_throws ArgumentError(
+            "A ParameterDomain was given type = AbstractVector{<:Real}, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
+        ) ParameterDomain(; type=AbstractVector{<:Real}, lower=0, upper=1)
+        @test_throws ArgumentError ParameterDomain(; type=AbstractVector)
+        @test_throws ArgumentError ParameterDomain(; type=Vector{<:Integer})
+        @test_throws ArgumentError ParameterDomain(; type=NTuple{3})
+        @test ParameterDomain(; type=AbstractVector{Any}).type === AbstractVector{Any}
+        @test ParameterDomain(; type=NTuple{3,Real}, lower=0).type === NTuple{3,Real}
+        @test ParameterDomain(; type=Tuple{Vararg{Real}}).type === Tuple{Vararg{Real}}
+        @test ParameterDomain(; type=AbstractVector{Symbol}).type === AbstractVector{Symbol}
+        #The type of the elements is read from the type, also when it is left open
+        type_of_elements = CognitiveModeling.type_of_elements
+        @test type_of_elements(Real) === Real
+        @test type_of_elements(Symbol) === Symbol
+        @test type_of_elements(AbstractVector{Real}) === Real
+        @test type_of_elements(Vector{Integer}) === Integer
+        @test type_of_elements(AbstractMatrix{Bool}) === Bool
+        @test type_of_elements(AbstractArray{Real}) === Real
+        @test type_of_elements(AbstractVector{Any}) === Any
+        @test type_of_elements(NTuple{3,Real}) === Real
+        @test type_of_elements(Tuple{Vararg{Integer}}) === Integer
+        #Elements that are floating-point numbers leave out the others, as a single one does
+        @test_throws ArgumentError(
+            "A ParameterDomain was given type = Vector{Float64}, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
+        ) ParameterDomain(; type=Vector{Float64})
+        @test_throws ArgumentError ParameterDomain(; type=AbstractVector{<:AbstractFloat})
+        @test_throws ArgumentError ParameterDomain(; type=NTuple{2,Float64})
+        #Only elements that are real numbers have bounds
+        @test_throws ArgumentError ParameterDomain(; type=AbstractVector{Symbol}, lower=0)
+        @test_throws ArgumentError ParameterDomain(;
+            type=AbstractVector{<:AbstractVector{<:Real}}, upper=1
+        )
+        @test_throws ArgumentError ParameterDomain(; type=AbstractVector, lower=0)
+    end
+
     @testset "ParameterDomain is shown as it is written, without the defaults" begin
         @test repr(ParameterDomain()) == "ParameterDomain()"
         @test repr(ParameterDomain(; lower=0, upper=1)) ==
@@ -371,9 +414,11 @@ using Random: Xoshiro, default_rng
         @test repr(ParameterDomain(; type=Symbol)) == "ParameterDomain(; type = Symbol)"
         @test repr("text/plain", ParameterDomain(; type=Bool)) ==
             "ParameterDomain(; type = Bool)"
+        @test repr(ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
+            "ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)"
     end
 
-    @testset "A parameter is discrete when its type is one of whole numbers, or isn't one of real numbers" begin
+    @testset "A parameter is discrete when its type, or the type of its elements, is one of whole numbers, or isn't one of real numbers" begin
         @test !CognitiveModeling.is_discrete(ParameterDomain())
         @test !CognitiveModeling.is_discrete(ParameterDomain(; lower=0, upper=1))
         @test !CognitiveModeling.is_discrete(ParameterDomain(; type=Rational))
@@ -382,6 +427,12 @@ using Random: Xoshiro, default_rng
         @test CognitiveModeling.is_discrete(ParameterDomain(; type=Bool))
         @test CognitiveModeling.is_discrete(ParameterDomain(; type=Symbol))
         @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractString))
+        #An array or a tuple is discrete when its elements are
+        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Real}))
+        @test !CognitiveModeling.is_discrete(ParameterDomain(; type=NTuple{2,Real}))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Integer}))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractMatrix{Bool}))
+        @test CognitiveModeling.is_discrete(ParameterDomain(; type=AbstractVector{Symbol}))
     end
 
     @testset "ParameterDomainError has the message it is given" begin

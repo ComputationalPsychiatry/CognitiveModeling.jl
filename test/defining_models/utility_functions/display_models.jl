@@ -242,6 +242,22 @@ Outputs: none"""
         @test describe(ParameterDomain(; type=AbstractString)) == "AbstractString"
     end
 
+    @testset "A domain of arrays or tuples is written as the values of each element" begin
+        describe = CognitiveModeling.describe_domain
+        @test describe(ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)) ==
+            "[0, 1] for each element of a vector"
+        @test describe(ParameterDomain(; type=AbstractMatrix{Integer}, lower=1)) ==
+            "{1, 2, …} for each element of a matrix"
+        @test describe(ParameterDomain(; type=AbstractArray{Real})) ==
+            "(-∞, ∞) for each element of an array"
+        @test describe(ParameterDomain(; type=NTuple{3,Real}, lower=0)) ==
+            "[0, ∞) for each element of a tuple of 3"
+        @test describe(ParameterDomain(; type=Tuple{Vararg{Bool}})) ==
+            "{false, true} for each element of a tuple"
+        @test describe(ParameterDomain(; type=AbstractVector{Symbol})) ==
+            "Symbol for each element of a vector"
+    end
+
     @testset "A model whose domains aren't right is shown without them, and without an error" begin
         @test occursin(
             "Parameters: learning_rate\n", repr("text/plain", ModelWithDomainsInAVector())

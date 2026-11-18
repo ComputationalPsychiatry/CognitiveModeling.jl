@@ -586,8 +586,8 @@ struct StateKind <: AbstractAttributeKind end
     ParameterDomain(; type=Real, lower=-Inf, upper=Inf)
 
 The values that a parameter of a cognitive model or an environment model can take, which
-the model gives for it in [`parameter_domains`](@ref): values of `type`, between `lower` and
-`upper` when they are real numbers.
+the model gives for it in [`parameter_domains`](@ref): values of `type`, with the numbers
+in them between `lower` and `upper`.
 
 # Keyword arguments
 - `type=Real`: the type of the parameter's values. An abstract type takes every type of its
@@ -595,14 +595,22 @@ the model gives for it in [`parameter_domains`](@ref): values of `type`, between
   differentiation package alike, and no value is converted. A type of whole numbers, such as
   `Integer`, takes every whole number, also in another number type, such as `3.0`, and
   `Bool` takes `true`, `false`, 0 and 1. A type that isn't a type of numbers, such as
-  `AbstractString` or `Symbol`, is for a parameter such as the name of a strategy. A type of
-  floating-point numbers, such as `Float64`, is an error: give `Real`, which takes them all.
+  `AbstractString` or `Symbol`, is for a parameter such as the name of a strategy. An array
+  type, such as `AbstractVector{Real}` or `AbstractMatrix{Integer}`, takes every array with
+  as many dimensions, and a tuple type, such as `NTuple{3,Real}` or `Tuple{Vararg{Real}}`,
+  takes tuples of its length, with each element a value of the type of the elements, so
+  that `AbstractVector{Real}` takes a `Vector{Float64}` and a vector of numbers of automatic
+  differentiation alike. An array type or a tuple type that leaves the type of its elements
+  open, such as `AbstractVector{<:Real}` or `NTuple{3}`, is an error: give the type of the
+  elements, as `AbstractVector{Real}` does. A type of floating-point numbers, such as
+  `Float64` or `AbstractVector{Float64}`, is an error too: give `Real` or
+  `AbstractVector{Real}`, which take them all.
 - `lower=-Inf` and `upper=Inf`: the smallest and the largest value of a parameter that is a
-  real number, which are both in the domain. A parameter of another type has no bounds.
+  real number, or of each element of an array or a tuple of real numbers, which are both in
+  the domain. A parameter of another type has no bounds.
 
-A parameter that is an array has every element in the domain, so `type` is the type of an
-element. A parameter is discrete when its type is a type of whole numbers, or isn't a type
-of real numbers, and continuous otherwise, as
+A parameter is discrete when its type, or the type of its elements, is a type of whole
+numbers, or isn't a type of real numbers, and continuous otherwise, as
 [`CognitiveModeling.discrete_parameter_names`](@ref) and
 [`CognitiveModeling.continuous_parameter_names`](@ref) read it. The arguments are kept as
 `domain.type`, `domain.lower` and `domain.upper`.
@@ -617,29 +625,50 @@ julia> learning_rate.type, learning_rate.lower, learning_rate.upper
 
 julia> ParameterDomain(; type = Integer, lower = 1)
 ParameterDomain(; type = Integer, lower = 1)
+
+julia> ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
+ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
 ```
 """
-struct ParameterDomain{Ttype,Tlower<:Real,Tupper<:Real}
+struct ParameterDomain{Ttype,Telement,Tlower<:Real,Tupper<:Real}
     lower::Tlower
     upper::Tupper
 
-    #Takes the type of the values and the bounds, and checks that they fit together. The type is kept in the type of the domain, so that a value is checked against it without looking it up when a model runs
+    #Takes the type of the values and the bounds, and checks that they fit together. The type and the type of its elements are kept in the type of the domain, so that a value is checked against them without looking them up when a model runs
     function ParameterDomain(; type::Type=Real, lower::Real=(-Inf), upper::Real=Inf)
 
-        #A type of floating-point numbers would leave out the other ones, and the numbers of automatic differentiation packages
+        #An array type or a tuple type that leaves the type of its elements open, as AbstractVector{<:Real} does, is a new type each time parameter_domains runs, which makes every check slow, and which Mooncake.jl can't differentiate through
+        if has_open_element_type(type)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain was given type = $type, which leaves the type of its elements open. Give the type of the elements, as in AbstractVector{Real}, which takes arrays with elements of every real number type, NTuple{3,Real}, or AbstractVector{Any} for elements of any type.",
+                ),
+            )
+        end
+
+        #The type of the elements of an array or a tuple, and of a single value the type itself
+        element_type = type_of_elements(type)
+
+        #A type of floating-point numbers would leave out the other ones, and the numbers of automatic differentiation packages, also as the type of the elements
         if type <: AbstractFloat
             throw(
                 ArgumentError(
                     "A ParameterDomain was given type = $type, but a type of floating-point numbers leaves out the others, and the numbers of automatic differentiation packages. Give Real, the default, for a parameter that is a real number.",
                 ),
             )
-        end
-
-        #Only real numbers have bounds
-        if !(type <: Real) && (lower != -Inf || upper != Inf)
+        elseif element_type <: AbstractFloat
             throw(
                 ArgumentError(
-                    "A ParameterDomain with type = $type was given the bounds lower = $lower and upper = $upper, but only a parameter that is a real number has bounds.",
+                    "A ParameterDomain was given type = $type, whose elements are floating-point numbers, but these leave out the others, and the numbers of automatic differentiation packages. Give elements of type Real, as in AbstractVector{Real} or NTuple{3,Real}.",
+                ),
+            )
+        end
+
+        #Only real numbers have bounds, also as the elements of an array or a tuple
+        if !(element_type <: Real) && (lower != -Inf || upper != Inf)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain with type = $type was given the bounds lower = $lower and upper = $upper, but only a parameter that is a real number, or an array or a tuple of real numbers, has bounds.",
                 ),
             )
         end
@@ -652,8 +681,34 @@ struct ParameterDomain{Ttype,Tlower<:Real,Tupper<:Real}
                 ),
             )
         end
-        return new{type,typeof(lower),typeof(upper)}(lower, upper)
+        return new{type,element_type,typeof(lower),typeof(upper)}(lower, upper)
     end
+end
+
+"""
+    type_of_elements(type)
+
+Return the type of the elements of `type` when it is an array type or a tuple type, such as
+`Real` for `AbstractVector{Real}` or `NTuple{3,Real}`, and `type` itself otherwise. Used by
+[`ParameterDomain`](@ref).
+"""
+function type_of_elements(type::Type)
+    type <: Union{AbstractArray,Tuple} && return eltype(type)
+    return type
+end
+
+#Julia's eltype gives Any for an array type whose element type is open, as for AbstractVector{<:Real}, and also for AbstractVector{Any}, which is the only one of them whose elements are all of type Any
+"""
+    has_open_element_type(type)
+
+Return whether `type` is an array type which leaves the type of its elements open, such as
+`AbstractVector{<:Real}` or `AbstractVector`, or a tuple type with a type variable, such as
+`NTuple{3}`. Used by [`ParameterDomain`](@ref).
+"""
+function has_open_element_type(type::Type)
+    type <: AbstractArray && return eltype(type) === Any && !(type <: AbstractArray{Any})
+    type <: Tuple && return !(type isa DataType)
+    return false
 end
 
 #Reads the type of the values, which is in the type of the domain, as a property next to the bounds
@@ -680,10 +735,13 @@ end
     is_discrete(domain)
 
 Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when its
-type is a type of whole numbers, or isn't a type of real numbers. Used by
-[`discrete_parameter_names`](@ref) and by the display of a model.
+type, or the type of its elements when it is an array type or a tuple type, is a type of
+whole numbers, or isn't a type of real numbers. Used by [`discrete_parameter_names`](@ref)
+and by the display of a model.
 """
-is_discrete(::ParameterDomain{Ttype}) where {Ttype} = !(Ttype <: Real) || Ttype <: Integer
+function is_discrete(::ParameterDomain{Ttype,Telement}) where {Ttype,Telement}
+    return !(Telement <: Real) || Telement <: Integer
+end
 
 ## Errors ##
 

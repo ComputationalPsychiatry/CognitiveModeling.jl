@@ -94,21 +94,199 @@ end
     check_value_in_domain(model, name, value, domain)
 
 Throw a [`ParameterDomainError`](@ref) if `value`, the value of the parameter `name` of
-`model`, is outside `domain`, a [`ParameterDomain`](@ref): a real number that the domain's
-type doesn't take, as [`takes_value`](@ref) decides, or that is below the lower bound or
-above the upper bound, which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides
-for a number that isn't one of Julia's own, or a value that isn't a number and isn't of the
-domain's type. Every element of an array is checked as a value of its own. A number that
-isn't a real number, and an array of them, is left alone. Used by
+`model`, is outside `domain`, a [`ParameterDomain`](@ref). A domain of single values checks
+`value` with [`check_single_value`](@ref). A domain of arrays takes an array with the number
+of dimensions of its type, and a domain of tuples a tuple of the length of its type, if it
+has one, and each element is then checked with `check_single_value` against the type of the
+elements. A number that isn't a real number, and an array of them, is left alone. Used by
 [`check_values_in_domains`](@ref).
 """
 function check_value_in_domain(
-    model::AbstractTimestepModel, name::Symbol, value::Real, domain::ParameterDomain{Ttype}
+    model::AbstractTimestepModel, name::Symbol, value, domain::ParameterDomain{Ttype}
 ) where {Ttype}
-    takes_value(Ttype, value) || throw_not_of_type(model, name, value, domain)
-    if !(domain.lower <= value <= domain.upper) && is_beyond_bounds(value, domain)
-        throw_outside_bounds(model, name, value, domain)
+    return check_value_in_domain(model, name, value, domain, kind_of_values(Ttype))
+end
+
+#Which kind of values a domain takes is in its type, so it is chosen when the code is compiled and costs nothing when a model runs
+"""
+    SingleValues()
+
+The kind of values of a [`ParameterDomain`](@ref) whose type isn't an array type or a tuple
+type, as [`kind_of_values`](@ref) reads it. Used by [`check_value_in_domain`](@ref).
+"""
+struct SingleValues end
+
+"""
+    ArrayValues()
+
+The kind of values of a [`ParameterDomain`](@ref) whose type is an array type, as
+[`kind_of_values`](@ref) reads it. Used by [`check_value_in_domain`](@ref).
+"""
+struct ArrayValues end
+
+"""
+    TupleValues()
+
+The kind of values of a [`ParameterDomain`](@ref) whose type is a tuple type, as
+[`kind_of_values`](@ref) reads it. Used by [`check_value_in_domain`](@ref).
+"""
+struct TupleValues end
+
+"""
+    kind_of_values(type)
+
+Return `ArrayValues()` for an array type, `TupleValues()` for a tuple type and
+`SingleValues()` for any other type, the kind of values that a [`ParameterDomain`](@ref)
+with `type` takes. Used by [`check_value_in_domain`](@ref).
+"""
+kind_of_values(::Type{<:AbstractArray}) = ArrayValues()
+kind_of_values(::Type{<:Tuple}) = TupleValues()
+kind_of_values(::Type) = SingleValues()
+
+#A single value is checked as it is
+function check_value_in_domain(
+    model::AbstractTimestepModel,
+    name::Symbol,
+    value,
+    domain::ParameterDomain{Ttype},
+    ::SingleValues,
+) where {Ttype}
+    return check_single_value(model, name, value, Ttype, domain, nothing)
+end
+
+#An array has the number of dimensions of the domain's type, and each of its elements is checked at its position. Which kind of elements it has is in its type, so an array that is left alone costs nothing
+function check_value_in_domain(
+    model::AbstractTimestepModel,
+    name::Symbol,
+    values,
+    domain::ParameterDomain{Ttype,Telement},
+    ::ArrayValues,
+) where {Ttype,Telement}
+
+    #A number that isn't a real number can't be compared with anything, such as a number that Reactant.jl traces while it compiles
+    values isa Number && !(values isa Real) && return nothing
+
+    #The value is an array with as many dimensions as the domain's type
+    has_dimensions_of(values, Ttype) ||
+        throw_not_of_type(model, name, values, Ttype, nothing)
+
+    #An array of numbers that aren't real numbers is left alone, since it can't be read one element at a time while Reactant.jl compiles
+    eltype(values) <: Number && !(eltype(values) <: Real) && return nothing
+
+    #Check each element as a single value, at its position in the array
+    for (position, element) in pairs(values)
+        check_single_value(model, name, element, Telement, domain, position)
     end
+    return nothing
+end
+
+#A tuple has the length of the domain's type, if it has one, and each of its elements is checked at its position
+function check_value_in_domain(
+    model::AbstractTimestepModel,
+    name::Symbol,
+    values,
+    domain::ParameterDomain{Ttype,Telement},
+    ::TupleValues,
+) where {Ttype,Telement}
+
+    #A number that isn't a real number can't be compared with anything, such as a number that Reactant.jl traces while it compiles
+    values isa Number && !(values isa Real) && return nothing
+
+    #The value is a tuple with the length of the domain's type
+    has_length_of(values, Ttype) || throw_not_of_type(model, name, values, Ttype, nothing)
+
+    #Check each element as a single value, at its position in the tuple
+    return check_tuple_elements(model, name, values, Telement, domain, 1)
+end
+
+"""
+    has_dimensions_of(value, type)
+
+Return whether `value` is an array with as many dimensions as the array type `type`, of any
+kind, which takes every number of them when it has none, as `AbstractArray{Real}`. Used by
+[`check_value_in_domain`](@ref).
+"""
+function has_dimensions_of(values::AbstractArray, ::Type{T}) where {T}
+    n_dimensions = dimensions_of(T)
+    return n_dimensions === nothing || ndims(values) == n_dimensions
+end
+has_dimensions_of(value, ::Type) = false
+
+"""
+    has_length_of(value, type)
+
+Return whether `value` is a tuple of the length of the tuple type `type`, which takes every
+length when it has none, as `Tuple{Vararg{Real}}`. Used by [`check_value_in_domain`](@ref).
+"""
+function has_length_of(values::Tuple, ::Type{T}) where {T}
+    tuple_length = length_of(T)
+    return tuple_length === nothing || length(values) == tuple_length
+end
+has_length_of(value, ::Type) = false
+
+"""
+    dimensions_of(type)
+
+Return the number of dimensions of the array type `type`, or `nothing` when the type leaves
+it open, as `AbstractArray{Real}` does. Used by [`has_dimensions_of`](@ref).
+"""
+dimensions_of(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+dimensions_of(::Type{<:AbstractArray}) = nothing
+
+"""
+    length_of(type)
+
+Return the length of the tuple type `type`, or `nothing` when the type leaves it open, as
+`Tuple{Vararg{Real}}` does. Used by [`has_length_of`](@ref) and the display of a model.
+"""
+length_of(::Type{<:NTuple{N,Any}}) where {N} = N
+length_of(::Type{<:Tuple}) = nothing
+
+"""
+    check_tuple_elements(model, name, values, type, domain, position)
+
+Check each element of the tuple `values`, the parameter `name` of `model`, with
+[`check_single_value`](@ref) against `type` and `domain`, the first at `position`. Used by
+[`check_value_in_domain`](@ref).
+"""
+check_tuple_elements(model, name::Symbol, ::Tuple{}, ::Type, domain, position) = nothing
+
+#Each call checks the first element and calls itself with the remaining ones, so that the compiler knows the type of every element
+function check_tuple_elements(
+    model, name::Symbol, values::Tuple, ::Type{T}, domain, position
+) where {T}
+    check_single_value(model, name, first(values), T, domain, position)
+    return check_tuple_elements(model, name, Base.tail(values), T, domain, position + 1)
+end
+
+"""
+    check_single_value(model, name, value, type, domain, position)
+
+Throw a [`ParameterDomainError`](@ref) if `value` isn't a value of `type` within `domain`, a
+[`ParameterDomain`](@ref): a real number that `type` doesn't take, as
+[`takes_value`](@ref) decides, or that is below the lower bound or above the upper bound,
+which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides for a number that
+isn't one of Julia's own, or another value that isn't of `type`. A number that isn't a real
+number is left alone. `value` is the parameter `name` of `model` when `position` is
+`nothing`, and its element at `position` otherwise. Used by
+[`check_value_in_domain`](@ref) and [`check_tuple_elements`](@ref).
+"""
+function check_single_value(
+    model, name::Symbol, value::Real, ::Type{T}, domain::ParameterDomain, position
+) where {T}
+    takes_value(T, value) || throw_not_of_type(model, name, value, T, position)
+    if !(domain.lower <= value <= domain.upper) && is_beyond_bounds(value, domain)
+        throw_outside_bounds(model, name, value, domain, position)
+    end
+    return nothing
+end
+
+#Any other value is of the type, except a number that isn't a real number, which can't be compared with anything, such as a number that Reactant.jl traces while it compiles
+function check_single_value(
+    model, name::Symbol, value, ::Type{T}, domain::ParameterDomain, position
+) where {T}
+    value isa Number && return nothing
+    value isa T || throw_not_of_type(model, name, value, T, position)
     return nothing
 end
 
@@ -120,7 +298,7 @@ Return whether `value`, a real number which didn't compare as within the bounds 
 a [`ParameterDomain`](@ref), is beyond them. One of Julia's own number types always is. A
 number of another type, such as one of automatic differentiation, is when it is `NaN`, or
 when it is at or beyond the nearest floating-point number below the lower bound or above
-the upper bound. Used by [`check_value_in_domain`](@ref).
+the upper bound. Used by [`check_single_value`](@ref).
 """
 function is_beyond_bounds(
     ::Union{AbstractFloat,Integer,Rational,AbstractIrrational}, ::ParameterDomain
@@ -134,44 +312,13 @@ function is_beyond_bounds(value::Real, domain::ParameterDomain)
     return is_below || is_above
 end
 
-#Numbers that aren't real numbers can't be compared with the bounds, such as the numbers that Reactant.jl traces while it compiles
-function check_value_in_domain(
-    ::AbstractTimestepModel, ::Symbol, ::Number, ::ParameterDomain
-)
-    return nothing
-end
-
-#An array has the domain of each of its elements. Which kind of elements it has is in its type, so an array that is left alone costs nothing
-function check_value_in_domain(
-    model::AbstractTimestepModel,
-    name::Symbol,
-    values::AbstractArray{Telement},
-    domain::ParameterDomain,
-) where {Telement}
-
-    #An array of numbers that aren't real numbers is left alone as they are, since it can't be read one element at a time while Reactant.jl compiles
-    Telement <: Number && !(Telement <: Real) && return nothing
-
-    #Check each element as a value of its own
-    foreach(value -> check_value_in_domain(model, name, value, domain), values)
-    return nothing
-end
-
-#A value that isn't a number is of the domain's type or not
-function check_value_in_domain(
-    model::AbstractTimestepModel, name::Symbol, value, domain::ParameterDomain{Ttype}
-) where {Ttype}
-    value isa Ttype || throw_not_of_type(model, name, value, domain)
-    return nothing
-end
-
 """
     takes_value(type, value)
 
-Return whether a [`ParameterDomain`](@ref) with `type` takes the real number `value`: when
-it is of the type, when the type is a type of whole numbers and it is a whole number in
-another number type, such as `3.0`, and when the type is `Bool` and it is 0 or 1. Used by
-[`check_value_in_domain`](@ref).
+Return whether a [`ParameterDomain`](@ref) takes the real number `value` as a value of
+`type`: when it is of the type, when the type is a type of whole numbers and it is a whole
+number in another number type, such as `3.0`, and when the type is `Bool` and it is 0 or 1.
+Used by [`check_single_value`](@ref).
 """
 takes_value(::Type{T}, value::Real) where {T} = value isa T
 takes_value(::Type{T}, value::Real) where {T<:Integer} = value isa T || isinteger(value)
@@ -179,33 +326,61 @@ takes_value(::Type{Bool}, value::Real) = value isa Bool || iszero(value) || ison
 
 #Functions of their own, which aren't inlined, so that the messages are only built when there is an error
 """
-    throw_not_of_type(model, name, value, domain)
-    throw_outside_bounds(model, name, value, domain)
+    throw_not_of_type(model, name, value, type, position)
 
 Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
-isn't of the type of `domain`, or is outside its bounds. Used by
-[`check_value_in_domain`](@ref).
+isn't of `type`. The value is the parameter itself when `position` is `nothing`, and its
+element at `position` otherwise. Used by [`check_value_in_domain`](@ref) and
+[`check_single_value`](@ref).
 """
-@noinline function throw_not_of_type(model, name::Symbol, value, domain::ParameterDomain)
+@noinline function throw_not_of_type(model, name::Symbol, value, type::Type, position)
 
     #Say what the domain takes: a number that isn't whole is told so, and not that it is of another type than a type of whole numbers
-    taken = if domain.type === Bool
-        "true and false, or 0 and 1"
-    elseif domain.type <: Integer && value isa Real
-        "whole numbers, as its type is $(domain.type)"
+    whose_type = position === nothing ? "its type" : "the type of its elements"
+    taken, reason = if type === Bool
+        "true and false, or 0 and 1", ""
+    elseif type <: Integer && value isa Real
+        "whole numbers", ", as $whose_type is $type"
     else
-        "values of type $(domain.type)"
+        "values of type $type", ""
+    end
+    message = if position === nothing
+        "The parameter $name of $(describe_model(model)) is $(repr(value)), of type $(typeof(value)), but its domain takes $taken$reason."
+    else
+        "The parameter $name of $(describe_model(model)) has $(describe_element(name, position)) = $(repr(value)), of type $(typeof(value)), but its domain takes $taken there$reason."
+    end
+    return throw(ParameterDomainError(message))
+end
+"""
+    throw_outside_bounds(model, name, value, domain, position)
+
+Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
+is outside the bounds of `domain`. The value is the parameter itself when `position` is
+`nothing`, and its element at `position` otherwise. Used by [`check_single_value`](@ref).
+"""
+@noinline function throw_outside_bounds(
+    model, name::Symbol, value, domain::ParameterDomain, position
+)
+    subject = if position === nothing
+        "is $value"
+    else
+        "has $(describe_element(name, position)) = $value"
     end
     return throw(
         ParameterDomainError(
-            "The parameter $name of $(describe_model(model)) is $(repr(value)), of type $(typeof(value)), but its domain takes $taken.",
+            "The parameter $name of $(describe_model(model)) $subject, which is outside its domain, from $(domain.lower) to $(domain.upper).",
         ),
     )
 end
-@noinline function throw_outside_bounds(model, name::Symbol, value, domain::ParameterDomain)
-    return throw(
-        ParameterDomainError(
-            "The parameter $name of $(describe_model(model)) is $value, which is outside its domain, from $(domain.lower) to $(domain.upper).",
-        ),
-    )
+
+"""
+    describe_element(name, position)
+
+Return the element at `position` of the parameter `name` as it is indexed, such as
+`choice_probabilities[3]`, or `weights[2, 1]` for a position in a matrix. Used by
+[`throw_not_of_type`](@ref) and [`throw_outside_bounds`](@ref).
+"""
+describe_element(name::Symbol, position::Integer) = "$name[$position]"
+function describe_element(name::Symbol, position::CartesianIndex)
+    return "$name[$(join(Tuple(position), ", "))]"
 end

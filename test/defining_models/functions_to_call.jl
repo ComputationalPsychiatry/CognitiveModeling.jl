@@ -29,6 +29,23 @@ function CognitiveModeling.parameter_domains(model::ModelWithNamedStrategy)
         is_greedy=ParameterDomain(; type=Bool),
     )
 end
+#A model whose parameters are arrays and tuples, of real numbers, of whole numbers and of true or false
+struct ModelWithArrayParameters <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithArrayParameters)
+    return ModelAttributes(;
+        parameters=(:choice_probabilities, :counts, :flags),
+        states=(),
+        inputs=(),
+        outputs=(),
+    )
+end
+function CognitiveModeling.parameter_domains(model::ModelWithArrayParameters)
+    return (;
+        choice_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
+        counts=ParameterDomain(; type=AbstractVector{Integer}, lower=0),
+        flags=ParameterDomain(; type=NTuple{2,Bool}),
+    )
+end
 #Models whose domains don't fit them: one for a parameter that isn't in the attributes, and domains in the form of NamedTuples
 struct ModelWithDomainForUnknownParameter <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithDomainForUnknownParameter)
@@ -68,6 +85,11 @@ end
             (:strategy, :label, :is_greedy)
         @test CognitiveModeling.continuous_parameter_names(ModelWithNamedStrategy()) ===
             (:learning_rate,)
+        #An array or a tuple is discrete when its elements are
+        @test CognitiveModeling.discrete_parameter_names(ModelWithArrayParameters()) ===
+            (:counts, :flags)
+        @test CognitiveModeling.continuous_parameter_names(ModelWithArrayParameters()) ===
+            (:choice_probabilities,)
     end
 
     @testset "Domains that don't fit the model are an error when the names are read" begin

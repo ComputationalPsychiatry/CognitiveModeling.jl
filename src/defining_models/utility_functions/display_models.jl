@@ -107,11 +107,40 @@ end
 Return `domain`, a [`ParameterDomain`](@ref), as the display of a model writes it after the
 name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or `[0, ∞)`,
 the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, and the type of
-a parameter that isn't a number, such as `AbstractString`. Used by
-[`print_parameter_lines`](@ref).
+a parameter that isn't a number, such as `AbstractString`. A parameter that is an array or
+a tuple has the values of each element, such as `[0, 1] for each element of a vector`. Used
+by [`print_parameter_lines`](@ref).
 """
-function describe_domain(domain::ParameterDomain{Ttype}) where {Ttype}
-    lower, upper = domain.lower, domain.upper
+function describe_domain(domain::ParameterDomain{Ttype,Telement}) where {Ttype,Telement}
+
+    #The values of a single value, or of each element of an array or a tuple
+    values = describe_values(Telement, domain.lower, domain.upper)
+    Ttype <: AbstractArray || Ttype <: Tuple || return values
+    return "$values for each element of $(describe_container(Ttype))"
+end
+
+"""
+    describe_container(type)
+
+Return the array type or tuple type `type` as the display of a model writes it: `a vector`,
+`a matrix`, `an array`, `a tuple`, or `a tuple of 3` for a type with a length. Used by
+[`describe_domain`](@ref).
+"""
+function describe_container(type::Type)
+    type <: AbstractVector && return "a vector"
+    type <: AbstractMatrix && return "a matrix"
+    type <: AbstractArray && return "an array"
+    tuple_length = length_of(type)
+    return tuple_length === nothing ? "a tuple" : "a tuple of $tuple_length"
+end
+
+"""
+    describe_values(type, lower, upper)
+
+Return the values of `type` between `lower` and `upper`, as [`describe_domain`](@ref)
+writes them for a single value or for each element of an array or a tuple.
+"""
+function describe_values(::Type{Ttype}, lower, upper) where {Ttype}
 
     #A parameter that isn't a number can be any value of its type
     Ttype <: Real || return string(Ttype)

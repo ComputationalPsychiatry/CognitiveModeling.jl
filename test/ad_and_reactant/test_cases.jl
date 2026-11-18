@@ -595,7 +595,7 @@ function CognitiveModeling.attribute_names(model::LearnsAndForgetsWithinDomains)
 end
 function CognitiveModeling.parameter_domains(model::LearnsAndForgetsWithinDomains)
     return (;
-        rates=ParameterDomain(; lower=0, upper=1),
+        rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
         inverse_temperature=ParameterDomain(; lower=0),
     )
 end

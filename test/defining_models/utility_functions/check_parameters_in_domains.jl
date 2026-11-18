@@ -17,6 +17,37 @@ function CognitiveModeling.parameter_domains(model::ModelWithDomains)
     )
 end
 
+#A model whose parameters are arrays and tuples: probabilities in a vector, counts in a vector of whole numbers, weights in a matrix, a pair of positive numbers, rates in a tuple of any length, names in a vector, and values in an array of any number of dimensions
+struct ModelWithArrayDomains <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithArrayDomains)
+    return ModelAttributes(;
+        parameters=(:probabilities, :counts, :weights, :pair, :rates, :names, :values),
+        states=(),
+        inputs=(),
+        outputs=(),
+    )
+end
+function CognitiveModeling.parameter_domains(model::ModelWithArrayDomains)
+    return (;
+        probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
+        counts=ParameterDomain(; type=AbstractVector{Integer}, lower=0),
+        weights=ParameterDomain(; type=AbstractMatrix{Real}, upper=1),
+        pair=ParameterDomain(; type=NTuple{2,Real}, lower=0),
+        rates=ParameterDomain(; type=Tuple{Vararg{Real}}, lower=0, upper=1),
+        names=ParameterDomain(; type=AbstractVector{Symbol}),
+        values=ParameterDomain(; type=AbstractArray{Real}, lower=-1, upper=1),
+    )
+end
+
+#A model whose parameter is a vector of vectors of names, whose elements are checked against the type of the elements as a whole
+struct ModelWithNestedArrays <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithNestedArrays)
+    return ModelAttributes(; parameters=:vectors, states=(), inputs=(), outputs=())
+end
+function CognitiveModeling.parameter_domains(model::ModelWithNestedArrays)
+    return (; vectors=ParameterDomain(; type=AbstractVector{Vector{Symbol}}))
+end
+
 #Models whose domains don't fit them: a parameter that isn't in the model's attributes, a domain that isn't a ParameterDomain, and domains that aren't in a NamedTuple
 struct ModelWithUnknownDomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithUnknownDomain)
@@ -68,6 +99,16 @@ end
     #Parameters of ModelWithDomains which are all within their domains
     valid_parameters = (;
         learning_rate=0.5, n_options=3, strategy=:greedy, is_greedy=true, bias=-10.0
+    )
+    #Parameters of ModelWithArrayDomains which are all within their domains
+    valid_array_parameters = (;
+        probabilities=[0.2, 0.3, 0.5],
+        counts=[0, 3],
+        weights=[0.1 0.2; 0.3 1.0],
+        pair=(0.5, 2),
+        rates=(0.1, 0.2, 0.3),
+        names=[:a, :b],
+        values=zeros(2, 2, 2),
     )
 
     @testset "A model has no domains by default, and its parameters can then take any value" begin
@@ -207,36 +248,98 @@ end
         )
     end
 
-    @testset "Every element of an array is checked" begin
+    @testset "A domain of single values doesn't take an array or a tuple" begin
         model = ModelWithDomains()
-        @test CognitiveModeling.check_parameters_in_domains(
-            model,
-            merge(
-                valid_parameters,
-                (;
-                    learning_rate=[0.2, 0.8],
-                    n_options=[2 3; 4 5],
-                    strategy=[:greedy, :random],
-                ),
-            ),
-        ) === nothing
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type ModelWithDomains is 1.2, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type ModelWithDomains is [0.2, 0.8], of type Vector{Float64}, but its domain takes values of type Real.",
         ) CognitiveModeling.check_parameters_in_domains(
-            model, merge(valid_parameters, (; learning_rate=[0.2, 1.2]))
+            model, merge(valid_parameters, (; learning_rate=[0.2, 0.8]))
         )
-        @test_throws ParameterDomainError(
-            "The parameter strategy of a cognitive model of type ModelWithDomains is \"random\", of type String, but its domain takes values of type Symbol.",
-        ) CognitiveModeling.check_parameters_in_domains(
-            model, merge(valid_parameters, (; strategy=Any[:greedy, "random"]))
-        )
-        #The elements of an array of arrays are checked too
         @test_throws ParameterDomainError CognitiveModeling.check_parameters_in_domains(
-            model, merge(valid_parameters, (; learning_rate=[[0.2], [0.8, 1.2]]))
+            model, merge(valid_parameters, (; learning_rate=(0.2, 0.8)))
+        )
+        @test_throws ParameterDomainError CognitiveModeling.check_parameters_in_domains(
+            model, merge(valid_parameters, (; strategy=[:greedy]))
         )
     end
 
-    @testset "Numbers that aren't real numbers are left alone, also in arrays" begin
+    @testset "A domain of arrays takes every array with its number of dimensions, and checks each element" begin
+        model = ModelWithArrayDomains()
+        check(changes) = CognitiveModeling.check_parameters_in_domains(
+            model, merge(valid_array_parameters, changes)
+        )
+        @test check((;)) === nothing
+        #Arrays of other kinds and other number types are taken as they are, also numbers of automatic differentiation at a bound, and whole numbers in another number type
+        @test check((; probabilities=view([0.2, 0.3, 0.5, 9.0], 1:3))) === nothing
+        @test check((; probabilities=Float32[0.2, 0.8], counts=[0.0, 3.0])) === nothing
+        @test check((;
+            probabilities=[NumberWithDerivative(1.0, 2.0), NumberWithDerivative(0.0, -2.0)]
+        )) === nothing
+        @test check((; weights=[true false; false true], counts=Int8[2])) === nothing
+        #An array type without a number of dimensions takes any number of them
+        @test check((; values=[0.5])) === nothing
+        @test check((; values=fill(0.5, 1, 1, 1))) === nothing
+        #An element outside the bounds is named by its position
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithArrayDomains has probabilities[3] = -0.2, which is outside its domain, from 0 to 1.",
+        ) check((; probabilities=[0.5, 0.7, -0.2]))
+        @test_throws ParameterDomainError(
+            "The parameter weights of a cognitive model of type ModelWithArrayDomains has weights[2, 1] = 1.3, which is outside its domain, from -Inf to 1.",
+        ) check((; weights=[0.1 0.2; 1.3 0.4]))
+        @test_throws ParameterDomainError check((; probabilities=[0.5, NaN]))
+        @test_throws ParameterDomainError check((; values=fill(2.0, 1, 1, 1)))
+        @test_throws ParameterDomainError check((;
+            probabilities=[NumberWithDerivative(nextfloat(1.0), 2.0)]
+        ))
+        #An element of another type is named by its position too
+        @test_throws ParameterDomainError(
+            "The parameter counts of a cognitive model of type ModelWithArrayDomains has counts[2] = 2.5, of type Float64, but its domain takes whole numbers there, as the type of its elements is Integer.",
+        ) check((; counts=[1, 2.5]))
+        @test_throws ParameterDomainError(
+            "The parameter names of a cognitive model of type ModelWithArrayDomains has names[2] = \"b\", of type String, but its domain takes values of type Symbol there.",
+        ) check((; names=Any[:a, "b"]))
+        #A value that isn't an array, or an array with another number of dimensions, isn't taken
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithArrayDomains is 0.1, of type Float64, but its domain takes values of type AbstractVector{Real}.",
+        ) check((; probabilities=0.1))
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithArrayDomains is [0.5 0.5], of type Matrix{Float64}, but its domain takes values of type AbstractVector{Real}.",
+        ) check((; probabilities=[0.5 0.5]))
+        @test_throws ParameterDomainError check((; weights=[0.1, 0.2]))
+        @test_throws ParameterDomainError check((; probabilities=(0.2, 0.8)))
+        #The elements of an array of arrays are checked against the type of the elements as a whole
+        @test CognitiveModeling.check_parameters_in_domains(
+            ModelWithNestedArrays(), (; vectors=[[:a], [:b, :c]])
+        ) === nothing
+        @test_throws ParameterDomainError(
+            "The parameter vectors of a cognitive model of type ModelWithNestedArrays has vectors[2] = [\"b\"], of type Vector{String}, but its domain takes values of type Vector{Symbol} there.",
+        ) CognitiveModeling.check_parameters_in_domains(
+            ModelWithNestedArrays(), (; vectors=[[:a], ["b"]])
+        )
+    end
+
+    @testset "A domain of tuples takes tuples of the length of its type, and checks each element" begin
+        model = ModelWithArrayDomains()
+        check(changes) = CognitiveModeling.check_parameters_in_domains(
+            model, merge(valid_array_parameters, changes)
+        )
+        @test check((; pair=(0, 1.5f0), rates=(0.5,))) === nothing
+        #A tuple type of any length takes the empty tuple
+        @test check((; rates=())) === nothing
+        @test_throws ParameterDomainError(
+            "The parameter pair of a cognitive model of type ModelWithArrayDomains has pair[2] = -1, which is outside its domain, from 0 to Inf.",
+        ) check((; pair=(0.5, -1)))
+        @test_throws ParameterDomainError(
+            "The parameter rates of a cognitive model of type ModelWithArrayDomains has rates[3] = 1.5, which is outside its domain, from 0 to 1.",
+        ) check((; rates=(0.1, 0.2, 1.5)))
+        @test_throws ParameterDomainError(
+            "The parameter pair of a cognitive model of type ModelWithArrayDomains is (0.5, 1, 2), of type Tuple{Float64, Int64, Int64}, but its domain takes values of type Tuple{Real, Real}.",
+        ) check((; pair=(0.5, 1, 2)))
+        @test_throws ParameterDomainError check((; pair=[0.5, 1.0]))
+        @test_throws ParameterDomainError check((; rates=(0.1, :fast)))
+    end
+
+    @testset "Numbers that aren't real numbers are left alone, also in arrays and tuples" begin
         model = ModelWithDomains()
         @test CognitiveModeling.check_parameters_in_domains(
             model,
@@ -246,10 +349,15 @@ end
             ),
         ) === nothing
         @test CognitiveModeling.check_parameters_in_domains(
-            model,
+            ModelWithArrayDomains(),
             merge(
-                valid_parameters,
-                (; learning_rate=[NumberWithoutValue()], n_options=[2.5 + 0.0im]),
+                valid_array_parameters,
+                (;
+                    probabilities=[NumberWithoutValue()],
+                    counts=[2.5 + 0.0im],
+                    pair=(NumberWithoutValue(), NumberWithoutValue()),
+                    values=NumberWithoutValue(),
+                ),
             ),
         ) === nothing
     end
@@ -307,9 +415,15 @@ end
         #Run once first, so that compiling isn't measured
         check_many_times(model, valid_parameters, 1)
         @test @allocated(check_many_times(model, valid_parameters, 100)) == 0
-        vector_parameters = merge(valid_parameters, (; learning_rate=[0.2, 0.8]))
-        check_many_times(model, vector_parameters, 1)
-        @test @allocated(check_many_times(model, vector_parameters, 100)) == 0
+        @test @inferred(
+            CognitiveModeling.check_parameters_in_domains(
+                ModelWithArrayDomains(), valid_array_parameters
+            )
+        ) === nothing
+        check_many_times(ModelWithArrayDomains(), valid_array_parameters, 1)
+        @test @allocated(
+            check_many_times(ModelWithArrayDomains(), valid_array_parameters, 100)
+        ) == 0
         without_domains = (; learning_rate=0.5, action_noise=1.0)
         check_many_times(ModelWithAttributes(), without_domains, 1)
         @test @allocated(check_many_times(ModelWithAttributes(), without_domains, 100)) == 0
