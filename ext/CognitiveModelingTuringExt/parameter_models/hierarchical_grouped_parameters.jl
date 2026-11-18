@@ -60,7 +60,7 @@ end
 
 Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
 a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
-each group, with [`turing_hierarchical_group_parameters`](@ref) from the priors in
+each group, with [`turing_group_level_parameters`](@ref) from the priors in
 `groups`, and then the value of every session. Centered, the value of every session is
 sampled from the distribution of its group, which [`group_level_distribution`](@ref) makes,
 as the variable `session`, named like `learning_rate.session` under the parameter's prefix.
@@ -74,7 +74,7 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
 
     #Sample the parameters of the group-level distribution, each with a value for every group, or one value without groups
     group_parameters ~
-    to_submodel(turing_hierarchical_group_parameters(groups.group_priors), false)
+    to_submodel(turing_group_level_parameters(groups.group_priors), false)
 
     #Sample the value of every session from the distribution of its group, or non-centered, as a standard normal value which the group's mean shifts and its standard deviation scales
     group_of_each_session = groups.group_of_each_session
@@ -101,33 +101,32 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
 end
 
 """
-    turing_hierarchical_group_parameters(group_priors)
+    turing_group_level_parameters(group_priors)
 
 Turing.jl model which samples one parameter of a group-level distribution at a time from
 `group_priors`, the priors of the parameters under their names, each for every group with
-[`turing_hierarchical_group_parameter`](@ref) under the name of its prior, and returns them
+[`turing_group_level_parameter`](@ref) under the name of its prior, and returns them
 in a `NamedTuple`, each as a vector with a value for every group, or as one value without
 groups. Used by [`turing_hierarchical_grouped_parameter`](@ref).
 """
-Turing.@model function turing_hierarchical_group_parameters(
+Turing.@model function turing_group_level_parameters(
     group_priors::NamedTuple{names}
 ) where {names}
     name = first(names)
     values ~ to_submodel(
-        prefix(turing_hierarchical_group_parameter(first(group_priors)), VarName{name}()),
-        false,
+        prefix(turing_group_level_parameter(first(group_priors)), VarName{name}()), false
     )
     other_values ~
-    to_submodel(turing_hierarchical_group_parameters(Base.tail(group_priors)), false)
+    to_submodel(turing_group_level_parameters(Base.tail(group_priors)), false)
     return merge(NamedTuple{(name,)}((values,)), other_values)
 end
 
-Turing.@model function turing_hierarchical_group_parameters(group_priors::NamedTuple{()})
+Turing.@model function turing_group_level_parameters(group_priors::NamedTuple{()})
     return (;)
 end
 
 """
-    turing_hierarchical_group_parameter(prior)
+    turing_group_level_parameter(prior)
 
 Turing.jl model which samples the value of one parameter of a group-level distribution, as
 the variable `group`, so that under the prefixes of the parameter and of the prior it is
@@ -135,14 +134,14 @@ named like `learning_rate.mean.group`. Without groups, `prior` is its prior, and
 value is returned. With groups, `prior` is a `NamedTuple` with the prior of each group under
 its symbol name, `group` has the value of each group under the same name, such as
 `learning_rate.mean.group.clinical`, and the values are returned as a vector with a value
-for every group. Used by [`turing_hierarchical_group_parameters`](@ref).
+for every group. Used by [`turing_group_level_parameters`](@ref).
 """
-Turing.@model function turing_hierarchical_group_parameter(prior)
+Turing.@model function turing_group_level_parameter(prior)
     group ~ prior
     return group
 end
 
-Turing.@model function turing_hierarchical_group_parameter(priors_of_groups::NamedTuple)
+Turing.@model function turing_group_level_parameter(priors_of_groups::NamedTuple)
     group ~ product_distribution(priors_of_groups)
 
     #The value of each group as a vector, to look up the group of every session

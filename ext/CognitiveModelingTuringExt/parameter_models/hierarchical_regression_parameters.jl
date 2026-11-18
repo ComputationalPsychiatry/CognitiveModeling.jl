@@ -5,7 +5,7 @@ function CognitiveModeling.turing_parameters_model(
     parameters_model::HierarchicalRegressionParameters{<:NamedTuple,<:NamedTuple},
     sessions_info::MultipleSessionsInfo,
 )
-    return turing_regression_parameters(
+    return turing_hierarchical_regression_parameters(
         parameters_model.parameters, parameters_model.designs, n_sessions(sessions_info)
     )
 end
@@ -22,41 +22,45 @@ function CognitiveModeling.turing_parameters_model(
 end
 
 """
-    turing_regression_parameters(parameters, designs, n_sessions)
+    turing_hierarchical_regression_parameters(parameters, designs, n_sessions)
 
 Turing.jl model which gives one parameter at a time from `parameters`, the
 [`RegressionParameter`](@ref) of each parameter of a
-[`HierarchicalRegressionParameters`](@ref), with [`turing_regression_parameter`](@ref) under
-the parameter's name, and returns them in a `NamedTuple`, each as a vector with a value for
-each of `n_sessions` sessions. `designs` has the design of each regression. Used by
-`HierarchicalRegressionParameters`.
+[`HierarchicalRegressionParameters`](@ref), with
+[`turing_hierarchical_regression_parameter`](@ref) under the parameter's name, and returns
+them in a `NamedTuple`, each as a vector with a value for each of `n_sessions` sessions.
+`designs` has the design of each regression. Used by `HierarchicalRegressionParameters`.
 """
-Turing.@model function turing_regression_parameters(
+Turing.@model function turing_hierarchical_regression_parameters(
     parameters::NamedTuple{names}, designs::NamedTuple, n_sessions
 ) where {names}
     name = first(names)
     values ~ to_submodel(
         prefix(
-            turing_regression_parameter(first(parameters), first(designs), n_sessions),
+            turing_hierarchical_regression_parameter(
+                first(parameters), first(designs), n_sessions
+            ),
             VarName{name}(),
         ),
         false,
     )
     other_values ~ to_submodel(
-        turing_regression_parameters(Base.tail(parameters), Base.tail(designs), n_sessions),
+        turing_hierarchical_regression_parameters(
+            Base.tail(parameters), Base.tail(designs), n_sessions
+        ),
         false,
     )
     return merge(NamedTuple{(name,)}((values,)), other_values)
 end
 
-Turing.@model function turing_regression_parameters(
+Turing.@model function turing_hierarchical_regression_parameters(
     parameters::NamedTuple{()}, designs::NamedTuple, n_sessions
 )
     return (;)
 end
 
 """
-    turing_regression_parameter(regression_parameter, design, n_sessions)
+    turing_hierarchical_regression_parameter(regression_parameter, design, n_sessions)
 
 Turing.jl model which gives one parameter to every session, as `regression_parameter`, a
 [`RegressionParameter`](@ref), says. It samples the non-varying coefficients of the
@@ -72,9 +76,11 @@ like `learning_rate.session`, from the distribution that
 [`CognitiveModeling.build_family_distribution`](@ref) makes of the session's transformed sum
 and the other parameters, and those values are returned instead. `design` has the design
 columns and the levels of the regression, for each of `n_sessions` sessions. Used by
-[`turing_regression_parameters`](@ref).
+[`turing_hierarchical_regression_parameters`](@ref).
 """
-Turing.@model function turing_regression_parameter(regression_parameter, design, n_sessions)
+Turing.@model function turing_hierarchical_regression_parameter(
+    regression_parameter, design, n_sessions
+)
 
     #Sample the non-varying coefficients, as one variable named coef, and add up their effects on every session, which are zero without coefficients
     coefficient_priors = design.coefficient_priors
@@ -130,7 +136,7 @@ end
 Return the sum of the effects of the non-varying coefficients in `coefficients`, a
 `NamedTuple`: each coefficient times the design column of the same name in
 `design_columns`, as a vector with a value for each of `n_sessions` sessions. Used by
-[`turing_regression_parameter`](@ref).
+[`turing_hierarchical_regression_parameter`](@ref).
 """
 function add_up_effects(
     coefficients::NamedTuple, design_columns::NamedTuple{names}, n_sessions
@@ -155,7 +161,8 @@ their name. It samples the deviations of their varying coefficients with
 [`turing_regression_varying_coefficients`](@ref) under the name of the varying effects, and
 adds up their effects with [`add_up_varying_effects`](@ref). It returns the sum of the
 effects of all varying effects on every session, as a vector with a value for every
-session, or zero without varying effects. Used by [`turing_regression_parameter`](@ref).
+session, or zero without varying effects. Used by
+[`turing_hierarchical_regression_parameter`](@ref).
 """
 Turing.@model function turing_regression_varying_effects(
     designs::NamedTuple{names}
