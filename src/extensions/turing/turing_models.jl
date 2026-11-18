@@ -1,6 +1,14 @@
 ## Turing.jl models which users call, defined in the Turing extension ##
 
 """
+    TuringBackend()
+
+Marker of Turing.jl as the inference backend, which [`full_model`](@ref) takes to make the
+Turing.jl model of a full model. This needs Turing.jl to be loaded.
+"""
+struct TuringBackend <: AbstractInferenceBackend end
+
+"""
     turing_behavioral_session(session_info::SessionInfo, cognitive_parameters)
     turing_behavioral_session(session_info::SessionInfo, cognitive_parameters,
                               environment_parameters=(;))
@@ -185,7 +193,8 @@ are `(;)` for sessions without an environment, the sessions run over the threads
 started with. **The model that is evaluated, which is the outermost one, must then be marked
 with `setthreadsafe(model, true)` from DynamicPPL**, since the log density of a threaded
 model that isn't is wrong with no error; the sessions throw an error when it isn't marked.
-See `parallelization` in [`turing_full_model`](@ref). This needs Turing.jl to be loaded.
+See `parallelization` in [`full_model`](@ref) with `TuringBackend()`. This needs Turing.jl
+to be loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
 for every session in the order of `sessions_info`, which is what a parameter model returns,
@@ -204,19 +213,21 @@ variables into the parameters.
 function turing_multiple_behavioral_sessions end
 
 """
-    turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
-                      environment_parameters_model=NoParameters(),
-                      downstream_model=NoDownstreamModel(),
-                      fixed_cognitive_parameters=(;), fixed_environment_parameters=(;),
-                      catch_invalid_parameters=false, parallelization=SerialSessions(),
-                      include_submodel_prefixes=false)
+    full_model(::TuringBackend, cognitive_parameters_model,
+               sessions_info::MultipleSessionsInfo;
+               environment_parameters_model=NoParameters(),
+               downstream_model=NoDownstreamModel(), fixed_cognitive_parameters=(;),
+               fixed_environment_parameters=(;), catch_invalid_parameters=false,
+               parallelization=SerialSessions(), include_submodel_prefixes=false)
 
 Create the Turing.jl model which fits a cognitive model to several sessions, in three parts:
 `cognitive_parameters_model` gives or samples the cognitive parameters of every session, and
 `environment_parameters_model` those of the environment model, the sessions in
 `sessions_info` run with them as [`turing_multiple_behavioral_sessions`](@ref), and
 `downstream_model` can do something with the trajectories they saved, such as a regression
-of a measurement on a state. This needs Turing.jl to be loaded.
+of a measurement on a state. The parts are prepared with [`prepare_full_model`](@ref), and
+the model is [`turing_full_model`](@ref) of the prepared parts. This needs Turing.jl to be
+loaded.
 
 # Arguments
 - `cognitive_parameters_model`: the parameter model of the cognitive model, which gives or
@@ -312,7 +323,7 @@ cognitive_parameters_model = IndependentParameters((;
     inverse_temperature = LogNormal(0, 1),
 ))
 
-model = turing_full_model(cognitive_parameters_model, sessions_info)
+model = full_model(TuringBackend(), cognitive_parameters_model, sessions_info)
 chain = sample(model, NUTS(), 1000)
 
 #The parameters and the expected rewards of every session, for each sample
@@ -324,10 +335,27 @@ returned_values[1].saved_trajectories[2].states
 sessions_without_saving = MultipleSessionsInfo(
     sessions_info; cognitive_save_history = SaveHistory(),
 )
-unsaved = turing_full_model(cognitive_parameters_model, sessions_without_saving)
+unsaved = full_model(TuringBackend(), cognitive_parameters_model, sessions_without_saving)
 chain = sample(unsaved, NUTS(), 1000)
 returned_values = returned(model, chain)
 ```
+"""
+full_model(::TuringBackend, cognitive_parameters_model, sessions_info::MultipleSessionsInfo)
+
+#The parts are prepared by full_model, outside the model's body, which is differentiated
+"""
+    turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
+                      environment_parameters_model=NoParameters(),
+                      downstream_model=NoDownstreamModel(),
+                      catch_invalid_parameters=false, parallelization=SerialSessions(),
+                      include_submodel_prefixes=false)
+
+Create the Turing.jl model of a full model from parts that [`prepare_full_model`](@ref)
+prepared: the parameter models give or sample the cognitive and the environment parameters
+of every session, the sessions run with them as
+[`turing_multiple_behavioral_sessions`](@ref), and the downstream model runs after them, as
+[`full_model`](@ref) with [`TuringBackend`](@ref) describes, which prepares the parts and
+returns this model. This needs Turing.jl to be loaded.
 """
 function turing_full_model end
 

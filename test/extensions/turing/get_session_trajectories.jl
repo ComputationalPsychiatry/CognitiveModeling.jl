@@ -19,7 +19,8 @@ const DIFFERENT_LENGTHS_TABLE = (;
 
 #A full model of the sessions of TWO_MISSING_REWARDS_TABLE, where S1 and S3 run their environment, whose mean is fixed, to impute a reward each, and S2 doesn't run it
 function some_sessions_running_environment()
-    return turing_full_model(
+    return full_model(
+        TuringBackend(),
         IndependentParameters(FULL_PRIORS),
         sessions_for_test(
             SessionRescorlaWagner(),
@@ -34,7 +35,7 @@ end
 @testset "get_session_trajectories" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
     sessions_info = sessions_for_test(; impute_missing_actions=false)
-    model = turing_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
+    model = full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info)
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "The chain from a fitted full model has the saved trajectories of each session, numbered as the fit, and the parameters are a chain of their own" begin
@@ -179,7 +180,7 @@ end
         @test @varname(S1.expected_reward) in Turing.FlexiChains.parameters(merged) &&
             @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
         #The form with a model takes only the package's models, which have the session info to name the parameters by
-        @test_throws "get_session_parameters(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session" get_session_parameters(
+        @test_throws "get_session_parameters(model, chain) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session" get_session_parameters(
             hierarchical_model, own_chain
         )
 
@@ -238,7 +239,8 @@ end
                 missing, false, true, false, true, true, true, false, missing
             ],
         )
-        imputing = turing_full_model(
+        imputing = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(SessionRescorlaWagner(), table),
         )
@@ -250,7 +252,8 @@ end
     end
 
     @testset "Sessions of different lengths each keep their own timesteps, also with values imputed at timesteps that the sessions before them don't have" begin
-        different_lengths = turing_full_model(
+        different_lengths = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
         )
@@ -326,7 +329,7 @@ end
 
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
-        @test_throws "get_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" get_session_trajectories(
+        @test_throws "get_session_trajectories(model, chain; cognitive_save_history) takes a model made by full_model" get_session_trajectories(
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
     end

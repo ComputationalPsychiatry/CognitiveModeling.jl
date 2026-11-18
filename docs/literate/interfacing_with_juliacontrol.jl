@@ -198,7 +198,8 @@ sessions_info = MultipleSessionsInfo(
     session_columns=:id,
     who_starts=EnvironmentStarts(),
 )
-full_model = turing_full_model(
+model = full_model(
+    TuringBackend(),
     IndependentParameters((;
         K=LogNormal(0, 1),
         Ti=LogNormal(0, 1),
@@ -207,7 +208,7 @@ full_model = turing_full_model(
     )),
     sessions_info,
 )
-chain = sample(Xoshiro(11), full_model, NUTS(300, 0.65), 300; progress=false)
+chain = sample(Xoshiro(11), model, NUTS(300, 0.65), 300; progress=false)
 
 # The chain has the gains of each session under `K.session`, `Ti.session` and `Td.session`.
 #

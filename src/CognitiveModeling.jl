@@ -36,6 +36,7 @@ include("inference/parameter_models/hierarchical_regression_parameters.jl")
 include("inference/parameter_models/composite_parameters.jl")
 include("inference/parameter_models/functions_to_extend.jl")
 include("inference/functions_to_call.jl")
+include("inference/full_model.jl")
 include("inference/utility_functions/preparing_models/prepare_full_model.jl")
 include("inference/utility_functions/preparing_models/prepare_session_data.jl")
 include("inference/utility_functions/preparing_models/split_table_into_sessions.jl")
@@ -90,6 +91,7 @@ export AbstractParametersModel,
     CompositeParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions
+export AbstractInferenceBackend, TuringBackend, full_model
 export turing_behavioral_session,
     turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 export get_session_trajectories, get_session_parameters, predict_session_trajectories

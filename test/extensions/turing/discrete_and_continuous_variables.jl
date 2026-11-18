@@ -38,8 +38,10 @@ end
         parameters_model = IndependentParameters((;
             learning_rate=Beta(2, 2), uses_rewards=Bernoulli(0.5)
         ))
-        model = turing_full_model(
-            parameters_model, sessions_for_test(LearnsOrNot(); impute_missing_actions=true)
+        model = full_model(
+            TuringBackend(),
+            parameters_model,
+            sessions_for_test(LearnsOrNot(); impute_missing_actions=true),
         )
         variable_names = discrete_and_continuous_variable_names(model)
         @test variable_names.discrete == [
@@ -78,7 +80,8 @@ end
             transformation=to_unit_interval,
         )
         uses_rewards = RegressionParameter(Intercept(Normal(0, 1)); family=BernoulliLogit)
-        model = turing_full_model(
+        model = full_model(
+            TuringBackend(),
             HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
             sessions_for_test(
                 LearnsOrNot(), REGRESSION_FULL_TABLE; impute_missing_actions=false
@@ -95,7 +98,8 @@ end
     end
 
     @testset "A model without discrete variables has none" begin
-        model = turing_full_model(
+        model = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(; impute_missing_actions=false),
         )

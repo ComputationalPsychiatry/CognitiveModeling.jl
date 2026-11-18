@@ -22,6 +22,18 @@ Pages = ["inference/types.jl"]
 Filter = t -> t !== AbstractParametersModel
 ```
 
+## The full model
+
+Each inference backend makes its full model with [`full_model`](@ref), given the marker of
+the backend, such as [`TuringBackend`](@ref) on the page
+[Fitting with Turing.jl](fitting_with_turing.md).
+
+```@autodocs
+Modules = [CognitiveModeling]
+Private = false
+Pages = ["inference/full_model.jl"]
+```
+
 ## Preparing a full model
 
 This is what an inference backend calls before it makes its full model. It is public, but

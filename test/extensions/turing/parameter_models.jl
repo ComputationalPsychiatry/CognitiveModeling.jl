@@ -150,7 +150,7 @@ end
               sum(logpdf.(Exponential(1), [1.0, 2.0, 0.5])) +
               sum(logpdf.(Normal(), [0.1, 0.2, -0.3, 1.0, 0.0, -1.0]))
         #A model that wasn't prepared is an error, which says how to prepare it
-        @test_throws "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does." CognitiveModeling.turing_parameters_model(
+        @test_throws "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as full_model does." CognitiveModeling.turing_parameters_model(
             hierarchical, sessions_info
         )
     end
@@ -266,7 +266,7 @@ end
             ),
             inverse_temperature=HierarchicalParameter(GROUP_PRIORS; transformation=exp),
         ))
-        model = turing_full_model(hierarchical, sessions_info)
+        model = full_model(TuringBackend(), hierarchical, sessions_info)
         values = Dict(
             @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
             @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
@@ -394,7 +394,7 @@ end
         @test parameters.inverse_temperature ≈ fill(exp(0.7), 3)
         @test logjoint(model, values) ≈ log_prior
         #A model that wasn't prepared is an error, which says how to prepare it
-        @test_throws "A HierarchicalRegressionParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does." CognitiveModeling.turing_parameters_model(
+        @test_throws "A HierarchicalRegressionParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as full_model does." CognitiveModeling.turing_parameters_model(
             regression, sessions_info
         )
     end
@@ -540,14 +540,15 @@ end
     end
 
     @testset "The full model fits the sessions with the parameters of their regressions, for the cognitive model and for the environment" begin
-        model = turing_full_model(regression, sessions_info)
+        model = full_model(TuringBackend(), regression, sessions_info)
         @test returned(model, values).cognitive_parameters.learning_rate ≈ learning_rates
         @test logjoint(model, values) ≈
             log_prior + sessions_by_hand(FULL_TABLE, learning_rates, fill(exp(0.7), 3))
         chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
         @test size(chain, 1) == 20
         #A parameter that is fixed is given next to those of the regression
-        with_fixed = turing_full_model(
+        with_fixed = full_model(
+            TuringBackend(),
             HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(
                     Intercept(Normal(0, 1)); transformation=to_unit_interval
@@ -567,7 +568,8 @@ end
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
         )
-        model = turing_full_model(
+        model = full_model(
+            TuringBackend(),
             FixedParameters((; learning_rate=0.3)),
             with_environment;
             environment_parameters_model=HierarchicalRegressionParameters((;
@@ -692,7 +694,8 @@ end
             ContinuousPredictor(:age, Normal(0, 0.05));
             family=BernoulliLogit,
         )
-        model = turing_full_model(
+        model = full_model(
+            TuringBackend(),
             HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
             discrete_sessions,
         )
@@ -740,7 +743,8 @@ end
         @test all(value -> value isa Bool, parameters_chain[@varname(S2.uses_rewards)])
 
         #A discrete parameter needs a family distribution: without one, the value of a session isn't one that its domain takes, which stops the evaluation
-        without_family = turing_full_model(
+        without_family = full_model(
+            TuringBackend(),
             HierarchicalRegressionParameters((;
                 learning_rate,
                 uses_rewards=RegressionParameter(
@@ -762,7 +766,8 @@ end
         bounded_sessions = sessions_for_test(
             BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
         )
-        model = turing_full_model(
+        model = full_model(
+            TuringBackend(),
             HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(Intercept(Normal(0, 1))),
                 inverse_temperature=RegressionParameter(

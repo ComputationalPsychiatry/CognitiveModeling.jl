@@ -1,19 +1,7 @@
 ### MODEL OF THE FULL MODEL ###
 
-"""
-    turing_run_full_model(cognitive_parameters_model, sessions_info;
-                          environment_parameters_model, downstream_model,
-                          catch_invalid_parameters, parallelization,
-                          include_submodel_prefixes)
-
-Turing.jl model which [`turing_full_model`](@ref) creates, with its arguments as
-`prepare_full_model` prepared them: the parameter models for the parameters of the
-cognitive model and of the environment model, the sessions with those parameters, and the
-optional downstream model. It is a function of its own so that `turing_full_model` can check
-and prepare its parts when the model is made, outside the model's body. Used by
-[`turing_full_model`](@ref).
-"""
-Turing.@model function turing_run_full_model(
+#The Turing.jl model of a full model, from the parts that full_model prepared, outside this model's body. Its docstring is in the package, beside full_model
+Turing.@model function CognitiveModeling.turing_full_model(
     cognitive_parameters_model,
     sessions_info::MultipleSessionsInfo;
     environment_parameters_model=NoParameters(),

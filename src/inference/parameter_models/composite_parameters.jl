@@ -67,8 +67,7 @@ Return `parameters_model` as one parameter model: a tuple of parameter models as
 with each part under its name, which its variables are then named under. Anything else is
 returned as it is, for [`prepare_full_model`](@ref) to check. A tuple or a `NamedTuple` with
 something other than a parameter model in it is an error. Used by `prepare_full_model` and
-by the functions of the inference backends that make a full model, such as
-`turing_full_model`.
+by the methods of `full_model` of the inference backends.
 """
 as_parameters_model(parameters_model) = parameters_model
 function as_parameters_model(parts::Tuple)

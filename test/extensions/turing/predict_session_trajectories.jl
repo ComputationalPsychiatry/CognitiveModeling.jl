@@ -1,7 +1,7 @@
 @testset "predict_session_trajectories" begin
     #The full model of the sessions of the table, fitted as in the tests of get_session_trajectories
     sessions_info = sessions_for_test(; impute_missing_actions=false)
-    model = turing_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
+    model = full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info)
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "predict_session_trajectories simulates every action again with the parameters of each sample" begin
@@ -25,7 +25,8 @@
 
     @testset "With an environment, the observations are simulated too, in response to the simulated actions" begin
         #RewardsPreviousChoice gives the previous choice as the reward, and 0.5 before the first
-        with_environment = turing_full_model(
+        with_environment = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(; environment=RewardsPreviousChoice()),
         )
@@ -61,7 +62,8 @@
                 missing, false, true, false, true, true, true, false, missing
             ],
         )
-        imputing = turing_full_model(
+        imputing = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(SessionRescorlaWagner(), table),
         )
@@ -88,7 +90,8 @@
     end
 
     @testset "Sessions of different lengths are simulated with their own timesteps, with an environment too" begin
-        different_lengths = turing_full_model(
+        different_lengths = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
         )
@@ -111,7 +114,8 @@
         end
 
         #With an environment, the rewards are simulated on each timestep of each session too, from the simulated choices
-        with_environment = turing_full_model(
+        with_environment = full_model(
+            TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(
                 SessionRescorlaWagner(),
@@ -166,7 +170,7 @@
 
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
-        @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by turing_full_model" predict_session_trajectories(
+        @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by full_model" predict_session_trajectories(
             own_model(), chain; cognitive_save_history=SaveHistory()
         )
     end

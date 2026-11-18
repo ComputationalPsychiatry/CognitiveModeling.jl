@@ -69,8 +69,8 @@ using Turing.DynamicPPL: VarName
 
 include("extension_defaults.jl")
 #The full model, made from its parts, the Turing.jl models of the full model, the sessions, a session and a timestep, each in a file named after it, and the helpers they use, in files named after the models they serve
-include("turing_full_model.jl")
-include("behavioral_models/run_full_model.jl")
+include("full_model.jl")
+include("behavioral_models/full_model.jl")
 include("behavioral_models/multiple_behavioral_sessions.jl")
 include("behavioral_models/behavioral_session.jl")
 include("behavioral_models/catch_invalid_parameters.jl")

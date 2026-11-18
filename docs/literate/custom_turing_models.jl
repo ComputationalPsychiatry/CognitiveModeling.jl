@@ -2,7 +2,7 @@
 #
 # *This page is a draft.*
 #
-# [`turing_full_model`](@ref) fits several sessions with parameter models, which
+# [`full_model`](@ref) fits several sessions with parameter models, which
 # give the parameters of every session in one of the ways the package offers. A Turing.jl
 # model of one's own can give them in any other way, and run the sessions inside it as a
 # submodel: [`turing_multiple_behavioral_sessions`](@ref) runs several sessions, and

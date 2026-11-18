@@ -16,7 +16,7 @@ function CognitiveModeling.turing_parameters_model(
 )
     return throw(
         ArgumentError(
-            "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as turing_full_model does.",
+            "A HierarchicalGroupedParameters must be prepared for the sessions with prepare_parameters_model(parameters_model, sessions_info) before turing_parameters_model makes its Turing.jl model, as full_model does.",
         ),
     )
 end

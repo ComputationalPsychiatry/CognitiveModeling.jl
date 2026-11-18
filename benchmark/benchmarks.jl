@@ -154,7 +154,8 @@ SUITE["turing"]["single session"] = benchmark_turing_model(
     fit_single_session(first(BENCHMARK_SESSIONS.sessions))
 )
 SUITE["turing"]["full model, independent sessions"] = benchmark_turing_model(
-    turing_full_model(
+    full_model(
+        TuringBackend(),
         IndependentParameters((;
             learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 1)
         )),

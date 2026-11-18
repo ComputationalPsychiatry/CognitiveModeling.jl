@@ -32,7 +32,7 @@ end
 
     include("extension_defaults.jl")
     include("turing_behavioral_session.jl")
-    include("turing_full_model.jl")
+    include("full_model.jl")
     include("parameter_models.jl")
     include("get_session_trajectories.jl")
     include("predict_session_trajectories.jl")

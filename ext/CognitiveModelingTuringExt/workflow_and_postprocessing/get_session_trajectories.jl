@@ -30,7 +30,7 @@ function CognitiveModeling.get_session_parameters(
     if !is_session_model(model)
         throw(
             ArgumentError(
-                "get_session_parameters(model, chain) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_parameters what returned(model, chain) gives instead.",
+                "get_session_parameters(model, chain) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_parameters what returned(model, chain) gives instead.",
             ),
         )
     end
@@ -80,7 +80,7 @@ function is_session_model(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_catch_invalid_parameters
         return is_session_model(model.args.model)
     end
-    return model.f === turing_run_full_model ||
+    return model.f === CognitiveModeling.turing_full_model ||
            model.f === CognitiveModeling.turing_multiple_behavioral_sessions ||
            model.f === CognitiveModeling.turing_behavioral_session
 end
@@ -108,7 +108,7 @@ function with_session_info(
         new_args = merge(args, (; session_info=change(args.session_info)))
     elseif model.f === CognitiveModeling.turing_multiple_behavioral_sessions
         new_args = merge(args, (; sessions_info=change(args.sessions_info)))
-    elseif model.f === turing_run_full_model
+    elseif model.f === CognitiveModeling.turing_full_model
         #The sessions of a full model run their environment when its parameters are sampled, as when the model was made
         new_args = merge(
             args,
@@ -125,7 +125,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by turing_full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
             ),
         )
     end

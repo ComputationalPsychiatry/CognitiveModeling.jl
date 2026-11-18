@@ -330,7 +330,8 @@ const TURING_SESSIONS = MultipleSessionsInfo(
     session_columns=:id,
     who_starts=EnvironmentStarts(),
 )
-const TURING_FULL_MODEL = turing_full_model(
+const TURING_FULL_MODEL = full_model(
+    TuringBackend(),
     IndependentParameters((;
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
@@ -339,7 +340,8 @@ const TURING_FULL_MODEL = turing_full_model(
 
 # The same sessions with the model of three parameters. Each session's parameters are read from a NamedTuple with a vector for
 # each parameter, and from three on, Enzyme stopped the process on a row read with a recursive merge, which select_row avoids
-const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
+const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = full_model(
+    TuringBackend(),
     IndependentParameters((;
         learning_rate=Turing.Flat(),
         inverse_temperature=Turing.Flat(),
@@ -356,7 +358,8 @@ const TURING_FULL_MODEL_WITH_THREE_PARAMETERS = turing_full_model(
 )
 
 # The same sessions with the model whose parameters have domains, and priors that stay within them
-const TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS = turing_full_model(
+const TURING_FULL_MODEL_WITH_PARAMETER_DOMAINS = full_model(
+    TuringBackend(),
     IndependentParameters((;
         learning_rate=Uniform(0, 1), inverse_temperature=Turing.FlatPos(0.0)
     )),
@@ -380,7 +383,8 @@ const TURING_SESSIONS_WITH_ENVIRONMENT = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
     environment=TuringNoisyRewards(),
 )
-const TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS = turing_full_model(
+const TURING_FULL_MODEL_WITH_ENVIRONMENT_PARAMETERS = full_model(
+    TuringBackend(),
     IndependentParameters((;
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
@@ -401,7 +405,8 @@ turing_to_unit_interval(x) = 1 / (1 + exp(-x))
 const TURING_GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
 
 # Both parameters from the distributions of groups, non-centered, as standard normal values: the learning rate with two groups, the inverse temperature with one
-const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
+const TURING_FULL_MODEL_WITH_GROUPS = full_model(
+    TuringBackend(),
     HierarchicalGroupedParameters((;
         learning_rate=HierarchicalParameter(
             TURING_GROUP_PRIORS; transformation=turing_to_unit_interval, group_by=:group
@@ -412,7 +417,8 @@ const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
 )
 
 # A composite: the learning rate from the distributions of two groups directly, and the inverse temperature independent for each session
-const TURING_FULL_MODEL_WITH_COMPOSITE = turing_full_model(
+const TURING_FULL_MODEL_WITH_COMPOSITE = full_model(
+    TuringBackend(),
     CompositeParameters(
         HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
@@ -447,7 +453,8 @@ const TURING_REGRESSION_SESSIONS = MultipleSessionsInfo(
 # Both parameters from regressions: the learning rate on the age, the group and their interaction, with a varying intercept
 # and a varying slope of the age for each participant, and a varying intercept for each session, whose standard deviation
 # is one for each group, and the inverse temperature with centered varying intercepts of the participants
-const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
+const TURING_FULL_MODEL_WITH_REGRESSION = full_model(
+    TuringBackend(),
     HierarchicalRegressionParameters((;
         learning_rate=RegressionParameter(
             Intercept(Normal(0, 1)),
@@ -473,7 +480,8 @@ const TURING_FULL_MODEL_WITH_REGRESSION = turing_full_model(
 
 # The inverse temperature of each session sampled from the distribution of a family, a log-normal one whose mean
 # the regression gives and whose standard deviation has a prior, next to a learning rate from a regression without one
-const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
+const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = full_model(
+    TuringBackend(),
     HierarchicalRegressionParameters((;
         learning_rate=RegressionParameter(
             Intercept(Normal(0, 1)),
@@ -495,7 +503,8 @@ const TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION = turing_full_model(
 const TURING_COMPLETE_CONTINUOUS_CHOICES = (;
     choice=[0.3, 0.6, 0.5, 0.4, 0.7, 0.4, 0.5, 0.2, 0.8, 0.6]
 )
-const TURING_FULL_MODEL_WITH_SOME_SESSIONS_IMPUTING_ACTIONS = turing_full_model(
+const TURING_FULL_MODEL_WITH_SOME_SESSIONS_IMPUTING_ACTIONS = full_model(
+    TuringBackend(),
     IndependentParameters((; learning_rate=Turing.Flat(), noise_scale=Turing.Flat())),
     MultipleSessionsInfo(
         TuringContinuousAction(),
@@ -517,7 +526,8 @@ const TURING_FULL_MODEL_WITH_SOME_SESSIONS_IMPUTING_ACTIONS = turing_full_model(
 
 # The first and the third session run their environment, whose scale is fixed, to impute their missing rewards, and the
 # second, which has all of its rewards, doesn't run it
-const TURING_FULL_MODEL_WITH_SOME_SESSIONS_RUNNING_THE_ENVIRONMENT = turing_full_model(
+const TURING_FULL_MODEL_WITH_SOME_SESSIONS_RUNNING_THE_ENVIRONMENT = full_model(
+    TuringBackend(),
     IndependentParameters((;
         learning_rate=Turing.Flat(), inverse_temperature=Turing.Flat()
     )),
@@ -543,7 +553,8 @@ const TURING_FULL_MODEL_WITH_SOME_SESSIONS_RUNNING_THE_ENVIRONMENT = turing_full
 
 # Sessions of three, six and ten timesteps, where only the second and the third impute missing actions, at the same
 # timesteps
-const TURING_FULL_MODEL_WITH_SESSIONS_OF_DIFFERENT_LENGTHS = turing_full_model(
+const TURING_FULL_MODEL_WITH_SESSIONS_OF_DIFFERENT_LENGTHS = full_model(
+    TuringBackend(),
     IndependentParameters((; learning_rate=Turing.Flat(), noise_scale=Turing.Flat())),
     MultipleSessionsInfo(
         TuringContinuousAction(),

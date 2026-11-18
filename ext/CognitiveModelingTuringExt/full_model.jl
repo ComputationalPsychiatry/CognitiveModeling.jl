@@ -2,7 +2,8 @@
 
 #Creates the Turing model for fitting a cognitive model to several sessions, after warning when both parameter models can sample variables of the same name, and after preparing its parts once, which warns when the sessions save trajectories that no downstream model uses
 #The warnings and the preparation are done here, when the model is made, and not in the model, whose body is differentiated and runs on every evaluation: a warning holds a try block, which Mooncake can't differentiate
-function CognitiveModeling.turing_full_model(
+function CognitiveModeling.full_model(
+    ::TuringBackend,
     cognitive_parameters_model,
     sessions_info::MultipleSessionsInfo;
     environment_parameters_model=NoParameters(),
@@ -33,7 +34,7 @@ function CognitiveModeling.turing_full_model(
         fixed_cognitive_parameters,
         fixed_environment_parameters,
     )
-    return turing_run_full_model(
+    return CognitiveModeling.turing_full_model(
         prepared.cognitive_parameters_model,
         prepared.sessions_info;
         environment_parameters_model=prepared.environment_parameters_model,
@@ -53,8 +54,8 @@ Warn when the attributes of the cognitive model and of the environment model of 
 have a parameter of the same name, both parameter models sample, and the variables have no
 prefixes, since their variables can then have the same names, and a name that both use is
 one variable, which `sample` rejects. Whether both sample is decided by their types. Used by
-`turing_full_model` when it creates the model, outside the model's body, which is
-differentiated.
+`full_model` with `TuringBackend()` when it creates the model, outside the model's body,
+which is differentiated.
 """
 function warn_if_parameter_names_overlap(
     cognitive_parameters_model,
@@ -71,7 +72,7 @@ function warn_if_parameter_names_overlap(
     environment_names = attribute_names(session_info.environment).parameters
     shared_names = Tuple(name for name in cognitive_names if name in environment_names)
     if !isempty(shared_names)
-        @warn "The cognitive model and the environment model both have the parameters $shared_names, and both parameter models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give turing_full_model include_submodel_prefixes = true to keep them apart."
+        @warn "The cognitive model and the environment model both have the parameters $shared_names, and both parameter models sample, so their variables can have the same names. A name that both use is one variable for both, which sample rejects. Give full_model include_submodel_prefixes = true to keep them apart."
     end
     return nothing
 end

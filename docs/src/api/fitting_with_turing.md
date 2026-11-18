@@ -18,9 +18,10 @@ Pages = ["extensions/turing/turing_models.jl"]
 ## Postprocessing
 
 With Turing.jl loaded, which loads FlexiChains.jl, [`get_session_trajectories`](@ref) and
-[`get_session_parameters`](@ref) take a model made by [`turing_full_model`](@ref),
-[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
-such a model inside [`turing_catch_invalid_parameters`](@ref), and the `FlexiChain` that
+[`get_session_parameters`](@ref) take a model made by [`full_model`](@ref) with
+`TuringBackend()`, [`turing_multiple_behavioral_sessions`](@ref) or
+[`turing_behavioral_session`](@ref), or such a model inside
+[`turing_catch_invalid_parameters`](@ref), and the `FlexiChain` that
 `sample` gives for it. A model of one's own around the sessions gives them the values that
 `returned(model, chain)` gives instead, with the `MultipleSessionsInfo` of several sessions.
 
@@ -36,12 +37,12 @@ parameters = get_session_parameters(returned(own_model, chain), sessions_info)
 ### Predictive checks
 
 With Turing.jl loaded, [`predict_session_trajectories`](@ref) takes a model made by
-[`turing_full_model`](@ref), [`turing_multiple_behavioral_sessions`](@ref) or
-[`turing_behavioral_session`](@ref), or such a model inside
-[`turing_catch_invalid_parameters`](@ref), and a chain sampled from it. It returns the
-simulated trajectories as a `FlexiChain`, as [`get_session_trajectories`](@ref) makes it.
-For a prior predictive check, give a chain sampled from the prior, such as
-`sample(model, Prior(), 1000)`.
+[`full_model`](@ref) with `TuringBackend()`,
+[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
+such a model inside [`turing_catch_invalid_parameters`](@ref), and a chain sampled from it.
+It returns the simulated trajectories as a `FlexiChain`, as
+[`get_session_trajectories`](@ref) makes it. For a prior predictive check, give a chain
+sampled from the prior, such as `sample(model, Prior(), 1000)`.
 
 ```julia
 chain = sample(model, NUTS(), 1000)
