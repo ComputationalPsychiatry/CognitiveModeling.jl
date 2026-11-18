@@ -106,17 +106,50 @@ end
 
 Return `domain`, a [`ParameterDomain`](@ref), as the display of a model writes it after the
 name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or `[0, ∞)`,
-the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, and the type of
-a parameter that isn't a number, such as `AbstractString`. A parameter that is an array or
-a tuple has the values of each element, such as `[0, 1] for each element of a vector`. Used
-by [`print_parameter_lines`](@ref).
+the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, the possible
+values of a parameter that has them, such as `{:greedy, :random}`, and the type of a
+parameter that isn't a number, such as `AbstractString`. A parameter that is an array or a
+tuple has the values of each element, such as `[0, 1] for each element of a vector`, and a
+constraint follows the values, such as `, with the constraint sums_to_one`, or
+`, with a constraint` for an anonymous function. Used by
+[`print_parameter_lines`](@ref).
 """
 function describe_domain(domain::ParameterDomain{Ttype,Telement}) where {Ttype,Telement}
 
-    #The values of a single value, or of each element of an array or a tuple
-    values = describe_values(Telement, domain.lower, domain.upper)
-    Ttype <: AbstractArray || Ttype <: Tuple || return values
-    return "$values for each element of $(describe_container(Ttype))"
+    #The values of a single value, or of each element of an array or a tuple: its possible values, or the values of its type within its bounds
+    values = if domain.possible_values === nothing
+        describe_values(Telement, domain.lower, domain.upper)
+    else
+        describe_possible_values(domain.possible_values)
+    end
+
+    #The constraint, which follows the values, with its name unless it is an anonymous function
+    constraint = if domain.constraint === nothing
+        ""
+    elseif name_of_constraint(domain.constraint) === nothing
+        ", with a constraint"
+    else
+        ", with the constraint $(name_of_constraint(domain.constraint))"
+    end
+    Ttype <: AbstractArray || Ttype <: Tuple || return values * constraint
+    return "$values for each element of $(describe_container(Ttype))$constraint"
+end
+
+"""
+    describe_possible_values(possible_values)
+
+Return the possible values of a [`ParameterDomain`](@ref) as [`describe_domain`](@ref)
+writes them: every one of them for a tuple, such as `{:greedy, :random}`, and for a range of
+at most three values, and the first two and the last one for a longer range, such as
+`{1, 2, …, 10}`.
+"""
+function describe_possible_values(possible_values::Tuple)
+    return string("{", join(map(repr, possible_values), ", "), "}")
+end
+function describe_possible_values(possible_values::AbstractRange)
+    length(possible_values) <= 3 && return describe_possible_values(Tuple(possible_values))
+    first_value, second_value = possible_values[1], possible_values[2]
+    return "{$(repr(first_value)), $(repr(second_value)), …, $(repr(last(possible_values)))}"
 end
 
 """

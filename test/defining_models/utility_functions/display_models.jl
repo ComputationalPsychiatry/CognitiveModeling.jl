@@ -258,6 +258,36 @@ Outputs: none"""
             "Symbol for each element of a vector"
     end
 
+    @testset "A domain with possible values is written as them, and a constraint is named after the values" begin
+        describe = CognitiveModeling.describe_domain
+        @test describe(ParameterDomain(; possible_values=(:greedy, :random))) ==
+            "{:greedy, :random}"
+        @test describe(ParameterDomain(; possible_values=(2, 4, 8))) == "{2, 4, 8}"
+        @test describe(ParameterDomain(; possible_values=("low", "high"))) ==
+            "{\"low\", \"high\"}"
+        #A range of more than three values is written with its first two and its last
+        @test describe(ParameterDomain(; possible_values=1:3)) == "{1, 2, 3}"
+        @test describe(ParameterDomain(; possible_values=1:10)) == "{1, 2, …, 10}"
+        @test describe(ParameterDomain(; possible_values=0.0:0.25:1.0)) ==
+            "{0.0, 0.25, …, 1.0}"
+        @test describe(
+            ParameterDomain(; type=NTuple{2,Symbol}, possible_values=(:a, :b))
+        ) == "{:a, :b} for each element of a tuple of 2"
+        @test describe(
+            ParameterDomain(;
+                type=AbstractVector{Real}, lower=0, upper=1, constraint=sums_to_one
+            ),
+        ) == "[0, 1] for each element of a vector, with the constraint sums_to_one"
+        @test describe(ParameterDomain(; lower=0, constraint=isinteger)) ==
+            "[0, ∞), with the constraint isinteger"
+        @test describe(ParameterDomain(; constraint=value -> value != 0)) ==
+            "(-∞, ∞), with a constraint"
+        @test occursin(
+            "  strategy ∈ {:greedy, :random}\n  n_options ∈ {2, 4, 8}\n",
+            repr("text/plain", ModelWithPossibleValues()),
+        )
+    end
+
     @testset "A model whose domains aren't right is shown without them, and without an error" begin
         @test occursin(
             "Parameters: learning_rate\n", repr("text/plain", ModelWithDomainsInAVector())

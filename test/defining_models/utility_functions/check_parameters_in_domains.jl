@@ -48,6 +48,58 @@ function CognitiveModeling.parameter_domains(model::ModelWithNestedArrays)
     return (; vectors=ParameterDomain(; type=AbstractVector{Vector{Symbol}}))
 end
 
+#Constraints on the whole value of a parameter: probabilities that sum to one, and a pair whose first number is below its second, and a constraint that returns a number and not true or false
+sums_to_one(values) = sum(values) ≈ 1
+is_increasing(pair) = pair[1] < pair[2]
+total_of(values) = sum(values)
+
+#A model whose parameters have possible values or constraints: a strategy among two names, a number of options among three whole numbers, a step size in a range of numbers, levels in a vector which are each in a range of whole numbers, a pair of sides which are each one of three names, probabilities in a vector which sum to one, a pair of numbers in increasing order, and thresholds in a vector whose constraint is an anonymous function
+struct ModelWithPossibleValues <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithPossibleValues)
+    return ModelAttributes(;
+        parameters=(
+            :strategy,
+            :n_options,
+            :step_size,
+            :levels,
+            :sides,
+            :probabilities,
+            :pair,
+            :thresholds,
+        ),
+        states=(),
+        inputs=(),
+        outputs=(),
+    )
+end
+function CognitiveModeling.parameter_domains(model::ModelWithPossibleValues)
+    return (;
+        strategy=ParameterDomain(; possible_values=(:greedy, :random)),
+        n_options=ParameterDomain(; possible_values=(2, 4, 8)),
+        step_size=ParameterDomain(; possible_values=0.0:0.25:1.0),
+        levels=ParameterDomain(; type=AbstractVector{Integer}, possible_values=1:3),
+        sides=ParameterDomain(;
+            type=NTuple{2,Symbol}, possible_values=(:left, :middle, :right)
+        ),
+        probabilities=ParameterDomain(;
+            type=AbstractVector{Real}, lower=0, upper=1, constraint=sums_to_one
+        ),
+        pair=ParameterDomain(; type=NTuple{2,Real}, constraint=is_increasing),
+        thresholds=ParameterDomain(;
+            type=AbstractVector{Real}, constraint=values -> issorted(values)
+        ),
+    )
+end
+
+#A model whose constraint returns a number, and not true or false
+struct ModelWithConstraintOfNumbers <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithConstraintOfNumbers)
+    return ModelAttributes(; parameters=:weights, states=(), inputs=(), outputs=())
+end
+function CognitiveModeling.parameter_domains(model::ModelWithConstraintOfNumbers)
+    return (; weights=ParameterDomain(; type=AbstractVector{Real}, constraint=total_of))
+end
+
 #Models whose domains don't fit them: a parameter that isn't in the model's attributes, a domain that isn't a ParameterDomain, and domains that aren't in a NamedTuple
 struct ModelWithUnknownDomain <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithUnknownDomain)
@@ -109,6 +161,20 @@ end
         rates=(0.1, 0.2, 0.3),
         names=[:a, :b],
         values=zeros(2, 2, 2),
+    )
+    #Parameters of ModelWithPossibleValues which are all within their domains
+    valid_parameters_with_possible_values = (;
+        strategy=:random,
+        n_options=4,
+        step_size=0.75,
+        levels=[1, 3, 2],
+        sides=(:left, :right),
+        probabilities=[0.2, 0.3, 0.5],
+        pair=(0.1, 0.4),
+        thresholds=[-1.0, 0.0, 2.0],
+    )
+    check_possible_values(changes) = CognitiveModeling.check_parameters_in_domains(
+        ModelWithPossibleValues(), merge(valid_parameters_with_possible_values, changes)
     )
 
     @testset "A model has no domains by default, and its parameters can then take any value" begin
@@ -339,6 +405,79 @@ end
         @test_throws ParameterDomainError check((; rates=(0.1, :fast)))
     end
 
+    @testset "A value among the possible values passes, compared by its value, and any other value is a ParameterDomainError" begin
+        @test check_possible_values((;)) === nothing
+        @test check_possible_values((; strategy=:greedy, n_options=2, step_size=0)) ===
+            nothing
+        #A number is compared by its value, in any number type
+        @test check_possible_values((;
+            n_options=4.0, step_size=1, levels=[1.0, 2.0, 3.0]
+        )) === nothing
+        @test check_possible_values((; n_options=Int32(8), step_size=1//4)) === nothing
+        @test_throws ParameterDomainError(
+            "The parameter strategy of a cognitive model of type ModelWithPossibleValues is :lazy, which isn't one of its possible values, (:greedy, :random).",
+        ) check_possible_values((; strategy=:lazy))
+        @test_throws ParameterDomainError(
+            "The parameter n_options of a cognitive model of type ModelWithPossibleValues is 3, which isn't one of its possible values, (2, 4, 8).",
+        ) check_possible_values((; n_options=3))
+        @test_throws ParameterDomainError(
+            "The parameter step_size of a cognitive model of type ModelWithPossibleValues is 0.3, which isn't one of its possible values, 0.0:0.25:1.0.",
+        ) check_possible_values((; step_size=0.3))
+        @test_throws ParameterDomainError check_possible_values((; step_size=1.25))
+        #A value of another type than the possible values is told so, before they are compared
+        @test_throws ParameterDomainError(
+            "The parameter strategy of a cognitive model of type ModelWithPossibleValues is \"greedy\", of type String, but its domain takes values of type Symbol.",
+        ) check_possible_values((; strategy="greedy"))
+        @test_throws ParameterDomainError(
+            "The parameter n_options of a cognitive model of type ModelWithPossibleValues is 2.5, of type Float64, but its domain takes whole numbers, as its type is Integer.",
+        ) check_possible_values((; n_options=2.5))
+    end
+
+    @testset "Each element of an array or a tuple is one of the possible values, and an element that isn't is named by its position" begin
+        @test_throws ParameterDomainError(
+            "The parameter levels of a cognitive model of type ModelWithPossibleValues has levels[2] = 4, which isn't one of its possible values, 1:3.",
+        ) check_possible_values((; levels=[1, 4, 2]))
+        @test_throws ParameterDomainError check_possible_values((; levels=[0]))
+        @test check_possible_values((; levels=Int[])) === nothing
+        @test_throws ParameterDomainError(
+            "The parameter sides of a cognitive model of type ModelWithPossibleValues has sides[2] = :up, which isn't one of its possible values, (:left, :middle, :right).",
+        ) check_possible_values((; sides=(:left, :up)))
+        @test_throws ParameterDomainError check_possible_values((; sides=(:left,)))
+    end
+
+    @testset "A value that doesn't satisfy its domain's constraint is a ParameterDomainError, which names the constraint unless it is an anonymous function" begin
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithPossibleValues is [0.2, 0.3, 0.4], which doesn't satisfy the constraint sums_to_one of its domain.",
+        ) check_possible_values((; probabilities=[0.2, 0.3, 0.4]))
+        @test_throws ParameterDomainError(
+            "The parameter pair of a cognitive model of type ModelWithPossibleValues is (0.4, 0.1), which doesn't satisfy the constraint is_increasing of its domain.",
+        ) check_possible_values((; pair=(0.4, 0.1)))
+        @test_throws ParameterDomainError(
+            "The parameter thresholds of a cognitive model of type ModelWithPossibleValues is [1.0, 0.0], which doesn't satisfy the constraint of its domain.",
+        ) check_possible_values((; thresholds=[1.0, 0.0]))
+        #The constraint is called after the type and the bounds are checked, which are told first
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithPossibleValues has probabilities[2] = -0.5, which is outside its domain, from 0 to 1.",
+        ) check_possible_values((; probabilities=[0.5, -0.5, 1.0]))
+        @test_throws ParameterDomainError(
+            "The parameter probabilities of a cognitive model of type ModelWithPossibleValues is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
+        ) check_possible_values((; probabilities=0.5))
+        #Numbers that aren't real numbers are left alone, also by the constraint
+        @test check_possible_values((;
+            probabilities=[NumberWithoutValue()],
+            pair=(NumberWithoutValue(), NumberWithoutValue()),
+            thresholds=[2.5 + 0.0im, 1.0 + 0.0im],
+        )) === nothing
+    end
+
+    @testset "A constraint that returns something other than true or false is an ArgumentError" begin
+        @test_throws ArgumentError(
+            "The constraint total_of of the domain of the parameter weights of a cognitive model of type ModelWithConstraintOfNumbers returned 1.0 for [0.5, 0.5], but a constraint returns true or false.",
+        ) CognitiveModeling.check_parameters_in_domains(
+            ModelWithConstraintOfNumbers(), (; weights=[0.5, 0.5])
+        )
+    end
+
     @testset "Numbers that aren't real numbers are left alone, also in arrays and tuples" begin
         model = ModelWithDomains()
         @test CognitiveModeling.check_parameters_in_domains(
@@ -427,5 +566,20 @@ end
         without_domains = (; learning_rate=0.5, action_noise=1.0)
         check_many_times(ModelWithAttributes(), without_domains, 1)
         @test @allocated(check_many_times(ModelWithAttributes(), without_domains, 100)) == 0
+        #Possible values and constraints are kept in the types of the domains, so they are compiled in too
+        model_with_possible_values = ModelWithPossibleValues()
+        @test @inferred(
+            CognitiveModeling.check_parameters_in_domains(
+                model_with_possible_values, valid_parameters_with_possible_values
+            )
+        ) === nothing
+        check_many_times(
+            model_with_possible_values, valid_parameters_with_possible_values, 1
+        )
+        @test @allocated(
+            check_many_times(
+                model_with_possible_values, valid_parameters_with_possible_values, 100
+            )
+        ) == 0
     end
 end

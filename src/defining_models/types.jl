@@ -583,14 +583,17 @@ struct StateKind <: AbstractAttributeKind end
 ## The values a parameter can take ##
 
 """
-    ParameterDomain(; type=Real, lower=-Inf, upper=Inf)
+    ParameterDomain(; type, lower=-Inf, upper=Inf, possible_values=nothing,
+                    constraint=nothing)
 
 The values that a parameter of a cognitive model or an environment model can take, which
 the model gives for it in [`parameter_domains`](@ref): values of `type`, with the numbers
-in them between `lower` and `upper`.
+in them between `lower` and `upper`, or among `possible_values`, which satisfy
+`constraint`.
 
 # Keyword arguments
-- `type=Real`: the type of the parameter's values. An abstract type takes every type of its
+- `type`: the type of the parameter's values, `Real` unless it is given, or the type of the
+  possible values when there are some. An abstract type takes every type of its
   kind, so with `Real` a value can be a `Float32`, a `Float64` or a number of an automatic
   differentiation package alike, and no value is converted. A type of whole numbers, such as
   `Integer`, takes every whole number, also in another number type, such as `3.0`, and
@@ -608,12 +611,24 @@ in them between `lower` and `upper`.
 - `lower=-Inf` and `upper=Inf`: the smallest and the largest value of a parameter that is a
   real number, or of each element of an array or a tuple of real numbers, which are both in
   the domain. A parameter of another type has no bounds.
+- `possible_values=nothing`: the values that the parameter, or each element of an array or a
+  tuple, can take, in a tuple, such as `(:greedy, :random)` or `(2, 4, 8)`, or in a range,
+  such as `1:4`. A number is compared by its value, so `4.0` is among `(2, 4, 8)`. Without
+  `type`, the type is that of the possible values: `Symbol` for symbols, `Integer` for whole
+  numbers, `Real` for other numbers and `AbstractString` for strings. A domain with possible
+  values has no bounds.
+- `constraint=nothing`: a function of the parameter's whole value which returns `true` when
+  the value is in the domain, such as `sums_to_one(values) = sum(values) ≈ 1` for the
+  probabilities of the options of a choice. It is called after the type, the bounds and the
+  possible values are checked, and a named function names the constraint in errors and in
+  the display of a model.
 
-A parameter is discrete when its type, or the type of its elements, is a type of whole
-numbers, or isn't a type of real numbers, and continuous otherwise, as
-[`CognitiveModeling.discrete_parameter_names`](@ref) and
+A parameter is discrete when it has possible values, or when its type, or the type of its
+elements, is a type of whole numbers, or isn't a type of real numbers, and continuous
+otherwise, as [`CognitiveModeling.discrete_parameter_names`](@ref) and
 [`CognitiveModeling.continuous_parameter_names`](@ref) read it. The arguments are kept as
-`domain.type`, `domain.lower` and `domain.upper`.
+`domain.type`, `domain.lower`, `domain.upper`, `domain.possible_values` and
+`domain.constraint`.
 
 # Examples
 ```jldoctest
@@ -628,14 +643,52 @@ ParameterDomain(; type = Integer, lower = 1)
 
 julia> ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
 ParameterDomain(; type = AbstractVector{Real}, lower = 0, upper = 1)
+
+julia> strategy = ParameterDomain(; possible_values = (:greedy, :random));
+
+julia> strategy.type, strategy.possible_values
+(Symbol, (:greedy, :random))
+
+julia> sums_to_one(values) = sum(values) ≈ 1;
+
+julia> ParameterDomain(; type = AbstractVector{Real}, constraint = sums_to_one)
+ParameterDomain(; type = AbstractVector{Real}, constraint = sums_to_one)
 ```
 """
-struct ParameterDomain{Ttype,Telement,Tlower<:Real,Tupper<:Real}
+struct ParameterDomain{
+    Ttype,Telement,Tlower<:Real,Tupper<:Real,Tpossible_values,Tconstraint
+}
     lower::Tlower
     upper::Tupper
+    possible_values::Tpossible_values
+    constraint::Tconstraint
 
-    #Takes the type of the values and the bounds, and checks that they fit together. The type and the type of its elements are kept in the type of the domain, so that a value is checked against them without looking them up when a model runs
-    function ParameterDomain(; type::Type=Real, lower::Real=(-Inf), upper::Real=Inf)
+    #Takes the type of the values, the bounds, the possible values and the constraint, and checks that they fit together. The type and the type of its elements are kept in the type of the domain, so that a value is checked against them without looking them up when a model runs
+    function ParameterDomain(;
+        type::Union{Type,Nothing}=nothing,
+        lower::Real=(-Inf),
+        upper::Real=Inf,
+        possible_values=nothing,
+        constraint=nothing,
+    )
+
+        #The possible values are in a tuple or a range, which are the same objects each time parameter_domains runs. A vector would be made again each time, and its length isn't known when the code is compiled
+        if !(possible_values isa Union{Nothing,Tuple,AbstractRange})
+            throw(
+                ArgumentError(
+                    "A ParameterDomain takes its possible values in a tuple, such as (:greedy, :random), or in a range, such as 1:4, but it was given possible_values = $(repr(possible_values)).",
+                ),
+            )
+        elseif possible_values !== nothing && isempty(possible_values)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain takes at least one possible value, but it was given possible_values = $(repr(possible_values)).",
+                ),
+            )
+        end
+
+        #Without a type, the type is that of the possible values, or Real
+        type = something(type, type_of_possible_values(possible_values))
 
         #An array type or a tuple type that leaves the type of its elements open, as AbstractVector{<:Real} does, is a new type each time parameter_domains runs, which makes every check slow, and which Mooncake.jl can't differentiate through
         if has_open_element_type(type)
@@ -681,9 +734,65 @@ struct ParameterDomain{Ttype,Telement,Tlower<:Real,Tupper<:Real}
                 ),
             )
         end
-        return new{type,element_type,typeof(lower),typeof(upper)}(lower, upper)
+
+        #Possible values say what the parameter takes, which bounds would only repeat or contradict
+        if possible_values !== nothing && (lower != -Inf || upper != Inf)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain takes possible values or bounds, but it was given possible_values = $(repr(possible_values)) and the bounds lower = $lower and upper = $upper.",
+                ),
+            )
+        end
+
+        #Each possible value is a value of the type of the elements
+        if possible_values !== nothing &&
+            !all(value -> is_value_of_type(value, element_type), possible_values)
+            throw(
+                ArgumentError(
+                    "A ParameterDomain with type = $type was given possible_values = $(repr(possible_values)), but each of them must be a value of type $element_type.",
+                ),
+            )
+        end
+        return new{
+            type,
+            element_type,
+            typeof(lower),
+            typeof(upper),
+            typeof(possible_values),
+            typeof(constraint),
+        }(
+            lower, upper, possible_values, constraint
+        )
     end
 end
+
+"""
+    type_of_possible_values(possible_values)
+
+Return the type that a [`ParameterDomain`](@ref) with `possible_values` and no type has:
+`Real` without possible values, and otherwise the type of the possible values, widened to
+`Integer` for whole numbers, `Real` for other numbers and `AbstractString` for strings, so
+that `(2, 4, 8)` is `Integer` and `(:greedy, :random)` is `Symbol`.
+"""
+type_of_possible_values(::Nothing) = Real
+function type_of_possible_values(possible_values::Union{Tuple,AbstractRange})
+    type = eltype(possible_values)
+    type <: Bool && return Bool
+    type <: Integer && return Integer
+    type <: Real && return Real
+    type <: AbstractString && return AbstractString
+    return type
+end
+
+"""
+    is_value_of_type(value, type)
+
+Return whether `value` is a value of `type`, as a [`ParameterDomain`](@ref) takes it: a real
+number as [`takes_value`](@ref) decides, and any other value when it is of the type. Used by
+`ParameterDomain` for its possible values.
+"""
+is_value_of_type(value::Real, type::Type) = type <: Real && takes_value(type, value)
+is_value_of_type(value, type::Type) = value isa type
 
 """
     type_of_elements(type)
@@ -717,14 +826,23 @@ function Base.getproperty(domain::ParameterDomain{Ttype}, name::Symbol) where {T
     return getfield(domain, name)
 end
 
-Base.propertynames(::ParameterDomain) = (:type, :lower, :upper)
+function Base.propertynames(::ParameterDomain)
+    return (:type, :lower, :upper, :possible_values, :constraint)
+end
 
 #Shows the domain as it is written, with the arguments that aren't the defaults
 function Base.show(io::IO, domain::ParameterDomain)
     arguments = String[]
-    domain.type === Real || push!(arguments, "type = $(domain.type)")
+    domain.type === type_of_possible_values(domain.possible_values) ||
+        push!(arguments, "type = $(domain.type)")
     domain.lower == -Inf || push!(arguments, "lower = $(domain.lower)")
     domain.upper == Inf || push!(arguments, "upper = $(domain.upper)")
+    domain.possible_values === nothing ||
+        push!(arguments, "possible_values = $(repr(domain.possible_values))")
+    if domain.constraint !== nothing
+        name = something(name_of_constraint(domain.constraint), "an anonymous function")
+        push!(arguments, "constraint = $name")
+    end
     print(io, "ParameterDomain(")
     isempty(arguments) || print(io, "; ", join(arguments, ", "))
     print(io, ")")
@@ -734,14 +852,29 @@ end
 """
     is_discrete(domain)
 
-Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when its
-type, or the type of its elements when it is an array type or a tuple type, is a type of
-whole numbers, or isn't a type of real numbers. Used by [`discrete_parameter_names`](@ref)
-and by the display of a model.
+Return whether a parameter with `domain`, a [`ParameterDomain`](@ref), is discrete: when it
+has possible values, or when its type, or the type of its elements when it is an array type
+or a tuple type, is a type of whole numbers, or isn't a type of real numbers. Used by
+[`discrete_parameter_names`](@ref) and by the display of a model.
 """
-function is_discrete(::ParameterDomain{Ttype,Telement}) where {Ttype,Telement}
-    return !(Telement <: Real) || Telement <: Integer
+function is_discrete(
+    ::ParameterDomain{Ttype,Telement,Tlower,Tupper,Tpossible_values}
+) where {Ttype,Telement,Tlower,Tupper,Tpossible_values}
+    return Tpossible_values !== Nothing || !(Telement <: Real) || Telement <: Integer
 end
+
+"""
+    name_of_constraint(constraint)
+
+Return the name of `constraint`, the constraint of a [`ParameterDomain`](@ref), as errors and
+the display of a model write it: the name of a function, such as `sums_to_one`, `nothing` for
+an anonymous function, and the object as it is shown otherwise.
+"""
+function name_of_constraint(constraint::Function)
+    name = string(nameof(constraint))
+    return startswith(name, "#") ? nothing : name
+end
+name_of_constraint(constraint) = repr(constraint)
 
 ## Errors ##
 

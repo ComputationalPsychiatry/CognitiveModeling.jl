@@ -46,6 +46,20 @@ function CognitiveModeling.parameter_domains(model::ModelWithArrayParameters)
         flags=ParameterDomain(; type=NTuple{2,Bool}),
     )
 end
+#A model whose parameters have possible values, names and real numbers, or a constraint
+struct ModelWithPossibleValuesAndConstraint <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithPossibleValuesAndConstraint)
+    return ModelAttributes(;
+        parameters=(:strategy, :step_size, :thresholds), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.parameter_domains(model::ModelWithPossibleValuesAndConstraint)
+    return (;
+        strategy=ParameterDomain(; possible_values=(:greedy, :random)),
+        step_size=ParameterDomain(; possible_values=(0.5, 1.0)),
+        thresholds=ParameterDomain(; type=AbstractVector{Real}, constraint=issorted),
+    )
+end
 #Models whose domains don't fit them: one for a parameter that isn't in the attributes, and domains in the form of NamedTuples
 struct ModelWithDomainForUnknownParameter <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithDomainForUnknownParameter)
@@ -90,6 +104,13 @@ end
             (:counts, :flags)
         @test CognitiveModeling.continuous_parameter_names(ModelWithArrayParameters()) ===
             (:choice_probabilities,)
+        #A parameter with possible values is discrete, also when they are real numbers, and a constraint doesn't change it
+        @test CognitiveModeling.discrete_parameter_names(
+            ModelWithPossibleValuesAndConstraint()
+        ) === (:strategy, :step_size)
+        @test CognitiveModeling.continuous_parameter_names(
+            ModelWithPossibleValuesAndConstraint()
+        ) === (:thresholds,)
     end
 
     @testset "Domains that don't fit the model are an error when the names are read" begin

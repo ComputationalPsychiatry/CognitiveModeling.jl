@@ -3,11 +3,12 @@
     check_parameters_in_domains(model, parameters)
 
 Throw a [`ParameterDomainError`](@ref) if a parameter in `parameters` is outside its domain
-in [`parameter_domains`](@ref) of `model`: of another type than the domain's, or below its
-lower bound or above its upper bound. Real numbers and values that aren't numbers are
-checked, and so is every element of an array. A number that isn't a real number is left
-alone. It is an `ArgumentError` when the domains aren't [`ParameterDomain`](@ref)s under
-the names of parameters in the model's attributes. Used by [`simulate`](@ref),
+in [`parameter_domains`](@ref) of `model`: of another type than the domain's, below its lower
+bound or above its upper bound, not one of its possible values, or not satisfying its
+constraint. Real numbers and values that aren't numbers are checked, and so is every element
+of an array or a tuple. A number that isn't a real number is left alone. It is an
+`ArgumentError` when the domains aren't [`ParameterDomain`](@ref)s under the names of
+parameters in the model's attributes. Used by [`simulate`](@ref),
 [`InstantiatedModel`](@ref) and fitted sessions, before anything runs, unless they are given
 `check_parameter_domains = false`.
 """
@@ -98,13 +99,16 @@ Throw a [`ParameterDomainError`](@ref) if `value`, the value of the parameter `n
 `value` with [`check_single_value`](@ref). A domain of arrays takes an array with the number
 of dimensions of its type, and a domain of tuples a tuple of the length of its type, if it
 has one, and each element is then checked with `check_single_value` against the type of the
-elements. A number that isn't a real number, and an array of them, is left alone. Used by
-[`check_values_in_domains`](@ref).
+elements. The whole value is then checked against the domain's constraint, with
+[`check_constraint`](@ref). A number that isn't a real number, and an array of them, is left
+alone. Used by [`check_values_in_domains`](@ref).
 """
 function check_value_in_domain(
     model::AbstractTimestepModel, name::Symbol, value, domain::ParameterDomain{Ttype}
 ) where {Ttype}
-    return check_value_in_domain(model, name, value, domain, kind_of_values(Ttype))
+    check_value_in_domain(model, name, value, domain, kind_of_values(Ttype))
+    check_constraint(model, name, value, domain.constraint)
+    return nothing
 end
 
 #Which kind of values a domain takes is in its type, so it is chosen when the code is compiled and costs nothing when a model runs
@@ -266,8 +270,9 @@ Throw a [`ParameterDomainError`](@ref) if `value` isn't a value of `type` within
 [`ParameterDomain`](@ref): a real number that `type` doesn't take, as
 [`takes_value`](@ref) decides, or that is below the lower bound or above the upper bound,
 which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides for a number that
-isn't one of Julia's own, or another value that isn't of `type`. A number that isn't a real
-number is left alone. `value` is the parameter `name` of `model` when `position` is
+isn't one of Julia's own, or another value that isn't of `type`, or a value that isn't one
+of the domain's possible values, as [`is_possible_value`](@ref) decides. A number that isn't
+a real number is left alone. `value` is the parameter `name` of `model` when `position` is
 `nothing`, and its element at `position` otherwise. Used by
 [`check_value_in_domain`](@ref) and [`check_tuple_elements`](@ref).
 """
@@ -278,6 +283,8 @@ function check_single_value(
     if !(domain.lower <= value <= domain.upper) && is_beyond_bounds(value, domain)
         throw_outside_bounds(model, name, value, domain, position)
     end
+    is_possible_value(value, domain.possible_values) ||
+        throw_not_possible_value(model, name, value, domain, position)
     return nothing
 end
 
@@ -287,8 +294,61 @@ function check_single_value(
 ) where {T}
     value isa Number && return nothing
     value isa T || throw_not_of_type(model, name, value, T, position)
+    is_possible_value(value, domain.possible_values) ||
+        throw_not_possible_value(model, name, value, domain, position)
     return nothing
 end
+
+#Whether a domain has possible values is in its type, so a domain without them costs nothing. A number is compared by its value, as == compares it, so that 4.0 is among (2, 4, 8)
+"""
+    is_possible_value(value, possible_values)
+
+Return whether `value` is one of `possible_values`, the possible values of a
+[`ParameterDomain`](@ref), as `in` decides, and `true` when the domain has none. Used by
+[`check_single_value`](@ref).
+"""
+is_possible_value(value, ::Nothing) = true
+function is_possible_value(value, possible_values::Union{Tuple,AbstractRange})
+    return value in possible_values
+end
+
+"""
+    check_constraint(model, name, value, constraint)
+
+Throw a [`ParameterDomainError`](@ref) if `constraint`, the constraint of the domain of the
+parameter `name` of `model`, returns `false` for its `value`, and an `ArgumentError` if it
+returns something other than `true` or `false`. Nothing is checked without a constraint, or
+for a value with numbers that aren't real numbers, as [`holds_unreal_numbers`](@ref) decides.
+Used by [`check_value_in_domain`](@ref).
+"""
+check_constraint(model, name::Symbol, value, ::Nothing) = nothing
+function check_constraint(model, name::Symbol, value, constraint)
+
+    #A number that isn't a real number can't be compared with anything, such as a number that Reactant.jl traces while it compiles
+    holds_unreal_numbers(value) && return nothing
+
+    #The constraint says whether the value satisfies it
+    satisfies_constraint = constraint(value)
+    satisfies_constraint isa Bool || throw_constraint_not_true_or_false(
+        model, name, value, constraint, satisfies_constraint
+    )
+    satisfies_constraint || throw_constraint_not_satisfied(model, name, value, constraint)
+    return nothing
+end
+
+"""
+    holds_unreal_numbers(value)
+
+Return whether `value` is a number that isn't a real number, or an array or a tuple with
+such numbers in it, such as the numbers that Reactant.jl traces while it compiles. Used by
+[`check_constraint`](@ref).
+"""
+holds_unreal_numbers(value::Number) = !(value isa Real)
+function holds_unreal_numbers(values::AbstractArray)
+    return eltype(values) <: Number && !(eltype(values) <: Real)
+end
+holds_unreal_numbers(values::Tuple) = any(holds_unreal_numbers, values)
+holds_unreal_numbers(value) = false
 
 #A number of automatic differentiation can compare as beyond a bound that it equals: ForwardDiff.jl orders numbers of the same value by their derivatives, so that a learning rate of exactly 1 whose derivative is above zero compares as above 1, as it does when a transformation such as logistic reaches 1 while a sampler explores. Such a number is compared with the nearest number beyond each bound instead, which its value alone decides. Julia's own numbers are compared with the bounds as they are
 """
@@ -374,11 +434,80 @@ is outside the bounds of `domain`. The value is the parameter itself when `posit
 end
 
 """
+    throw_not_possible_value(model, name, value, domain, position)
+
+Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
+isn't one of the possible values of `domain`. The value is the parameter itself when
+`position` is `nothing`, and its element at `position` otherwise. Used by
+[`check_single_value`](@ref).
+"""
+@noinline function throw_not_possible_value(
+    model, name::Symbol, value, domain::ParameterDomain, position
+)
+    subject = if position === nothing
+        "is $(repr(value))"
+    else
+        "has $(describe_element(name, position)) = $(repr(value))"
+    end
+    return throw(
+        ParameterDomainError(
+            "The parameter $name of $(describe_model(model)) $subject, which isn't one of its possible values, $(repr(domain.possible_values)).",
+        ),
+    )
+end
+
+"""
+    throw_constraint_not_satisfied(model, name, value, constraint)
+
+Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
+doesn't satisfy `constraint`, the constraint of its domain. Used by
+[`check_constraint`](@ref).
+"""
+@noinline function throw_constraint_not_satisfied(model, name::Symbol, value, constraint)
+    return throw(
+        ParameterDomainError(
+            "The parameter $name of $(describe_model(model)) is $(repr(value)), which doesn't satisfy $(describe_constraint(constraint)) of its domain.",
+        ),
+    )
+end
+
+"""
+    throw_constraint_not_true_or_false(model, name, value, constraint, returned)
+
+Throw the `ArgumentError` for `constraint`, the constraint of the domain of the parameter
+`name` of `model`, which returned `returned` for the parameter's `value`, which is neither
+`true` nor `false`. Used by [`check_constraint`](@ref).
+"""
+@noinline function throw_constraint_not_true_or_false(
+    model, name::Symbol, value, constraint, returned
+)
+    return throw(
+        ArgumentError(
+            "$(uppercasefirst(describe_constraint(constraint))) of the domain of the parameter $name of $(describe_model(model)) returned $(repr(returned)) for $(repr(value)), but a constraint returns true or false.",
+        ),
+    )
+end
+
+"""
+    describe_constraint(constraint)
+
+Return `constraint`, the constraint of a [`ParameterDomain`](@ref), as errors write it: with
+its name, as in `the constraint sums_to_one`, and without one for an anonymous function, as
+in `the constraint`. Used by [`throw_constraint_not_satisfied`](@ref) and
+[`throw_constraint_not_true_or_false`](@ref).
+"""
+function describe_constraint(constraint)
+    name = name_of_constraint(constraint)
+    return name === nothing ? "the constraint" : "the constraint $name"
+end
+
+"""
     describe_element(name, position)
 
 Return the element at `position` of the parameter `name` as it is indexed, such as
 `choice_probabilities[3]`, or `weights[2, 1]` for a position in a matrix. Used by
-[`throw_not_of_type`](@ref) and [`throw_outside_bounds`](@ref).
+[`throw_not_of_type`](@ref), [`throw_outside_bounds`](@ref) and
+[`throw_not_possible_value`](@ref).
 """
 describe_element(name::Symbol, position::Integer) = "$name[$position]"
 function describe_element(name::Symbol, position::CartesianIndex)
