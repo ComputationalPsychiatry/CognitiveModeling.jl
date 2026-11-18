@@ -693,6 +693,104 @@ function simulate_with_fixed_observations(x, who_starts, environment)
     return total
 end
 
+# A Rescorla-Wagner model of three options, which learns the expected payoff of each, a vector, with a learning rate for
+# each option, a vector, from the payoffs of every option, a vector, and adds up the payoffs, a number. It rates each
+# option, a vector, and gives its confidence, a number. An environment pays each option its size, a vector, in proportion
+# to the agent's rating of it, and counts the trials, a number. The payoff sizes have a domain with a constraint, which
+# every backend's numbers pass through
+struct LearnsEachOptionDeterministically <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::LearnsEachOptionDeterministically, parameters
+)
+    learning_rates = parameters.learning_rates
+    return (;
+        expected_payoffs=0.5 .* one.(learning_rates), total_payoff=zero(sum(learning_rates))
+    )
+end
+function CognitiveModeling.run_timestep(
+    model::LearnsEachOptionDeterministically, context::ModelContext
+)
+    (; expected_payoffs, total_payoff) = context.previous_state
+    α = context.parameters.learning_rates
+    payoffs = context.input.payoffs
+    if !(payoffs isa AbstractNoValue)
+        expected_payoffs = expected_payoffs .+ α .* (payoffs .- expected_payoffs)
+        total_payoff += sum(payoffs)
+    end
+    return ModelOutput(
+        (;
+            ratings=Deterministic(context.parameters.rating_scale .* expected_payoffs),
+            confidence=Deterministic(sum(expected_payoffs) / length(expected_payoffs)),
+        ),
+        (; expected_payoffs, total_payoff),
+    )
+end
+function CognitiveModeling.attribute_names(model::LearnsEachOptionDeterministically)
+    return ModelAttributes(;
+        parameters=(:learning_rates, :rating_scale),
+        states=(:expected_payoffs, :total_payoff),
+        inputs=:payoffs,
+        outputs=(:ratings, :confidence),
+    )
+end
+function CognitiveModeling.parameter_domains(model::LearnsEachOptionDeterministically)
+    return (;
+        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_scale=ParameterDomain(; lower=0),
+    )
+end
+struct PaysForRatings <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::PaysForRatings, parameters) = (; n_trials=0)
+function CognitiveModeling.run_timestep(environment::PaysForRatings, context::ModelContext)
+    payoff_sizes = context.parameters.payoff_sizes
+    ratings = if context.input.ratings isa AbstractNoValue
+        0.5 .* one.(payoff_sizes)
+    else
+        context.input.ratings
+    end
+    return ModelOutput(
+        (; payoffs=Deterministic(payoff_sizes .* ratings ./ (1 .+ ratings))),
+        (; n_trials=context.previous_state.n_trials + 1),
+    )
+end
+function CognitiveModeling.attribute_names(environment::PaysForRatings)
+    return ModelAttributes(;
+        parameters=:payoff_sizes,
+        states=:n_trials,
+        inputs=(:ratings, :confidence),
+        outputs=:payoffs,
+    )
+end
+function CognitiveModeling.parameter_domains(environment::PaysForRatings)
+    return (;
+        payoff_sizes=ParameterDomain(;
+            type=AbstractVector{Real}, lower=0, constraint=issorted
+        ),
+    )
+end
+
+# A simulation with vectors in every attribute, with the parameters from a vector, of which the learning rates and the
+# payoff sizes are passed on as vectors. It sums every saved state and action, from timestep 1 on, since timestep 0 has
+# no action
+function simulate_with_vectors(x, who_starts)
+    simulation = simulate(
+        LearnsEachOptionDeterministically(),
+        PaysForRatings();
+        who_starts,
+        n_steps=10,
+        cognitive_parameters=(; learning_rates=x[1:3], rating_scale=x[4]),
+        environment_parameters=(; payoff_sizes=x[5:7]),
+        cognitive_save_history=SaveHistory(SaveEverything()),
+    )
+    total = zero(x[1])
+    for t in 2:length(simulation.states)
+        (; expected_payoffs, total_payoff) = simulation.states[t]
+        (; ratings, confidence) = simulation.actions[t]
+        total += sum(expected_payoffs) + total_payoff + sum(ratings) + confidence
+    end
+    return total
+end
+
 # What the AD and Reactant tests check. In each entry,
 # f takes a vector x and returns a number, such as a model's log likelihood for example data.
 # Set reactant = false for what can't run on Reactant. Here that's Xoshiro, which Reactant doesn't support.
@@ -977,6 +1075,18 @@ const TEST_CASES = [
         name="simulate on single observations with parameter domains",
         f=simulate_on_observations_within_domains,
         x=[0.3, 0.1, 2.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with observations, actions, states and parameters that are vectors, environment starts",
+        f=x -> simulate_with_vectors(x, EnvironmentStarts()),
+        x=[0.3, 0.5, 0.2, 1.5, 1.0, 2.0, 3.0],
+        reactant=true,
+    ),
+    (;
+        name="simulate with observations, actions, states and parameters that are vectors, agent starts",
+        f=x -> simulate_with_vectors(x, AgentStarts()),
+        x=[0.3, 0.5, 0.2, 1.5, 1.0, 2.0, 3.0],
         reactant=true,
     ),
 ]

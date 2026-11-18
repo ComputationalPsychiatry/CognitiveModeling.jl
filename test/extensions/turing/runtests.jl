@@ -38,5 +38,6 @@ end
     include("predict_session_trajectories.jl")
     include("discrete_and_continuous_variables.jl")
     include("vector_parameters.jl")
+    include("multivariate_attributes.jl")
     include("outputs_of_any_type.jl")
 end

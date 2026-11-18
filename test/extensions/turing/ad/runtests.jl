@@ -59,6 +59,8 @@ const KNOWN_FAILURES = [
             "turing full model where only the first and the third session run their environment",
             "turing full model of sessions of different lengths, where only the second and the third impute missing actions",
             "turing full model with an output whose values are vectors, made from two columns",
+            "turing full model with observations, actions, states and parameters that are vectors",
+            "turing full model with a missing action that is a vector, imputed",
         ],
     ),
     (;
@@ -66,7 +68,13 @@ const KNOWN_FAILURES = [
         backends=["Enzyme forward", "Enzyme forward, runtime activity"],
         cases=[
             "turing full model with an output whose values are vectors, made from two columns",
+            "turing full model with observations, actions, states and parameters that are vectors",
         ],
+    ),
+    (;
+        bug="Enzyme with runtime activity throws an IllegalTypeAnalysisException for a session with a vector action that is missing on one timestep and imputed, so that the actions are a Vector{Union{MissingValue, Vector{Float64}}}, whose elements are boxed. A missing action that is a number is right",
+        backends=["Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
+        cases=["turing full model with a missing action that is a vector, imputed"],
     ),
     (;
         bug="Mooncake forward throws an UndefRefError on a full model where only some sessions have latent variables. Preparing its cache, it reads every element of the arrays that the differentiated function holds, here through the closure over the LogDensityFunction, and DynamicPPL's GrowableArray has elements that aren't assigned for the sessions without latent variables. Turing.jl's samplers, which differentiate through LogDensityFunction(model; adtype), aren't affected",
@@ -75,6 +83,7 @@ const KNOWN_FAILURES = [
             "turing full model where only the first and the third session impute missing actions",
             "turing full model where only the first and the third session run their environment",
             "turing full model of sessions of different lengths, where only the second and the third impute missing actions",
+            "turing full model with a missing action that is a vector, imputed",
         ],
     ),
     (;

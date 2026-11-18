@@ -808,6 +808,100 @@ const TURING_FULL_MODEL_WITH_VECTOR_REPORTS = full_model(
     ),
 )
 
+# A cognitive model which learns the expected payoff of each of three options, a vector, with a learning rate for each
+# option, a vector, from the payoffs of every option, a vector, beside the number of the trial, a number. It rates each
+# option, a vector from a normal distribution over vectors, and chooses an option with a probability in proportion to
+# its expected payoff, a number
+struct TuringRatesAndChoosesOptions <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::TuringRatesAndChoosesOptions, parameters)
+    return (; expected_payoffs=0.5 .* one.(parameters.learning_rates), n_updates=0)
+end
+function CognitiveModeling.run_timestep(
+    model::TuringRatesAndChoosesOptions, context::ModelContext
+)
+    (; expected_payoffs, n_updates) = context.previous_state
+    payoffs = context.input.payoffs
+    if !(payoffs isa AbstractNoValue)
+        expected_payoffs =
+            expected_payoffs .+
+            context.parameters.learning_rates .* (payoffs .- expected_payoffs)
+        n_updates += 1
+    end
+    return ModelOutput(
+        (;
+            ratings=MvNormal(
+                expected_payoffs,
+                context.parameters.rating_noise^2 .*
+                [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0],
+            ),
+            choice=Categorical(expected_payoffs ./ sum(expected_payoffs)),
+        ),
+        (; expected_payoffs, n_updates),
+    )
+end
+function CognitiveModeling.attribute_names(model::TuringRatesAndChoosesOptions)
+    return ModelAttributes(;
+        parameters=(:learning_rates, :rating_noise),
+        states=(:expected_payoffs, :n_updates),
+        inputs=(:payoffs, :trial),
+        outputs=(:ratings, :choice),
+    )
+end
+function CognitiveModeling.parameter_domains(model::TuringRatesAndChoosesOptions)
+    return (;
+        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_noise=ParameterDomain(; lower=0),
+    )
+end
+
+# The payoffs, ratings and choices of three sessions of different lengths, with the payoffs and the ratings in a column for
+# each option, and the same table with the second rating of the fourth row missing, which makes its whole vector missing
+const TURING_OPTIONS_TABLE = (;
+    id=["S1", "S1", "S2", "S2", "S2", "S3", "S3", "S3", "S3"],
+    trial=[1, 2, 1, 2, 3, 1, 2, 3, 4],
+    payoff_1=[1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0],
+    payoff_2=[0.0, 2.0, 2.0, 0.0, 2.0, 2.0, 0.0, 0.0, 2.0],
+    payoff_3=[3.0, 3.0, 0.0, 3.0, 0.0, 3.0, 3.0, 0.0, 3.0],
+    rating_1=[0.7, 0.6, 0.4, 0.8, 0.9, 0.3, 0.2, 0.7, 0.5],
+    rating_2=Union{Missing,Float64}[0.2, 1.1, 1.4, 0.9, 1.5, 1.6, 0.8, 0.6, 1.3],
+    rating_3=[2.4, 2.8, 0.3, 1.9, 0.9, 2.5, 2.9, 1.2, 2.2],
+    choice=[3, 3, 2, 1, 2, 2, 3, 3, 3],
+)
+const TURING_OPTIONS_TABLE_WITH_A_MISSING_RATING = (;
+    TURING_OPTIONS_TABLE...,
+    rating_2=Union{Missing,Float64}[0.2, 1.1, 1.4, missing, 1.5, 1.6, 0.8, 0.6, 1.3],
+)
+function turing_full_model_of_options(table)
+    return full_model(
+        TuringBackend(),
+        IndependentParameters((;
+            learning_rates=filldist(Beta(2, 2), 3), rating_noise=LogNormal(-1, 0.5)
+        )),
+        MultipleSessionsInfo(
+            TuringRatesAndChoosesOptions(),
+            table;
+            observation_columns=(
+                (:payoff_1, :payoff_2, :payoff_3) =>
+                    ((first, second, third) -> [first, second, third]) => :payoffs,
+                :trial,
+            ),
+            action_columns=(
+                (:rating_1, :rating_2, :rating_3) =>
+                    ((first, second, third) -> [first, second, third]) => :ratings,
+                :choice,
+            ),
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        ),
+    )
+end
+const TURING_FULL_MODEL_WITH_VECTORS_IN_EVERY_ATTRIBUTE = turing_full_model_of_options(
+    TURING_OPTIONS_TABLE
+)
+const TURING_FULL_MODEL_WITH_AN_IMPUTED_VECTOR_ACTION = turing_full_model_of_options(
+    TURING_OPTIONS_TABLE_WITH_A_MISSING_RATING
+)
+
 function log_density_of(model)
     log_density_function = LogDensityFunction(model)
     return x -> LogDensityProblems.logdensity(log_density_function, x)
@@ -974,6 +1068,20 @@ const TURING_CASES = [
         name="turing full model with an output whose values are vectors, made from two columns",
         f=log_density_of(TURING_FULL_MODEL_WITH_VECTOR_REPORTS),
         x=[0.2, -0.1, 0.4],
+        reactant=false,
+    ),
+    # The learning rates of the three sessions, a column each, the rating noises, and then the imputed ratings. The learning
+    # rates stay below 1 where the gradient is prepared, at x .+ 0.25
+    (;
+        name="turing full model with observations, actions, states and parameters that are vectors",
+        f=log_density_of(TURING_FULL_MODEL_WITH_VECTORS_IN_EVERY_ATTRIBUTE),
+        x=[0.2, 0.6, 0.7, 0.5, 0.3, 0.7, 0.4, 0.45, 0.1, 0.3, 0.5, 0.4],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with a missing action that is a vector, imputed",
+        f=log_density_of(TURING_FULL_MODEL_WITH_AN_IMPUTED_VECTOR_ACTION),
+        x=[0.2, 0.6, 0.7, 0.5, 0.3, 0.7, 0.4, 0.45, 0.1, 0.3, 0.5, 0.4, 0.8, 0.9, 1.9],
         reactant=false,
     ),
     (;

@@ -872,6 +872,230 @@ end
     end
 end
 
+#An action made by hand which is a vector: a rating of each option, around the value of each, with noise of a size
+struct RatingsAroundValues{Tvalues,Tnoise}
+    values::Tvalues
+    noise::Tnoise
+end
+function Base.rand(rng::AbstractRNG, ratings::RatingsAroundValues)
+    return ratings.values .+ ratings.noise .* randn(rng, length(ratings.values))
+end
+
+#An observation made by hand which is a vector: a payoff of each option, which is the size of the option with a probability, and zero otherwise
+struct PayoffsWithProbability{Tsizes,Tprobability}
+    sizes::Tsizes
+    probability::Tprobability
+end
+function Base.rand(rng::AbstractRNG, payoffs::PayoffsWithProbability)
+    return [rand(rng) < payoffs.probability ? size : zero(size) for size in payoffs.sizes]
+end
+
+#Learns the expected payoff of each option, a vector, with a learning rate for each option, a vector, from the payoffs of every option, a vector, beside the number of the trial, a number. It rates each option, a vector, chooses the option it expects the most of, a number, and counts the timesteps it learned on, a number
+struct LearnsEachOption <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::LearnsEachOption, parameters)
+    return (; expected_payoffs=fill(0.5, length(parameters.learning_rates)), n_updates=0)
+end
+function CognitiveModeling.run_timestep(model::LearnsEachOption, context::ModelContext)
+    (; expected_payoffs, n_updates) = context.previous_state
+    payoffs = context.input.payoffs
+    if !(payoffs isa AbstractNoValue)
+        expected_payoffs =
+            expected_payoffs .+
+            context.parameters.learning_rates .* (payoffs .- expected_payoffs)
+        n_updates += 1
+    end
+    return ModelOutput(
+        (;
+            ratings=RatingsAroundValues(expected_payoffs, context.parameters.rating_noise),
+            choice=Deterministic(argmax(expected_payoffs)),
+        ),
+        (; expected_payoffs, n_updates),
+    )
+end
+function CognitiveModeling.attribute_names(model::LearnsEachOption)
+    return ModelAttributes(;
+        parameters=(:learning_rates, :rating_noise),
+        states=(:expected_payoffs, :n_updates),
+        inputs=(:payoffs, :trial),
+        outputs=(:ratings, :choice),
+    )
+end
+function CognitiveModeling.parameter_domains(model::LearnsEachOption)
+    return (;
+        learning_rates=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1),
+        rating_noise=ParameterDomain(; lower=0),
+    )
+end
+
+#Pays each option its size with a probability, a vector, and gives the number of the trial, a number. It counts how often each option was chosen, a vector, beside the number of trials, a number. Its sizes of payoffs are a vector, which grows from the first option to the last
+struct PaysEachOption <: AbstractEnvironmentModel end
+function CognitiveModeling.initialize_state(environment::PaysEachOption, parameters)
+    return (; n_choices=zeros(Int, length(parameters.payoff_sizes)), n_trials=0)
+end
+function CognitiveModeling.run_timestep(environment::PaysEachOption, context::ModelContext)
+    (; n_choices, n_trials) = context.previous_state
+    choice = context.input.choice
+    if !(choice isa AbstractNoValue)
+        n_choices = [n + (option == choice) for (option, n) in enumerate(n_choices)]
+    end
+    n_trials += 1
+    payoffs = PayoffsWithProbability(
+        context.parameters.payoff_sizes, context.parameters.payoff_probability
+    )
+    return ModelOutput((; payoffs, trial=Deterministic(n_trials)), (; n_choices, n_trials))
+end
+function CognitiveModeling.attribute_names(environment::PaysEachOption)
+    return ModelAttributes(;
+        parameters=(:payoff_sizes, :payoff_probability),
+        states=(:n_choices, :n_trials),
+        inputs=(:ratings, :choice),
+        outputs=(:payoffs, :trial),
+    )
+end
+function CognitiveModeling.parameter_domains(environment::PaysEachOption)
+    return (;
+        payoff_sizes=ParameterDomain(;
+            type=AbstractVector{Real}, lower=0, constraint=issorted
+        ),
+        payoff_probability=ParameterDomain(; lower=0, upper=1),
+    )
+end
+
+#Updates expected payoffs by hand, as LearnsEachOption does, with the payoffs it receives
+function expected_payoffs_by_hand(learning_rates, received_payoffs)
+    expected_payoffs = fill(0.5, length(learning_rates))
+    for payoffs in received_payoffs
+        expected_payoffs =
+            expected_payoffs .+ learning_rates .* (payoffs .- expected_payoffs)
+    end
+    return expected_payoffs
+end
+
+@testset "Observations, actions, states and parameters that are vectors, beside ones that are numbers" begin
+    vector_parameters = (; learning_rates=[0.2, 0.5, 0.9], rating_noise=0.1)
+    vector_environment_parameters = (; payoff_sizes=[1.0, 2.0, 3.0], payoff_probability=0.7)
+    function simulate_vectors(
+        who_starts;
+        rng=Xoshiro(1),
+        cognitive_parameters=vector_parameters,
+        environment_parameters=vector_environment_parameters,
+    )
+        return simulate(
+            LearnsEachOption(),
+            PaysEachOption();
+            who_starts,
+            n_steps=6,
+            cognitive_parameters,
+            environment_parameters,
+            rng,
+            cognitive_save_history=SaveHistory(SaveEverything()),
+            environment_save_history=SaveHistory(SaveEverything()),
+        )
+    end
+
+    @testset "Each timestep's vectors are saved, and each state follows from what the models received, whoever starts" begin
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            simulation = simulate_vectors(who_starts)
+            @test length(simulation.states) == length(simulation.environment.states) == 7
+            @test eltype(simulation.observations) == Union{
+                @NamedTuple{payoffs::BeforeFirstTimestep,trial::BeforeFirstTimestep},
+                @NamedTuple{payoffs::Vector{Float64},trial::Int64},
+            }
+            for t in 2:7
+                #The payoffs are a vector, with each option's size or zero, and the trial a number
+                (; payoffs, trial) = simulation.observations[t]
+                @test length(payoffs) == 3 && all(payoffs .== 0 .|| payoffs .== [1, 2, 3])
+                @test trial == t - 1
+                #The agent receives the observation of the same timestep when the environment starts, and of the timestep before
+                #when the agent starts, which at timestep 1 is none
+                received = if who_starts isa EnvironmentStarts
+                    [observation.payoffs for observation in simulation.observations[2:t]]
+                else
+                    [observation.payoffs for observation in simulation.observations[2:(t - 1)]]
+                end
+                (; expected_payoffs, n_updates) = simulation.states[t]
+                @test expected_payoffs ≈ expected_payoffs_by_hand([0.2, 0.5, 0.9], received)
+                @test n_updates == length(received)
+                #The ratings are a vector around the expected payoffs, and the choice a number, the option expected to pay the most
+                @test simulation.action_distributions[t].ratings.values == expected_payoffs
+                @test length(simulation.actions[t].ratings) == 3
+                @test simulation.actions[t].choice == argmax(expected_payoffs)
+                #The environment receives the action of the same timestep when the agent starts, and of the timestep before when
+                #the environment starts, and counts the choices of each option in a vector
+                choices = if who_starts isa AgentStarts
+                    [action.choice for action in simulation.actions[2:t]]
+                else
+                    [action.choice for action in simulation.actions[2:(t - 1)]]
+                end
+                @test simulation.environment.states[t].n_choices ==
+                    [count(==(option), choices) for option in 1:3]
+                @test simulation.environment.actions[t].ratings ==
+                    simulation.actions[t].ratings
+            end
+            #The same seed gives the same vectors. The distributions are left out, since a struct with a vector in it is only
+            #equal to itself
+            same_seed = simulate_vectors(who_starts)
+            other_seed = simulate_vectors(who_starts; rng=Xoshiro(2))
+            for name in (:states, :observations, :actions)
+                @test getproperty(same_seed, name) == getproperty(simulation, name)
+                @test getproperty(other_seed, name) != getproperty(simulation, name)
+            end
+            @test same_seed.environment.states == simulation.environment.states
+        end
+    end
+
+    @testset "An agent simulated on one observation at a time takes and gives vectors" begin
+        agent = InstantiatedModel(LearnsEachOption(), vector_parameters)
+        action = simulate!(agent, (; payoffs=[1.0, 0.0, 3.0], trial=1); rng=Xoshiro(2))
+        @test length(action.ratings) == 3 && action.choice == 3
+        @test agent.state.expected_payoffs ≈ [0.6, 0.25, 2.75]
+        simulate!(agent, (; payoffs=[0.0, 2.0, 3.0], trial=2); rng=Xoshiro(2))
+        @test agent.state == (;
+            expected_payoffs=[0.6, 0.25, 2.75] .+
+                             [0.2, 0.5, 0.9] .* ([0.0, 2.0, 3.0] .- [0.6, 0.25, 2.75]),
+            n_updates=2,
+        )
+    end
+
+    @testset "Fixed observations that are vectors are given in order, and the simulation stops after the last" begin
+        fixed = FixedObservationsEnvironment((;
+            payoffs=[[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]], trial=[1, 2]
+        ))
+        simulation = simulate(
+            LearnsEachOption(),
+            fixed;
+            who_starts=EnvironmentStarts(),
+            n_steps=5,
+            cognitive_parameters=vector_parameters,
+            environment_parameters=(;),
+            action_map=NameMap(),
+            rng=Xoshiro(1),
+            cognitive_save_history=SaveHistory(SaveEverything()),
+        )
+        @test [state.expected_payoffs for state in simulation.states] ≈ [
+            [0.5, 0.5, 0.5],
+            expected_payoffs_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0]]),
+            expected_payoffs_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]]),
+        ]
+        @test simulation.observations[3] == (; payoffs=[0.0, 2.0, 3.0], trial=2)
+    end
+
+    @testset "The vector parameters of both models are checked against their domains, with the bounds of each element and the constraint of the whole" begin
+        @test_throws ParameterDomainError(
+            "The parameter learning_rates of a cognitive model of type LearnsEachOption has learning_rates[2] = 1.5, which is outside its domain, from 0 to 1.",
+        ) simulate_vectors(
+            EnvironmentStarts();
+            cognitive_parameters=(; learning_rates=[0.2, 1.5, 0.9], rating_noise=0.1),
+        )
+        @test_throws ParameterDomainError(
+            "The parameter payoff_sizes of an environment model of type PaysEachOption is [3.0, 1.0, 2.0], which doesn't satisfy the constraint issorted of its domain.",
+        ) simulate_vectors(
+            AgentStarts();
+            environment_parameters=(; payoff_sizes=[3.0, 1.0, 2.0], payoff_probability=0.7),
+        )
+    end
+end
+
 @testset "simulate" begin
     expected_rewards(cognitive_states) =
         [state.expected_reward for state in cognitive_states]
