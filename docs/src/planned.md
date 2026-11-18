@@ -15,6 +15,9 @@ This page lists what is planned and not written yet. The list will grow.
 - Models with discrete parameters, to show how they are fitted. The page
   [Discrete parameters](generated/discrete_parameters.md) is a sketch of it.
 - Examples with models from control theory as cognitive models.
+- Models from game theory, such as win-stay-lose-shift, and models that take a payoff
+  matrix, as an input or as a parameter.
+- The k-ToM model of recursive theory of mind.
 
 ## Interfaces
 
@@ -41,6 +44,10 @@ This page lists what is planned and not written yet. The list will grow.
 - Whether a trial needs to be distinguished from a timestep, and whether a model can have
   nested time scales, such as evidence that accumulates over several timesteps within each
   trial and learning between the trials.
+- Relations between parameters, checked beside the domain of each parameter: a function of
+  all the parameters of a model, such as one that the lower of two thresholds is below the
+  upper one, or that the sum of two rates is at most 1, or that a vector has one element for
+  each option that another parameter gives.
 
 ## Fitting
 
