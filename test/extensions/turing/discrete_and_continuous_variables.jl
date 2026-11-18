@@ -1,12 +1,4 @@
-#The function that the tutorial on discrete parameters shows for reading the names of the discrete and of the continuous variables of a Turing.jl model, as it is written there. It is all Turing.jl's and DynamicPPL.jl's own, so these tests say when a new version of either changes what the tutorial shows
-function discrete_and_continuous_variable_names(model)
-    distributions = Turing.DynamicPPL.extract_priors(model)
-    variable_names = collect(keys(distributions))
-    is_discrete = map(name -> distributions[name] isa DiscreteDistribution, variable_names)
-    return (;
-        discrete=variable_names[is_discrete], continuous=variable_names[.!is_discrete]
-    )
-end
+#Each test reads the names of the discrete and of the continuous variables of a Turing.jl model with the lines that the tutorial on discrete parameters shows, as they are written there. They are all Turing.jl's and DynamicPPL.jl's own, so these tests say when a new version of either changes what the tutorial shows
 
 #A Turing.jl model that has nothing to do with sessions, with discrete and continuous variables of one value and of several
 Turing.@model function model_with_both_kinds_of_variables(observed_value)
@@ -22,16 +14,18 @@ end
 
 @testset "The discrete and the continuous variables of a model, as the tutorial reads them" begin
     @testset "A variable is discrete when its distribution is, in any Turing.jl model" begin
-        variable_names = discrete_and_continuous_variable_names(
-            model_with_both_kinds_of_variables(0.3)
-        )
-        @test variable_names.discrete == [
+        model = model_with_both_kinds_of_variables(0.3)
+        priors = Turing.DynamicPPL.extract_priors(model)
+        names = collect(keys(priors))
+        discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+        continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
+        @test discrete == [
             @varname(n_components),
             @varname(component),
             @varname(flags),
             @varname(grid_value),
         ]
-        @test variable_names.continuous == [@varname(means), @varname(sd)]
+        @test continuous == [@varname(means), @varname(sd)]
     end
 
     @testset "A discrete parameter of the sessions and an imputed choice are discrete variables, and each kind takes a sampler" begin
@@ -43,18 +37,19 @@ end
             parameters_model,
             sessions_for_test(LearnsOrNot(); impute_missing_actions=true),
         )
-        variable_names = discrete_and_continuous_variable_names(model)
-        @test variable_names.discrete == [
+        priors = Turing.DynamicPPL.extract_priors(model)
+        names = collect(keys(priors))
+        discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+        continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
+        @test discrete == [
             @varname(uses_rewards.session), @varname(session[3].timestep[3].choice.imputed)
         ]
-        @test variable_names.continuous == [@varname(learning_rate.session)]
+        @test continuous == [@varname(learning_rate.session)]
 
         #A sampler which uses gradients can't sample the model
         @test_throws ArgumentError sample(Xoshiro(1), model, NUTS(), 20; progress=false)
         #With a sampler for each kind, and adaptation steps that are left out of the chain, the variables of both kinds change between samples
-        sampler = Gibbs(
-            variable_names.continuous => NUTS(), variable_names.discrete => MH()
-        )
+        sampler = Gibbs(continuous => NUTS(), discrete => MH())
         chain = sample(
             Xoshiro(1), model, sampler, 60; nadapts=30, discard_initial=30, progress=false
         )
@@ -87,9 +82,12 @@ end
                 LearnsOrNot(), REGRESSION_FULL_TABLE; impute_missing_actions=false
             ),
         )
-        variable_names = discrete_and_continuous_variable_names(model)
-        @test variable_names.discrete == [@varname(uses_rewards.session)]
-        @test variable_names.continuous == [
+        priors = Turing.DynamicPPL.extract_priors(model)
+        names = collect(keys(priors))
+        discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+        continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
+        @test discrete == [@varname(uses_rewards.session)]
+        @test continuous == [
             @varname(learning_rate.coef),
             @varname(learning_rate.id.intercept.sd),
             @varname(learning_rate.id.intercept.deviation_z),
@@ -103,9 +101,12 @@ end
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(; impute_missing_actions=false),
         )
-        variable_names = discrete_and_continuous_variable_names(model)
-        @test isempty(variable_names.discrete)
-        @test variable_names.continuous ==
+        priors = Turing.DynamicPPL.extract_priors(model)
+        names = collect(keys(priors))
+        discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+        continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
+        @test isempty(discrete)
+        @test continuous ==
             [@varname(learning_rate.session), @varname(inverse_temperature.session)]
     end
 end

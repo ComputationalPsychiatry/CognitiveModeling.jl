@@ -66,25 +66,20 @@ model = full_model(TuringBackend(), parameters_model, sessions_info)
 
 # The names of the variables of each kind can be read from the model. DynamicPPL.jl, which
 # Turing.jl is built on, gives the distribution that every variable is sampled from, and a
-# variable is discrete when its distribution is. A function of one's own keeps the lines
-# together:
+# variable is discrete when its distribution is:
 
-function discrete_and_continuous_variable_names(model)
-    distributions = DynamicPPL.extract_priors(model)
-    variable_names = collect(keys(distributions))
-    is_discrete = map(name -> distributions[name] isa DiscreteDistribution, variable_names)
-    return (;
-        discrete=variable_names[is_discrete], continuous=variable_names[.!is_discrete]
-    )
-end
-
-variable_names = discrete_and_continuous_variable_names(model)
+priors = DynamicPPL.extract_priors(model)
+names = collect(keys(priors))
+#The names of the discrete variables, such as uses_rewards.session
+discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+#The names of the continuous variables, such as learning_rate.session
+continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
 
 # This finds every discrete variable of the model, also a choice that wasn't recorded and
 # is imputed, which is a variable without being a parameter. Each kind then gets its
 # sampler:
 
-sampler = Gibbs(variable_names.continuous => NUTS(), variable_names.discrete => MH())
+sampler = Gibbs(continuous => NUTS(), discrete => MH())
 chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
 
 # Inside a `Gibbs` sampler, NUTS only adapts its step size when `sample` is given `nadapts`,
@@ -123,8 +118,13 @@ model = full_model(TuringBackend(), parameters_model, sessions_info)
 # The coefficients are continuous and the values of the sessions discrete, so each kind
 # gets its sampler again:
 
-variable_names = discrete_and_continuous_variable_names(model)
-sampler = Gibbs(variable_names.continuous => NUTS(), variable_names.discrete => MH())
+priors = DynamicPPL.extract_priors(model)
+names = collect(keys(priors))
+#The names of the discrete variables, such as uses_rewards.session
+discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
+#The names of the continuous variables, such as learning_rate.coef and uses_rewards.coef
+continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
+sampler = Gibbs(continuous => NUTS(), discrete => MH())
 chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
 
 # ## Ordered levels and counts
