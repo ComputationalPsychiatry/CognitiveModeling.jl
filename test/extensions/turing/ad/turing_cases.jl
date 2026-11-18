@@ -1,5 +1,6 @@
 using Turing
-using Turing.DynamicPPL: LogDensityFunction, LogDensityProblems
+using Turing.DynamicPPL:
+    LogDensityFunction, LogDensityProblems, getlogjoint_internal, LinkAll
 
 # Test cases for the log density of Turing.jl models of a session, which only this suite runs,
 # since Turing.jl isn't loaded by the AD and Reactant suites of the package itself, in
@@ -657,8 +658,70 @@ function noise_in_timesteps_session()
 end
 
 # The log density as a function of the vector of parameters and latents, through a LogDensityFunction made once
+# A model which chooses one of three options with probabilities that are a parameter, a vector
+struct TuringChoosesWithProbabilities <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::TuringChoosesWithProbabilities, parameters
+)
+    return (;)
+end
+function CognitiveModeling.run_timestep(
+    model::TuringChoosesWithProbabilities, context::ModelContext
+)
+    return ModelOutput((; choice=Categorical(context.parameters.choice_probabilities)))
+end
+function CognitiveModeling.attribute_names(model::TuringChoosesWithProbabilities)
+    return ModelAttributes(;
+        parameters=:choice_probabilities, states=(), inputs=:trial, outputs=:choice
+    )
+end
+function CognitiveModeling.parameter_domains(model::TuringChoosesWithProbabilities)
+    return (;
+        choice_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
+    )
+end
+
+# Three sessions of ten choices, with the trial as the observation, and the first and the third in one group
+const TURING_CHOICE_SESSIONS = MultipleSessionsInfo(
+    TuringChoosesWithProbabilities(),
+    (;
+        id=repeat(["S1", "S2", "S3"]; inner=10),
+        trial=repeat(1:10, 3),
+        choice=repeat([1, 2, 3, 3, 2, 1, 1, 3, 2, 1], 3),
+        group=repeat(["a", "b", "a"]; inner=10),
+    );
+    observation_columns=:trial,
+    action_columns=:choice,
+    session_columns=:id,
+    who_starts=EnvironmentStarts(),
+)
+
+# A vector of choice probabilities for each session, from a Dirichlet prior, and from a hierarchical Dirichlet whose concentrations two groups have each
+const TURING_FULL_MODEL_WITH_DIRICHLET_PRIORS = full_model(
+    TuringBackend(),
+    IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
+    TURING_CHOICE_SESSIONS,
+)
+const TURING_FULL_MODEL_WITH_HIERARCHICAL_DIRICHLET = full_model(
+    TuringBackend(),
+    HierarchicalGroupedParameters((;
+        choice_probabilities=HierarchicalParameter(
+            (; concentration=filldist(Gamma(2, 2), 3));
+            distribution=Dirichlet,
+            group_by=:group,
+        ),
+    )),
+    TURING_CHOICE_SESSIONS,
+)
+
 function log_density_of(model)
     log_density_function = LogDensityFunction(model)
+    return x -> LogDensityProblems.logdensity(log_density_function, x)
+end
+
+# The log density on the unconstrained values that samplers move in, for a model whose variables are constrained together, such as a vector of probabilities, which finite differences on the values themselves would step out of
+function linked_log_density_of(model)
+    log_density_function = LogDensityFunction(model, getlogjoint_internal, LinkAll())
     return x -> LogDensityProblems.logdensity(log_density_function, x)
 end
 
@@ -793,6 +856,18 @@ const TURING_CASES = [
         name="turing full model with a regression with a family distribution",
         f=log_density_of(TURING_FULL_MODEL_WITH_FAMILY_DISTRIBUTION),
         x=[0.2, 0.3, 0.5, 0.4, 0.6, 0.9, 1.3],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with a vector parameter for each session, from a Dirichlet prior",
+        f=linked_log_density_of(TURING_FULL_MODEL_WITH_DIRICHLET_PRIORS),
+        x=[0.3, -0.2, 0.1, 0.5, -0.4, 0.2],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with a vector parameter for each session, from a hierarchical Dirichlet with two groups",
+        f=linked_log_density_of(TURING_FULL_MODEL_WITH_HIERARCHICAL_DIRICHLET),
+        x=[0.4, 0.1, -0.3, -0.2, 0.3, 0.6, 0.3, -0.2, 0.1, 0.5, -0.4, 0.2],
         reactant=false,
     ),
     (;

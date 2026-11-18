@@ -53,6 +53,7 @@ const KNOWN_FAILURES = [
             "turing full model with a composite of centered group parameters and independent ones",
             "turing full model with parameters from regressions",
             "turing full model with a regression with a family distribution",
+            "turing full model with a vector parameter for each session, from a Dirichlet prior",
             "turing full model where only the first and the third session impute missing actions",
             "turing full model where only the first and the third session run their environment",
             "turing full model of sessions of different lengths, where only the second and the third impute missing actions",

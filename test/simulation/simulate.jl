@@ -804,6 +804,74 @@ end
     end
 end
 
+#An action made by hand: one of several options, with the probability of each in a vector
+struct ChooseAmongOptions{T}
+    probabilities::T
+end
+function Base.rand(rng::AbstractRNG, action::ChooseAmongOptions)
+    threshold = rand(rng)
+    cumulative = cumsum(action.probabilities)
+    return something(findfirst(>(threshold), cumulative), length(cumulative))
+end
+
+#Chooses one of three options with probabilities that are a parameter, a vector, whatever the timestep
+struct ChoosesAmongOptions <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::ChoosesAmongOptions, parameters) = (;)
+function CognitiveModeling.run_timestep(model::ChoosesAmongOptions, context::ModelContext)
+    return ModelOutput((;
+        choice=ChooseAmongOptions(context.parameters.option_probabilities)
+    ))
+end
+function CognitiveModeling.attribute_names(model::ChoosesAmongOptions)
+    return ModelAttributes(;
+        parameters=:option_probabilities, states=(), inputs=:timestep, outputs=:choice
+    )
+end
+function CognitiveModeling.parameter_domains(model::ChoosesAmongOptions)
+    return (;
+        option_probabilities=ParameterDomain(; type=AbstractVector{Real}, lower=0, upper=1)
+    )
+end
+
+@testset "A parameter that is a vector is simulated with, and checked against its domain" begin
+    @testset "The model chooses with the probabilities in the vector" begin
+        agent = InstantiatedModel(
+            ChoosesAmongOptions(), (; option_probabilities=[0.2, 0.3, 0.5])
+        )
+        rng = Xoshiro(1)
+        choices = [simulate!(agent, (; timestep); rng).choice for timestep in 1:3000]
+        @test all(in(1:3), choices)
+        shares = [count(==(option), choices) / 3000 for option in 1:3]
+        @test all(abs.(shares .- [0.2, 0.3, 0.5]) .< 0.03)
+        #A view of a vector is taken as the vector is
+        output, _ = simulate(
+            ChoosesAmongOptions(),
+            (; timestep=1);
+            parameters=(; option_probabilities=view([0.0, 0.0, 1.0, 9.0], 1:3)),
+        )
+        @test output.choice == 3
+    end
+
+    @testset "A vector with an element outside the domain, or a number where the domain takes a vector, is an error, unless the model is told not to check" begin
+        @test_throws ParameterDomainError(
+            "The parameter option_probabilities of a cognitive model of type ChoosesAmongOptions has option_probabilities[3] = -0.2, which is outside its domain, from 0 to 1.",
+        ) InstantiatedModel(
+            ChoosesAmongOptions(), (; option_probabilities=[0.5, 0.7, -0.2])
+        )
+        @test_throws ParameterDomainError(
+            "The parameter option_probabilities of a cognitive model of type ChoosesAmongOptions is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
+        ) simulate(
+            ChoosesAmongOptions(), (; timestep=1); parameters=(; option_probabilities=0.5)
+        )
+        agent = InstantiatedModel(
+            ChoosesAmongOptions(),
+            (; option_probabilities=[0.5, 0.7, -0.2]);
+            check_parameter_domains=false,
+        )
+        @test agent.parameters.option_probabilities == [0.5, 0.7, -0.2]
+    end
+end
+
 @testset "simulate" begin
     expected_rewards(cognitive_states) =
         [state.expected_reward for state in cognitive_states]
