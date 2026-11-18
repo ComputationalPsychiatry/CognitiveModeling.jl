@@ -79,6 +79,27 @@ function CognitiveModeling.parameter_domains(model::ModelWithManyParametersAndAD
     return (; b=Domain(; lower=0),)
 end
 
+#A model with domains for an input and an output, beside an input without one, and one whose input domains aren't in a NamedTuple
+struct ModelWithInputAndOutputDomains <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithInputAndOutputDomains)
+    return ModelAttributes(;
+        parameters=:learning_rate, states=(), inputs=(:reward, :cue), outputs=:choice
+    )
+end
+function CognitiveModeling.input_domains(model::ModelWithInputAndOutputDomains)
+    return (; reward=Domain(; lower=0, upper=1))
+end
+function CognitiveModeling.output_domains(model::ModelWithInputAndOutputDomains)
+    return (; choice=Domain(; possible_values=(1, 2)))
+end
+struct ModelWithInputDomainsInAVector <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithInputDomainsInAVector)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=())
+end
+function CognitiveModeling.input_domains(model::ModelWithInputDomainsInAVector)
+    return [Domain(; lower=0)]
+end
+
 #Models whose domains aren't right: not in a NamedTuple, and not Domains
 struct ModelWithDomainsInAVector <: AbstractCognitiveModel end
 function CognitiveModeling.attribute_names(model::ModelWithDomainsInAVector)
@@ -192,6 +213,25 @@ Inputs: none
 Outputs: none"""
     end
 
+    @testset "The REPL lists the inputs or the outputs one on a line when any has a domain" begin
+        @test repr("text/plain", ModelWithInputAndOutputDomains()) == """
+            -- Cognitive model --
+            Type: ModelWithInputAndOutputDomains
+            Parameters: learning_rate
+            States: none
+            Inputs:
+              reward ∈ [0, 1]
+              cue
+            Outputs:
+              choice ∈ {1, 2}"""
+        #Domains that aren't in a NamedTuple are left out
+        @test occursin(
+            "Inputs: reward", repr("text/plain", ModelWithInputDomainsInAVector())
+        )
+        @test CognitiveModeling.input_domains(ModelWithFields(3, 1.0)) === (;) &&
+            CognitiveModeling.output_domains(ModelWithFields(3, 1.0)) === (;)
+    end
+
     @testset "The REPL lists at most ten parameters one on a line, and says how many more there are" begin
         shown = repr(
             "text/plain", ModelWithManyParametersAndADomain(); context=:limit => true
@@ -202,13 +242,13 @@ Outputs: none"""
         twelve_names =
             CognitiveModeling.attribute_names(ModelWithManyParametersAndADomain()).parameters
         limited_io = IOContext(IOBuffer(), :limit => true)
-        @test CognitiveModeling.n_parameter_lines(limited_io, twelve_names) == 10
-        @test CognitiveModeling.n_parameter_lines(limited_io, (:a, :b, :c)) == 3
+        @test CognitiveModeling.n_attribute_lines(limited_io, twelve_names) == 10
+        @test CognitiveModeling.n_attribute_lines(limited_io, (:a, :b, :c)) == 3
         #Without a limit, as when printing to a file, every parameter is listed
         unlimited = repr("text/plain", ModelWithManyParametersAndADomain())
         @test occursin("\n  k\n  l\nStates: none", unlimited)
         @test !occursin("more", unlimited)
-        @test CognitiveModeling.n_parameter_lines(IOBuffer(), twelve_names) == 12
+        @test CognitiveModeling.n_attribute_lines(IOBuffer(), twelve_names) == 12
     end
 
     @testset "A parameter has more to show than its name when it has a domain or a default value" begin

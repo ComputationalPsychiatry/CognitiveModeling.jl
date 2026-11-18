@@ -32,6 +32,8 @@ CognitiveModeling.attribute_names
 CognitiveModeling.prepare_state_for_saving
 CognitiveModeling.default_parameters
 CognitiveModeling.parameter_domains
+CognitiveModeling.input_domains
+CognitiveModeling.output_domains
 CognitiveModeling.stopping_criterion
 ```
 

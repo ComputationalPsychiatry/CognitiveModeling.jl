@@ -539,6 +539,54 @@ end
         )
     end
 
+    @testset "A value in the data is checked as a parameter is, with an ArgumentError that names its timestep or its row in the table" begin
+        in_session(timestep) = CognitiveModeling.DataValue(:action, timestep, false)
+        in_table(row) = CognitiveModeling.DataValue(:observation, row, true)
+        choice_domain = Domain(; possible_values=(1, 2))
+        @test_throws ArgumentError(
+            "The action choice at timestep 3 is 3, which isn't one of its possible values, (1, 2).",
+        ) CognitiveModeling.check_value_in_domain(in_session(3), :choice, 3, choice_domain)
+        @test_throws ArgumentError(
+            "The observation reward in row 7 of the table is -0.5, which is outside its domain, from 0 to 1.",
+        ) CognitiveModeling.check_value_in_domain(
+            in_table(7), :reward, -0.5, Domain(; lower=0, upper=1)
+        )
+        #An element of an array is named by its position, a value of another type by its type, and a constraint by its name
+        @test_throws ArgumentError(
+            "The action ratings at timestep 2 has ratings[2] = -0.5, which is outside its domain, from 0 to Inf.",
+        ) CognitiveModeling.check_value_in_domain(
+            in_session(2),
+            :ratings,
+            [0.5, -0.5],
+            Domain(; type=AbstractVector{Real}, lower=0),
+        )
+        @test_throws ArgumentError(
+            "The action choice at timestep 1 is \"left\", of type String, but its domain takes values of type Integer.",
+        ) CognitiveModeling.check_value_in_domain(
+            in_session(1), :choice, "left", Domain(; type=Integer)
+        )
+        @test_throws ArgumentError(
+            "The action ratings at timestep 1 is [0.5, 0.6], which doesn't satisfy the constraint sums_to_one of its domain.",
+        ) CognitiveModeling.check_value_in_domain(
+            in_session(1),
+            :ratings,
+            [0.5, 0.6],
+            Domain(; type=AbstractVector{Real}, constraint=sums_to_one),
+        )
+        @test_throws ArgumentError(
+            "The constraint total_of of the domain of the action ratings at timestep 1 returned 1.1 for [0.5, 0.6], but a constraint returns true or false.",
+        ) CognitiveModeling.check_value_in_domain(
+            in_session(1),
+            :ratings,
+            [0.5, 0.6],
+            Domain(; type=AbstractVector{Real}, constraint=total_of),
+        )
+        #A value within its domain passes
+        @test CognitiveModeling.check_value_in_domain(
+            in_session(1), :choice, 2, choice_domain
+        ) === nothing
+    end
+
     @testset "The check is inferred and doesn't allocate, with and without domains" begin
         model = ModelWithDomains()
         @test @inferred(

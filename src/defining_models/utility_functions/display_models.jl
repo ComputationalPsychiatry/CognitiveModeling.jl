@@ -4,9 +4,11 @@
 
 Print a line for each kind of attribute in `attributes`, a [`ModelAttributes`](@ref), with
 `none` if it has no names of that kind. With `shorten`, a kind with more names than
-[`shows_every_name`](@ref) allows shows only how many there are. When a parameter has a
-[`Domain`](@ref) in `domains` or a default value in `defaults`, the parameters are
-listed one on a line instead, as [`print_parameter_lines`](@ref) writes them.
+[`shows_every_name`](@ref) allows shows only how many there are. `domains` has the
+[`Domain`](@ref)s of the parameters, the inputs and the outputs, under `parameters`,
+`inputs` and `outputs`, and `defaults` the default values of the parameters. When one of the
+attributes of a kind has a domain or a default value, the attributes of that kind are listed
+one on a line instead, as [`print_attribute_lines`](@ref) writes them.
 
 The `show` methods of a `ModelAttributes`, of a cognitive model and of an environment model
 each print a header of their own, and then these lines. Only those of the models shorten
@@ -20,18 +22,17 @@ function print_attribute_names(
     domains::NamedTuple=(;),
     defaults::NamedTuple=(;),
 )
-    for (kind, names) in (
-        ("Parameters", attributes.parameters),
-        ("States", attributes.states),
-        ("Inputs", attributes.inputs),
-        ("Outputs", attributes.outputs),
+    for (kind, names, kind_domains, kind_defaults) in (
+        ("Parameters", attributes.parameters, get(domains, :parameters, (;)), defaults),
+        ("States", attributes.states, (;), (;)),
+        ("Inputs", attributes.inputs, get(domains, :inputs, (;)), (;)),
+        ("Outputs", attributes.outputs, get(domains, :outputs, (;)), (;)),
     )
         print(io, "\n", kind, ":")
         if isempty(names)
             print(io, " none")
-        elseif kind == "Parameters" &&
-            any(name -> has_domain_or_default(name, domains, defaults), names)
-            print_parameter_lines(io, names, domains, defaults; shorten)
+        elseif any(name -> has_domain_or_default(name, kind_domains, kind_defaults), names)
+            print_attribute_lines(io, names, kind_domains, kind_defaults; shorten)
         elseif shorten && !shows_every_name(io, names)
             print(io, " ", length(names), " (see attribute_names)")
         else
@@ -45,7 +46,7 @@ end
 """
     has_domain_or_default(name, domains, defaults)
 
-Return whether the parameter `name` has a [`Domain`](@ref) in `domains` or a
+Return whether the attribute `name` has a [`Domain`](@ref) in `domains` or a
 default value in `defaults`, so that the display of a model has more to show of it than its
 name. Used by [`print_attribute_names`](@ref).
 """
@@ -55,22 +56,23 @@ function has_domain_or_default(name::Symbol, domains::NamedTuple, defaults::Name
 end
 
 """
-    print_parameter_lines(io, names, domains, defaults; shorten=false)
+    print_attribute_lines(io, names, domains, defaults; shorten=false)
 
-Print the parameters `names` one on a line, each with its domain in `domains` after its
-name, as [`describe_domain`](@ref) writes it, and then its default value in `defaults`, as
-in `inverse_temperature ∈ [0, ∞) (default 2.0)`. A parameter without either has its name
-alone. With `shorten`, only as many are listed as [`n_parameter_lines`](@ref) allows, and
-the last line says how many more there are. Used by [`print_attribute_names`](@ref).
+Print the attributes `names` of one kind one on a line, each with its domain in `domains`
+after its name, as [`describe_domain`](@ref) writes it, and then its default value in
+`defaults`, as in `inverse_temperature ∈ [0, ∞) (default 2.0)`. An attribute without either
+has its name alone. With `shorten`, only as many are listed as [`n_attribute_lines`](@ref)
+allows, and the last line says how many more there are. Used by
+[`print_attribute_names`](@ref).
 """
-function print_parameter_lines(
+function print_attribute_lines(
     io::IO,
     names::Tuple{Vararg{Symbol}},
     domains::NamedTuple,
     defaults::NamedTuple;
     shorten::Bool=false,
 )
-    n_listed = shorten ? n_parameter_lines(io, names) : length(names)
+    n_listed = shorten ? n_attribute_lines(io, names) : length(names)
     compact_io = IOContext(io, :compact => true)
     for index in 1:n_listed
         name = names[index]
@@ -91,13 +93,13 @@ function print_parameter_lines(
 end
 
 """
-    n_parameter_lines(io, names)
+    n_attribute_lines(io, names)
 
-Return how many of the parameters `names` a display on `io` lists one on a line: all of them
+Return how many of the attributes `names` a display on `io` lists one on a line: all of them
 when `io` isn't limited, as when printing to a file, and at most ten otherwise. Used by
-[`print_parameter_lines`](@ref).
+[`print_attribute_lines`](@ref).
 """
-function n_parameter_lines(io::IO, names::Tuple{Vararg{Symbol}})
+function n_attribute_lines(io::IO, names::Tuple{Vararg{Symbol}})
     return get(io, :limit, false) ? min(length(names), 10) : length(names)
 end
 
@@ -105,14 +107,13 @@ end
     describe_domain(domain)
 
 Return `domain`, a [`Domain`](@ref), as the display of a model writes it after the
-name of its parameter: an interval for a continuous parameter, such as `[0, 1]` or `[0, ∞)`,
-the whole numbers of a discrete one, such as `{1, 2, …}` or `{0, 1, …, 5}`, the possible
-values of a parameter that has them, such as `{:greedy, :random}`, and the type of a
-parameter that isn't a number, such as `AbstractString`. A parameter that is an array or a
-tuple has the values of each element, such as `[0, 1] for each element of a vector`, and a
-constraint follows the values, such as `, with the constraint sums_to_one`, or
-`, with a constraint` for an anonymous function. Used by
-[`print_parameter_lines`](@ref).
+name of its parameter, input or output: an interval for real numbers, such as `[0, 1]` or
+`[0, ∞)`, the whole numbers of a domain of them, such as `{1, 2, …}` or `{0, 1, …, 5}`, the
+possible values of a domain that has them, such as `{:greedy, :random}`, and the type of
+values that aren't numbers, such as `AbstractString`. A domain of arrays or tuples has the
+values of each element, such as `[0, 1] for each element of a vector`, and a constraint
+follows the values, such as `, with the constraint sums_to_one`, or `, with a constraint`
+for an anonymous function. Used by [`print_attribute_lines`](@ref).
 """
 function describe_domain(domain::Domain{Ttype,Telement}) where {Ttype,Telement}
 
@@ -267,7 +268,11 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
             io,
             attributes;
             shorten=true,
-            domains=domains_to_display(model),
+            domains=(;
+                parameters=domains_to_display(parameter_domains(model)),
+                inputs=domains_to_display(input_domains(model)),
+                outputs=domains_to_display(output_domains(model)),
+            ),
             defaults=defaults_to_display(model),
         )
     else
@@ -284,18 +289,16 @@ function Base.show(io::IO, model::AbstractTimestepModel)
 end
 
 """
-    domains_to_display(model)
+    domains_to_display(domains)
     defaults_to_display(model)
 
-Return the domains and the default values of the parameters of `model` for its display: what
-[`parameter_domains`](@ref) and [`default_parameters`](@ref) return when it is a
-`NamedTuple`, and none otherwise, so that a model whose domains or default values aren't
-right is still shown. Used by the `show` method of a model.
+Return `domains`, what [`parameter_domains`](@ref), [`input_domains`](@ref) or
+[`output_domains`](@ref) return for a model, and the default values of the parameters of
+`model`, from [`default_parameters`](@ref), for the display of the model: each as it is when
+it is a `NamedTuple`, and none otherwise, so that a model whose domains or default values
+aren't right is still shown. Used by the `show` method of a model.
 """
-function domains_to_display(model::AbstractTimestepModel)
-    domains = parameter_domains(model)
-    return domains isa NamedTuple ? domains : (;)
-end
+domains_to_display(domains) = domains isa NamedTuple ? domains : (;)
 function defaults_to_display(model::AbstractTimestepModel)
     defaults = default_parameters(model)
     return defaults isa NamedTuple ? defaults : (;)

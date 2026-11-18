@@ -76,7 +76,10 @@ table.
 - `actions`: the actions in the data, in the same forms, with exactly the actions in the
   model's attributes. An action that was taken but not recorded is `MissingValue()`, which
   is imputed unless `impute_missing_actions` is `false`, and an action that wasn't taken is
-  `NoValue()`. Neither is scored.
+  `NoValue()`. Neither is scored. The observations are checked against the domains of the
+  cognitive model's inputs, in [`input_domains`](@ref), and the actions against those of its
+  outputs, in [`output_domains`](@ref), and a value outside its domain is an
+  `ArgumentError` that names its timestep.
 
 # Keyword arguments
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
@@ -334,6 +337,7 @@ function prepare_session(
 
     #Check the data against the names in the cognitive model's attributes, and that the environment fits
     n_timesteps = check_data_fits(cognitive_model, observations, actions)
+    check_data_in_domains(cognitive_model, observations, actions, false)
     check_environment_fits(
         cognitive_model, environment, observations, observation_map, action_map
     )
@@ -469,7 +473,9 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
   `impute_missing_observations=true` and `impute_missing_actions=true`: the values in the
   columns which stand for a missing observation or action, and whether those are imputed, as
   for [`SessionInfo`](@ref). They are marked in the whole table before it is split, so that
-  the columns of every session have the same element types.
+  the columns of every session have the same element types, and the values are checked
+  against the domains of the model's inputs and outputs there, so that a value outside its
+  domain is an `ArgumentError` that names its row of the table.
 - The other keyword arguments of [`SessionInfo`](@ref), which every session gets.
 
 The second form takes sessions that are already prepared. They have no table, unless it is
@@ -625,6 +631,11 @@ function MultipleSessionsInfo(
     )
     action_columns_of_table = build_columns(
         table, action_column_map, as_tuple(missing_action_values), impute_missing_actions
+    )
+
+    #The values are checked against the domains of the model's inputs and outputs for the whole table, so that an error names the row of the table
+    check_data_in_domains(
+        cognitive_model, observation_columns_of_table, action_columns_of_table, true
     )
 
     #Each session is prepared from its rows of those columns, in which the missing values are marked already

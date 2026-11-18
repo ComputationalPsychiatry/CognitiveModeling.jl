@@ -248,6 +248,68 @@ function parameter_domains(model::AbstractTimestepModel)
 end
 
 """
+    input_domains(model::AbstractTimestepModel)
+
+Return the values that the inputs of `model`, a cognitive model or an environment model, can
+take: a `NamedTuple` with a [`Domain`](@ref) under the name of each input that has one. An
+input without a domain can take any value. [`output_domains`](@ref) gives the domains of
+the outputs in the same way.
+
+The data of a fitted session is checked against the domains of its cognitive model once,
+when it is read: the observations against the input domains, and the actions against the
+output domains. A value outside its domain throws an `ArgumentError` that names its row in
+the table, or its timestep in the session, and markers such as [`MissingValue`](@ref)
+aren't checked. The display of a model shows each domain after the name of its input or
+output.
+
+# Implementation
+A model can add a method of this function and of `output_domains`. The defaults are an empty
+`NamedTuple`, `(;)`, so that every input and every output can take any value.
+
+# Examples
+```jldoctest
+julia> struct ChoosesOption <: AbstractCognitiveModel end
+
+julia> function CognitiveModeling.attribute_names(model::ChoosesOption)
+           return ModelAttributes(; parameters = (), states = (), inputs = :reward, outputs = :choice)
+       end;
+
+julia> CognitiveModeling.input_domains(model::ChoosesOption) = (; reward = Domain(; lower = 0, upper = 1));
+
+julia> CognitiveModeling.output_domains(model::ChoosesOption) = (; choice = Domain(; possible_values = (1, 2)));
+
+julia> ChoosesOption()
+-- Cognitive model --
+Type: ChoosesOption
+Parameters: none
+States: none
+Inputs:
+  reward ∈ [0, 1]
+Outputs:
+  choice ∈ {1, 2}
+
+julia> SessionInfo(ChoosesOption(), [0.5, 1.0], [1, 3]; who_starts = EnvironmentStarts())
+ERROR: ArgumentError: The action choice at timestep 2 is 3, which isn't one of its possible values, (1, 2).
+```
+"""
+function input_domains(model::AbstractTimestepModel)
+    return (;)
+end
+
+"""
+    output_domains(model::AbstractTimestepModel)
+
+Return the values that the outputs of `model`, a cognitive model or an environment model,
+can take: a `NamedTuple` with a [`Domain`](@ref) under the name of each output that has one,
+as [`input_domains`](@ref) does for the inputs, which also tells how the actions in the data
+are checked against them and gives an example. The default is an empty `NamedTuple`, `(;)`,
+so that every output can take any value.
+"""
+function output_domains(model::AbstractTimestepModel)
+    return (;)
+end
+
+"""
     stopping_criterion(model::AbstractTimestepModel, state, parameters)
 
 Return whether `model`, a cognitive model or an environment model, with `state` as its state

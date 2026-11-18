@@ -91,23 +91,75 @@ function check_values_in_domains(
     )
 end
 
+## What is checked against a domain ##
 """
-    check_value_in_domain(model, name, value, domain)
+    DataValue(kind, index, in_table)
 
-Throw a [`ParameterDomainError`](@ref) if `value`, the value of the parameter `name` of
-`model`, is outside `domain`, a [`Domain`](@ref). A domain of single values checks
+A value in the data of a fitted session, which [`check_value_in_domain`](@ref) checks
+against the domain of the input or the output of the cognitive model that it is: an
+`:observation` or an `:action`, as `kind` says, at `index`, a row of the table when
+`in_table` is `true`, and a timestep of the session otherwise. Used by
+[`check_data_in_domains`](@ref).
+"""
+struct DataValue
+    kind::Symbol
+    index::Int
+    in_table::Bool
+end
+
+"""
+    describe_value(checked, name)
+
+Return what is checked against a domain, as errors write it: `the parameter learning_rate of`
+the model when `checked` is a model, and `the action choice in row 7 of the table` or
+`the observation reward at timestep 3` when it is a [`DataValue`](@ref). Used by the
+functions that throw the errors of [`check_value_in_domain`](@ref).
+"""
+function describe_value(model::AbstractTimestepModel, name::Symbol)
+    return "the parameter $name of $(describe_model(model))"
+end
+function describe_value(checked::DataValue, name::Symbol)
+    place = if checked.in_table
+        "in row $(checked.index) of the table"
+    else
+        "at timestep $(checked.index)"
+    end
+    return "the $(checked.kind) $name $place"
+end
+
+"""
+    domain_error(checked, message)
+
+Return the error for a value outside its domain, with `message`: a
+[`ParameterDomainError`](@ref) for a parameter of a model, which stops a fit, and an
+`ArgumentError` for a [`DataValue`](@ref). Used by the functions that throw the errors of
+[`check_value_in_domain`](@ref).
+"""
+domain_error(::AbstractTimestepModel, message::String) = ParameterDomainError(message)
+domain_error(::DataValue, message::String) = ArgumentError(message)
+
+"""
+    check_value_in_domain(checked, name, value, domain)
+
+Throw an error if `value`, the value of `name`, is outside `domain`, a [`Domain`](@ref): a
+[`ParameterDomainError`](@ref) when `checked` is a model and `name` one of its parameters,
+and an `ArgumentError` when `checked` is a [`DataValue`](@ref), a value in the data of a
+fitted session. A domain of single values checks
 `value` with [`check_single_value`](@ref). A domain of arrays takes an array with the number
 of dimensions of its type, and a domain of tuples a tuple of the length of its type, if it
 has one, and each element is then checked with `check_single_value` against the type of the
 elements. The whole value is then checked against the domain's constraint, with
 [`check_constraint`](@ref). A number that isn't a real number, and an array of them, is left
-alone. Used by [`check_values_in_domains`](@ref).
+alone. Used by [`check_values_in_domains`](@ref) and [`check_data_in_domains`](@ref).
 """
 function check_value_in_domain(
-    model::AbstractTimestepModel, name::Symbol, value, domain::Domain{Ttype}
+    checked::Union{AbstractTimestepModel,DataValue},
+    name::Symbol,
+    value,
+    domain::Domain{Ttype},
 ) where {Ttype}
-    check_value_in_domain(model, name, value, domain, kind_of_values(Ttype))
-    check_constraint(model, name, value, domain.constraint)
+    check_value_in_domain(checked, name, value, domain, kind_of_values(Ttype))
+    check_constraint(checked, name, value, domain.constraint)
     return nothing
 end
 
@@ -149,14 +201,18 @@ kind_of_values(::Type) = SingleValues()
 
 #A single value is checked as it is
 function check_value_in_domain(
-    model::AbstractTimestepModel, name::Symbol, value, domain::Domain{Ttype}, ::SingleValues
+    checked::Union{AbstractTimestepModel,DataValue},
+    name::Symbol,
+    value,
+    domain::Domain{Ttype},
+    ::SingleValues,
 ) where {Ttype}
-    return check_single_value(model, name, value, Ttype, domain, nothing)
+    return check_single_value(checked, name, value, Ttype, domain, nothing)
 end
 
 #An array has the number of dimensions of the domain's type, and each of its elements is checked at its position. Which kind of elements it has is in its type, so an array that is left alone costs nothing
 function check_value_in_domain(
-    model::AbstractTimestepModel,
+    checked::Union{AbstractTimestepModel,DataValue},
     name::Symbol,
     values,
     domain::Domain{Ttype,Telement},
@@ -168,21 +224,21 @@ function check_value_in_domain(
 
     #The value is an array with as many dimensions as the domain's type
     has_dimensions_of(values, Ttype) ||
-        throw_not_of_type(model, name, values, Ttype, nothing)
+        throw_not_of_type(checked, name, values, Ttype, nothing)
 
     #An array of numbers that aren't real numbers is left alone, since it can't be read one element at a time while Reactant.jl compiles
     eltype(values) <: Number && !(eltype(values) <: Real) && return nothing
 
     #Check each element as a single value, at its position in the array
     for (position, element) in pairs(values)
-        check_single_value(model, name, element, Telement, domain, position)
+        check_single_value(checked, name, element, Telement, domain, position)
     end
     return nothing
 end
 
 #A tuple has the length of the domain's type, if it has one, and each of its elements is checked at its position
 function check_value_in_domain(
-    model::AbstractTimestepModel,
+    checked::Union{AbstractTimestepModel,DataValue},
     name::Symbol,
     values,
     domain::Domain{Ttype,Telement},
@@ -193,10 +249,10 @@ function check_value_in_domain(
     values isa Number && !(values isa Real) && return nothing
 
     #The value is a tuple with the length of the domain's type
-    has_length_of(values, Ttype) || throw_not_of_type(model, name, values, Ttype, nothing)
+    has_length_of(values, Ttype) || throw_not_of_type(checked, name, values, Ttype, nothing)
 
     #Check each element as a single value, at its position in the tuple
-    return check_tuple_elements(model, name, values, Telement, domain, 1)
+    return check_tuple_elements(checked, name, values, Telement, domain, 1)
 end
 
 """
@@ -243,55 +299,56 @@ length_of(::Type{<:NTuple{N,Any}}) where {N} = N
 length_of(::Type{<:Tuple}) = nothing
 
 """
-    check_tuple_elements(model, name, values, type, domain, position)
+    check_tuple_elements(checked, name, values, type, domain, position)
 
-Check each element of the tuple `values`, the parameter `name` of `model`, with
+Check each element of the tuple `values`, the value of `name`, as `checked` describes it, with
 [`check_single_value`](@ref) against `type` and `domain`, the first at `position`. Used by
 [`check_value_in_domain`](@ref).
 """
-check_tuple_elements(model, name::Symbol, ::Tuple{}, ::Type, domain, position) = nothing
+check_tuple_elements(checked, name::Symbol, ::Tuple{}, ::Type, domain, position) = nothing
 
 #Each call checks the first element and calls itself with the remaining ones, so that the compiler knows the type of every element
 function check_tuple_elements(
-    model, name::Symbol, values::Tuple, ::Type{T}, domain, position
+    checked, name::Symbol, values::Tuple, ::Type{T}, domain, position
 ) where {T}
-    check_single_value(model, name, first(values), T, domain, position)
-    return check_tuple_elements(model, name, Base.tail(values), T, domain, position + 1)
+    check_single_value(checked, name, first(values), T, domain, position)
+    return check_tuple_elements(checked, name, Base.tail(values), T, domain, position + 1)
 end
 
 """
-    check_single_value(model, name, value, type, domain, position)
+    check_single_value(checked, name, value, type, domain, position)
 
-Throw a [`ParameterDomainError`](@ref) if `value` isn't a value of `type` within `domain`, a
+Throw the error of [`check_value_in_domain`](@ref) if `value` isn't a value of `type` within
+`domain`, a
 [`Domain`](@ref): a real number that `type` doesn't take, as
 [`takes_value`](@ref) decides, or that is below the lower bound or above the upper bound,
 which a `NaN` always is, and which [`is_beyond_bounds`](@ref) decides for a number that
 isn't one of Julia's own, or another value that isn't of `type`, or a value that isn't one
 of the domain's possible values, as [`is_possible_value`](@ref) decides. A number that isn't
-a real number is left alone. `value` is the parameter `name` of `model` when `position` is
-`nothing`, and its element at `position` otherwise. Used by
+a real number is left alone. `value` is the value of `name`, as `checked` describes it, when
+`position` is `nothing`, and its element at `position` otherwise. Used by
 [`check_value_in_domain`](@ref) and [`check_tuple_elements`](@ref).
 """
 function check_single_value(
-    model, name::Symbol, value::Real, ::Type{T}, domain::Domain, position
+    checked, name::Symbol, value::Real, ::Type{T}, domain::Domain, position
 ) where {T}
-    takes_value(T, value) || throw_not_of_type(model, name, value, T, position)
+    takes_value(T, value) || throw_not_of_type(checked, name, value, T, position)
     if !(domain.lower <= value <= domain.upper) && is_beyond_bounds(value, domain)
-        throw_outside_bounds(model, name, value, domain, position)
+        throw_outside_bounds(checked, name, value, domain, position)
     end
     is_possible_value(value, domain.possible_values) ||
-        throw_not_possible_value(model, name, value, domain, position)
+        throw_not_possible_value(checked, name, value, domain, position)
     return nothing
 end
 
 #Any other value is of the type, except a number that isn't a real number, which can't be compared with anything, such as a number that Reactant.jl traces while it compiles
 function check_single_value(
-    model, name::Symbol, value, ::Type{T}, domain::Domain, position
+    checked, name::Symbol, value, ::Type{T}, domain::Domain, position
 ) where {T}
     value isa Number && return nothing
-    value isa T || throw_not_of_type(model, name, value, T, position)
+    value isa T || throw_not_of_type(checked, name, value, T, position)
     is_possible_value(value, domain.possible_values) ||
-        throw_not_possible_value(model, name, value, domain, position)
+        throw_not_possible_value(checked, name, value, domain, position)
     return nothing
 end
 
@@ -309,16 +366,16 @@ function is_possible_value(value, possible_values::Union{Tuple,AbstractRange})
 end
 
 """
-    check_constraint(model, name, value, constraint)
+    check_constraint(checked, name, value, constraint)
 
-Throw a [`ParameterDomainError`](@ref) if `constraint`, the constraint of the domain of the
-parameter `name` of `model`, returns `false` for its `value`, and an `ArgumentError` if it
-returns something other than `true` or `false`. Nothing is checked without a constraint, or
+Throw the error of [`check_value_in_domain`](@ref) if `constraint`, the constraint of the
+domain of `name`, as `checked` describes it, returns `false` for its `value`, and an
+`ArgumentError` if it returns something other than `true` or `false`. Nothing is checked without a constraint, or
 for a value with numbers that aren't real numbers, as [`holds_unreal_numbers`](@ref) decides.
 Used by [`check_value_in_domain`](@ref).
 """
-check_constraint(model, name::Symbol, value, ::Nothing) = nothing
-function check_constraint(model, name::Symbol, value, constraint)
+check_constraint(checked, name::Symbol, value, ::Nothing) = nothing
+function check_constraint(checked, name::Symbol, value, constraint)
 
     #A number that isn't a real number can't be compared with anything, such as a number that Reactant.jl traces while it compiles
     holds_unreal_numbers(value) && return nothing
@@ -326,9 +383,9 @@ function check_constraint(model, name::Symbol, value, constraint)
     #The constraint says whether the value satisfies it
     satisfies_constraint = constraint(value)
     satisfies_constraint isa Bool || throw_constraint_not_true_or_false(
-        model, name, value, constraint, satisfies_constraint
+        checked, name, value, constraint, satisfies_constraint
     )
-    satisfies_constraint || throw_constraint_not_satisfied(model, name, value, constraint)
+    satisfies_constraint || throw_constraint_not_satisfied(checked, name, value, constraint)
     return nothing
 end
 
@@ -382,14 +439,14 @@ takes_value(::Type{Bool}, value::Real) = value isa Bool || iszero(value) || ison
 
 #Functions of their own, which aren't inlined, so that the messages are only built when there is an error
 """
-    throw_not_of_type(model, name, value, type, position)
+    throw_not_of_type(checked, name, value, type, position)
 
-Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
-isn't of `type`. The value is the parameter itself when `position` is `nothing`, and its
-element at `position` otherwise. Used by [`check_value_in_domain`](@ref) and
+Throw the error of [`check_value_in_domain`](@ref) for `name`, as `checked` describes it,
+whose `value` isn't of `type`. The value is the whole value when `position` is `nothing`,
+and its element at `position` otherwise. Used by [`check_value_in_domain`](@ref) and
 [`check_single_value`](@ref).
 """
-@noinline function throw_not_of_type(model, name::Symbol, value, type::Type, position)
+@noinline function throw_not_of_type(checked, name::Symbol, value, type::Type, position)
 
     #Say what the domain takes: a number that isn't whole is told so, and not that it is of another type than a type of whole numbers
     whose_type = position === nothing ? "its type" : "the type of its elements"
@@ -401,21 +458,22 @@ element at `position` otherwise. Used by [`check_value_in_domain`](@ref) and
         "values of type $type", ""
     end
     message = if position === nothing
-        "The parameter $name of $(describe_model(model)) is $(repr(value)), of type $(typeof(value)), but its domain takes $taken$reason."
+        "$(uppercasefirst(describe_value(checked, name))) is $(repr(value)), of type $(typeof(value)), but its domain takes $taken$reason."
     else
-        "The parameter $name of $(describe_model(model)) has $(describe_element(name, position)) = $(repr(value)), of type $(typeof(value)), but its domain takes $taken there$reason."
+        "$(uppercasefirst(describe_value(checked, name))) has $(describe_element(name, position)) = $(repr(value)), of type $(typeof(value)), but its domain takes $taken there$reason."
     end
-    return throw(ParameterDomainError(message))
+    return throw(domain_error(checked, message))
 end
 """
-    throw_outside_bounds(model, name, value, domain, position)
+    throw_outside_bounds(checked, name, value, domain, position)
 
-Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
-is outside the bounds of `domain`. The value is the parameter itself when `position` is
-`nothing`, and its element at `position` otherwise. Used by [`check_single_value`](@ref).
+Throw the error of [`check_value_in_domain`](@ref) for `name`, as `checked` describes it,
+whose `value` is outside the bounds of `domain`. The value is the whole value when
+`position` is `nothing`, and its element at `position` otherwise. Used by
+[`check_single_value`](@ref).
 """
 @noinline function throw_outside_bounds(
-    model, name::Symbol, value, domain::Domain, position
+    checked, name::Symbol, value, domain::Domain, position
 )
     subject = if position === nothing
         "is $value"
@@ -423,22 +481,23 @@ is outside the bounds of `domain`. The value is the parameter itself when `posit
         "has $(describe_element(name, position)) = $value"
     end
     return throw(
-        ParameterDomainError(
-            "The parameter $name of $(describe_model(model)) $subject, which is outside its domain, from $(domain.lower) to $(domain.upper).",
+        domain_error(
+            checked,
+            "$(uppercasefirst(describe_value(checked, name))) $subject, which is outside its domain, from $(domain.lower) to $(domain.upper).",
         ),
     )
 end
 
 """
-    throw_not_possible_value(model, name, value, domain, position)
+    throw_not_possible_value(checked, name, value, domain, position)
 
-Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
-isn't one of the possible values of `domain`. The value is the parameter itself when
-`position` is `nothing`, and its element at `position` otherwise. Used by
+Throw the error of [`check_value_in_domain`](@ref) for `name`, as `checked` describes it,
+whose `value` isn't one of the possible values of `domain`. The value is the whole value
+when `position` is `nothing`, and its element at `position` otherwise. Used by
 [`check_single_value`](@ref).
 """
 @noinline function throw_not_possible_value(
-    model, name::Symbol, value, domain::Domain, position
+    checked, name::Symbol, value, domain::Domain, position
 )
     subject = if position === nothing
         "is $(repr(value))"
@@ -446,40 +505,42 @@ isn't one of the possible values of `domain`. The value is the parameter itself 
         "has $(describe_element(name, position)) = $(repr(value))"
     end
     return throw(
-        ParameterDomainError(
-            "The parameter $name of $(describe_model(model)) $subject, which isn't one of its possible values, $(repr(domain.possible_values)).",
+        domain_error(
+            checked,
+            "$(uppercasefirst(describe_value(checked, name))) $subject, which isn't one of its possible values, $(repr(domain.possible_values)).",
         ),
     )
 end
 
 """
-    throw_constraint_not_satisfied(model, name, value, constraint)
+    throw_constraint_not_satisfied(checked, name, value, constraint)
 
-Throw the [`ParameterDomainError`](@ref) for the parameter `name` of `model`, whose `value`
-doesn't satisfy `constraint`, the constraint of its domain. Used by
+Throw the error of [`check_value_in_domain`](@ref) for `name`, as `checked` describes it,
+whose `value` doesn't satisfy `constraint`, the constraint of its domain. Used by
 [`check_constraint`](@ref).
 """
-@noinline function throw_constraint_not_satisfied(model, name::Symbol, value, constraint)
+@noinline function throw_constraint_not_satisfied(checked, name::Symbol, value, constraint)
     return throw(
-        ParameterDomainError(
-            "The parameter $name of $(describe_model(model)) is $(repr(value)), which doesn't satisfy $(describe_constraint(constraint)) of its domain.",
+        domain_error(
+            checked,
+            "$(uppercasefirst(describe_value(checked, name))) is $(repr(value)), which doesn't satisfy $(describe_constraint(constraint)) of its domain.",
         ),
     )
 end
 
 """
-    throw_constraint_not_true_or_false(model, name, value, constraint, returned)
+    throw_constraint_not_true_or_false(checked, name, value, constraint, returned)
 
-Throw the `ArgumentError` for `constraint`, the constraint of the domain of the parameter
-`name` of `model`, which returned `returned` for the parameter's `value`, which is neither
-`true` nor `false`. Used by [`check_constraint`](@ref).
+Throw the `ArgumentError` for `constraint`, the constraint of the domain of `name`, as
+`checked` describes it, which returned `returned` for its `value`, which is neither `true`
+nor `false`. Used by [`check_constraint`](@ref).
 """
 @noinline function throw_constraint_not_true_or_false(
-    model, name::Symbol, value, constraint, returned
+    checked, name::Symbol, value, constraint, returned
 )
     return throw(
         ArgumentError(
-            "$(uppercasefirst(describe_constraint(constraint))) of the domain of the parameter $name of $(describe_model(model)) returned $(repr(returned)) for $(repr(value)), but a constraint returns true or false.",
+            "$(uppercasefirst(describe_constraint(constraint))) of the domain of $(describe_value(checked, name)) returned $(repr(returned)) for $(repr(value)), but a constraint returns true or false.",
         ),
     )
 end
@@ -500,7 +561,7 @@ end
 """
     describe_element(name, position)
 
-Return the element at `position` of the parameter `name` as it is indexed, such as
+Return the element at `position` of the value of `name` as it is indexed, such as
 `choice_probabilities[3]`, or `weights[2, 1]` for a position in a matrix. Used by
 [`throw_not_of_type`](@ref), [`throw_outside_bounds`](@ref) and
 [`throw_not_possible_value`](@ref).

@@ -348,3 +348,111 @@ function value_passed_on(
     index = findfirst(==(name), Tgiven)
     return index === nothing ? value_if_not_passed_on : values[Treceived[index]]
 end
+
+## Checking the data against the domains of the cognitive model ##
+"""
+    check_data_in_domains(cognitive_model, observations, actions, in_table)
+
+Throw an `ArgumentError` if a value in `observations` or in `actions`, each a `NamedTuple`
+of vectors under the names of `cognitive_model`, is outside its domain: an observation
+outside the domain of its input in [`input_domains`](@ref), and an action outside the
+domain of its output in [`output_domains`](@ref), as [`check_value_in_domain`](@ref) checks
+them. Markers, such as [`MissingValue`](@ref) and [`NoValue`](@ref), aren't checked. The
+error names the row of the table when `in_table` is `true`, and the timestep of the session
+otherwise. Used by [`SessionInfo`](@ref), and by [`MultipleSessionsInfo`](@ref) for a whole
+table.
+"""
+function check_data_in_domains(
+    cognitive_model::AbstractTimestepModel,
+    observations::NamedTuple,
+    actions::NamedTuple,
+    in_table::Bool,
+)
+    #The domains must be Domains under names of the model's inputs and outputs
+    domains_of_inputs = input_domains(cognitive_model)
+    check_data_domains_fit_model(cognitive_model, domains_of_inputs, :inputs)
+    domains_of_outputs = output_domains(cognitive_model)
+    check_data_domains_fit_model(cognitive_model, domains_of_outputs, :outputs)
+
+    #The observations are checked against the domains of the inputs, and the actions against those of the outputs
+    check_columns_in_domains(:observation, observations, domains_of_inputs, in_table)
+    check_columns_in_domains(:action, actions, domains_of_outputs, in_table)
+    return nothing
+end
+
+"""
+    check_columns_in_domains(kind, columns, domains, in_table)
+
+Check each value of each column in `columns` that has a domain in `domains` with
+[`check_value_in_domain`](@ref), as a [`DataValue`](@ref) of `kind`, `:observation` or
+`:action`, at its index in the column. A column without a domain, a domain without a
+column, and a marker such as [`MissingValue`](@ref) or [`NoValue`](@ref) aren't checked.
+Used by [`check_data_in_domains`](@ref).
+"""
+function check_columns_in_domains(
+    kind::Symbol, columns::NamedTuple, domains::NamedTuple, in_table::Bool
+)
+    for name in keys(domains)
+
+        #A domain of an input or an output that isn't in the data, such as one which only an environment gives, has nothing to check
+        haskey(columns, name) || continue
+        domain = getproperty(domains, name)
+        for (index, value) in enumerate(getproperty(columns, name))
+
+            #A marker of a missing value or of nothing happening isn't a value of the domain
+            (value isa AbstractNoValue || value isa MissingValue) && continue
+            check_value_in_domain(DataValue(kind, index, in_table), name, value, domain)
+        end
+    end
+    return nothing
+end
+
+"""
+    check_data_domains_fit_model(model, domains, attribute)
+
+Throw an `ArgumentError` if `domains`, what [`input_domains`](@ref) or
+[`output_domains`](@ref) returns for `model`, as `attribute`, `:inputs` or `:outputs`, says,
+isn't a `NamedTuple` of [`Domain`](@ref)s, or names an input or an output that isn't in the
+model's attributes, from [`attribute_names`](@ref). Used by
+[`check_data_in_domains`](@ref).
+"""
+function check_data_domains_fit_model(
+    ::AbstractTimestepModel, ::NamedTuple{()}, attribute::Symbol
+)
+    return nothing
+end
+function check_data_domains_fit_model(
+    model::AbstractTimestepModel,
+    ::NamedTuple{names,<:Tuple{Vararg{Domain}}},
+    attribute::Symbol,
+) where {names}
+    attributes = check_type_attribute_names(attribute_names(model), model)
+    names_in_attributes = getproperty(attributes, attribute)
+    if !has_every_name(names, names_in_attributes)
+        throw(
+            ArgumentError(
+                "$(domains_function_name(attribute)) of $(describe_model(model)) has domains for $names, but the $attribute in its attributes are $names_in_attributes.",
+            ),
+        )
+    end
+    return nothing
+end
+function check_data_domains_fit_model(
+    model::AbstractTimestepModel, domains, attribute::Symbol
+)
+    return throw(
+        ArgumentError(
+            "$(domains_function_name(attribute)) of $(describe_model(model)) returns $(repr(domains)), but it must return a NamedTuple with a Domain under the name of each of its $attribute that has a domain, such as (; choice = Domain(; possible_values = (1, 2))).",
+        ),
+    )
+end
+
+"""
+    domains_function_name(attribute)
+
+Return the name of the function that gives the domains of `attribute`, `:inputs` or
+`:outputs`, as errors write it. Used by [`check_data_domains_fit_model`](@ref).
+"""
+function domains_function_name(attribute::Symbol)
+    return attribute === :inputs ? "input_domains" : "output_domains"
+end

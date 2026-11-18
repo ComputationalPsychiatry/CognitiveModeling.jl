@@ -39,6 +39,30 @@ end
 #A parameter model of one's own, without any of the optional methods
 struct ParametersModelOfOwn <: AbstractParametersModel end
 
+#A model whose reward, its input, is between 0 and 1, and whose choice, its output, is 1 or 2
+struct ChoosesWithinDomains <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::ChoosesWithinDomains)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
+end
+function CognitiveModeling.input_domains(::ChoosesWithinDomains)
+    return (; reward=Domain(; lower=0, upper=1))
+end
+function CognitiveModeling.output_domains(::ChoosesWithinDomains)
+    return (; choice=Domain(; possible_values=(1, 2)))
+end
+
+#Models whose domains of inputs or outputs aren't right: for an input it doesn't have, and not Domains
+struct DomainForAnotherInput <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::DomainForAnotherInput)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
+end
+CognitiveModeling.input_domains(::DomainForAnotherInput) = (; cue=Domain(; lower=0))
+struct OutputDomainsNotDomains <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(::OutputDomainsNotDomains)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
+end
+CognitiveModeling.output_domains(::OutputDomainsNotDomains) = (; choice=(1, 2))
+
 @testset "Types for data" begin
     @testset "The marker for a missing value is its own type, apart from the one for nothing happening" begin
         @test MissingValue() === MissingValue()
@@ -540,6 +564,39 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
     end
 
+    @testset "The observations and the actions are checked against the domains of the model's inputs and outputs, apart from markers" begin
+        @test SessionInfo(
+            ChoosesWithinDomains(), [0.5, 1.0], [1, 2]; who_starts=EnvironmentStarts()
+        ).actions == (; choice=[1, 2])
+        @test_throws ArgumentError(
+            "The action choice at timestep 2 is 3, which isn't one of its possible values, (1, 2).",
+        ) SessionInfo(
+            ChoosesWithinDomains(), [0.5, 1.0], [1, 3]; who_starts=EnvironmentStarts()
+        )
+        @test_throws ArgumentError(
+            "The observation reward at timestep 1 is 1.5, which is outside its domain, from 0 to 1.",
+        ) SessionInfo(
+            ChoosesWithinDomains(), [1.5, 1.0], [1, 2]; who_starts=EnvironmentStarts()
+        )
+        #A missing value, and a marker for nothing happening, aren't checked
+        @test SessionInfo(
+            ChoosesWithinDomains(),
+            [0.5, missing],
+            [NoValue(), MissingValue()];
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        ) isa SessionInfo
+        #The domains must be Domains under the names of the model's inputs and outputs
+        @test_throws ArgumentError(
+            "input_domains of a cognitive model of type DomainForAnotherInput has domains for (:cue,), but the inputs in its attributes are (:reward,).",
+        ) SessionInfo(
+            DomainForAnotherInput(), [0.5, 1.0], [1, 2]; who_starts=EnvironmentStarts()
+        )
+        @test_throws "output_domains of a cognitive model of type OutputDomainsNotDomains returns (choice = (1, 2),), but it must return a NamedTuple with a Domain under the name of each of its outputs that has a domain" SessionInfo(
+            OutputDomainsNotDomains(), [0.5, 1.0], [1, 2]; who_starts=EnvironmentStarts()
+        )
+    end
+
     @testset "The data, the names and the environment are checked" begin
         @test_throws "The observations in the data are named (:cue,), but the observations in the attributes of a cognitive model of type SessionCounter, its inputs, are (:reward,). The data must have every observation in the cognitive model's attributes." SessionInfo(
             SessionCounter(),
@@ -850,6 +907,31 @@ const COUNTER_TABLE = (;
                 session.cognitive_save_history === SaveHistory(; states=:n_timesteps),
             copy.sessions,
         ) && copy.session_ids == sessions_info.session_ids
+    end
+
+    @testset "The values in a table are checked against the domains of the model's inputs and outputs, and an error names the row" begin
+        table = (;
+            id=["A", "A", "B", "B"], reward=[0.5, 0.2, 0.9, 0.1], choice=[1, 2, 2, 5]
+        )
+        @test_throws ArgumentError(
+            "The action choice in row 4 of the table is 5, which isn't one of its possible values, (1, 2).",
+        ) MultipleSessionsInfo(
+            ChoosesWithinDomains(),
+            table;
+            observation_columns=:reward,
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        within_domains = merge(table, (; choice=[1, 2, 2, 1]))
+        @test MultipleSessionsInfo(
+            ChoosesWithinDomains(),
+            within_domains;
+            observation_columns=:reward,
+            action_columns=:choice,
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        ).sessions[2].actions == (; choice=[2, 1])
     end
 
     @testset "The table and its columns are checked" begin

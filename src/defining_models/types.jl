@@ -580,22 +580,21 @@ The kind of attribute that the states of a model are, see [`AbstractAttributeKin
 """
 struct StateKind <: AbstractAttributeKind end
 
-## The values a parameter can take ##
+## The values a parameter, an input or an output can take ##
 
 """
-    Domain(; type, lower=-Inf, upper=Inf, possible_values=nothing,
-                    constraint=nothing)
+    Domain(; type, lower=-Inf, upper=Inf, possible_values=nothing, constraint=nothing)
 
-The values that a parameter of a cognitive model or an environment model can take, which
-the model gives for it in [`parameter_domains`](@ref): values of `type`, with the numbers
-in them between `lower` and `upper`, or among `possible_values`, which satisfy
-`constraint`.
+The values that a parameter, an input or an output of a cognitive model or an environment
+model can take, which the model gives for it in [`parameter_domains`](@ref),
+[`input_domains`](@ref) or [`output_domains`](@ref): values of `type`, with the numbers in
+them between `lower` and `upper`, or among `possible_values`, which satisfy `constraint`.
 
 # Keyword arguments
-- `type`: the type of the parameter's values, `Real` unless it is given, or the type of the
-  possible values when there are some. An abstract type takes every type of its
-  kind, so with `Real` a value can be a `Float32`, a `Float64` or a number of an automatic
-  differentiation package alike, and no value is converted. A type of whole numbers, such as
+- `type`: the type of the values, `Real` unless it is given, or the type of the possible
+  values when there are some. An abstract type takes every type of its kind, so with `Real`
+  a value can be a `Float32`, a `Float64` or a number of an automatic differentiation
+  package alike, and no value is converted. A type of whole numbers, such as
   `Integer`, takes every whole number, also in another number type, such as `3.0`, and
   `Bool` takes `true`, `false`, 0 and 1. A type that isn't a type of numbers, such as
   `AbstractString` or `Symbol`, is for a parameter such as the name of a strategy. An array
@@ -608,17 +607,17 @@ in them between `lower` and `upper`, or among `possible_values`, which satisfy
   elements, as `AbstractVector{Real}` does. A type of floating-point numbers, such as
   `Float64` or `AbstractVector{Float64}`, is an error too: give `Real` or
   `AbstractVector{Real}`, which take them all.
-- `lower=-Inf` and `upper=Inf`: the smallest and the largest value of a parameter that is a
-  real number, or of each element of an array or a tuple of real numbers, which are both in
-  the domain. A parameter of another type has no bounds.
-- `possible_values=nothing`: the values that the parameter, or each element of an array or a
+- `lower=-Inf` and `upper=Inf`: the smallest and the largest value that is a real number,
+  or element of an array or a tuple of real numbers, which are both in the domain. Values of
+  another type have no bounds.
+- `possible_values=nothing`: the values that a value, or each element of an array or a
   tuple, can take, in a tuple, such as `(:greedy, :random)` or `(2, 4, 8)`, or in a range,
   such as `1:4`. A number is compared by its value, so `4.0` is among `(2, 4, 8)`. Without
   `type`, the type is that of the possible values: `Symbol` for symbols, `Integer` for whole
   numbers, `Real` for other numbers and `AbstractString` for strings. A domain with possible
   values has no bounds.
-- `constraint=nothing`: a function of the parameter's whole value which returns `true` when
-  the value is in the domain, such as `sums_to_one(values) = sum(values) ≈ 1` for the
+- `constraint=nothing`: a function of the whole value which returns `true` when the value is
+  in the domain, such as `sums_to_one(values) = sum(values) ≈ 1` for the
   probabilities of the options of a choice. It is called after the type, the bounds and the
   possible values are checked, and a named function names the constraint in errors and in
   the display of a model.

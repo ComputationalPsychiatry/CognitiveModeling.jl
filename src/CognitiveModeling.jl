@@ -99,7 +99,8 @@ export get_session_trajectories, get_session_parameters, predict_session_traject
 #What users call with the package's name, as in CognitiveModeling.run_timestep
 public run_timestep, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
-public parameter_domains, discrete_parameter_names, continuous_parameter_names
+public parameter_domains, input_domains, output_domains
+public discrete_parameter_names, continuous_parameter_names
 public turing_run_timestep,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
