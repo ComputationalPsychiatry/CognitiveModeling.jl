@@ -18,6 +18,8 @@ This page lists what is planned and not written yet. The list will grow.
 - Models from game theory, such as win-stay-lose-shift, and models that take a payoff
   matrix, as an input or as a parameter.
 - The k-ToM model of recursive theory of mind.
+- An example of inverse reinforcement learning, if it can be done: the reward function
+  that an agent acts on, fitted from its actions.
 
 ## Interfaces
 
