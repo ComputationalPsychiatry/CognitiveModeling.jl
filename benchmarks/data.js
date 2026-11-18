@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794945264267,
+  "lastUpdate": 1794991385482,
   "repoUrl": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl",
   "entries": {
     "CognitiveModeling.jl": [
@@ -574,6 +574,102 @@ window.BENCHMARK_DATA = {
           {
             "name": "turing/single session/log density",
             "value": 2422.6,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "committer": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "distinct": true,
+          "id": "de084ae80f664434b08cdce266ab95a4bafcb7de",
+          "message": "Combine turing_impute_missing_values and turing_impute_each_value into one Turing.jl model, turing_impute_missing_values, which returns the data as it is when nothing in it is missing, and otherwise imputes the first value under its name and goes on with the rest, building the data again from its values in order, so that the values keep their types and sessions with a missing action or observation are no longer many times slower",
+          "timestamp": "2026-11-18T09:36:34+01:00",
+          "tree_id": "7c44fcf02fa4afe46477602c24133a602125a435",
+          "url": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/commit/de084ae80f664434b08cdce266ab95a4bafcb7de"
+        },
+        "date": 1794991384511,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "simulate/saving everything",
+            "value": 3790.222222222222,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4160\nallocs=16\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "simulate/saving nothing",
+            "value": 1892.9,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=512\nallocs=16\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Enzyme",
+            "value": 142880.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=200176\nallocs=698\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ForwardDiff",
+            "value": 147753,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=339488\nallocs=392\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Mooncake",
+            "value": 146310,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=92496\nallocs=980\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ReverseDiff",
+            "value": 1715660,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1556528\nallocs=42516\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/log density",
+            "value": 27191,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=22752\nallocs=175\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Enzyme",
+            "value": 9794.8,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16688\nallocs=29\nparams={\"evals\":5,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ForwardDiff",
+            "value": 5273,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4904\nallocs=16\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Mooncake",
+            "value": 9171.25,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5936\nallocs=51\nparams={\"evals\":4,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ReverseDiff",
+            "value": 192805,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=155296\nallocs=4245\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/log density",
+            "value": 2388.6,
             "unit": "ns",
             "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
