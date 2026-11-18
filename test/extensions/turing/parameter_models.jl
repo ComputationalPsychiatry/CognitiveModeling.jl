@@ -111,7 +111,7 @@ end
         SessionRescorlaWagner(), GROUPED_FULL_TABLE; impute_missing_actions=false
     )
 
-    @testset "Each session's value is its group's mean plus a standardized value times its group's standard deviation, transformed" begin
+    @testset "Each session's value is its group's mean plus a standard normal value times its group's standard deviation, transformed" begin
         hierarchical = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 GROUP_PRIORS; transformation=to_unit_interval, group_by=:group
@@ -122,24 +122,24 @@ end
             CognitiveModeling.prepare_parameters_model(hierarchical, sessions_info),
             sessions_info,
         )
-        #The learning rate has two groups, with the values of each parameter of its distribution under their names, the inverse temperature one value of each, and every session has a standardized value
+        #The learning rate has two groups, with the values of each parameter of its distribution under their names, the inverse temperature one value of each, and every session has a standard normal value, session_z
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
             @varname(learning_rate.mean.group),
             @varname(learning_rate.sd.group),
-            @varname(learning_rate.standardized),
+            @varname(learning_rate.session_z),
             @varname(inverse_temperature.mean.group),
             @varname(inverse_temperature.sd.group),
-            @varname(inverse_temperature.standardized),
+            @varname(inverse_temperature.session_z),
         ])
         @test keys(rand(Xoshiro(1), model)[@varname(learning_rate.mean.group)]) == (:a, :b)
         @test rand(Xoshiro(1), model)[@varname(inverse_temperature.mean.group)] isa Real
         values = Dict(
             @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
             @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
-            @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session_z) => [0.1, 0.2, -0.3],
             @varname(inverse_temperature.mean.group) => 0.3,
             @varname(inverse_temperature.sd.group) => 0.5,
-            @varname(inverse_temperature.standardized) => [1.0, 0.0, -1.0],
+            @varname(inverse_temperature.session_z) => [1.0, 0.0, -1.0],
         )
         parameters = returned(model, values)
         @test parameters.learning_rate ≈
@@ -227,7 +227,7 @@ end
         values = Dict(
             @varname(learning_rate.mean.group) => 0.5,
             @varname(learning_rate.sd.group) => 1.0,
-            @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session_z) => [0.1, 0.2, -0.3],
             @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
@@ -270,10 +270,10 @@ end
         values = Dict(
             @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
             @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
-            @varname(learning_rate.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session_z) => [0.1, 0.2, -0.3],
             @varname(inverse_temperature.mean.group) => 0.3,
             @varname(inverse_temperature.sd.group) => 0.5,
-            @varname(inverse_temperature.standardized) => [1.0, 0.0, -1.0],
+            @varname(inverse_temperature.session_z) => [1.0, 0.0, -1.0],
         )
         learning_rates = to_unit_interval.([
             0.5 + 1.0 * 0.1, -1.0 + 2.0 * 0.2, 0.5 + 1.0 * -0.3
@@ -356,11 +356,11 @@ end
         @varname(learning_rate.coef) =>
             (; intercept=0.5, age=0.01, group_b=-1.0, age_by_group_b=0.02),
         @varname(learning_rate.participant.intercept.sd) => 2.0,
-        @varname(learning_rate.participant.intercept.standardized) => [0.3, -0.4],
+        @varname(learning_rate.participant.intercept.deviation_z) => [0.3, -0.4],
         @varname(learning_rate.participant.age.sd) => 0.1,
-        @varname(learning_rate.participant.age.standardized) => [0.5, -1.0],
+        @varname(learning_rate.participant.age.deviation_z) => [0.5, -1.0],
         @varname(learning_rate.session.intercept.sd) => 0.5,
-        @varname(learning_rate.session.intercept.standardized) => [0.1, 0.2, -0.3],
+        @varname(learning_rate.session.intercept.deviation_z) => [0.1, 0.2, -0.3],
         @varname(inverse_temperature.coef) => (; intercept=0.7),
     )
     #The sum of each session by hand: the intercept, the effects of its age, its group and their product, the deviations of its participant's intercept and of its participant's slope of the age times its age, and the deviation of the session itself
@@ -413,10 +413,10 @@ end
             @varname(learning_rate.participant.intercept.sd) => 2.0,
             @varname(learning_rate.participant.intercept.deviation) => [0.6, -0.8],
             @varname(learning_rate.session.intercept.sd) => (; a=0.5, b=3.0),
-            @varname(learning_rate.session.intercept.standardized) => [0.1, 0.2, -0.3],
+            @varname(learning_rate.session.intercept.deviation_z) => [0.1, 0.2, -0.3],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
-        #S1 and S3 are in group a and S2 in group b, which scales its standardized value by its own standard deviation
+        #S1 and S3 are in group a and S2 in group b, which scales its standard normal value by its own standard deviation
         @test returned(model, given).learning_rate ≈
             [0.6 + 0.5 * 0.1, -0.8 + 3.0 * 0.2, 0.6 + 0.5 * -0.3]
         @test logjoint(model, given) ≈
@@ -479,7 +479,7 @@ end
                 if centered
                     @varname(learning_rate.session.intercept.deviation) => [0.2, 0.4, -0.6]
                 else
-                    @varname(learning_rate.session.intercept.standardized) =>
+                    @varname(learning_rate.session.intercept.deviation_z) =>
                         [0.1, 0.2, -0.3]
                 end,
             )
@@ -489,7 +489,7 @@ end
                 if centered
                     @varname(learning_rate.session) => [0.7, 0.9, -0.1]
                 else
-                    @varname(learning_rate.standardized) => [0.1, 0.2, -0.3]
+                    @varname(learning_rate.session_z) => [0.1, 0.2, -0.3]
                 end,
             )
             @test returned(as_regression, regression_values).learning_rate ≈

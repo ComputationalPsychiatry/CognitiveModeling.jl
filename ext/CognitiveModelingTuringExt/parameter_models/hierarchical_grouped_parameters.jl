@@ -76,7 +76,7 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
     group_parameters ~
     to_submodel(turing_hierarchical_group_parameters(groups.group_priors), false)
 
-    #Sample the value of every session, from the distribution of its group or as a standardized value
+    #Sample the value of every session, from the distribution of its group, or non-centered, as a standard normal value
     if hierarchical_parameter.centered
         session_values ~ to_submodel(
             turing_hierarchical_centered_values(
@@ -173,20 +173,20 @@ end
 """
     turing_hierarchical_non_centered_values(group_parameters, group_of_each_session)
 
-Turing.jl model which samples a standardized value of one parameter for every session, as
-the variable `standardized`, so that under the parameter's prefix it is named like
-`learning_rate.standardized`, and returns the value of every session: the mean of its group
-plus the standardized value times the standard deviation of its group, which are the two
-group-level parameters. This is the non-centered form of a normal distribution. Used by
+Turing.jl model which samples a standard normal value of one parameter for every session,
+as the variable `session_z`, so that under the parameter's prefix it is named like
+`learning_rate.session_z`, and returns the value of every session: the mean of its group
+plus that value times the standard deviation of its group, which are the two group-level
+parameters. This is the non-centered form of a normal distribution. Used by
 [`turing_hierarchical_grouped_parameter`](@ref).
 """
 Turing.@model function turing_hierarchical_non_centered_values(
     group_parameters::NamedTuple, group_of_each_session
 )
-    standardized ~ filldist(Normal(), length(group_of_each_session))
+    session_z ~ filldist(Normal(), length(group_of_each_session))
     means, standard_deviations = values(group_parameters)
     return select_by_group(means, group_of_each_session) .+
-           select_by_group(standard_deviations, group_of_each_session) .* standardized
+           select_by_group(standard_deviations, group_of_each_session) .* session_z
 end
 
 """

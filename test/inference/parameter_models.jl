@@ -133,7 +133,7 @@ const REGRESSION_TABLE = merge(
 
     @testset "A HierarchicalParameter keeps its settings, with the defaults of those that aren't given" begin
         priors = (; mean=1, sd=2)
-        #The default normal distribution is sampled as standardized values, in one group, without a transformation
+        #The default normal distribution is sampled non-centered, as standard normal values, in one group, without a transformation
         default = HierarchicalParameter(priors)
         @test default.priors === priors &&
             default.distribution === nothing &&
@@ -347,7 +347,7 @@ const REGRESSION_TABLE = merge(
     end
 
     @testset "DefaultRegressionSettings give the terms without them a coding and a choice of centering, and a term's own settings win" begin
-        #The defaults are dummy coding and standardized deviations, as without DefaultRegressionSettings
+        #The defaults are dummy coding and non-centered deviations, as without DefaultRegressionSettings
         defaults = DefaultRegressionSettings()
         @test defaults.coding === :dummy && defaults.centered === false
         without_settings = RegressionParameter(

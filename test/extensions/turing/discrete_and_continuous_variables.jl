@@ -89,7 +89,7 @@ end
         @test variable_names.continuous == [
             @varname(learning_rate.coef),
             @varname(learning_rate.id.intercept.sd),
-            @varname(learning_rate.id.intercept.standardized),
+            @varname(learning_rate.id.intercept.deviation_z),
             @varname(uses_rewards.coef),
         ]
     end

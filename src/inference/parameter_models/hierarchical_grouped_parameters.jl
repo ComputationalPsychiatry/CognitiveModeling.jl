@@ -40,11 +40,11 @@ once for each group of sessions.
   [`session_id_to_symbol`](@ref) makes that of a session. With `nothing`, every session is
   in one group, and each group-level parameter is one value.
 - `centered=nothing`: for the default normal distribution, whether the value of each session
-  is sampled from the distribution of its group, with `true`, or as a standardized value
-  which the group's mean shifts and its standard deviation scales, with `false`, which is
-  the default, since it usually samples better when the data of a session informs its
-  parameters little. Any other distribution is always sampled from directly, and giving
-  `centered` with one is an error.
+  is sampled from the distribution of its group, with `true`, or non-centered, as a standard
+  normal value which the group's mean shifts and its standard deviation scales, with
+  `false`, which is the default, since it usually samples better when the data of a session
+  informs its parameters little. Any other distribution is always sampled from directly, and
+  giving `centered` with one is an error.
 
 Each argument is kept in a field of the same name, with `group_by` as a tuple of column
 names, which is empty for one group, `centered` as `true` or `false`, and a `distribution`
@@ -101,7 +101,7 @@ struct HierarchicalParameter{
             )
         end
 
-        #Only the default normal distribution has the choice of being sampled as standardized values, which is its default. Any other distribution is sampled from directly
+        #Only the default normal distribution has the choice of being sampled non-centered, as standard normal values, which is its default. Any other distribution is sampled from directly
         if centered !== nothing && distribution !== nothing
             throw(
                 ArgumentError(

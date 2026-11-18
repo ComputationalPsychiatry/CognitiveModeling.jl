@@ -400,7 +400,7 @@ const TURING_GROUPED_SESSIONS = MultipleSessionsInfo(
 turing_to_unit_interval(x) = 1 / (1 + exp(-x))
 const TURING_GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
 
-# Both parameters from the distributions of groups, as standardized values: the learning rate with two groups, the inverse temperature with one
+# Both parameters from the distributions of groups, non-centered, as standard normal values: the learning rate with two groups, the inverse temperature with one
 const TURING_FULL_MODEL_WITH_GROUPS = turing_full_model(
     HierarchicalGroupedParameters((;
         learning_rate=HierarchicalParameter(

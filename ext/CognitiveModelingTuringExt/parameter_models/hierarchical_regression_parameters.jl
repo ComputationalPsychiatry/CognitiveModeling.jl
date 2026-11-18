@@ -276,7 +276,7 @@ Turing.jl model which samples the deviations of one varying coefficient, one for
 level: their standard deviation with [`turing_regression_standard_deviation`](@ref), and
 then every deviation from a normal distribution around zero, with
 [`turing_regression_centered_deviations`](@ref) when `centered` is `true`, or as a
-standardized value which the standard deviation scales, with
+standard normal value which the standard deviation scales, with
 [`turing_regression_non_centered_deviations`](@ref). It returns the deviation of every
 level. `sd_prior` is the prior of the standard deviation, a `NamedTuple` with the prior of
 each group when the levels are grouped, and `levels` has the number of levels and their
@@ -288,7 +288,7 @@ Turing.@model function turing_regression_deviations(sd_prior, levels, centered)
     sd_of_levels ~
     to_submodel(turing_regression_standard_deviation(sd_prior, levels.groups), false)
 
-    #Sample the deviation of every level, from the normal distribution or as a standardized value
+    #Sample the deviation of every level, from the normal distribution, or non-centered, as a standard normal value
     if centered
         deviations ~ to_submodel(
             turing_regression_centered_deviations(sd_of_levels, levels.n_levels), false
@@ -346,17 +346,17 @@ end
 """
     turing_regression_non_centered_deviations(sd_of_levels, n_levels)
 
-Turing.jl model which samples a standardized value for each of `n_levels` levels of varying
-effects, as the variable `standardized`, so that under the prefixes of the parameter, the
-varying effects and the coefficient it is named like
-`learning_rate.participant.intercept.standardized`, and returns the deviation of every
-level: its standardized value times `sd_of_levels`, the standard deviation, as one value or
+Turing.jl model which samples a standard normal value for each of `n_levels` levels of
+varying effects, as the variable `deviation_z`, so that under the prefixes of the parameter,
+the varying effects and the coefficient it is named like
+`learning_rate.participant.intercept.deviation_z`, and returns the deviation of every level:
+that value times `sd_of_levels`, the standard deviation, as one value or
 with a value for every level. This is the non-centered form of a normal distribution. Used
 by [`turing_regression_deviations`](@ref).
 """
 Turing.@model function turing_regression_non_centered_deviations(sd_of_levels, n_levels)
-    standardized ~ filldist(Normal(), n_levels)
-    return sd_of_levels .* standardized
+    deviation_z ~ filldist(Normal(), n_levels)
+    return sd_of_levels .* deviation_z
 end
 
 """

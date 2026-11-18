@@ -308,10 +308,10 @@ varying effects names is a term of the same varying effects.
   sessions of one level must all be in one group. With `nothing`, the levels share one
   standard deviation.
 - `centered=nothing`: whether each deviation is sampled from the normal distribution
-  directly, with `true`, or as a standardized value which the standard deviation scales,
-  with `false`, or with `nothing` as the regression's [`DefaultRegressionSettings`](@ref)
-  say, which is `false` unless they say otherwise. The standardized form usually samples
-  better when the data informs each deviation little.
+  directly, with `true`, or non-centered, as a standard normal value which the standard
+  deviation scales, with `false`, or with `nothing` as the regression's
+  [`DefaultRegressionSettings`](@ref) say, which is `false` unless they say otherwise. The
+  non-centered form usually samples better when the data informs each deviation little.
 - `name`: the name of the varying effects, which their variables are named under: the name
   of their column, or the names of their columns joined by two underscores, as in
   `id__block`.
