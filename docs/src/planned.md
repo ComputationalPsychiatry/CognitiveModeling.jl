@@ -69,6 +69,11 @@ This page lists what is planned and not written yet. The list will grow.
   several cognitive models generated its behavior, and its posterior compares the models.
 - Several sets of experimental data in one hierarchical model, such as different experiments
   or tasks done by the same participants, which share the parameters they have in common.
+- Imputing a missing part of a value, such as the time of a response whose choice was
+  recorded, or one element of a vector, as a latent variable of its own, for when a later
+  timestep uses the value. Leaving a missing part out already works: a distribution of one's
+  own, which splits the distribution of the value into its parts, scores the parts that are
+  known, as the tutorial on SequentialSamplingModels.jl shows.
 
 ## Performance
 
