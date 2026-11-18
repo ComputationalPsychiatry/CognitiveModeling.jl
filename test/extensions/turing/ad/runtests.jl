@@ -54,9 +54,18 @@ const KNOWN_FAILURES = [
             "turing full model with parameters from regressions",
             "turing full model with a regression with a family distribution",
             "turing full model with a vector parameter for each session, from a Dirichlet prior",
+            "turing full model with an output whose values are NamedTuples, made from two columns",
             "turing full model where only the first and the third session impute missing actions",
             "turing full model where only the first and the third session run their environment",
             "turing full model of sessions of different lengths, where only the second and the third impute missing actions",
+            "turing full model with an output whose values are vectors, made from two columns",
+        ],
+    ),
+    (;
+        bug="Enzyme forward throws an EnzymeNoDerivativeError, with and without runtime activity, for the log density of a normal distribution over vectors whose mean or covariance depends on what is differentiated, since it has no forward rule for LAPACK's triangular solve, trtrs, which Enzyme.jl issue 1991 reports. Reverse mode is right",
+        backends=["Enzyme forward", "Enzyme forward, runtime activity"],
+        cases=[
+            "turing full model with an output whose values are vectors, made from two columns",
         ],
     ),
     (;

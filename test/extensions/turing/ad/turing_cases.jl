@@ -714,6 +714,100 @@ const TURING_FULL_MODEL_WITH_HIERARCHICAL_DIRICHLET = full_model(
     TURING_CHOICE_SESSIONS,
 )
 
+# A stand-in for the distributions of SequentialSamplingModels.jl, whose values are NamedTuples: a choice of 1 with a probability and of 2 otherwise, and an exponential response time with a rate
+struct TuringChoiceAndTime{T} <: Turing.Distributions.Distribution{
+    Turing.Distributions.Multivariate,Turing.Distributions.ValueSupport
+}
+    probability::T
+    rate::T
+end
+function Turing.Distributions.logpdf(distribution::TuringChoiceAndTime, value::NamedTuple)
+    choice_density = if value.choice == 1
+        log(distribution.probability)
+    else
+        log1p(-distribution.probability)
+    end
+    return choice_density + log(distribution.rate) - distribution.rate * value.rt
+end
+
+# A model which responds with a choice and a time from the stand-in, and with a confidence, a number
+struct TuringRespondsWithChoiceAndTime <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(
+    model::TuringRespondsWithChoiceAndTime, parameters
+)
+    return (;)
+end
+function CognitiveModeling.run_timestep(
+    model::TuringRespondsWithChoiceAndTime, context::ModelContext
+)
+    probability = context.parameters.choice_probability
+    return ModelOutput((;
+        response=TuringChoiceAndTime(probability, context.parameters.rate),
+        confidence=Normal(probability, 0.1),
+    ))
+end
+function CognitiveModeling.attribute_names(model::TuringRespondsWithChoiceAndTime)
+    return ModelAttributes(;
+        parameters=(:choice_probability, :rate),
+        states=(),
+        inputs=:trial,
+        outputs=(:response, :confidence),
+    )
+end
+
+# Three sessions of ten responses, with the choice and the response time in two columns, which make one action
+const TURING_FULL_MODEL_WITH_RESPONSES = full_model(
+    TuringBackend(),
+    IndependentParameters((; choice_probability=Beta(2, 2), rate=LogNormal(0, 0.5))),
+    MultipleSessionsInfo(
+        TuringRespondsWithChoiceAndTime(),
+        (;
+            id=repeat(["S1", "S2", "S3"]; inner=10),
+            trial=repeat(1:10, 3),
+            choice=repeat([1, 2, 1, 1, 2, 1, 2, 2, 1, 1], 3),
+            rt=repeat([0.4, 0.7, 0.3, 0.5, 0.2, 0.9, 1.1, 0.6, 0.8, 0.5], 3),
+            confidence=repeat([0.7, 0.4, 0.8, 0.9, 0.8, 0.3, 0.2, 0.6, 0.5, 0.7], 3),
+        );
+        observation_columns=:trial,
+        action_columns=((; choice=:choice, rt=:rt) => :response, :confidence),
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+
+# A model which reports two numbers at once, from a normal distribution over vectors around a mean that is a parameter
+struct TuringReportsTwoNumbers <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::TuringReportsTwoNumbers, parameters) = (;)
+function CognitiveModeling.run_timestep(
+    model::TuringReportsTwoNumbers, context::ModelContext
+)
+    return ModelOutput((;
+        report=MvNormal(fill(context.parameters.mean, 2), [1.0 0.0; 0.0 1.0])
+    ))
+end
+function CognitiveModeling.attribute_names(model::TuringReportsTwoNumbers)
+    return ModelAttributes(; parameters=:mean, states=(), inputs=:trial, outputs=:report)
+end
+
+# Three sessions of ten reports, each made from two columns
+const TURING_FULL_MODEL_WITH_VECTOR_REPORTS = full_model(
+    TuringBackend(),
+    IndependentParameters((; mean=Normal(0, 1))),
+    MultipleSessionsInfo(
+        TuringReportsTwoNumbers(),
+        (;
+            id=repeat(["S1", "S2", "S3"]; inner=10),
+            trial=repeat(1:10, 3),
+            first=repeat([0.1, 0.3, -0.2, 0.5, 0.0, 0.4, -0.1, 0.2, 0.6, 0.3], 3),
+            second=repeat([0.5, 0.2, 0.0, -0.3, 0.1, 0.2, 0.4, -0.2, 0.3, 0.1], 3),
+        );
+        observation_columns=:trial,
+        action_columns=(:first, :second) => ((first, second) -> [first, second]),
+        session_columns=:id,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+
 function log_density_of(model)
     log_density_function = LogDensityFunction(model)
     return x -> LogDensityProblems.logdensity(log_density_function, x)
@@ -868,6 +962,18 @@ const TURING_CASES = [
         name="turing full model with a vector parameter for each session, from a hierarchical Dirichlet with two groups",
         f=linked_log_density_of(TURING_FULL_MODEL_WITH_HIERARCHICAL_DIRICHLET),
         x=[0.4, 0.1, -0.3, -0.2, 0.3, 0.6, 0.3, -0.2, 0.1, 0.5, -0.4, 0.2],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with an output whose values are NamedTuples, made from two columns",
+        f=log_density_of(TURING_FULL_MODEL_WITH_RESPONSES),
+        x=[0.6, 0.7, 0.3, 2.0, 3.0, 1.5],
+        reactant=false,
+    ),
+    (;
+        name="turing full model with an output whose values are vectors, made from two columns",
+        f=log_density_of(TURING_FULL_MODEL_WITH_VECTOR_REPORTS),
+        x=[0.2, -0.1, 0.4],
         reactant=false,
     ),
     (;

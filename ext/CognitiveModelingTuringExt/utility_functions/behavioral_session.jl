@@ -12,6 +12,47 @@ zero, where a `Vector{Union{}}` can't be made into a product distribution at all
 scorable_distributions(distributions::AbstractVector) = distributions
 scorable_distributions(::Vector{Union{}}) = Normal{Float64}[]
 
+#Distributions.jl's product_distribution scores a vector of numbers under distributions of numbers. Distributions of arrays it makes into a distribution over one array with one more dimension, which a vector of arrays isn't, and distributions of other values, such as the NamedTuples of a choice and a response time that the models of SequentialSamplingModels.jl give, it doesn't take. So every other output is scored by a product of its own. Which one is chosen is in the type of the values, so it costs nothing when a model runs
+"""
+    product_of_distributions(distributions, values)
+
+Return the distribution of `values`, the values of one output to condition on, each under
+its distribution in `distributions`: Distributions.jl's `product_distribution` when the
+values are numbers, and a [`ProductOfValuesOfAnyType`](@ref) otherwise, such as for
+arrays or `NamedTuple`s. Used by [`turing_run_all_timesteps`](@ref).
+"""
+function product_of_distributions(distributions, ::AbstractVector{<:Real})
+    return product_distribution(distributions)
+end
+function product_of_distributions(distributions, ::AbstractVector)
+    return ProductOfValuesOfAnyType(distributions)
+end
+
+"""
+    ProductOfValuesOfAnyType(distributions)
+
+The distribution of a vector of values, each from its own distribution in `distributions`,
+for values that Distributions.jl's `product_distribution` doesn't score as a vector, such
+as arrays and `NamedTuple`s. The log density of the values is the sum of that of each. Used by
+[`product_of_distributions`](@ref).
+"""
+struct ProductOfValuesOfAnyType{Tdistributions<:AbstractVector} <:
+       Distribution{Multivariate,ValueSupport}
+    distributions::Tdistributions
+end
+Base.length(product::ProductOfValuesOfAnyType) = length(product.distributions)
+function Distributions.logpdf(product::ProductOfValuesOfAnyType, values::AbstractVector)
+    return sum(map(logpdf, product.distributions, values); init=0.0)
+end
+function Distributions.loglikelihood(
+    product::ProductOfValuesOfAnyType, values::AbstractVector
+)
+    return logpdf(product, values)
+end
+function Base.rand(rng::AbstractRNG, product::ProductOfValuesOfAnyType)
+    return map(distribution -> rand(rng, distribution), product.distributions)
+end
+
 """
     initialize_distributions_for_conditioning(session_info, timestep_values)
     store_distributions_for_conditioning(session_info, distributions_for_conditioning,
