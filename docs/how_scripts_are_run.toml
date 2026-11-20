@@ -1,0 +1,23 @@
+# How each script of the documentation is run. docs/make.jl reads it, and so will the tests of the
+# documentation. Every script in docs/literate and docs/examples has an entry.
+#
+# run_in_build: whether the documentation's build runs the tutorial and shows its output (true),
+# or only shows its code (false). The examples in docs/examples aren't part of the build.
+# test_tier: when the tests run the script and check its results: "fast" on every push, "long" on
+# pushes into main, and "none" when no test runs it yet.
+
+[tutorials]
+"getting_started.jl" = { run_in_build = true, test_tier = "none" }
+"custom_turing_models.jl" = { run_in_build = true, test_tier = "none" }
+"discrete_parameters.jl" = { run_in_build = false, test_tier = "none" }
+"cognitive_abm_with_agents.jl" = { run_in_build = true, test_tier = "none" }
+"interfacing_with_common_rl.jl" = { run_in_build = true, test_tier = "none" }
+"interfacing_with_reinforcement_learning.jl" = { run_in_build = false, test_tier = "fast" }
+"interfacing_with_pomdps.jl" = { run_in_build = false, test_tier = "fast" }
+"interfacing_with_juliacontrol.jl" = { run_in_build = false, test_tier = "fast" }
+"interfacing_with_actr_models.jl" = { run_in_build = true, test_tier = "none" }
+"interfacing_with_sequential_sampling_models.jl" = { run_in_build = false, test_tier = "fast" }
+"compiling_with_reactant.jl" = { run_in_build = true, test_tier = "none" }
+
+[examples]
+"fit_three_participants.jl" = { test_tier = "fast" }
