@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795205278035,
+  "lastUpdate": 1795208786846,
   "repoUrl": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl",
   "entries": {
     "CognitiveModeling.jl": [
@@ -1336,6 +1336,132 @@ window.BENCHMARK_DATA = {
           {
             "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/log density",
             "value": 208383,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=324160\nallocs=887\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "committer": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "distinct": true,
+          "id": "33e0bc22c2eeef01bd3fbc5dd04894351aa6b020",
+          "message": "Use the example models in the tests of simulate, simulate! and instantiated models wherever one can serve a test: Baseline with the distributions written by hand in place of LearnsRewards, and the example environments, with FixedObservationsEnvironment for given rewards and the means of the distributions where a test checks values exactly, so that every test keeps its exact expectations. 28 of the 48 local models and distributions remain: those that test errors, such as a model without names or a method that returns the wrong type, those whose feature no example model has, such as a function that prepares the state for saving, an environment with default parameters or one that changes its state in place, and the two distributions they give. The tests of FixedObservationsEnvironment and of displaying instantiated models use the example models too. The suite covers the same lines of the package as before, and the test of vectors checks twelve values fewer, since VectorAttributes has no number beside its vectors",
+          "timestamp": "2026-11-20T21:46:03+01:00",
+          "tree_id": "12bb1f337ed9dbea7494bf97a586658e8fb424e7",
+          "url": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/commit/33e0bc22c2eeef01bd3fbc5dd04894351aa6b020"
+        },
+        "date": 1795208786143,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "simulate/saving everything",
+            "value": 5486.875,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5024\nallocs=16\nparams={\"evals\":8,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "simulate/saving nothing",
+            "value": 2189.8888888888887,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=512\nallocs=16\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Enzyme",
+            "value": 215708,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=200272\nallocs=698\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ForwardDiff",
+            "value": 193045,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=339584\nallocs=392\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Mooncake",
+            "value": 182420,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=92352\nallocs=952\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ReverseDiff",
+            "value": 2530425.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1544944\nallocs=42152\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/log density",
+            "value": 34511,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=22800\nallocs=175\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Enzyme",
+            "value": 11847.666666666666,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16688\nallocs=29\nparams={\"evals\":3,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ForwardDiff",
+            "value": 6665.8,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4904\nallocs=16\nparams={\"evals\":5,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Mooncake",
+            "value": 9674,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5840\nallocs=48\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ReverseDiff",
+            "value": 258171.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=154144\nallocs=4209\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/log density",
+            "value": 3090.1111111111113,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, Enzyme",
+            "value": 1409190,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=2076416\nallocs=2561\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, ForwardDiff",
+            "value": 11020212,
+            "unit": "ns",
+            "extra": "gctime=2330711\nmemory=34279408\nallocs=8975\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, Mooncake",
+            "value": 1251758,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1042328\nallocs=3958\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, ReverseDiff",
+            "value": 28625912,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=15300720\nallocs=413250\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/log density",
+            "value": 268928,
             "unit": "ns",
             "extra": "gctime=0\nmemory=324160\nallocs=887\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
