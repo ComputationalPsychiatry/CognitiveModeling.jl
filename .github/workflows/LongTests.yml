@@ -1,0 +1,46 @@
+name: Long tests
+
+# The tests of the long tier: those of the scripts of the documentation whose test_tier in docs/how_scripts_are_run.toml
+# is long, which take too long for every push. They run on pull requests into main, and when started by hand from the
+# Actions tab. The fast tier runs in CI.yml
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  # Cancel superseded runs on pull requests
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  long_tests:
+    name: Long tests - ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each runner runs the scripts of the long tier that it has. A tutorial that the documentation's build doesn't run,
+        # whose tier is long, has an entry here with its folder as the path, instead of its entry in CI.yml
+        include:
+          - name: tutorials in the documentation's environment
+            path: docs
+            runner: test/documentation/tutorials/runtests.jl
+          - name: docs examples
+            path: test/documentation/examples
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Install the test environment
+        run: julia --color=yes --project=${{ matrix.path }} -e 'using Pkg; Pkg.instantiate()'
+      - name: Run the tests of the long tier
+        # The runner is runtests.jl in the environment's folder, unless the entry names another
+        run: julia --color=yes --project=${{ matrix.path }} ${{ matrix.runner || format('{0}/runtests.jl', matrix.path) }} long

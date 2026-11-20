@@ -61,28 +61,46 @@ Automatic differentiation of the Turing.jl extension is tested in another enviro
 julia --project=test/ad_and_reactant/turing -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/turing/runtests.jl")'
 ```
 
-The tutorials that the documentation shows without running are run by tests of their own, each in an environment with the packages it uses:
+Both suites of automatic differentiation test every backend when they are run without arguments, and otherwise the backends whose names start with one of their arguments, as CI runs each group of backends in a job of its own:
 
 ```bash
-julia --project=test/documentation/tutorials/reinforcement_learning -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/reinforcement_learning/runtests.jl")'
+julia --project=test/ad_and_reactant/ad test/ad_and_reactant/ad/runtests.jl "Enzyme forward" Mooncake
+```
+
+The scripts of the documentation are tested with the checks of their results, as `docs/how_scripts_are_run.toml` describes. Each runner takes the tier of the tests as its argument, `fast` or `long`, and runs the scripts of that tier. `CI.yml` runs the fast tier on every push, and `LongTests.yml` the long tier on pull requests into `main` and when started by hand. The tutorials that the documentation's build runs are tested in its environment:
+
+```bash
+julia --project=docs -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs test/documentation/tutorials/runtests.jl fast
+```
+
+The tutorials that the build shows without running have an environment of their own each, with the packages they use:
+
+```bash
+julia --project=test/documentation/tutorials/interfacing_with_reinforcement_learning -e 'using Pkg; Pkg.instantiate()'
+julia --project=test/documentation/tutorials/interfacing_with_reinforcement_learning test/documentation/tutorials/interfacing_with_reinforcement_learning/runtests.jl fast
 ```
 
 ```bash
-julia --project=test/documentation/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/pomdps/runtests.jl")'
+julia --project=test/documentation/tutorials/interfacing_with_pomdps -e 'using Pkg; Pkg.instantiate()'
+julia --project=test/documentation/tutorials/interfacing_with_pomdps test/documentation/tutorials/interfacing_with_pomdps/runtests.jl fast
 ```
 
 ```bash
-julia --project=test/documentation/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/juliacontrol/runtests.jl")'
+julia --project=test/documentation/tutorials/interfacing_with_juliacontrol -e 'using Pkg; Pkg.instantiate()'
+julia --project=test/documentation/tutorials/interfacing_with_juliacontrol test/documentation/tutorials/interfacing_with_juliacontrol/runtests.jl fast
 ```
 
 ```bash
-julia --project=test/documentation/tutorials/sequential_sampling_models -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/sequential_sampling_models/runtests.jl")'
+julia --project=test/documentation/tutorials/interfacing_with_sequential_sampling_models -e 'using Pkg; Pkg.instantiate()'
+julia --project=test/documentation/tutorials/interfacing_with_sequential_sampling_models test/documentation/tutorials/interfacing_with_sequential_sampling_models/runtests.jl fast
 ```
 
-The examples in `docs/examples` run to the end in an environment of their own:
+The examples in `docs/examples` have an environment of their own:
 
 ```bash
-julia --project=test/documentation/examples -e 'using Pkg; Pkg.instantiate(); include("test/documentation/examples/runtests.jl")'
+julia --project=test/documentation/examples -e 'using Pkg; Pkg.instantiate()'
+julia --project=test/documentation/examples test/documentation/examples/runtests.jl fast
 ```
 
 Run the benchmarks of simulating and of fitting with each automatic differentiation backend. The `Benchmarks` workflow runs them on every push to `dev` and `main`, and keeps a history of the results with charts at <https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/benchmarks/>:
@@ -95,4 +113,10 @@ Build the documentation:
 
 ```bash
 julia --project=docs -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
+```
+
+The build shows only the code of the tutorials that only the builds of a release run, which take long. Build the documentation of a release, which runs them too:
+
+```bash
+DOCUMENTATION_FOR_A_RELEASE=true julia --project=docs docs/make.jl
 ```

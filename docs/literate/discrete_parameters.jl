@@ -1,7 +1,7 @@
 # # Discrete parameters
 #
-# *This page is a sketch of a tutorial. Its code isn't run when the documentation is built,
-# and the sections that are marked as planned describe what isn't in the package yet.*
+# *This page is a sketch of a tutorial. Its samplers take very few samples, and the sections
+# that are marked as planned describe what isn't in the package yet.*
 #
 # Some parameters of a cognitive model aren't continuous: whether a participant uses a
 # strategy at all, which of several strategies they use, or how many items they can hold in
@@ -10,6 +10,7 @@
 
 using CognitiveModeling
 using LogExpFunctions: logistic
+using Random: Xoshiro
 using Turing
 using Turing: Bijectors, DynamicPPL
 
@@ -50,11 +51,51 @@ end
 # [`CognitiveModeling.continuous_parameter_names`](@ref) then give the parameters of each
 # kind.
 
+# ## The data
+#
+# Four participants are simulated for 40 timesteps, each with rewards that come with a
+# probability of 0.7, as the rewards of a [`FixedObservationsEnvironment`](@ref). The first
+# two use their rewards, and the other two don't. Their ages go into the table for the
+# regression further down:
+
+ages = [20.0, 35.0, 50.0, 65.0]
+uses_rewards = [true, true, false, false]
+simulations = map(1:4) do participant
+    rewards = Float64.(rand(Xoshiro(participant), 40) .< 0.7)
+    return simulate(
+        LearnsOrNot(),
+        FixedObservationsEnvironment((; reward=rewards));
+        who_starts=EnvironmentStarts(),
+        n_steps=40,
+        cognitive_parameters=(; learning_rate=0.3, uses_rewards=uses_rewards[participant]),
+        environment_parameters=(;),
+        action_map=NameMap(),
+        cognitive_save_history=SaveHistory(;
+            inputs=:reward, outputs=:choice, save_initial_timestep_values=false
+        ),
+        rng=Xoshiro(participant),
+    )
+end
+table = (;
+    participant=repeat(["P1", "P2", "P3", "P4"]; inner=40),
+    age=repeat(ages; inner=40),
+    reward=[observation.reward for s in simulations for observation in s.observations],
+    choice=[action.choice for s in simulations for action in s.actions],
+)
+sessions_info = MultipleSessionsInfo(
+    LearnsOrNot(),
+    table;
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:participant,
+    who_starts=EnvironmentStarts(),
+)
+
 # ## Sampling a discrete parameter
 #
 # A sampler which uses gradients, such as NUTS, can't sample a discrete parameter. With
 # `Gibbs`, each kind of variable gets a sampler of its own. Here every session has its own
-# parameters, with `sessions_info` made from a table as on the other pages:
+# parameters:
 
 parameters_model = IndependentParameters((;
     learning_rate=Beta(2, 2), uses_rewards=Bernoulli(0.5)
@@ -77,7 +118,7 @@ continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
 # sampler:
 
 sampler = Gibbs(continuous => NUTS(), discrete => MH())
-chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
+chain = sample(Xoshiro(1), model, sampler, 20; nadapts=10, discard_initial=10)
 
 # Inside a `Gibbs` sampler, NUTS only adapts its step size when `sample` is given `nadapts`,
 # and the samples of those steps are kept unless `discard_initial` is given too. Without
@@ -122,7 +163,7 @@ discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
 #The names of the continuous variables, such as learning_rate.coef and uses_rewards.coef
 continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
 sampler = Gibbs(continuous => NUTS(), discrete => MH())
-chain = sample(model, sampler, 2000; nadapts=1000, discard_initial=1000)
+chain = sample(Xoshiro(1), model, sampler, 20; nadapts=10, discard_initial=10)
 
 # ## Ordered levels and counts
 #

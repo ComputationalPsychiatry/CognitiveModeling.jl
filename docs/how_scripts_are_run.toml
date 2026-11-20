@@ -1,23 +1,41 @@
-# How each script of the documentation is run. docs/make.jl reads it, and so will the tests of the
-# documentation. Every script in docs/literate and docs/examples has an entry.
+# How each script of the documentation is run, by the documentation's build and by its tests.
+# docs/make.jl reads this file, and so do the runners in test/documentation and a check in
+# test/code_quality. Every script in docs/literate and docs/examples has an entry.
 #
-# run_in_build: whether the documentation's build runs the tutorial and shows its output (true),
-# or only shows its code (false). The examples in docs/examples aren't part of the build.
-# test_tier: when the tests run the script and check its results: "fast" on every push, "long" on
-# pushes into main, and "none" when no test runs it yet.
+# run_in_build: how the documentation's build runs a tutorial, in the documentation's
+# environment, docs/Project.toml.
+# - "always": every build runs it and shows its output.
+# - "for_releases": the builds of a release, which are those of a tag and of a pull request into
+#   main, run it and show its output. Other builds show only its code, with a note that the
+#   documentation of a release shows its output. For a tutorial that takes long to run.
+# - "never": every build shows only its code. For a tutorial whose packages aren't in the
+#   documentation's environment, and which its tests run in an environment of their own.
+#
+# test_tier: when the tests run a script and check its results.
+# - "fast": on every push, in .github/workflows/CI.yml.
+# - "long": on pull requests into main, and when started by hand, in
+#   .github/workflows/LongTests.yml.
+# - "none": no test runs it.
+#
+# The tests of a script are in a folder named after it, in test/documentation/tutorials or
+# test/documentation/examples, whose results.jl checks what the script gave. A tutorial that the
+# build runs is tested in the documentation's environment, by
+# test/documentation/tutorials/runtests.jl. One that the build doesn't run has an environment and
+# a runtests.jl of its own in its folder. The examples in docs/examples aren't part of the build,
+# and are tested by test/documentation/examples/runtests.jl.
 
 [tutorials]
-"getting_started.jl" = { run_in_build = true, test_tier = "none" }
-"custom_turing_models.jl" = { run_in_build = true, test_tier = "none" }
-"discrete_parameters.jl" = { run_in_build = false, test_tier = "none" }
-"cognitive_abm_with_agents.jl" = { run_in_build = true, test_tier = "none" }
-"interfacing_with_common_rl.jl" = { run_in_build = true, test_tier = "none" }
-"interfacing_with_reinforcement_learning.jl" = { run_in_build = false, test_tier = "fast" }
-"interfacing_with_pomdps.jl" = { run_in_build = false, test_tier = "fast" }
-"interfacing_with_juliacontrol.jl" = { run_in_build = false, test_tier = "fast" }
-"interfacing_with_actr_models.jl" = { run_in_build = true, test_tier = "none" }
-"interfacing_with_sequential_sampling_models.jl" = { run_in_build = false, test_tier = "fast" }
-"compiling_with_reactant.jl" = { run_in_build = true, test_tier = "none" }
+"getting_started.jl" = { run_in_build = "always", test_tier = "fast" }
+"custom_turing_models.jl" = { run_in_build = "always", test_tier = "fast" }
+"discrete_parameters.jl" = { run_in_build = "always", test_tier = "fast" }
+"cognitive_abm_with_agents.jl" = { run_in_build = "always", test_tier = "fast" }
+"interfacing_with_common_rl.jl" = { run_in_build = "always", test_tier = "fast" }
+"interfacing_with_reinforcement_learning.jl" = { run_in_build = "never", test_tier = "fast" }
+"interfacing_with_pomdps.jl" = { run_in_build = "never", test_tier = "fast" }
+"interfacing_with_juliacontrol.jl" = { run_in_build = "never", test_tier = "fast" }
+"interfacing_with_actr_models.jl" = { run_in_build = "always", test_tier = "fast" }
+"interfacing_with_sequential_sampling_models.jl" = { run_in_build = "never", test_tier = "fast" }
+"compiling_with_reactant.jl" = { run_in_build = "always", test_tier = "fast" }
 
 [examples]
 "fit_three_participants.jl" = { test_tier = "fast" }

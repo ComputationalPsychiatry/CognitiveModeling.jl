@@ -58,8 +58,10 @@ jobs:
         # FlexiChains.jl at an older version than the main suite tests, and they run as the main suite does, with
         # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own, in
         # test/ad_and_reactant beside those of the package itself.
-        # The tutorials that the documentation shows without running have one each, with the packages they use, and so do
-        # the examples in docs/examples, which run to the end.
+        # The tutorials that the documentation's build runs are tested in its environment, docs, by a runner of their own.
+        # Those that the build shows without running have an environment each, with the packages they use, and so do the
+        # examples in docs/examples. They run with the argument fast, which runs the scripts whose test_tier in
+        # docs/how_scripts_are_run.toml is fast; .github/workflows/LongTests.yml runs those whose tier is long.
         # The two suites of automatic differentiation test each group of backends in a job of its own, which the runner
         # selects by the arguments it is given: the backends whose names start with one of them. The Turing.jl extension's
         # suite runs its two parts, the tests of its features and the shared inference cases, in a job each
@@ -103,16 +105,25 @@ jobs:
           - name: turing ad, Mooncake forward
             path: test/ad_and_reactant/turing
             arguments: '"Mooncake forward"'
+          - name: tutorials in the documentation's environment
+            path: docs
+            runner: test/documentation/tutorials/runtests.jl
+            arguments: fast
           - name: reinforcement learning tutorial
-            path: test/documentation/tutorials/reinforcement_learning
+            path: test/documentation/tutorials/interfacing_with_reinforcement_learning
+            arguments: fast
           - name: pomdps tutorial
-            path: test/documentation/tutorials/pomdps
+            path: test/documentation/tutorials/interfacing_with_pomdps
+            arguments: fast
           - name: juliacontrol tutorial
-            path: test/documentation/tutorials/juliacontrol
+            path: test/documentation/tutorials/interfacing_with_juliacontrol
+            arguments: fast
           - name: sequential sampling models tutorial
-            path: test/documentation/tutorials/sequential_sampling_models
+            path: test/documentation/tutorials/interfacing_with_sequential_sampling_models
+            arguments: fast
           - name: docs examples
             path: test/documentation/examples
+            arguments: fast
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
@@ -122,7 +133,8 @@ jobs:
       - name: Install the test environment
         run: julia --color=yes --project=${{ matrix.path }} -e 'using Pkg; Pkg.instantiate()'
       - name: Run the tests
-        run: julia --color=yes ${{ matrix.julia_flags }} --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl ${{ matrix.arguments }}
+        # The runner is runtests.jl in the environment's folder, unless the entry names another
+        run: julia --color=yes ${{ matrix.julia_flags }} --project=${{ matrix.path }} ${{ matrix.runner || format('{0}/runtests.jl', matrix.path) }} ${{ matrix.arguments }}
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v7
