@@ -33,13 +33,13 @@ function CognitiveModeling.attribute_names(model::ObservesRewards)
 end
 
 #Runs a model with an environment of fixed observations, saving everything but timestep 0. The environment takes no actions, so the map passes none on
-function simulate_fixed_observations(environment; model=LearnsRewards(), keywords...)
+function simulate_fixed_observations(environment; model=Baseline(ByHand()), keywords...)
     return simulate(
         model,
         environment;
         who_starts=EnvironmentStarts(),
         n_steps=10,
-        cognitive_parameters=(; learning_rate=0.5),
+        cognitive_parameters=BASELINE_PARAMETERS,
         environment_parameters=(;),
         action_map=NameMap(),
         cognitive_save_history=EVERY_TIMESTEP,
@@ -160,7 +160,11 @@ end
         environment = FixedObservationsEnvironment((;
             reward=[1.0, 0.0, 1.0], cue=[1.0, 0.0, 0.5]
         ))
-        simulation = simulate_fixed_observations(environment; model=LearnsRewardsWithCues())
+        simulation = simulate_fixed_observations(
+            environment;
+            model=LearnsRewardsWithCues(),
+            cognitive_parameters=(; learning_rate=0.5),
+        )
         @test simulation.observations ==
             [(; reward=1.0, cue=1.0), (; reward=0.0, cue=0.0), (; reward=1.0, cue=0.5)]
         @test simulation.states == [
@@ -188,7 +192,7 @@ end
     end
 
     @testset "An instantiated one is simulated in steps, and starts from its first entry after reset!" begin
-        agent = InstantiatedModel(LearnsRewards(), (; learning_rate=0.5))
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(FixedObservationsEnvironment(rewards), (;))
         simulate_steps!(n_steps) = simulate!(
             agent,

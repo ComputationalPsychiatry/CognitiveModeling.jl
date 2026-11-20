@@ -16,18 +16,18 @@ end
     end
 
     @testset "The REPL shows its model's kind and type, the timesteps, and the values of the parameters and the state" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         simulate!(agent, (; reward=1.0))
         @test repr("text/plain", agent) == """
         -- Instantiated cognitive model --
-        Type: LearnsRewards
+        Type: Baseline
         Timesteps simulated: 1
-        Parameters: learning_rate = 0.5
+        Parameters: learning_rate = 0.5, inverse_temperature = 2.0
         State: expected_reward = 0.75"""
         #An environment without parameters or a state
-        @test repr("text/plain", InstantiatedModel(RewardsTrue(), (;))) == """
+        @test repr("text/plain", InstantiatedModel(OnlyCues(), (;))) == """
         -- Instantiated environment model --
-        Type: RewardsTrue
+        Type: OnlyCues
         Timesteps simulated: 0
         Parameters: none
         State: none"""
@@ -45,8 +45,11 @@ end
     end
 
     @testset "The REPL says so when the stopping criterion is met" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        environment = InstantiatedModel(EndsAfterTimesteps(), (; last_timestep=2))
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
+        environment = InstantiatedModel(
+            WithStoppingCriterionEnvironment(ByHand()),
+            (; reward_probability=0.8, last_timestep=2),
+        )
         @test !occursin("Stopping criterion", repr("text/plain", environment))
         simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
         @test endswith(
@@ -57,15 +60,14 @@ end
     end
 
     @testset "On one line it shows its model's type and kind, and how many timesteps it has run" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         @test repr(agent) ==
-            "LearnsRewards (instantiated cognitive model, 0 timesteps simulated)"
+            "Baseline (instantiated cognitive model, 0 timesteps simulated)"
         simulate!(agent, (; reward=1.0))
-        @test repr(agent) ==
-            "LearnsRewards (instantiated cognitive model, 1 timestep simulated)"
+        @test repr(agent) == "Baseline (instantiated cognitive model, 1 timestep simulated)"
         @test occursin(
-            "RewardsTrue (instantiated environment model, 0 timesteps simulated)",
-            repr("text/plain", [InstantiatedModel(RewardsTrue(), (;))]),
+            "OnlyCues (instantiated environment model, 0 timesteps simulated)",
+            repr("text/plain", [InstantiatedModel(OnlyCues(), (;))]),
         )
     end
 end

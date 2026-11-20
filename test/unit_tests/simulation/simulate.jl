@@ -2,6 +2,9 @@ using JET: JET
 using Random: AbstractRNG, Xoshiro
 
 ## Models and environments for the tests ##
+#The tests use the example models that the test suites share. The models below are for what no example model should
+#have, such as errors in how a model is defined, or for a feature that no example model has
+
 #An action made by hand, so that the tests don't need a distribution library
 struct ChooseWithProbability{T}
     probability::T
@@ -14,36 +17,6 @@ struct ZeroOrOne{T}
 end
 Base.rand(rng::AbstractRNG, reward::ZeroOrOne) = float(rand(rng) < reward.probability)
 
-#Learns an expected reward, and doesn't learn on timesteps with no observation, or before the first one
-struct LearnsRewards <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
-    return (; expected_reward=0.5)
-end
-function CognitiveModeling.run_timestep(model::LearnsRewards, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    Vₜ = if context.input.reward isa AbstractNoValue
-        V₋₁
-    else
-        V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
-    end
-    return ModelOutput((; choice=ChooseWithProbability(Vₜ)), (; expected_reward=Vₜ))
-end
-function CognitiveModeling.attribute_names(model::LearnsRewards)
-    return ModelAttributes(;
-        parameters=:learning_rate, states=:expected_reward, inputs=:reward, outputs=:choice
-    )
-end
-
-#Has no state
-struct OnlyChooses <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::OnlyChooses, parameters) = (;)
-function CognitiveModeling.run_timestep(model::OnlyChooses, context::ModelContext)
-    return ModelOutput((; choice=ChooseWithProbability(0.7)))
-end
-function CognitiveModeling.attribute_names(model::OnlyChooses)
-    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=:choice)
-end
-
 #Has two named actions, and receives a reward which it does nothing with
 struct TwoChoices <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::TwoChoices, parameters) = (;)
@@ -55,24 +28,6 @@ end
 function CognitiveModeling.attribute_names(model::TwoChoices)
     return ModelAttributes(;
         parameters=(), states=(), inputs=:reward, outputs=(:first_choice, :second_choice)
-    )
-end
-
-#Has noise in its state update
-struct LearnsWithNoise <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::LearnsWithNoise, parameters)
-    return (; expected_reward=0.5)
-end
-function CognitiveModeling.run_timestep(model::LearnsWithNoise, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    return ModelOutput(
-        (; choice=ChooseWithProbability(0.5)),
-        (; expected_reward=V₋₁ + rand(context.rng) - 0.5),
-    )
-end
-function CognitiveModeling.attribute_names(model::LearnsWithNoise)
-    return ModelAttributes(;
-        parameters=(), states=:expected_reward, inputs=:reward, outputs=:choice
     )
 end
 
@@ -92,26 +47,6 @@ end
 function CognitiveModeling.attribute_names(model::LearnsInPlace)
     return ModelAttributes(;
         parameters=:learning_rate, states=:values, inputs=:reward, outputs=:choice
-    )
-end
-
-#Starts with an integer as its state, which becomes a Float64 from the second timestep
-struct StartsWithInteger <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::StartsWithInteger, parameters)
-    return (; expected_reward=0)
-end
-function CognitiveModeling.run_timestep(model::StartsWithInteger, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    Vₜ = if context.input.reward isa AbstractNoValue
-        V₋₁
-    else
-        V₋₁ + 0.5 * (context.input.reward - V₋₁)
-    end
-    return ModelOutput((; choice=ChooseWithProbability(0.5)), (; expected_reward=Vₜ))
-end
-function CognitiveModeling.attribute_names(model::StartsWithInteger)
-    return ModelAttributes(;
-        parameters=(), states=:expected_reward, inputs=:reward, outputs=:choice
     )
 end
 
@@ -144,32 +79,6 @@ end
 function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
     return ModelAttributes(;
         parameters=(), states=:who_starts, inputs=:reward, outputs=:choice
-    )
-end
-
-#Has two states, so that one of them can be selected for saving
-struct LearnsAndCounts <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::LearnsAndCounts, parameters)
-    return (; expected_reward=0.5, n_timesteps=0)
-end
-function CognitiveModeling.run_timestep(model::LearnsAndCounts, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    Vₜ = if context.input.reward isa AbstractNoValue
-        V₋₁
-    else
-        V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
-    end
-    return ModelOutput(
-        (; choice=ChooseWithProbability(Vₜ)),
-        (; expected_reward=Vₜ, n_timesteps=context.previous_state.n_timesteps + 1),
-    )
-end
-function CognitiveModeling.attribute_names(model::LearnsAndCounts)
-    return ModelAttributes(;
-        parameters=:learning_rate,
-        states=(:expected_reward, :n_timesteps),
-        inputs=:reward,
-        outputs=:choice,
     )
 end
 
@@ -216,41 +125,11 @@ function CognitiveModeling.attribute_names(model::HasDefaults)
     )
 end
 
-#Throws the error for invalid parameters when the learning rate is above 1
-struct RejectsHighLearningRates <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::RejectsHighLearningRates, parameters) = (;)
-function CognitiveModeling.run_timestep(
-    model::RejectsHighLearningRates, context::ModelContext
-)
-    context.parameters.learning_rate > 1 &&
-        throw(InvalidParametersError("The learning rate must be at most 1."))
-    return ModelOutput((; choice=ChooseWithProbability(0.5)))
-end
-function CognitiveModeling.attribute_names(model::RejectsHighLearningRates)
-    return ModelAttributes(;
-        parameters=:learning_rate, states=(), inputs=:reward, outputs=:choice
-    )
-end
-
 #Has no names, so it can't be simulated
 struct WithoutNames <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::WithoutNames, parameters) = (;)
 function CognitiveModeling.run_timestep(model::WithoutNames, context::ModelContext)
     return ModelOutput((; choice=ChooseWithProbability(0.5)))
-end
-
-#Takes the agent's choice, and gives rewards with a fixed probability, whatever it is
-struct RewardsWithProbability <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsWithProbability, parameters) = (;)
-function CognitiveModeling.run_timestep(
-    environment::RewardsWithProbability, context::ModelContext
-)
-    return ModelOutput((; reward=ZeroOrOne(context.parameters.reward_probability)))
-end
-function CognitiveModeling.attribute_names(environment::RewardsWithProbability)
-    return ModelAttributes(;
-        parameters=:reward_probability, states=(), inputs=:choice, outputs=:reward
-    )
 end
 
 #Has default parameters, and reads the agent's choice
@@ -282,16 +161,6 @@ function CognitiveModeling.attribute_names(environment::RewardsWithDefaults)
     )
 end
 
-#Gives a reward and a cue, and takes no actions, so that a model needs maps of names to be used with it
-struct RewardsAndCues <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsAndCues, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::RewardsAndCues, context::ModelContext)
-    return ModelOutput((; reward=Deterministic(1.0), cue=Deterministic(2)))
-end
-function CognitiveModeling.attribute_names(environment::RewardsAndCues)
-    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=(:reward, :cue))
-end
-
 #Gives only a cue, which a model which learns from rewards can't use
 struct OnlyCues <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::OnlyCues, parameters) = (;)
@@ -311,23 +180,6 @@ function CognitiveModeling.run_timestep(
     return ModelOutput((; reward=Deterministic(1.0)))
 end
 
-#Takes the agent's choice, and gives fixed rewards whatever it is, counting the timesteps in its state
-struct FixedRewards <: AbstractEnvironmentModel end
-function CognitiveModeling.initialize_state(environment::FixedRewards, parameters)
-    return (; n_timesteps=0)
-end
-function CognitiveModeling.run_timestep(environment::FixedRewards, context::ModelContext)
-    n_timesteps = context.previous_state.n_timesteps + 1
-    return ModelOutput(
-        (; reward=Deterministic(context.parameters.rewards[n_timesteps])), (; n_timesteps)
-    )
-end
-function CognitiveModeling.attribute_names(environment::FixedRewards)
-    return ModelAttributes(;
-        parameters=:rewards, states=:n_timesteps, inputs=:choice, outputs=:reward
-    )
-end
-
 #Changes a Vector in its state in place, and copies its state when it's saved
 struct CountsInPlace <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::CountsInPlace, parameters) = (; counts=[0])
@@ -340,37 +192,6 @@ function CognitiveModeling.prepare_state_for_saving(environment::CountsInPlace, 
 end
 function CognitiveModeling.attribute_names(environment::CountsInPlace)
     return ModelAttributes(; parameters=(), states=:counts, inputs=:choice, outputs=:reward)
-end
-
-#Rewards an action of true, and has nothing to say before the first action
-struct RewardsTrue <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::RewardsTrue, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::RewardsTrue, context::ModelContext)
-    context.input.choice isa AbstractNoValue && return ModelOutput((; reward=NoValue()))
-    return ModelOutput((; reward=Deterministic(float(context.input.choice))))
-end
-function CognitiveModeling.attribute_names(environment::RewardsTrue)
-    return ModelAttributes(; parameters=(), states=(), inputs=:choice, outputs=:reward)
-end
-
-#Gives no observation on every 5th timestep
-struct SometimesSilent <: AbstractEnvironmentModel end
-function CognitiveModeling.initialize_state(environment::SometimesSilent, parameters)
-    return (; n_timesteps=0)
-end
-function CognitiveModeling.run_timestep(environment::SometimesSilent, context::ModelContext)
-    n_timesteps = context.previous_state.n_timesteps + 1
-    observation_distribution = if iszero(mod(n_timesteps, 5))
-        (; reward=NoValue())
-    else
-        (; reward=Deterministic(1.0))
-    end
-    return ModelOutput(observation_distribution, (; n_timesteps))
-end
-function CognitiveModeling.attribute_names(environment::SometimesSilent)
-    return ModelAttributes(;
-        parameters=(), states=:n_timesteps, inputs=:choice, outputs=:reward
-    )
 end
 
 #Saves the timestep size it gets in its state, and does nothing with the one it observes. The state can't share the
@@ -464,82 +285,6 @@ function CognitiveModeling.attribute_names(environment::EnvironmentNeedsGivenSta
     return ModelAttributes(; parameters=(), states=:value, inputs=:choice, outputs=:reward)
 end
 
-#Rewards a lever of true with a payoff, and gives a cue: the same as RewardsTrue, under other names than the models use
-struct PaysForLever <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::PaysForLever, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::PaysForLever, context::ModelContext)
-    context.input.lever isa AbstractNoValue &&
-        return ModelOutput((; payoff=NoValue(), cue=Deterministic(2)))
-    return ModelOutput((;
-        payoff=Deterministic(float(context.input.lever)), cue=Deterministic(2)
-    ))
-end
-function CognitiveModeling.attribute_names(environment::PaysForLever)
-    return ModelAttributes(;
-        parameters=(), states=(), inputs=:lever, outputs=(:payoff, :cue)
-    )
-end
-
-#Gives payoffs with a fixed probability, whatever the lever is, so that its outputs always have the same types
-struct PaysWithProbability <: AbstractEnvironmentModel end
-CognitiveModeling.initialize_state(environment::PaysWithProbability, parameters) = (;)
-function CognitiveModeling.run_timestep(
-    environment::PaysWithProbability, context::ModelContext
-)
-    return ModelOutput((;
-        payoff=ZeroOrOne(context.parameters.reward_probability), cue=Deterministic(2)
-    ))
-end
-function CognitiveModeling.attribute_names(environment::PaysWithProbability)
-    return ModelAttributes(;
-        parameters=:reward_probability, states=(), inputs=:lever, outputs=(:payoff, :cue)
-    )
-end
-
-#Ends after the number of timesteps in its parameters, which it counts in its state
-struct EndsAfterTimesteps <: AbstractEnvironmentModel end
-function CognitiveModeling.initialize_state(environment::EndsAfterTimesteps, parameters)
-    return (; n_timesteps=0)
-end
-function CognitiveModeling.run_timestep(
-    environment::EndsAfterTimesteps, context::ModelContext
-)
-    return ModelOutput(
-        (; reward=Deterministic(1.0)),
-        (; n_timesteps=context.previous_state.n_timesteps + 1),
-    )
-end
-function CognitiveModeling.attribute_names(environment::EndsAfterTimesteps)
-    return ModelAttributes(;
-        parameters=:last_timestep, states=:n_timesteps, inputs=:choice, outputs=:reward
-    )
-end
-function CognitiveModeling.stopping_criterion(
-    environment::EndsAfterTimesteps, state, parameters
-)
-    return state.n_timesteps >= parameters.last_timestep
-end
-
-#A cognitive model which ends after the number of timesteps in its parameters, like EndsAfterTimesteps does
-struct StopsAfterTimesteps <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::StopsAfterTimesteps, parameters)
-    return (; n_timesteps=0)
-end
-function CognitiveModeling.run_timestep(model::StopsAfterTimesteps, context::ModelContext)
-    return ModelOutput(
-        (; choice=ChooseWithProbability(0.5)),
-        (; n_timesteps=context.previous_state.n_timesteps + 1),
-    )
-end
-function CognitiveModeling.attribute_names(model::StopsAfterTimesteps)
-    return ModelAttributes(;
-        parameters=:last_timestep, states=:n_timesteps, inputs=:reward, outputs=:choice
-    )
-end
-function CognitiveModeling.stopping_criterion(model::StopsAfterTimesteps, state, parameters)
-    return state.n_timesteps >= parameters.last_timestep
-end
-
 #Has an observation that is never made, and a NamedTuple of observations, and takes no actions
 struct ObservesInGroups <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ObservesInGroups, parameters) = (;)
@@ -596,10 +341,24 @@ function CognitiveModeling.attribute_names(model::ChoosesUnwrapped)
     return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
 end
 
+#A learning rate of a half: the parameters of WithoutOutputs and LearnsInPlace, and of WithDefaultParameters with its
+#default
 const LEARNING = (; learning_rate=0.5)
 const REWARDS = (; reward_probability=0.8)
 
-#The maps between the names of LearnsRewards and those of PaysForLever and PaysWithProbability
+#The parameters of the baseline, whose learning rate of a half takes each expected reward halfway to the reward
+const BASELINE_PARAMETERS = (; learning_rate=0.5, inverse_temperature=2.0)
+
+#The parameters of DependsOnPreviousOutput, which counts its timesteps beside its expected reward
+const DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS = (; BASELINE_PARAMETERS..., stickiness=1.0)
+
+#The probability with which the baseline chooses true with BASELINE_PARAMETERS, from its expected reward
+baseline_choice_probability(expected_reward) = inv(1 + exp(-2.0 * (expected_reward - 0.5)))
+
+#The reward for a choice from BaselineEnvironment and those like it, with REWARDS and the means of their distributions
+reward_for_choice(choice) = 0.8 * (1 + choice) / 2
+
+#The maps between the names of the baseline and those of OtherNamesEnvironment
 const PAYOFF_AS_REWARD = NameMap(:payoff => :reward)
 const CHOICE_AS_LEVER = NameMap(:choice => :lever)
 
@@ -629,7 +388,7 @@ function simulate_for_test(
     environment;
     who_starts=EnvironmentStarts(),
     n_steps=50,
-    cognitive_parameters=LEARNING,
+    cognitive_parameters=BASELINE_PARAMETERS,
     environment_parameters=REWARDS,
     rng=Xoshiro(1),
     cognitive_save_history=EVERY_TIMESTEP,
@@ -675,23 +434,6 @@ function cognitive_values(simulation)
     )
 end
 
-#A model whose learning rate has a domain, for the check of the parameters when a simulation starts
-struct LearnsWithinDomain <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(::LearnsWithinDomain, parameters) = (; value=0.0)
-function CognitiveModeling.run_timestep(::LearnsWithinDomain, context::ModelContext)
-    return ModelOutput(
-        (; choice=Deterministic(true)), (; value=context.parameters.learning_rate)
-    )
-end
-function CognitiveModeling.attribute_names(::LearnsWithinDomain)
-    return ModelAttributes(;
-        parameters=:learning_rate, states=:value, inputs=:reward, outputs=:choice
-    )
-end
-function CognitiveModeling.parameter_domains(::LearnsWithinDomain)
-    return (; learning_rate=Domain(; lower=0, upper=1),)
-end
-
 #An environment whose reward probability has a domain, and which gives the reward 1.0 on every timestep
 struct RewardsWithinDomain <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(::RewardsWithinDomain, parameters) = (;)
@@ -710,154 +452,144 @@ end
 @testset "A parameter outside its domain is an error before anything runs" begin
     @testset "A single timestep checks its parameters, unless it is told not to" begin
         @test simulate(
-            LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=0.5)
-        )[2] == (; value=0.5)
+            WithDomains(ByHand()), (; reward=1.0); parameters=BASELINE_PARAMETERS
+        )[2] == (; expected_reward=0.75)
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
-        ) simulate(LearnsWithinDomain(), (; reward=1.0); parameters=(; learning_rate=1.5))
-        @test simulate(
-            LearnsWithinDomain(),
+            "The parameter learning_rate of a cognitive model of type WithDomains{ByHand} is 1.5, which is outside its domain, from 0 to 1.",
+        ) simulate(
+            WithDomains(ByHand()),
             (; reward=1.0);
-            parameters=(; learning_rate=1.5),
+            parameters=(; learning_rate=1.5, inverse_temperature=2.0),
+        )
+        @test simulate(
+            WithDomains(ByHand()),
+            (; reward=1.0);
+            parameters=(; learning_rate=1.5, inverse_temperature=2.0),
             check_parameter_domains=false,
-        )[2] == (; value=1.5)
+        )[2] == (; expected_reward=1.25)
     end
 
     @testset "A whole simulation checks the parameters of both models, unless it is told not to" begin
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{ByHand} is 1.5, which is outside its domain, from 0 to 1.",
         ) simulate(
-            LearnsWithinDomain(),
+            WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
             n_steps=2,
-            cognitive_parameters=(; learning_rate=1.5),
+            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
             environment_parameters=(; reward_probability=0.5),
         )
         @test_throws ParameterDomainError(
             "The parameter reward_probability of an environment model of type RewardsWithinDomain is -0.5, which is outside its domain, from 0 to 1.",
         ) simulate(
-            LearnsWithinDomain(),
+            WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
             n_steps=2,
-            cognitive_parameters=(; learning_rate=0.5),
+            cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=(; reward_probability=-0.5),
         )
+        #With rewards of 1, a learning rate of 1.5 takes the expected reward past 1, and back
         simulation = simulate(
-            LearnsWithinDomain(),
+            WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
             n_steps=2,
-            cognitive_parameters=(; learning_rate=1.5),
+            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
             environment_parameters=(; reward_probability=-0.5),
             cognitive_save_history=EVERY_TIMESTEP,
             check_parameter_domains=false,
         )
-        @test simulation.states == [(; value=1.5), (; value=1.5)]
+        @test simulation.states == [(; expected_reward=1.25), (; expected_reward=0.875)]
     end
 
     @testset "An instantiated model checks its parameters when it is created, unless it is told not to" begin
-        @test InstantiatedModel(LearnsWithinDomain(), (; learning_rate=1)).parameters ==
-            (; learning_rate=1)
+        @test InstantiatedModel(
+            WithDomains(ByHand()), (; learning_rate=1, inverse_temperature=2.0)
+        ).parameters == (; learning_rate=1, inverse_temperature=2.0)
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type LearnsWithinDomain is -0.1, which is outside its domain, from 0 to 1.",
-        ) InstantiatedModel(LearnsWithinDomain(), (; learning_rate=-0.1))
+            "The parameter learning_rate of a cognitive model of type WithDomains{ByHand} is -0.1, which is outside its domain, from 0 to 1.",
+        ) InstantiatedModel(
+            WithDomains(ByHand()), (; learning_rate=-0.1, inverse_temperature=2.0)
+        )
         @test_throws ParameterDomainError InstantiatedModel(
-            LearnsWithinDomain(),
-            (; learning_rate=-0.1),
-            (; value=0.0),
+            WithDomains(ByHand()),
+            (; learning_rate=-0.1, inverse_temperature=2.0),
+            (; expected_reward=0.0),
             (; choice=BeforeFirstTimestep()),
         )
         agent = InstantiatedModel(
-            LearnsWithinDomain(), (; learning_rate=-0.1); check_parameter_domains=false
+            WithDomains(ByHand()),
+            (; learning_rate=-0.1, inverse_temperature=2.0);
+            check_parameter_domains=false,
         )
-        @test agent.parameters == (; learning_rate=-0.1)
+        @test agent.parameters == (; learning_rate=-0.1, inverse_temperature=2.0)
         simulate!(agent, (; reward=1.0))
-        @test agent.state == (; value=-0.1)
+        @test agent.state == (; expected_reward=0.45)
         @test InstantiatedModel(
-            LearnsWithinDomain(),
-            (; learning_rate=-0.1),
-            (; value=0.0),
+            WithDomains(ByHand()),
+            (; learning_rate=-0.1, inverse_temperature=2.0),
+            (; expected_reward=0.0),
             (; choice=BeforeFirstTimestep());
             check_parameter_domains=false,
-        ).parameters == (; learning_rate=-0.1)
+        ).parameters == (; learning_rate=-0.1, inverse_temperature=2.0)
     end
 end
 
-#An action made by hand: one of several options, with the probability of each in a vector
-struct ChooseAmongOptions{T}
-    probabilities::T
-end
-function Base.rand(rng::AbstractRNG, action::ChooseAmongOptions)
-    threshold = rand(rng)
-    cumulative = cumsum(action.probabilities)
-    return something(findfirst(>(threshold), cumulative), length(cumulative))
-end
-
-#Chooses one of three options with probabilities that are a parameter, a vector, whatever the timestep
-struct ChoosesAmongOptions <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::ChoosesAmongOptions, parameters) = (;)
-function CognitiveModeling.run_timestep(model::ChoosesAmongOptions, context::ModelContext)
-    return ModelOutput((;
-        choice=ChooseAmongOptions(context.parameters.option_probabilities)
-    ))
-end
-function CognitiveModeling.attribute_names(model::ChoosesAmongOptions)
-    return ModelAttributes(;
-        parameters=:option_probabilities, states=(), inputs=:timestep, outputs=:choice
-    )
-end
-function CognitiveModeling.parameter_domains(model::ChoosesAmongOptions)
-    return (; option_probabilities=Domain(; type=AbstractVector{Real}, lower=0, upper=1))
-end
-
 @testset "A parameter that is a vector is simulated with, and checked against its domain" begin
-    @testset "The model chooses with the probabilities in the vector" begin
-        agent = InstantiatedModel(
-            ChoosesAmongOptions(), (; option_probabilities=[0.2, 0.3, 0.5])
-        )
+    #EveryFeatureWithoutSampling has a learning rate for each of three options, a vector with a domain, and chooses an
+    #option in proportion to its expected reward. It is given the rewards of the options only
+    every_feature_parameters =
+        pair_named("EveryFeatureWithoutSampling").cognitive_parameters
+    with_learning_rates(learning_rates) =
+        merge(every_feature_parameters, (; learning_rates))
+    rewards_of_options(rewards) = (; reward=NoValue(), rewards, feedback=NoValue())
+
+    @testset "The model chooses with the probabilities that the vector gives" begin
+        #Rewards of 1 take the expected rewards to 0.6, 0.65 and 0.75, for probabilities of 0.3, 0.325 and 0.375
         rng = Xoshiro(1)
-        choices = [simulate!(agent, (; timestep); rng).choice for timestep in 1:3000]
-        @test all(in(1:3), choices)
-        shares = [count(==(option), choices) / 3000 for option in 1:3]
-        @test all(abs.(shares .- [0.2, 0.3, 0.5]) .< 0.03)
-        #A view of a vector is taken as the vector is
+        options = [
+            simulate(
+                EveryFeatureWithoutSampling(ByHand()),
+                rewards_of_options([1.0, 1.0, 1.0]);
+                parameters=with_learning_rates([0.2, 0.3, 0.5]),
+                rng,
+            )[1].option for _ in 1:3000
+        ]
+        @test all(in(1:3), options)
+        shares = [count(==(option), options) / 3000 for option in 1:3]
+        @test all(abs.(shares .- [0.3, 0.325, 0.375]) .< 0.03)
+        #A view of a vector is taken as the vector is. Learning rates of 1 and rewards of 0 leave the first two options
+        #no chance
         output, _ = simulate(
-            ChoosesAmongOptions(),
-            (; timestep=1);
-            parameters=(; option_probabilities=view([0.0, 0.0, 1.0, 9.0], 1:3)),
+            EveryFeatureWithoutSampling(ByHand()),
+            rewards_of_options([0.0, 0.0, 1.0]);
+            parameters=with_learning_rates(view([1.0, 1.0, 0.5, 9.0], 1:3)),
         )
-        @test output.choice == 3
+        @test output.option == 3
     end
 
     @testset "A vector with an element outside the domain, or a number where the domain takes a vector, is an error, unless the model is told not to check" begin
         @test_throws ParameterDomainError(
-            "The parameter option_probabilities of a cognitive model of type ChoosesAmongOptions has option_probabilities[3] = -0.2, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rates of a cognitive model of type EveryFeatureWithoutSampling{ByHand} has learning_rates[3] = -0.2, which is outside its domain, from 0 to 1.",
         ) InstantiatedModel(
-            ChoosesAmongOptions(), (; option_probabilities=[0.5, 0.7, -0.2])
+            EveryFeatureWithoutSampling(ByHand()), with_learning_rates([0.5, 0.7, -0.2])
         )
         @test_throws ParameterDomainError(
-            "The parameter option_probabilities of a cognitive model of type ChoosesAmongOptions is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
+            "The parameter learning_rates of a cognitive model of type EveryFeatureWithoutSampling{ByHand} is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
         ) simulate(
-            ChoosesAmongOptions(), (; timestep=1); parameters=(; option_probabilities=0.5)
+            EveryFeatureWithoutSampling(ByHand()),
+            rewards_of_options([1.0, 1.0, 1.0]);
+            parameters=with_learning_rates(0.5),
         )
         agent = InstantiatedModel(
-            ChoosesAmongOptions(),
-            (; option_probabilities=[0.5, 0.7, -0.2]);
+            EveryFeatureWithoutSampling(ByHand()),
+            with_learning_rates([0.5, 0.7, -0.2]);
             check_parameter_domains=false,
         )
-        @test agent.parameters.option_probabilities == [0.5, 0.7, -0.2]
+        @test agent.parameters.learning_rates == [0.5, 0.7, -0.2]
     end
-end
-
-#An action made by hand which is a vector: a rating of each option, around the value of each, with noise of a size
-struct RatingsAroundValues{Tvalues,Tnoise}
-    values::Tvalues
-    noise::Tnoise
-end
-function Base.rand(rng::AbstractRNG, ratings::RatingsAroundValues)
-    return ratings.values .+ ratings.noise .* randn(rng, length(ratings.values))
 end
 
 #An observation made by hand which is a vector: a payoff of each option, which is the size of the option with a probability, and zero otherwise
@@ -869,44 +601,8 @@ function Base.rand(rng::AbstractRNG, payoffs::PayoffsWithProbability)
     return [rand(rng) < payoffs.probability ? size : zero(size) for size in payoffs.sizes]
 end
 
-#Learns the expected payoff of each option, a vector, with a learning rate for each option, a vector, from the payoffs of every option, a vector, beside the number of the trial, a number. It rates each option, a vector, chooses the option it expects the most of, a number, and counts the timesteps it learned on, a number
-struct LearnsEachOption <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::LearnsEachOption, parameters)
-    return (; expected_payoffs=fill(0.5, length(parameters.learning_rates)), n_updates=0)
-end
-function CognitiveModeling.run_timestep(model::LearnsEachOption, context::ModelContext)
-    (; expected_payoffs, n_updates) = context.previous_state
-    payoffs = context.input.payoffs
-    if !(payoffs isa AbstractNoValue)
-        expected_payoffs =
-            expected_payoffs .+
-            context.parameters.learning_rates .* (payoffs .- expected_payoffs)
-        n_updates += 1
-    end
-    return ModelOutput(
-        (;
-            ratings=RatingsAroundValues(expected_payoffs, context.parameters.rating_noise),
-            choice=Deterministic(argmax(expected_payoffs)),
-        ),
-        (; expected_payoffs, n_updates),
-    )
-end
-function CognitiveModeling.attribute_names(model::LearnsEachOption)
-    return ModelAttributes(;
-        parameters=(:learning_rates, :rating_noise),
-        states=(:expected_payoffs, :n_updates),
-        inputs=(:payoffs, :trial),
-        outputs=(:ratings, :choice),
-    )
-end
-function CognitiveModeling.parameter_domains(model::LearnsEachOption)
-    return (;
-        learning_rates=Domain(; type=AbstractVector{Real}, lower=0, upper=1),
-        rating_noise=Domain(; lower=0),
-    )
-end
-
 #Pays each option its size with a probability, a vector, and gives the number of the trial, a number. It counts how often each option was chosen, a vector, beside the number of trials, a number. Its sizes of payoffs are a vector, which grows from the first option to the last
+#No example model has a constraint on a parameter, which its sizes of payoffs have
 struct PaysEachOption <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::PaysEachOption, parameters)
     return (; n_choices=zeros(Int, length(parameters.payoff_sizes)), n_trials=0)
@@ -938,32 +634,29 @@ function CognitiveModeling.parameter_domains(environment::PaysEachOption)
     )
 end
 
-#Updates expected payoffs by hand, as LearnsEachOption does, with the payoffs it receives
-function expected_payoffs_by_hand(learning_rates, received_payoffs)
-    expected_payoffs = fill(0.5, length(learning_rates))
-    for payoffs in received_payoffs
-        expected_payoffs =
-            expected_payoffs .+ learning_rates .* (payoffs .- expected_payoffs)
+#Updates expected rewards by hand, as VectorAttributes does, with the rewards it receives
+function expected_rewards_by_hand(learning_rates, received_rewards)
+    expected_rewards = fill(0.5, length(learning_rates))
+    for rewards in received_rewards
+        expected_rewards =
+            expected_rewards .+ learning_rates .* (rewards .- expected_rewards)
     end
-    return expected_payoffs
+    return expected_rewards
 end
 
 @testset "Observations, actions, states and parameters that are vectors, beside ones that are numbers" begin
-    vector_parameters = (; learning_rates=[0.2, 0.5, 0.9], rating_noise=0.1)
-    vector_environment_parameters = (; payoff_sizes=[1.0, 2.0, 3.0], payoff_probability=0.7)
-    function simulate_vectors(
-        who_starts;
-        rng=Xoshiro(1),
-        cognitive_parameters=vector_parameters,
-        environment_parameters=vector_environment_parameters,
-    )
+    #VectorAttributes learns an expected reward for each of three options, chooses one, a number, and rates each, a
+    #vector. VectorAttributesEnvironment rewards each option, with a bonus for the one chosen, exactly with its means
+    vector_parameters = (; learning_rates=[0.2, 0.5, 0.9], noise=0.1)
+    vector_environment_parameters = (; payoffs=[0.4, 0.6, 0.8], noise=0.1)
+    function simulate_vectors(who_starts; rng=Xoshiro(1))
         return simulate(
-            LearnsEachOption(),
-            PaysEachOption();
+            VectorAttributes(ByHand()),
+            VectorAttributesEnvironment(Means());
             who_starts,
             n_steps=6,
-            cognitive_parameters,
-            environment_parameters,
+            cognitive_parameters=vector_parameters,
+            environment_parameters=vector_environment_parameters,
             rng,
             cognitive_save_history=SaveHistory(SaveEverything()),
             environment_save_history=SaveHistory(SaveEverything()),
@@ -975,37 +668,39 @@ end
             simulation = simulate_vectors(who_starts)
             @test length(simulation.states) == length(simulation.environment.states) == 7
             @test eltype(simulation.observations) == Union{
-                @NamedTuple{payoffs::BeforeFirstTimestep,trial::BeforeFirstTimestep},
-                @NamedTuple{payoffs::Vector{Float64},trial::Int64},
+                @NamedTuple{rewards::BeforeFirstTimestep},
+                @NamedTuple{rewards::Vector{Float64}},
             }
             for t in 2:7
-                #The payoffs are a vector, with each option's size or zero, and the trial a number
-                (; payoffs, trial) = simulation.observations[t]
-                @test length(payoffs) == 3 && all(payoffs .== 0 .|| payoffs .== [1, 2, 3])
-                @test trial == t - 1
+                #The environment receives the choice of the same timestep when the agent starts, and of the timestep before
+                #when the environment starts, which at timestep 1 is none
+                received_choice = if who_starts isa AgentStarts
+                    simulation.actions[t].choice
+                else
+                    simulation.actions[t - 1].choice
+                end
+                #The rewards are a vector, each option's payoff with a bonus of 0.1 for the option chosen
+                bonuses = [option == received_choice ? 0.1 : 0.0 for option in 1:3]
+                @test simulation.observations[t].rewards == [0.4, 0.6, 0.8] .+ bonuses
+                #The environment counts its timesteps, a number
+                @test simulation.environment.states[t] == (; n_timesteps=t - 1)
                 #The agent receives the observation of the same timestep when the environment starts, and of the timestep before
                 #when the agent starts, which at timestep 1 is none
                 received = if who_starts isa EnvironmentStarts
-                    [observation.payoffs for observation in simulation.observations[2:t]]
+                    [observation.rewards for observation in simulation.observations[2:t]]
                 else
-                    [observation.payoffs for observation in simulation.observations[2:(t - 1)]]
+                    [observation.rewards for observation in simulation.observations[2:(t - 1)]]
                 end
-                (; expected_payoffs, n_updates) = simulation.states[t]
-                @test expected_payoffs ≈ expected_payoffs_by_hand([0.2, 0.5, 0.9], received)
-                @test n_updates == length(received)
-                #The ratings are a vector around the expected payoffs, and the choice a number, the option expected to pay the most
-                @test simulation.action_distributions[t].ratings.values == expected_payoffs
+                (; expected_rewards) = simulation.states[t]
+                @test expected_rewards ≈ expected_rewards_by_hand([0.2, 0.5, 0.9], received)
+                #The ratings are a vector around the expected rewards, and the choice a number, with probabilities in
+                #proportion to them
+                @test simulation.action_distributions[t].ratings.means == expected_rewards
                 @test length(simulation.actions[t].ratings) == 3
-                @test simulation.actions[t].choice == argmax(expected_payoffs)
-                #The environment receives the action of the same timestep when the agent starts, and of the timestep before when
-                #the environment starts, and counts the choices of each option in a vector
-                choices = if who_starts isa AgentStarts
-                    [action.choice for action in simulation.actions[2:t]]
-                else
-                    [action.choice for action in simulation.actions[2:(t - 1)]]
-                end
-                @test simulation.environment.states[t].n_choices ==
-                    [count(==(option), choices) for option in 1:3]
+                @test simulation.action_distributions[t].choice.probabilities ==
+                    expected_rewards ./ sum(expected_rewards)
+                @test simulation.actions[t].choice in 1:3
+                #The environment receives the ratings with the choice
                 @test simulation.environment.actions[t].ratings ==
                     simulation.actions[t].ratings
             end
@@ -1022,24 +717,24 @@ end
     end
 
     @testset "An agent simulated on one observation at a time takes and gives vectors" begin
-        agent = InstantiatedModel(LearnsEachOption(), vector_parameters)
-        action = simulate!(agent, (; payoffs=[1.0, 0.0, 3.0], trial=1); rng=Xoshiro(2))
+        #Learning rates of 1 and rewards of 0 leave the first two options no chance, so that the third is chosen
+        agent = InstantiatedModel(
+            VectorAttributes(ByHand()), (; learning_rates=[1.0, 1.0, 0.9], noise=0.1)
+        )
+        action = simulate!(agent, (; rewards=[0.0, 0.0, 3.0]); rng=Xoshiro(2))
         @test length(action.ratings) == 3 && action.choice == 3
-        @test agent.state.expected_payoffs ≈ [0.6, 0.25, 2.75]
-        simulate!(agent, (; payoffs=[0.0, 2.0, 3.0], trial=2); rng=Xoshiro(2))
+        @test agent.state.expected_rewards ≈ [0.0, 0.0, 2.75]
+        simulate!(agent, (; rewards=[0.0, 2.0, 3.0]); rng=Xoshiro(2))
         @test agent.state == (;
-            expected_payoffs=[0.6, 0.25, 2.75] .+
-                             [0.2, 0.5, 0.9] .* ([0.0, 2.0, 3.0] .- [0.6, 0.25, 2.75]),
-            n_updates=2,
+            expected_rewards=[0.0, 0.0, 2.75] .+
+                             [1.0, 1.0, 0.9] .* ([0.0, 2.0, 3.0] .- [0.0, 0.0, 2.75])
         )
     end
 
     @testset "Fixed observations that are vectors are given in order, and the simulation stops after the last" begin
-        fixed = FixedObservationsEnvironment((;
-            payoffs=[[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]], trial=[1, 2]
-        ))
+        fixed = FixedObservationsEnvironment((; rewards=[[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]]))
         simulation = simulate(
-            LearnsEachOption(),
+            VectorAttributes(ByHand()),
             fixed;
             who_starts=EnvironmentStarts(),
             n_steps=5,
@@ -1049,26 +744,40 @@ end
             rng=Xoshiro(1),
             cognitive_save_history=SaveHistory(SaveEverything()),
         )
-        @test [state.expected_payoffs for state in simulation.states] ≈ [
+        @test [state.expected_rewards for state in simulation.states] ≈ [
             [0.5, 0.5, 0.5],
-            expected_payoffs_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0]]),
-            expected_payoffs_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]]),
+            expected_rewards_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0]]),
+            expected_rewards_by_hand([0.2, 0.5, 0.9], [[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]]),
         ]
-        @test simulation.observations[3] == (; payoffs=[0.0, 2.0, 3.0], trial=2)
+        @test simulation.observations[3] == (; rewards=[0.0, 2.0, 3.0])
     end
 
     @testset "The vector parameters of both models are checked against their domains, with the bounds of each element and the constraint of the whole" begin
+        #EveryFeatureWithoutSampling has bounds for each of its learning rates, and PaysEachOption a constraint on its
+        #sizes of payoffs, which VectorAttributes receives as rewards
+        every_feature = pair_named("EveryFeatureWithoutSampling")
         @test_throws ParameterDomainError(
-            "The parameter learning_rates of a cognitive model of type LearnsEachOption has learning_rates[2] = 1.5, which is outside its domain, from 0 to 1.",
-        ) simulate_vectors(
-            EnvironmentStarts();
-            cognitive_parameters=(; learning_rates=[0.2, 1.5, 0.9], rating_noise=0.1),
+            "The parameter learning_rates of a cognitive model of type EveryFeatureWithoutSampling{ByHand} has learning_rates[2] = 1.5, which is outside its domain, from 0 to 1.",
+        ) simulate(
+            EveryFeatureWithoutSampling(ByHand()),
+            EveryFeatureEnvironment(ByHand());
+            who_starts=EnvironmentStarts(),
+            n_steps=6,
+            cognitive_parameters=merge(
+                every_feature.cognitive_parameters, (; learning_rates=[0.2, 1.5, 0.9])
+            ),
+            every_feature.environment_parameters,
         )
         @test_throws ParameterDomainError(
             "The parameter payoff_sizes of an environment model of type PaysEachOption is [3.0, 1.0, 2.0], which doesn't satisfy the constraint issorted of its domain.",
-        ) simulate_vectors(
-            AgentStarts();
+        ) simulate(
+            VectorAttributes(ByHand()),
+            PaysEachOption();
+            who_starts=AgentStarts(),
+            n_steps=6,
+            cognitive_parameters=vector_parameters,
             environment_parameters=(; payoff_sizes=[3.0, 1.0, 2.0], payoff_probability=0.7),
+            observation_map=NameMap(:payoffs => :rewards),
         )
     end
 end
@@ -1078,71 +787,76 @@ end
         [state.expected_reward for state in cognitive_states]
 
     @testset "Who starts decides what the model learns from" begin
-        fixed_rewards = (; rewards=[1.0, 0.0, 1.0])
+        fixed_rewards = FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0]))
         #Learns from the reward of the same timestep
         simulation = simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            fixed_rewards;
             who_starts=EnvironmentStarts(),
             n_steps=3,
-            environment_parameters=fixed_rewards,
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
         @test expected_rewards(simulation.states) == [0.75, 0.375, 0.6875]
-        @test simulation.environment.states[end] == (; n_timesteps=3)
+        @test simulation.environment.states[end] == (; n_observations_given=3)
         #Learns from the reward of the timestep before, and from nothing on the first
         simulation = simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            fixed_rewards;
             who_starts=AgentStarts(),
             n_steps=3,
-            environment_parameters=fixed_rewards,
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
         @test expected_rewards(simulation.states) == [0.5, 0.75, 0.375]
-        @test simulation.environment.states[end] == (; n_timesteps=3)
+        @test simulation.environment.states[end] == (; n_observations_given=3)
     end
 
     @testset "The environment responds to the agent's actions" begin
-        #The environment sees the action of the same timestep
+        #The environment sees the action of the same timestep, and rewards it exactly with the means of its distributions
         (; observations, actions) = simulate_for_test(
-            LearnsRewards(),
-            RewardsTrue();
+            Baseline(ByHand()),
+            NoOutputBeforeFirstInputEnvironment(Means());
             who_starts=AgentStarts(),
-            environment_parameters=(;),
         )
-        @test [observation.reward for observation in observations] == [float(action.choice) for action in actions]
+        @test [observation.reward for observation in observations] == [reward_for_choice(action.choice) for action in actions]
         #The environment sees the action of the timestep before, and nothing on the first
         (; observations, actions) = simulate_for_test(
-            LearnsRewards(),
-            RewardsTrue();
+            Baseline(ByHand()),
+            NoOutputBeforeFirstInputEnvironment(Means());
             who_starts=EnvironmentStarts(),
-            environment_parameters=(;),
         )
         @test observations[1] === (; reward=NoValue())
-        @test [observation.reward for observation in observations[2:end]] == [float(action.choice) for action in actions[1:(end - 1)]]
+        @test [observation.reward for observation in observations[2:end]] == [reward_for_choice(action.choice) for action in actions[1:(end - 1)]]
     end
 
     @testset "The same seed gives the same simulation, for the model and the environment" begin
         for who_starts in (EnvironmentStarts(), AgentStarts()),
-            (model, cognitive_parameters) in
-            ((LearnsRewards(), LEARNING), (LearnsWithNoise(), (;)))
+            (model, cognitive_parameters) in (
+                (Baseline(ByHand()), BASELINE_PARAMETERS),
+                (
+                    SamplingWithinTimestep(ByHand()),
+                    (; BASELINE_PARAMETERS..., update_noise=0.1),
+                ),
+            )
 
             first_simulation = simulate_for_test(
                 model,
-                RewardsWithProbability();
+                BaselineEnvironment(ByHand());
                 who_starts,
                 cognitive_parameters,
                 rng=Xoshiro(3),
             )
             second_simulation = simulate_for_test(
                 model,
-                RewardsWithProbability();
+                BaselineEnvironment(ByHand());
                 who_starts,
                 cognitive_parameters,
                 rng=Xoshiro(3),
             )
             other_seed = simulate_for_test(
                 model,
-                RewardsWithProbability();
+                BaselineEnvironment(ByHand());
                 who_starts,
                 cognitive_parameters,
                 rng=Xoshiro(4),
@@ -1153,7 +867,9 @@ end
     end
 
     @testset "It returns one NamedTuple, with the environment's values under environment" begin
-        simulation = simulate_for_test(LearnsRewards(), RewardsWithProbability(); n_steps=3)
+        simulation = simulate_for_test(
+            Baseline(ByHand()), BaselineEnvironment(ByHand()); n_steps=3
+        )
         @test simulation isa NamedTuple
         @test keys(simulation) == (
             :states,
@@ -1178,11 +894,11 @@ end
     @testset "The return type is known and the loop doesn't allocate" begin
         rng = Xoshiro(1)
         run_simulation(who_starts, n_steps) = simulate(
-            LearnsRewards(),
-            RewardsWithProbability();
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
             who_starts,
             n_steps,
-            cognitive_parameters=LEARNING,
+            cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
             cognitive_save_history=SaveHistory(SaveEverything()),
@@ -1194,61 +910,65 @@ end
                 who_starts, 10
             )
             run_simulation(who_starts, 10)
-            #Doubling the timesteps only adds the storage: for the cognitive model, 8 bytes each for an observation, an action
-            #distribution and a state, and 1 for an action, and a byte each for the observation, the action and the action
-            #distribution to say which of two types it has, since timestep 0 has BeforeFirstTimestep. The environment's observations,
-            #actions and observation distributions take the same again, without a state
+            #Doubling the timesteps only adds the storage: for the cognitive model, 8 bytes each for an action distribution and a
+            #state, and 1 each for an observation and an action, and a byte each for the observation, the action and the action
+            #distribution to say which of two types it has, since timestep 0 has BeforeFirstTimestep. The environment's
+            #observations, actions and observation distributions take the same again, and its state 8 bytes
             extra_bytes =
                 @allocated(run_simulation(who_starts, 20_000)) -
                 @allocated(run_simulation(who_starts, 10_000))
-            @test extra_bytes <= 50 * 10_000
+            @test extra_bytes <= 48 * 10_000
         end
     end
 
     @testset "Outputs whose types change are all kept" begin
-        #An observation that is sometimes missing
+        #An observation that is sometimes missing: OutputNotEveryTimestepEnvironment gives a reward on every second timestep
         (; observations, states) = simulate_for_test(
-            LearnsRewards(), SometimesSilent(); environment_parameters=(;)
+            Baseline(ByHand()), OutputNotEveryTimestepEnvironment(ByHand())
         )
-        @test count(observation -> observation.reward isa NoValue, observations) == 10
-        @test expected_rewards(states)[4] == expected_rewards(states)[5]
+        @test count(observation -> observation.reward isa NoValue, observations) == 25
+        @test expected_rewards(states)[1] == expected_rewards(states)[2]
         #A first observation that is missing
         (; observations) = simulate_for_test(
-            LearnsRewards(), RewardsTrue(); environment_parameters=(;)
+            Baseline(ByHand()), NoOutputBeforeFirstInputEnvironment(ByHand())
         )
         @test observations[1] === (; reward=NoValue())
-        @test observations[2].reward isa Float64
+        @test observations[2].reward isa Bool
         #A state that changes from an integer to a Float64
         (; states) = simulate_for_test(
-            StartsWithInteger(),
-            FixedRewards();
+            StateChangesType(ByHand()),
+            FixedObservationsEnvironment((; reward=[0.0, 0.0, 0.0]));
             who_starts=AgentStarts(),
             n_steps=3,
-            cognitive_parameters=(;),
-            environment_parameters=(; rewards=[1.0, 1.0, 1.0]),
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
-        @test expected_rewards(states) == [0, 0.5, 0.75]
+        @test expected_rewards(states) == [1, 0.5, 0.25]
     end
 
     @testset "Models and environments can leave things out" begin
-        #A model without observations or a state, with an environment without a state: a map passes none of the observations on
+        #A model without observations, with an environment without a state: a map passes none of the observations on
         simulation = simulate_for_test(
-            OnlyChooses(),
-            RewardsWithProbability();
-            cognitive_parameters=(;),
+            WithoutInputs(ByHand()),
+            WithoutStatesEnvironment(ByHand());
             observation_map=NameMap(),
         )
         @test eltype(simulation.observations) === typeof((;))
-        @test eltype(simulation.states) === typeof((;))
         @test eltype(simulation.environment.states) === typeof((;))
         #The environment still gave the observations the model didn't receive
-        @test eltype(simulation.environment.observations) === @NamedTuple{reward::Float64}
+        @test eltype(simulation.environment.observations) === @NamedTuple{reward::Bool}
+        #A model without a state
+        simulation = simulate_for_test(
+            WithoutStates(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=(; inverse_temperature=2.0),
+        )
+        @test eltype(simulation.states) === typeof((;))
         #A model without actions, with an environment which takes none
         simulation = simulate_for_test(
             WithoutOutputs(),
-            RewardsAndCues();
-            environment_parameters=(;),
-            observation_map=NameMap(:reward),
+            WithoutInputsEnvironment(ByHand());
+            cognitive_parameters=LEARNING,
         )
         @test eltype(simulation.actions) === typeof((;))
         @test eltype(simulation.states) <: NamedTuple
@@ -1256,28 +976,32 @@ end
     end
 
     @testset "A single action keeps the name the model gave it" begin
-        (; actions) = simulate_for_test(LearnsRewards(), RewardsWithProbability())
+        (; actions) = simulate_for_test(Baseline(ByHand()), BaselineEnvironment(ByHand()))
         @test actions isa Vector{@NamedTuple{choice::Bool}}
     end
 
     @testset "Each of several named actions is sampled" begin
-        (; actions) = simulate_for_test(
-            TwoChoices(),
-            RewardsAndCues();
-            cognitive_parameters=(;),
-            environment_parameters=(;),
-            observation_map=NameMap(:reward),
-            action_map=NameMap(),
+        #ManyAttributes chooses, rates its confidence and reports the last reward. With the means of the distributions, the
+        #first are a probability of a half, the expected reward of a half with a bonus of a quarter, and a reward of a half
+        (; actions, action_distributions) = simulate_for_test(
+            ManyAttributes(Means()),
+            ManyAttributesEnvironment(Means());
+            cognitive_parameters=(; BASELINE_PARAMETERS..., noise=0.2),
+            environment_parameters=(; REWARDS..., noise=0.2, bonus_size=0.5),
         )
-        @test all(action -> action === (; first_choice=false, second_choice=true), actions)
+        @test actions[1] === (; choice=0.5, confidence=0.75, report=0.5)
+        #Each action is the value of what it was sampled from
+        @test actions == [
+            map(distribution -> distribution.value, distributions) for
+            distributions in action_distributions
+        ]
     end
 
     @testset "NoValue and a NamedTuple inside the actions are sampled on their own" begin
         (; actions) = simulate_for_test(
             ChoosesInGroups(),
-            RewardsAndCues();
+            WithoutInputsEnvironment(ByHand());
             cognitive_parameters=(;),
-            environment_parameters=(;),
             observation_map=NameMap(),
             action_map=NameMap(),
         )
@@ -1292,32 +1016,38 @@ end
     end
 
     @testset "Each observation is sampled from what the environment gives, and a Deterministic is its value" begin
-        #RewardsWithProbability gives something to sample the reward from
-        (; observations) = simulate_for_test(LearnsRewards(), RewardsWithProbability())
-        @test observations isa Vector{@NamedTuple{reward::Float64}}
-        @test Set(observation.reward for observation in observations) == Set([0.0, 1.0])
+        #BaselineEnvironment gives something to sample the reward from
         (; observations) = simulate_for_test(
-            LearnsRewards(),
-            RewardsWithProbability();
-            environment_parameters=(; reward_probability=1.0),
+            Baseline(ByHand()), BaselineEnvironment(ByHand())
         )
-        @test all(observation -> observation === (; reward=1.0), observations)
-        #FixedRewards gives each reward in a Deterministic
+        @test observations isa Vector{@NamedTuple{reward::Bool}}
+        @test Set(observation.reward for observation in observations) == Set([false, true])
+        #WithoutInputsEnvironment rewards every timestep with a reward probability of 1, and takes no actions
         (; observations) = simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            WithoutInputsEnvironment(ByHand());
+            environment_parameters=(; reward_probability=1.0),
+            action_map=NameMap(),
+        )
+        @test all(observation -> observation === (; reward=true), observations)
+        #FixedObservationsEnvironment gives each reward in a Deterministic
+        (; observations) = simulate_for_test(
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 0.0, 0.25]));
             n_steps=3,
-            environment_parameters=(; rewards=[1.0, 0.0, 0.25]),
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
         @test observations == [(; reward=1.0), (; reward=0.0), (; reward=0.25)]
         #One that is sampled and one that isn't, in the same observation, which the environment's history has both of as its outputs
+        #OtherNamesEnvironment samples its payoff, and gives the number of the timestep in a Deterministic
         environment = InstantiatedModel(
-            PaysWithProbability(),
+            OtherNamesEnvironment(ByHand()),
             REWARDS;
             save_history=SaveHistory(; outputs=SaveEverything()),
         )
         simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=50,
@@ -1325,10 +1055,13 @@ end
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
         )
-        @test all(observation -> observation.cue === 2, environment.history.outputs[2:end])
+        @test [
+            observation.timestep_number for
+            observation in environment.history.outputs[2:end]
+        ] == 1:50
         @test Set(
             observation.payoff for observation in environment.history.outputs[2:end]
-        ) == Set([0.0, 1.0])
+        ) == Set([false, true])
     end
 
     @testset "NoValue and a NamedTuple inside the observations are sampled on their own" begin
@@ -1352,10 +1085,12 @@ end
     @testset "A number, a string or a symbol that isn't wrapped gives an informative error" begin
         for value in (1.0, 1, true, "left", :left)
             @test_throws "A model gave $(repr(value)), of type $(typeof(value)), as what to sample an output from, but it is a value. An output that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))." simulate_for_test(
-                LearnsRewards(), GivesUnwrapped(value); environment_parameters=(;)
+                Baseline(ByHand()), GivesUnwrapped(value); environment_parameters=(;)
             )
             @test_throws "A model gave $(repr(value)), of type $(typeof(value)), as what to sample an output from, but it is a value. An output that isn't random is given in a Deterministic, as in Deterministic($(repr(value)))." simulate_for_test(
-                ChoosesUnwrapped(value), RewardsWithProbability(); cognitive_parameters=(;)
+                ChoosesUnwrapped(value),
+                BaselineEnvironment(ByHand());
+                cognitive_parameters=(;),
             )
             @test_throws ArgumentError simulate!(
                 InstantiatedModel(ChoosesUnwrapped(value), (;)), (; reward=1.0)
@@ -1384,7 +1119,10 @@ end
     @testset "The environment receives the observation that was sampled, on the next timestep" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             simulation = simulate_for_test(
-                LearnsRewards(), RemembersReward(); who_starts, environment_parameters=(;)
+                Baseline(ByHand()),
+                RemembersReward();
+                who_starts,
+                environment_parameters=(;),
             )
             environment_states = simulation.environment.states
             @test environment_states[1] === (; previous_reward=BeforeFirstTimestep())
@@ -1396,29 +1134,31 @@ end
 
     @testset "An InvalidParametersError from a model stops the simulation, with its message" begin
         @test_throws InvalidParametersError simulate_for_test(
-            RejectsHighLearningRates(),
-            RewardsWithProbability();
-            cognitive_parameters=(; learning_rate=1.5),
+            ThrowsInvalidParameters(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
         )
-        @test_throws "The learning rate must be at most 1." simulate_for_test(
-            RejectsHighLearningRates(),
-            RewardsWithProbability();
-            cognitive_parameters=(; learning_rate=1.5),
+        @test_throws "The learning rate is above 0.9." simulate_for_test(
+            ThrowsInvalidParameters(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
         )
         @test simulate_for_test(
-            RejectsHighLearningRates(),
-            RewardsWithProbability();
-            cognitive_parameters=(; learning_rate=0.5),
+            ThrowsInvalidParameters(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=BASELINE_PARAMETERS,
         ) isa NamedTuple
     end
 
     @testset "cognitive_save_history and environment_save_history select what is saved of each kind" begin
-        fixed_rewards = (; rewards=[1.0, 0.0, 1.0])
+        #DependsOnPreviousOutput counts its timesteps beside its expected reward
         run_with(; keywords...) = simulate_for_test(
-            LearnsAndCounts(),
-            FixedRewards();
+            DependsOnPreviousOutput(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0]));
             n_steps=3,
-            environment_parameters=fixed_rewards,
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
+            environment_parameters=(;),
+            action_map=NameMap(),
             keywords...,
         )
         #The helper saves everything, which selecting everything also does
@@ -1455,16 +1195,25 @@ end
         )
         @test states[1] === (; n_timesteps=1, expected_reward=0.75)
         #The environment's selection only affects what is returned under environment, in its own names: its outputs are the
-        #observations and its inputs the actions
-        simulation = run_with(;
+        #observations and its inputs the actions, which BaselineEnvironment receives
+        with_actions(; keywords...) = simulate_for_test(
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
+            n_steps=3,
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
+            keywords...,
+        )
+        everything_with_actions = with_actions()
+        simulation = with_actions(;
             environment_save_history=SaveHistory(;
                 outputs=:reward, inputs=:choice, save_initial_timestep_values=false
             ),
         )
-        @test cognitive_values(simulation) == cognitive_values(everything)
+        @test cognitive_values(simulation) == cognitive_values(everything_with_actions)
         @test simulation.environment.states == fill((;), 3)
-        @test simulation.environment.observations == everything.environment.observations
-        @test simulation.environment.actions == everything.environment.actions
+        @test simulation.environment.observations ==
+            everything_with_actions.environment.observations
+        @test simulation.environment.actions == everything_with_actions.environment.actions
         @test simulation.environment.observation_distributions == fill((;), 3)
         #Nothing at all gives empty NamedTuples of everything, followed by the size of the timesteps
         nothing_saved = run_with(;
@@ -1480,11 +1229,11 @@ end
             ==(fill((;), 4)),
             saved_vectors(
                 simulate(
-                    LearnsRewards(),
-                    RewardsWithProbability();
+                    Baseline(ByHand()),
+                    BaselineEnvironment(ByHand());
                     who_starts=EnvironmentStarts(),
                     n_steps=3,
-                    cognitive_parameters=LEARNING,
+                    cognitive_parameters=BASELINE_PARAMETERS,
                     environment_parameters=REWARDS,
                     rng=Xoshiro(1),
                 ),
@@ -1493,15 +1242,14 @@ end
     end
 
     @testset "Timestep 0 is saved by default, with the previous observation and action and the states before the first timestep" begin
-        rewards = (; rewards=[1.0, 0.0, 1.0])
         everything = SaveHistory(SaveEverything())
         for who_starts in (EnvironmentStarts(), AgentStarts())
             with_timestep_zero = simulate_for_test(
-                LearnsAndCounts(),
-                FixedRewards();
+                DependsOnPreviousOutput(ByHand()),
+                BaselineEnvironment(ByHand());
                 who_starts,
                 n_steps=3,
-                environment_parameters=rewards,
+                cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
                 cognitive_save_history=everything,
                 environment_save_history=everything,
             )
@@ -1519,11 +1267,11 @@ end
                 (; reward=BeforeFirstTimestep())
             #After it come the timesteps, as without it
             without_timestep_zero = simulate_for_test(
-                LearnsAndCounts(),
-                FixedRewards();
+                DependsOnPreviousOutput(ByHand()),
+                BaselineEnvironment(ByHand());
                 who_starts,
                 n_steps=3,
-                environment_parameters=rewards,
+                cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             )
             for (with_vector, without_vector) in
                 zip(saved_vectors(with_timestep_zero), saved_vectors(without_timestep_zero))
@@ -1532,11 +1280,11 @@ end
         end
         #What is given as previous is what timestep 0 has, and when it has the types of the later timesteps, the vectors have them only
         simulation = simulate_for_test(
-            LearnsAndCounts(),
-            FixedRewards();
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
             n_steps=2,
-            environment_parameters=rewards,
-            previous_observation=(; reward=0.25),
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
+            previous_observation=(; reward=true),
             previous_action=(; choice=true),
             previous_cognitive_state=(; expected_reward=0.1, n_timesteps=5),
             cognitive_save_history=everything,
@@ -1548,21 +1296,20 @@ end
             simulation.states[1],
             simulation.environment.states[1],
         ) === (
-            (; reward=0.25),
+            (; reward=true),
             (; choice=true),
             (; expected_reward=0.1, n_timesteps=5),
             (; n_timesteps=0),
         )
-        @test simulation.observations isa Vector{@NamedTuple{reward::Float64}} &&
+        @test simulation.observations isa Vector{@NamedTuple{reward::Bool}} &&
             simulation.actions isa Vector{@NamedTuple{choice::Bool}}
-        @test simulation.environment.observations[1] === (; reward=0.25) &&
+        @test simulation.environment.observations[1] === (; reward=true) &&
             simulation.environment.actions[1] === (; choice=true)
         #With maps, the observation and the action have the cognitive model's names, and under environment the environment's
         simulation = simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             n_steps=2,
-            environment_parameters=(;),
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
             cognitive_save_history=everything,
@@ -1571,15 +1318,15 @@ end
         @test simulation.observations[1] === (; reward=BeforeFirstTimestep()) &&
             simulation.actions[1] === (; choice=BeforeFirstTimestep())
         @test simulation.environment.observations[1] ===
-              (; payoff=BeforeFirstTimestep(), cue=BeforeFirstTimestep()) &&
+              (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep()) &&
             simulation.environment.actions[1] === (; lever=BeforeFirstTimestep())
         #A selection applies to it too, and cognitive_save_history decides for the environment's vectors as well, so that all of
         #them have the same length
         simulation = simulate_for_test(
-            LearnsAndCounts(),
-            FixedRewards();
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
             n_steps=2,
-            environment_parameters=rewards,
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
         )
         @test simulation.states == [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2)]
@@ -1590,11 +1337,10 @@ end
         for who_starts in (EnvironmentStarts(), AgentStarts())
             @test simulate_for_test(
                 RecordsWhoStarts(),
-                FixedRewards();
+                BaselineEnvironment(ByHand());
                 who_starts,
                 n_steps=2,
                 cognitive_parameters=(;),
-                environment_parameters=rewards,
                 cognitive_save_history=SaveHistory(; states=:who_starts),
             ).states[end] === (; who_starts)
             @test simulate_for_test(
@@ -1610,11 +1356,13 @@ end
         @test simulate(RecordsWhoStarts(), (; reward=1.0); parameters=(;))[2] ===
             (; who_starts=UnknownWhoStarts())
         #The action distributions are saved when selected, with BeforeFirstTimestep for every action at timestep 0
+        fixed_rewards = FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0]))
         (; actions, action_distributions) = simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            fixed_rewards;
             n_steps=3,
-            environment_parameters=rewards,
+            environment_parameters=(;),
+            action_map=NameMap(),
             cognitive_save_history=SaveHistory(;
                 outputs=:choice, output_distributions=:choice
             ),
@@ -1622,54 +1370,62 @@ end
         @test action_distributions[1] === (; choice=BeforeFirstTimestep())
         @test [
             distribution.choice.probability for distribution in action_distributions[2:end]
-        ] ≈ [0.75, 0.375, 0.6875]
+        ] ≈ baseline_choice_probability.([0.75, 0.375, 0.6875])
         @test length(action_distributions) == length(actions) == 4
         @test simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            fixed_rewards;
             n_steps=3,
-            environment_parameters=rewards,
+            environment_parameters=(;),
+            action_map=NameMap(),
             cognitive_save_history=SaveHistory(; outputs=:choice),
         ).action_distributions == fill((;), 4)
-        @test_throws "The SaveHistory selects the output distributions (:bet,), but the outputs in the attributes of a cognitive model of type LearnsRewards are (:choice,). A history can only select names in the model's attributes." InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(; output_distributions=:bet)
+        @test_throws "The SaveHistory selects the output distributions (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,). A history can only select names in the model's attributes." InstantiatedModel(
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(; output_distributions=:bet),
         )
         #A state changed in place is saved before the first timestep changes it
         (; states) = simulate_for_test(
-            LearnsInPlace(state -> (; values=copy(state.values))),
-            FixedRewards();
+            StateChangedInPlace(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 1.0]));
             n_steps=2,
-            environment_parameters=(; rewards=[1.0, 1.0]),
+            environment_parameters=(;),
+            action_map=NameMap(),
             cognitive_save_history=everything,
         )
-        @test [state.values[1] for state in states] == [0.5, 0.75, 0.875]
+        @test [state.expected_reward[1] for state in states] == [0.5, 0.75, 0.875]
     end
 
     @testset "The environment's observations, actions and observation distributions are returned as it gave and received them" begin
         everything = SaveHistory(SaveEverything())
         for who_starts in (EnvironmentStarts(), AgentStarts())
+            #OtherNamesEnvironment, with the means of its distributions, gives the payoff for each lever exactly
             simulation = simulate_for_test(
-                LearnsRewards(),
-                PaysForLever();
+                Baseline(ByHand()),
+                OtherNamesEnvironment(Means());
                 who_starts,
                 n_steps=3,
-                environment_parameters=(;),
                 observation_map=PAYOFF_AS_REWARD,
                 action_map=CHOICE_AS_LEVER,
                 cognitive_save_history=everything,
                 environment_save_history=everything,
             )
             environment = simulation.environment
-            #The observations are as the environment gave them, before the observation_map, with the cue the model didn't receive
+            #The observations are as the environment gave them, before the observation_map, with the number of the timestep the
+            #model didn't receive
             @test all(
-                observation -> keys(observation) == (:payoff, :cue),
+                observation -> keys(observation) == (:payoff, :timestep_number),
                 environment.observations,
             )
             @test isequal(
                 [observation.payoff for observation in environment.observations],
                 [observation.reward for observation in simulation.observations],
             )
-            @test all(observation -> observation.cue === 2, environment.observations[2:end])
+            @test [
+                observation.timestep_number for
+                observation in environment.observations[2:end]
+            ] == 1:3
             #The actions are as the environment received them, after the action_map
             @test all(action -> keys(action) == (:lever,), environment.actions)
             @test isequal(
@@ -1678,64 +1434,58 @@ end
             )
             #The observation distributions are what the environment gave its observations to be sampled from
             @test all(
-                distribution -> keys(distribution) == (:payoff, :cue),
+                distribution -> keys(distribution) == (:payoff, :timestep_number),
                 environment.observation_distributions,
             )
-            @test all(
-                distribution -> distribution.cue === Deterministic(2),
-                environment.observation_distributions[2:end],
-            )
+            @test [
+                distribution.timestep_number for
+                distribution in environment.observation_distributions[2:end]
+            ] == Deterministic.(1:3)
             for (observation, distribution) in zip(
                 environment.observations[2:end],
                 environment.observation_distributions[2:end],
             )
-                expected_distribution = if observation.payoff === NoValue()
-                    NoValue()
-                else
-                    Deterministic(observation.payoff)
-                end
-                @test distribution.payoff === expected_distribution
+                @test distribution.payoff === Deterministic(observation.payoff)
             end
             #At timestep 0 every observation distribution is BeforeFirstTimestep
             @test environment.observation_distributions[1] ===
-                (; payoff=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
+                (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep())
             #The cognitive model's action distributions are what it gave its actions to be sampled from
             @test [
                 distribution.choice.probability for
                 distribution in simulation.action_distributions[2:end]
-            ] == expected_rewards(simulation.states[2:end])
-            #When the environment starts, it receives the previous action, so its first payoff isn't there
+            ] == baseline_choice_probability.(expected_rewards(simulation.states[2:end]))
+            #When the environment starts, it receives the previous action, so its first payoff is the one for no lever, a half
             if who_starts === EnvironmentStarts()
                 @test environment.observation_distributions[2] ===
-                    (; payoff=NoValue(), cue=Deterministic(2))
+                    (; payoff=Deterministic(0.5), timestep_number=Deterministic(1))
             else
                 @test environment.observation_distributions[2] === (;
-                    payoff=Deterministic(float(simulation.actions[2].choice)),
-                    cue=Deterministic(2),
+                    payoff=Deterministic(reward_for_choice(simulation.actions[2].choice)),
+                    timestep_number=Deterministic(1),
                 )
             end
         end
         #The environment's selection applies to them, in its own names
         simulation = simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
+            Baseline(ByHand()),
+            OtherNamesEnvironment(Means());
             n_steps=3,
-            environment_parameters=(;),
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
             environment_save_history=SaveHistory(;
-                outputs=:cue, save_initial_timestep_values=false
+                outputs=:timestep_number, save_initial_timestep_values=false
             ),
         )
-        @test simulation.environment.observations == fill((; cue=2), 3)
+        @test simulation.environment.observations ==
+            [(; timestep_number=1), (; timestep_number=2), (; timestep_number=3)]
         @test simulation.environment.actions == fill((;), 3)
         @test simulation.environment.observation_distributions == fill((;), 3)
         @test simulation.environment.states == fill((;), 3)
         simulation = simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
+            Baseline(ByHand()),
+            OtherNamesEnvironment(Means());
             n_steps=3,
-            environment_parameters=(;),
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
             environment_save_history=SaveHistory(;
@@ -1754,24 +1504,22 @@ end
 
     @testset "An entry that is NoValue is saved like any other, and a model without actions saves empty NamedTuples" begin
         (; observations, actions) = simulate_for_test(
-            LearnsRewards(),
-            RewardsTrue();
+            Baseline(ByHand()),
+            NoOutputBeforeFirstInputEnvironment(Means());
             n_steps=3,
-            environment_parameters=(;),
             cognitive_save_history=SaveHistory(;
                 inputs=:reward, outputs=:choice, save_initial_timestep_values=false
             ),
         )
         @test observations[1] === (; reward=NoValue())
-        @test observations[2] == (; reward=float(actions[1].choice))
+        @test observations[2] == (; reward=reward_for_choice(actions[1].choice))
         for cognitive_save_history in
             (SaveHistory(; outputs=(), save_initial_timestep_values=false), EVERY_TIMESTEP)
             (; actions) = simulate_for_test(
                 WithoutOutputs(),
-                RewardsAndCues();
+                WithoutInputsEnvironment(ByHand());
                 n_steps=3,
-                environment_parameters=(;),
-                observation_map=NameMap(:reward),
+                cognitive_parameters=LEARNING,
                 cognitive_save_history,
             )
             @test actions == fill((;), 3)
@@ -1780,55 +1528,76 @@ end
 
     @testset "The output before the first timestep has every output as BeforeFirstTimestep" begin
         #For a cognitive model, the outputs are its actions
-        @test CognitiveModeling.output_before_first_timestep(LearnsRewards()) ===
+        @test CognitiveModeling.output_before_first_timestep(Baseline(ByHand())) ===
             (; choice=BeforeFirstTimestep())
         @test CognitiveModeling.output_before_first_timestep(WithoutOutputs()) === (;)
         #The names are in the type, so it is inferred
-        @test @inferred(CognitiveModeling.output_before_first_timestep(TwoChoices())) ===
-            (; first_choice=BeforeFirstTimestep(), second_choice=BeforeFirstTimestep())
-        @test InstantiatedModel(TwoChoices(), (;)).previous_output ===
-            (; first_choice=BeforeFirstTimestep(), second_choice=BeforeFirstTimestep())
-        #The environment receives it on the first timestep when it starts, and RewardsTrue gives no reward for it
+        @test @inferred(
+            CognitiveModeling.output_before_first_timestep(ManyAttributes(ByHand()))
+        ) === (;
+            choice=BeforeFirstTimestep(),
+            confidence=BeforeFirstTimestep(),
+            report=BeforeFirstTimestep(),
+        )
+        @test InstantiatedModel(
+            ManyAttributes(ByHand()), (; BASELINE_PARAMETERS..., noise=0.2)
+        ).previous_output === (;
+            choice=BeforeFirstTimestep(),
+            confidence=BeforeFirstTimestep(),
+            report=BeforeFirstTimestep(),
+        )
+        #The environment receives it on the first timestep when it starts, and NoOutputBeforeFirstInputEnvironment gives no
+        #reward for it
         (; observations) = simulate_for_test(
-            LearnsRewards(), RewardsTrue(); n_steps=2, environment_parameters=(;)
+            Baseline(ByHand()), NoOutputBeforeFirstInputEnvironment(ByHand()); n_steps=2
         )
         @test observations[1] === (; reward=NoValue())
         #For an environment model, the outputs are the observations it gives
-        @test CognitiveModeling.output_before_first_timestep(RewardsWithProbability()) ===
-            (; reward=BeforeFirstTimestep())
+        @test CognitiveModeling.output_before_first_timestep(
+            BaselineEnvironment(ByHand())
+        ) === (; reward=BeforeFirstTimestep())
         @test CognitiveModeling.output_before_first_timestep(ObservesTimestepSize()) ===
             (; timestep_size=BeforeFirstTimestep())
         @test @inferred(
-            CognitiveModeling.output_before_first_timestep(RewardsAndCues())
-        ) === (; reward=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
-        @test InstantiatedModel(RewardsAndCues(), (;)).previous_output ===
-            (; reward=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
+            CognitiveModeling.output_before_first_timestep(OtherNamesEnvironment(ByHand()))
+        ) === (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep())
+        @test InstantiatedModel(OtherNamesEnvironment(ByHand()), REWARDS).previous_output ===
+            (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep())
     end
 
     @testset "The input before the first timestep has every input as BeforeFirstTimestep" begin
         #For a cognitive model, the inputs are its observations
-        @test CognitiveModeling.input_before_first_timestep(LearnsRewards()) ===
+        @test CognitiveModeling.input_before_first_timestep(Baseline(ByHand())) ===
             (; reward=BeforeFirstTimestep())
-        @test CognitiveModeling.input_before_first_timestep(OnlyChooses()) === (;)
+        @test CognitiveModeling.input_before_first_timestep(WithoutInputs(ByHand())) === (;)
         #The names are in the type, so it is inferred
         @test @inferred(
-            CognitiveModeling.input_before_first_timestep(SavesTimestepSize())
-        ) === (; timestep_size=BeforeFirstTimestep())
+            CognitiveModeling.input_before_first_timestep(ManyAttributes(ByHand()))
+        ) === (;
+            reward=BeforeFirstTimestep(),
+            cue=BeforeFirstTimestep(),
+            bonus=BeforeFirstTimestep(),
+        )
         #The model receives it on the first timestep when it starts, so it learns nothing there
         (; states) = simulate_for_test(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 1.0]));
             who_starts=AgentStarts(),
             n_steps=2,
-            environment_parameters=(; rewards=[1.0, 1.0]),
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
         @test expected_rewards(states) == [0.5, 0.75]
         #For an environment model, the inputs are the actions it receives, which it can have none of
-        @test CognitiveModeling.input_before_first_timestep(RewardsTrue()) ===
-            (; choice=BeforeFirstTimestep())
-        @test CognitiveModeling.input_before_first_timestep(PaysForLever()) ===
-            (; lever=BeforeFirstTimestep())
-        @test CognitiveModeling.input_before_first_timestep(RewardsAndCues()) === (;)
+        @test CognitiveModeling.input_before_first_timestep(
+            BaselineEnvironment(ByHand())
+        ) === (; choice=BeforeFirstTimestep())
+        @test CognitiveModeling.input_before_first_timestep(
+            OtherNamesEnvironment(ByHand())
+        ) === (; lever=BeforeFirstTimestep())
+        @test CognitiveModeling.input_before_first_timestep(
+            WithoutInputsEnvironment(ByHand())
+        ) === (;)
     end
 
     @testset "The markers for nothing there share a supertype, and the one for before the first timestep is its own" begin
@@ -1840,26 +1609,30 @@ end
     @testset "A state isn't prepared for saving when none of it is saved, also at timestep 0" begin
         (; states) = simulate_for_test(
             LearnsInPlace(state -> error("prepared anyway")),
-            RewardsWithProbability();
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=LEARNING,
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
         )
         @test states == fill((;), 51)
     end
 
     @testset "Selecting a name that isn't there, or from something that isn't a NamedTuple, gives an error" begin
-        @test_throws "The SaveHistory selects the states (:surprise,), but the states in the attributes of a cognitive model of type LearnsAndCounts are (:expected_reward, :n_timesteps)." simulate_for_test(
-            LearnsAndCounts(),
-            RewardsWithProbability();
+        @test_throws "The SaveHistory selects the states (:surprise,), but the states in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:expected_reward, :n_timesteps)." simulate_for_test(
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             cognitive_save_history=SaveHistory(; states=:surprise),
         )
-        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type LearnsAndCounts are (:reward,)." simulate_for_test(
-            LearnsAndCounts(),
-            RewardsWithProbability();
+        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:reward,)." simulate_for_test(
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             cognitive_save_history=SaveHistory(; inputs=:cue),
         )
         @test_throws "can only select names from a NamedTuple" simulate_for_test(
             LearnsInPlace(state -> state.values),
-            RewardsWithProbability();
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=LEARNING,
             cognitive_save_history=SaveHistory(; states=:values),
         )
     end
@@ -1867,11 +1640,11 @@ end
     @testset "A selection keeps the return type known and the loop free of allocations" begin
         rng = Xoshiro(1)
         run_simulation(cognitive_save_history, n_steps) = simulate(
-            LearnsAndCounts(),
-            RewardsWithProbability();
+            DependsOnPreviousOutput(ByHand()),
+            BaselineEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
             n_steps,
-            cognitive_parameters=LEARNING,
+            cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
             cognitive_save_history,
@@ -1896,23 +1669,27 @@ end
     end
 
     @testset "A method which copies the state keeps the saved values of a state changed in place" begin
-        for prepare_state in (deepcopy, state -> (; values=copy(state.values)))
-            (; states) = simulate_for_test(
-                LearnsInPlace(prepare_state), RewardsWithProbability()
-            )
-            @test length(unique(state.values[1] for state in states)) > 1
-            @test allunique(objectid(state.values) for state in states)
+        #StateChangedInPlaceSavedWithDeepcopy copies its state with deepcopy, and StateChangedInPlace copies the vector in it
+        for model in
+            (StateChangedInPlaceSavedWithDeepcopy(ByHand()), StateChangedInPlace(ByHand()))
+            (; states) = simulate_for_test(model, BaselineEnvironment(ByHand()))
+            @test length(unique(state.expected_reward[1] for state in states)) > 1
+            @test allunique(objectid(state.expected_reward) for state in states)
         end
     end
 
     @testset "A method which does nothing copies nothing" begin
-        (; states) = simulate_for_test(LearnsInPlace(identity), RewardsWithProbability())
+        (; states) = simulate_for_test(
+            LearnsInPlace(identity),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=LEARNING,
+        )
         @test all(state -> state.values === first(states).values, states)
     end
 
     @testset "An environment can also have a method which copies its state" begin
         simulation = simulate_for_test(
-            LearnsRewards(), CountsInPlace(); environment_parameters=(;)
+            Baseline(ByHand()), CountsInPlace(); environment_parameters=(;)
         )
         environment_states = simulation.environment.states
         @test [state.counts[1] for state in environment_states] == 1:length(environment_states)
@@ -1920,39 +1697,41 @@ end
 
     @testset "What prepare_state_for_saving returns is what is saved" begin
         (; states) = simulate_for_test(
-            LearnsInPlace(state -> (; values=copy(state.values))), RewardsWithProbability()
+            StateChangedInPlace(ByHand()), BaselineEnvironment(ByHand())
         )
-        @test eltype(states) === @NamedTuple{values::Vector{Float64}}
+        @test eltype(states) === @NamedTuple{expected_reward::Vector{Float64}}
         @test length(unique(states)) > 1
     end
 
     @testset "There must be at least one timestep" begin
         @test length(
-            simulate_for_test(LearnsRewards(), RewardsWithProbability(); n_steps=1).actions
+            simulate_for_test(Baseline(ByHand()), BaselineEnvironment(ByHand()); n_steps=1).actions,
         ) == 1
         @test_throws ArgumentError simulate_for_test(
-            LearnsRewards(), RewardsWithProbability(); n_steps=0
+            Baseline(ByHand()), BaselineEnvironment(ByHand()); n_steps=0
         )
     end
 
     @testset "A missing timestep method gives an informative error" begin
         @test_throws "There is no run_timestep method for a cognitive model of type OnlyInitializesState with a context of type " simulate_for_test(
-            OnlyInitializesState(), RewardsWithProbability(); cognitive_parameters=(;)
+            OnlyInitializesState(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
         @test_throws "Each model must define CognitiveModeling.run_timestep(model::OnlyInitializesState, context::CognitiveModeling.ModelContext)." simulate_for_test(
-            OnlyInitializesState(), RewardsWithProbability(); cognitive_parameters=(;)
+            OnlyInitializesState(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
         @test_throws "There is no run_timestep method for an environment model of type EnvironmentOnlyInitializesState" simulate_for_test(
-            LearnsRewards(), EnvironmentOnlyInitializesState(); environment_parameters=(;)
+            Baseline(ByHand()),
+            EnvironmentOnlyInitializesState();
+            environment_parameters=(;),
         )
     end
 
     @testset "A missing method for the initial state gives an informative error, unless a state is given" begin
         @test_throws "There is no initialize_state method for a cognitive model of type NeedsGivenState. Each model must define CognitiveModeling.initialize_state(model::NeedsGivenState, parameters), which returns (;) if the model has no state." simulate_for_test(
-            NeedsGivenState(), RewardsWithProbability(); cognitive_parameters=(;)
+            NeedsGivenState(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
         @test_throws "There is no initialize_state method for an environment model of type EnvironmentNeedsGivenState" simulate_for_test(
-            LearnsRewards(), EnvironmentNeedsGivenState(); environment_parameters=(;)
+            Baseline(ByHand()), EnvironmentNeedsGivenState(); environment_parameters=(;)
         )
         simulation = simulate(
             NeedsGivenState(),
@@ -1975,12 +1754,12 @@ end
         for who_starts in (EnvironmentStarts(), AgentStarts())
             @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput, but it returned a value of type Tuple" simulate_for_test(
                 ReturnsTuple(),
-                RewardsWithProbability();
+                BaselineEnvironment(ByHand());
                 who_starts,
                 cognitive_parameters=(;),
             )
             @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput, but it returned a value of type @NamedTuple" simulate_for_test(
-                LearnsRewards(),
+                Baseline(ByHand()),
                 ReturnsObservation();
                 who_starts,
                 environment_parameters=(;),
@@ -2032,14 +1811,15 @@ end
     end
 
     @testset "Timestep sizes keep the return type known" begin
+        #UsesTimestepSize learns more on a timestep the more time it covers
         rng = Xoshiro(1)
         run_simulation(timestep_sizes) = simulate(
-            LearnsRewards(),
-            RewardsWithProbability();
+            UsesTimestepSize(ByHand()),
+            BaselineEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
             n_steps=3,
             timestep_sizes,
-            cognitive_parameters=LEARNING,
+            cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
             cognitive_save_history=SaveHistory(SaveEverything()),
@@ -2055,8 +1835,8 @@ end
 
     @testset "The sizes of the timesteps are returned as they were given" begin
         run_with_sizes(timestep_sizes; keywords...) = simulate_for_test(
-            LearnsRewards(),
-            RewardsWithProbability();
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
             n_steps=3,
             timestep_sizes,
             keywords...,
@@ -2090,16 +1870,17 @@ end
 
     @testset "An environment's stopping criterion ends the simulation, and n_steps is the most timesteps there can be" begin
         @test CognitiveModeling.stopping_criterion(
-            RewardsWithProbability(), (;), REWARDS
+            BaselineEnvironment(ByHand()), (; n_timesteps=0), REWARDS
         ) === false
         for who_starts in (EnvironmentStarts(), AgentStarts())
+            #WithStoppingCriterionEnvironment ends after the timestep that is its last, a parameter
             run_until_end(n_steps; timestep_sizes=1, keywords...) = simulate_for_test(
-                LearnsRewards(),
-                EndsAfterTimesteps();
+                Baseline(ByHand()),
+                WithStoppingCriterionEnvironment(ByHand());
                 who_starts,
                 n_steps,
                 timestep_sizes,
-                environment_parameters=(; last_timestep=7),
+                environment_parameters=(; REWARDS..., last_timestep=7),
                 keywords...,
             )
             #Everything returned has the timesteps that ran
@@ -2128,12 +1909,12 @@ end
             #The return type is still known
             rng = Xoshiro(1)
             typed_run(n_steps) = simulate(
-                LearnsRewards(),
-                EndsAfterTimesteps();
+                Baseline(ByHand()),
+                WithStoppingCriterionEnvironment(ByHand());
                 who_starts,
                 n_steps,
-                cognitive_parameters=LEARNING,
-                environment_parameters=(; last_timestep=7),
+                cognitive_parameters=BASELINE_PARAMETERS,
+                environment_parameters=(; REWARDS..., last_timestep=7),
                 rng,
                 cognitive_save_history=SaveHistory(SaveEverything()),
                 environment_save_history=SaveHistory(SaveEverything()),
@@ -2141,77 +1922,93 @@ end
             @test @inferred(typed_run(20)) isa NamedTuple
             JET.@test_opt target_modules = (CognitiveModeling,) typed_run(20)
         end
-        #When the environment starts, the model has observed and acted on the last timestep
+        #When the environment starts, the model has observed and acted on the last timestep, after which a
+        #FixedObservationsEnvironment ends
         simulation = simulate_for_test(
-            LearnsRewards(),
-            EndsAfterTimesteps();
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 1.0]));
             n_steps=20,
-            environment_parameters=(; last_timestep=2),
+            environment_parameters=(;),
+            action_map=NameMap(),
         )
         @test expected_rewards(simulation.states) == [0.75, 0.875] &&
             length(simulation.actions) == 2
         #An environment that has ended already can't be simulated
-        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_for_test(
-            LearnsRewards(),
-            EndsAfterTimesteps();
-            environment_parameters=(; last_timestep=0),
+        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_for_test(
+            Baseline(ByHand()),
+            WithStoppingCriterionEnvironment(ByHand());
+            environment_parameters=(; REWARDS..., last_timestep=7),
+            previous_environment_state=(; n_timesteps=7),
         )
     end
 
     @testset "A cognitive model's stopping criterion ends the simulation too, and check_stopping_criterion = false runs every timestep" begin
-        @test CognitiveModeling.stopping_criterion(LearnsRewards(), (;), LEARNING) === false
+        @test CognitiveModeling.stopping_criterion(
+            Baseline(ByHand()), (; expected_reward=0.5), BASELINE_PARAMETERS
+        ) === false
         for who_starts in (EnvironmentStarts(), AgentStarts())
+            #WithStoppingCriterion ends once its expected reward is above 0.8. Rewards of 1 take it to 1 - 0.5^(n + 1) after n of
+            #them, which it learns from on the same timestep when the environment starts, and on the next when the agent starts
+            expected_reward_after(t) =
+                1 - 0.5^(who_starts isa EnvironmentStarts ? t + 1 : t)
             run_until_end(; keywords...) = simulate_for_test(
-                StopsAfterTimesteps(),
-                RewardsWithProbability();
+                WithStoppingCriterion(ByHand()),
+                FixedObservationsEnvironment((; reward=fill(1.0, 20)));
                 who_starts,
                 n_steps=20,
-                cognitive_parameters=(; last_timestep=3),
+                environment_parameters=(;),
+                action_map=NameMap(),
                 keywords...,
             )
-            #The model ends the simulation after its third timestep
+            #The model ends the simulation after the timestep that takes its expected reward to 0.875, the second when the
+            #environment starts and the third when the agent starts
+            n_timesteps_that_run = who_starts isa EnvironmentStarts ? 2 : 3
             simulation = run_until_end()
-            @test all(vector -> length(vector) == 3, saved_vectors(simulation))
-            @test simulation.states[end] == (; n_timesteps=3)
+            @test all(
+                vector -> length(vector) == n_timesteps_that_run, saved_vectors(simulation)
+            )
+            @test simulation.states[end] == (; expected_reward=0.875)
             #Without the check, every timestep runs
             every_timestep = run_until_end(; check_stopping_criterion=false)
             @test all(vector -> length(vector) == 20, saved_vectors(every_timestep))
-            @test every_timestep.states[end] == (; n_timesteps=20)
+            @test expected_rewards(every_timestep.states) == expected_reward_after.(1:20)
             @test every_timestep.timestep_sizes === 1
             #The same goes for an environment which would end the simulation
             environment_ends = simulate_for_test(
-                LearnsRewards(),
-                EndsAfterTimesteps();
+                Baseline(ByHand()),
+                WithStoppingCriterionEnvironment(ByHand());
                 who_starts,
                 n_steps=20,
-                environment_parameters=(; last_timestep=7),
+                environment_parameters=(; REWARDS..., last_timestep=7),
                 check_stopping_criterion=false,
             )
             @test all(vector -> length(vector) == 20, saved_vectors(environment_ends))
             @test environment_ends.environment.states[end] == (; n_timesteps=20)
             #A model whose criterion is met already can't run a timestep, unless the check is off
-            @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." run_until_end(
-                cognitive_parameters=(; last_timestep=0)
+            @test_throws "The stopping criterion of a cognitive model of type WithStoppingCriterion{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." run_until_end(
+                previous_cognitive_state=(; expected_reward=0.9)
             )
             @test length(
                 run_until_end(;
-                    cognitive_parameters=(; last_timestep=0), check_stopping_criterion=false
+                    previous_cognitive_state=(; expected_reward=0.9),
+                    check_stopping_criterion=false,
                 ).actions,
             ) == 20
             @test length(
                 simulate_for_test(
-                    LearnsRewards(),
-                    EndsAfterTimesteps();
+                    Baseline(ByHand()),
+                    WithStoppingCriterionEnvironment(ByHand());
                     who_starts,
                     n_steps=20,
-                    environment_parameters=(; last_timestep=0),
+                    environment_parameters=(; REWARDS..., last_timestep=7),
+                    previous_environment_state=(; n_timesteps=7),
                     check_stopping_criterion=false,
                 ).actions,
             ) == 20
         end
         #Only a Bool is taken
         @test_throws TypeError simulate_for_test(
-            LearnsRewards(), RewardsWithProbability(); check_stopping_criterion=1
+            Baseline(ByHand()), BaselineEnvironment(ByHand()); check_stopping_criterion=1
         )
     end
 end
@@ -2220,22 +2017,26 @@ end
     @testset "Two simulations in a row give the same as one long one" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             one_simulation = simulate(
-                LearnsRewards(),
-                RewardsTrue();
+                Baseline(ByHand()),
+                NoOutputBeforeFirstInputEnvironment(ByHand());
                 who_starts,
                 n_steps=60,
-                cognitive_parameters=LEARNING,
-                environment_parameters=(;),
+                cognitive_parameters=BASELINE_PARAMETERS,
+                environment_parameters=REWARDS,
                 rng=Xoshiro(9),
                 cognitive_save_history=SaveHistory(SaveEverything()),
                 environment_save_history=SaveHistory(SaveEverything()),
             )
 
             agent = InstantiatedModel(
-                LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+                Baseline(ByHand()),
+                BASELINE_PARAMETERS;
+                save_history=SaveHistory(SaveEverything()),
             )
             environment = InstantiatedModel(
-                RewardsTrue(), (;); save_history=SaveHistory(SaveEverything())
+                NoOutputBeforeFirstInputEnvironment(ByHand()),
+                REWARDS;
+                save_history=SaveHistory(SaveEverything()),
             )
             rng = Xoshiro(9)
             first_part = simulate!(agent, environment; who_starts, n_steps=25, rng)
@@ -2276,26 +2077,31 @@ end
     end
 
     @testset "Timestep sizes in two simulations in a row give the same as in one long one" begin
+        #UsesTimestepSize learns more on a timestep the more time it covers
         sizes = [0.5, 2.0, 0.25, 1.5, 3.0]
         for who_starts in (EnvironmentStarts(), AgentStarts())
             one_simulation = simulate(
-                SavesTimestepSize(),
-                ObservesTimestepSize();
+                UsesTimestepSize(ByHand()),
+                BaselineEnvironment(ByHand());
                 who_starts,
                 n_steps=5,
                 timestep_sizes=sizes,
-                cognitive_parameters=(;),
-                environment_parameters=(;),
+                cognitive_parameters=BASELINE_PARAMETERS,
+                environment_parameters=REWARDS,
                 rng=Xoshiro(9),
                 cognitive_save_history=SaveHistory(SaveEverything()),
                 environment_save_history=SaveHistory(SaveEverything()),
             )
 
             agent = InstantiatedModel(
-                SavesTimestepSize(), (;); save_history=SaveHistory(SaveEverything())
+                UsesTimestepSize(ByHand()),
+                BASELINE_PARAMETERS;
+                save_history=SaveHistory(SaveEverything()),
             )
             environment = InstantiatedModel(
-                ObservesTimestepSize(), (;); save_history=SaveHistory(SaveEverything())
+                BaselineEnvironment(ByHand()),
+                REWARDS;
+                save_history=SaveHistory(SaveEverything()),
             )
             rng = Xoshiro(9)
             first_part = simulate!(
@@ -2324,26 +2130,28 @@ end
 
     @testset "Later simulations don't change the outputs of earlier ones" begin
         agent = InstantiatedModel(
-            LearnsInPlace(deepcopy), LEARNING; save_history=SaveHistory(SaveEverything())
+            StateChangedInPlaceSavedWithDeepcopy(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         (; states) = simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
-        last_value = states[end].values[1]
+        last_value = states[end].expected_reward[1]
         simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
-        @test states[end].values[1] == last_value
+        @test states[end].expected_reward[1] == last_value
     end
 
     @testset "simulate! continues from the state itself, whatever is saved" begin
         agent = InstantiatedModel(
-            LearnsInPlace(state -> (; values=copy(state.values))),
-            LEARNING;
+            StateChangedInPlace(ByHand()),
+            BASELINE_PARAMETERS;
             save_history=SaveHistory(SaveEverything()),
         )
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         first_states = simulate!(
             agent,
             environment;
@@ -2351,7 +2159,7 @@ end
             n_steps=3,
             rng=Xoshiro(1),
         ).states
-        @test agent.state.values[1] == first_states[end].values[1]
+        @test agent.state.expected_reward[1] == first_states[end].expected_reward[1]
         second_states = simulate!(
             agent,
             environment;
@@ -2359,10 +2167,11 @@ end
             n_steps=3,
             rng=Xoshiro(1),
         ).states
-        @test agent.state.values[1] == second_states[end].values[1]
+        @test agent.state.expected_reward[1] == second_states[end].expected_reward[1]
     end
 
     @testset "An agent fills in the default parameters, and starts from them" begin
+        #HasDefaults starts from a parameter with a default, which no example model does
         agent = InstantiatedModel(HasDefaults(), (;))
         @test agent.parameters == (; learning_rate=0.1, initial_value=0.5)
         @test agent.state == (; expected_reward=0.5)
@@ -2376,37 +2185,41 @@ end
             (; choice=NoValue()),
         ).parameters == (; learning_rate=0.3, initial_value=0.5)
         #A model without defaults keeps the parameters as they are
-        @test InstantiatedModel(LearnsRewards(), LEARNING).parameters === LEARNING
+        @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).parameters ===
+            BASELINE_PARAMETERS
         #The model is kept as it is
-        @test InstantiatedModel(LearnsRewards(), LEARNING).model === LearnsRewards()
+        @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).model ===
+            Baseline(ByHand())
     end
 
     @testset "An agent checks the names of the parameters and the state against attribute_names" begin
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults are (:learning_rate, :initial_value)" InstantiatedModel(
-            HasDefaults(), (; noise=0.1)
+        #WithDefaultParameters has a default inverse temperature, which is filled in before the names are checked
+        @test_throws "The parameters are named (:inverse_temperature, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{ByHand} are (:learning_rate, :inverse_temperature)" InstantiatedModel(
+            WithDefaultParameters(ByHand()), (; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type HasDefaults are (:expected_reward,)" InstantiatedModel(
-            HasDefaults(), (;), (; value=0.5), (; choice=NoValue())
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type WithDefaultParameters{ByHand} are (:expected_reward,)" InstantiatedModel(
+            WithDefaultParameters(ByHand()), LEARNING, (; value=0.5), (; choice=NoValue())
         )
-        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type HasDefaults, (:choice,)." InstantiatedModel(
-            HasDefaults(), (;), (; expected_reward=0.5), NoValue()
+        @test_throws "The previous output is NoValue(), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type WithDefaultParameters{ByHand}, (:choice,)." InstantiatedModel(
+            WithDefaultParameters(ByHand()), LEARNING, (; expected_reward=0.5), NoValue()
         )
         @test_throws "must be a NamedTuple with the outputs in the attributes of" InstantiatedModel(
-            HasDefaults(), (;), (; expected_reward=0.5), (; bet=true)
+            WithDefaultParameters(ByHand()), LEARNING, (; expected_reward=0.5), (; bet=true)
         )
         #The order of the names doesn't matter
-        @test InstantiatedModel(HasDefaults(), (; initial_value=0.5, learning_rate=0.1)).parameters.learning_rate ==
-            0.1
+        @test InstantiatedModel(
+            WithDefaultParameters(ByHand()), (; inverse_temperature=3.0, learning_rate=0.1)
+        ).parameters.learning_rate == 0.1
         #A state must be a NamedTuple, also when it is a single object
-        @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type HasDefaults, (:expected_reward,), also when it is a single object." InstantiatedModel(
-            HasDefaults(), (;), [0.5], (; choice=NoValue())
+        @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type WithDefaultParameters{ByHand}, (:expected_reward,), also when it is a single object." InstantiatedModel(
+            WithDefaultParameters(ByHand()), LEARNING, [0.5], (; choice=NoValue())
         )
         #A model without names can't be simulated or be instantiated
         @test_throws "There is no attribute_names method for a cognitive model of type WithoutNames. Each model must define CognitiveModeling.attribute_names(model::WithoutNames), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs." InstantiatedModel(
             WithoutNames(), (;)
         )
         @test_throws "There is no attribute_names method for a cognitive model of type WithoutNames" simulate_for_test(
-            WithoutNames(), RewardsWithProbability(); cognitive_parameters=(;)
+            WithoutNames(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
     end
 
@@ -2433,7 +2246,8 @@ end
         @test InstantiatedModel(
             RewardsWithDefaults(), (; bias=0.5), (; last_choice=true), (; reward=1.0)
         ).parameters == (; reward_size=1.0, bias=0.5)
-        @test InstantiatedModel(RewardsWithProbability(), REWARDS).parameters === REWARDS
+        @test InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS).parameters ===
+            REWARDS
         @test_throws "The parameters are named (:reward_size, :bias, :noise), but the parameters in the attributes of an environment model of type RewardsWithDefaults are (:reward_size, :bias)" InstantiatedModel(
             RewardsWithDefaults(), (; noise=0.1)
         )
@@ -2455,68 +2269,74 @@ end
             EnvironmentWithoutNames(), (;)
         )
         @test_throws "There is no attribute_names method for an environment model of type EnvironmentWithoutNames" simulate_for_test(
-            LearnsRewards(), EnvironmentWithoutNames(); environment_parameters=(;)
+            Baseline(ByHand()), EnvironmentWithoutNames(); environment_parameters=(;)
         )
     end
 
     @testset "simulate fills in the default parameters, and checks the names like an agent" begin
         run_with(model, environment; keywords...) =
             simulate_for_test(model, environment; n_steps=2, keywords...)
-        #The defaults are used, also for the initial state, and the given values replace them
+        #The defaults are used, also for the initial state, and the given values replace them. HasDefaults starts from a
+        #parameter with a default, which no example model does
         (; states) = run_with(
-            HasDefaults(), RewardsWithProbability(); cognitive_parameters=(;)
+            HasDefaults(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
         @test states[1].expected_reward != 0.5
         (; states) = run_with(
             HasDefaults(),
-            RewardsWithProbability();
+            BaselineEnvironment(ByHand());
             cognitive_parameters=(; learning_rate=0.0, initial_value=0.9),
         )
         @test [state.expected_reward for state in states] == [0.9, 0.9]
         simulation = run_with(
-            LearnsRewards(), RewardsWithDefaults(); environment_parameters=(; bias=0.5)
+            Baseline(ByHand()), RewardsWithDefaults(); environment_parameters=(; bias=0.5)
         )
         @test all(observation -> observation.reward >= 0.5, simulation.observations)
         @test simulation.environment.states[end].last_choice isa Bool
         #The names of the parameters, the states, the previous action and the previous observation are checked
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults" run_with(
-            HasDefaults(), RewardsWithProbability(); cognitive_parameters=(; noise=0.1)
+        @test_throws "The parameters are named (:inverse_temperature, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{ByHand}" run_with(
+            WithDefaultParameters(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=(; noise=0.1),
         )
-        @test_throws "The parameters are named (:reward_probability, :noise), but the parameters in the attributes of an environment model of type RewardsWithProbability" run_with(
-            LearnsRewards(),
-            RewardsWithProbability();
+        @test_throws "The parameters are named (:reward_probability, :noise), but the parameters in the attributes of an environment model of type BaselineEnvironment{ByHand}" run_with(
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
             environment_parameters=(; reward_probability=0.8, noise=0.1),
         )
-        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type LearnsRewards" run_with(
-            LearnsRewards(),
-            RewardsWithProbability();
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type Baseline{ByHand}" run_with(
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
             previous_cognitive_state=(; value=0.5),
         )
-        @test_throws "The state is named (:value,), but the states in the attributes of an environment model of type FixedRewards" run_with(
-            LearnsRewards(),
-            FixedRewards();
-            environment_parameters=(; rewards=[1.0, 0.0]),
+        @test_throws "The state is named (:value,), but the states in the attributes of an environment model of type BaselineEnvironment{ByHand}" run_with(
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
             previous_environment_state=(; value=0),
         )
-        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type LearnsRewards, (:choice,)." run_with(
-            LearnsRewards(), RewardsWithProbability(); previous_action=(; bet=true)
+        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type Baseline{ByHand}, (:choice,)." run_with(
+            Baseline(ByHand()), BaselineEnvironment(ByHand()); previous_action=(; bet=true)
         )
-        @test_throws "The previous output is (cue = 1,), but it must be a NamedTuple with the outputs in the attributes of an environment model of type RewardsWithProbability, (:reward,)." run_with(
-            LearnsRewards(), RewardsWithProbability(); previous_observation=(; cue=1)
+        @test_throws "The previous output is (cue = 1,), but it must be a NamedTuple with the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand}, (:reward,)." run_with(
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
+            previous_observation=(; cue=1),
         )
         @test_throws "must be a NamedTuple with the outputs" run_with(
-            LearnsRewards(), RewardsWithProbability(); previous_observation=NoValue()
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
+            previous_observation=NoValue(),
         )
         #The order of the names doesn't matter
         @test run_with(
-            HasDefaults(),
-            RewardsWithProbability();
-            cognitive_parameters=(; initial_value=0.5, learning_rate=0.1),
+            Baseline(ByHand()),
+            BaselineEnvironment(ByHand());
+            cognitive_parameters=(; inverse_temperature=2.0, learning_rate=0.5),
         ) isa NamedTuple
         #A state must be a NamedTuple, also when it is a single object
         @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type NeedsGivenState, (:value,), also when it is a single object." run_with(
             NeedsGivenState(),
-            RewardsWithProbability();
+            BaselineEnvironment(ByHand());
             cognitive_parameters=(;),
             previous_cognitive_state=[1.0],
         )
@@ -2525,25 +2345,25 @@ end
     @testset "The checks of the names are decided at compile time, so they cost nothing" begin
         #Each compiles to code which only returns, however many names there are
         @test folds(
-            CognitiveModeling.check_names_fit, LearnsRewards, RewardsWithProbability
+            CognitiveModeling.check_names_fit, Baseline{ByHand}, BaselineEnvironment{ByHand}
         )
         @test folds(
             CognitiveModeling.check_match_attribute_names,
-            LearnsAndCounts,
-            typeof(LEARNING),
+            DependsOnPreviousOutput{ByHand},
+            typeof(DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS),
             typeof((; expected_reward=0.5, n_timesteps=0)),
             typeof((; choice=NoValue())),
         )
         @test folds(
             CognitiveModeling.check_match_attribute_names,
-            RewardsAndCues,
-            typeof((;)),
-            typeof((;)),
-            typeof((; reward=NoValue(), cue=NoValue())),
+            OtherNamesEnvironment{ByHand},
+            typeof(REWARDS),
+            typeof((; n_timesteps=0)),
+            typeof((; payoff=NoValue(), timestep_number=NoValue())),
         )
         @test folds(
             CognitiveModeling.check_input_names,
-            LearnsRewards,
+            Baseline{ByHand},
             typeof((; reward=1.0, cue=2)),
         )
         @test folds(() -> CognitiveModeling.same_names(MANY_NAMES, MANY_NAMES_REVERSED))
@@ -2555,84 +2375,81 @@ end
 
     @testset "Without maps, the model and the environment must have the same observations and actions in their attributes" begin
         #An environment which gives something else, or more, than the inputs in the model's attributes
-        @test_throws "The attributes of a cognitive model of type LearnsRewards have the observations (:reward,) as inputs, but an environment model of type OnlyCues gives (:cue,). Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them." simulate_for_test(
-            LearnsRewards(), OnlyCues(); environment_parameters=(;)
+        @test_throws "The attributes of a cognitive model of type Baseline{ByHand} have the observations (:reward,) as inputs, but an environment model of type OnlyCues gives (:cue,). Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them." simulate_for_test(
+            Baseline(ByHand()), OnlyCues(); environment_parameters=(;)
         )
-        @test_throws "The attributes of a cognitive model of type LearnsRewards have the observations (:reward,) as inputs, but an environment model of type RewardsAndCues gives (:reward, :cue). Without a map, the two must have the same observations in their attributes." simulate_for_test(
-            LearnsRewards(), RewardsAndCues(); environment_parameters=(;)
+        @test_throws "The attributes of a cognitive model of type Baseline{ByHand} have the observations (:reward,) as inputs, but an environment model of type ManyAttributesEnvironment{ByHand} gives (:reward, :cue, :bonus). Without a map, the two must have the same observations in their attributes." simulate_for_test(
+            Baseline(ByHand()),
+            ManyAttributesEnvironment(ByHand());
+            environment_parameters=(; REWARDS..., noise=0.2, bonus_size=0.5),
         )
         #A model with fewer observations in its attributes than the environment gives
-        @test_throws "The attributes of a cognitive model of type OnlyChooses have the observations () as inputs, but an environment model of type RewardsTrue gives (:reward,)." simulate_for_test(
-            OnlyChooses(),
-            RewardsTrue();
-            cognitive_parameters=(;),
-            environment_parameters=(;),
+        @test_throws "The attributes of a cognitive model of type WithoutInputs{ByHand} have the observations () as inputs, but an environment model of type BaselineEnvironment{ByHand} gives (:reward,)." simulate_for_test(
+            WithoutInputs(ByHand()), BaselineEnvironment(ByHand())
         )
         #A model which gives fewer actions than the inputs in the environment's attributes, or more
-        @test_throws "A cognitive model of type WithoutOutputs gives the actions (), but the attributes of an environment model of type RewardsTrue have (:choice,) as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
-            WithoutOutputs(), RewardsTrue(); environment_parameters=(;)
+        @test_throws "A cognitive model of type WithoutOutputs gives the actions (), but the attributes of an environment model of type BaselineEnvironment{ByHand} have (:choice,) as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
+            WithoutOutputs(), BaselineEnvironment(ByHand()); cognitive_parameters=LEARNING
         )
-        @test_throws "A cognitive model of type LearnsRewards gives the actions (:choice,), but the attributes of an environment model of type RewardsAndCues have () as inputs. Without a map, the two must have the same actions in their attributes." simulate_for_test(
-            LearnsRewards(),
-            RewardsAndCues();
-            environment_parameters=(;),
-            observation_map=NameMap(:reward),
+        @test_throws "A cognitive model of type Baseline{ByHand} gives the actions (:choice,), but the attributes of an environment model of type WithoutInputsEnvironment{ByHand} have () as inputs. Without a map, the two must have the same actions in their attributes." simulate_for_test(
+            Baseline(ByHand()), WithoutInputsEnvironment(ByHand())
         )
-        #The same names in another order fit
+        #The same names in another order fit, here of three of the actions of EveryFeature, which leaves out its response and
+        #its side
         @test CognitiveModeling.check_names_fit(
-            TwoChoices(),
-            RewardsWithProbability(),
+            EveryFeature(ByHand()),
+            EveryFeatureEnvironment(ByHand()),
             nothing,
-            NameMap(:second_choice => :choice),
+            NameMap(:option, :rating, :choice),
         ) === nothing
         #simulate! checks it too
         @test_throws "Without a map, the two must have the same observations in their attributes." simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             InstantiatedModel(OnlyCues(), (;));
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
         @test_throws "Without a map, the two must have the same actions in their attributes." simulate!(
             InstantiatedModel(WithoutOutputs(), LEARNING),
-            InstantiatedModel(RewardsTrue(), (;));
+            InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS);
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
         @test simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
-            InstantiatedModel(RewardsAndCues(), (;));
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
+            InstantiatedModel(OtherNamesEnvironment(ByHand()), REWARDS);
             who_starts=EnvironmentStarts(),
             n_steps=2,
-            observation_map=NameMap(:reward),
-            action_map=NameMap(),
+            observation_map=PAYOFF_AS_REWARD,
+            action_map=CHOICE_AS_LEVER,
         ) isa NamedTuple
     end
 
     @testset "Maps of names let a model and an environment with other names be used together" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            #The same simulation as with an environment which uses the model's names, for the cognitive model's part
+            #The same simulation as with an environment which uses the model's names, for the cognitive model's part:
+            #OtherNamesEnvironment is BaselineEnvironment under other names
             same_names = simulate_for_test(
-                LearnsRewards(),
-                RewardsTrue();
+                Baseline(ByHand()),
+                BaselineEnvironment(ByHand());
                 who_starts,
-                environment_parameters=(;),
                 rng=Xoshiro(5),
             )
             mapped = simulate_for_test(
-                LearnsRewards(),
-                PaysForLever();
+                Baseline(ByHand()),
+                OtherNamesEnvironment(ByHand());
                 who_starts,
-                environment_parameters=(;),
                 rng=Xoshiro(5),
                 observation_map=PAYOFF_AS_REWARD,
                 action_map=CHOICE_AS_LEVER,
             )
             @test isequal(cognitive_values(mapped), cognitive_values(same_names))
-            #The observations are returned as the model received them, without the cue, and the actions as it gave them
+            #The observations are returned as the model received them, without the number of the timestep, and the actions as
+            #it gave them
             @test keys(mapped.observations[end]) == (:reward,)
             @test keys(mapped.actions[end]) == (:choice,)
             #Under environment, they are as the environment gave and received them
-            @test keys(mapped.environment.observations[end]) == (:payoff, :cue)
+            @test keys(mapped.environment.observations[end]) == (:payoff, :timestep_number)
             @test keys(mapped.environment.actions[end]) == (:lever,)
             @test isequal(
                 [observation.payoff for observation in mapped.environment.observations],
@@ -2642,12 +2459,11 @@ end
         end
         #Without the maps, the two don't fit
         @test_throws "Without a map, the two must have the same observations in their attributes. A NameMap as observation_map can select and rename them." simulate_for_test(
-            LearnsRewards(), PaysForLever(); environment_parameters=(;)
+            Baseline(ByHand()), OtherNamesEnvironment(ByHand())
         )
         @test_throws "Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             observation_map=PAYOFF_AS_REWARD,
         )
     end
@@ -2655,80 +2471,74 @@ end
     @testset "A map selects what the receiver gets" begin
         #The model receives only the observations the map takes, and a map without names passes no actions on
         simulation = simulate_for_test(
-            LearnsRewards(),
-            RewardsAndCues();
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=[1.0, 0.0], cue=[1, 2]));
             n_steps=2,
             environment_parameters=(;),
             observation_map=NameMap(:reward),
             action_map=NameMap(),
         )
-        @test simulation.observations == fill((; reward=1.0), 2)
-        @test simulation.environment.observations == fill((; reward=1.0, cue=2), 2)
+        @test simulation.observations == [(; reward=1.0), (; reward=0.0)]
+        @test simulation.environment.observations ==
+            [(; reward=1.0, cue=1), (; reward=0.0, cue=2)]
         @test simulation.environment.actions == fill((;), 2)
-        #An environment receives only the actions the map takes, here the second of two
+        #An environment receives only the actions the map takes, here the second of two, which the means of the
+        #distributions of NoOutputBeforeFirstInputEnvironment reward exactly
         (; observations, actions) = simulate_for_test(
             TwoChoices(),
-            RewardsTrue();
+            NoOutputBeforeFirstInputEnvironment(Means());
             n_steps=3,
             cognitive_parameters=(;),
-            environment_parameters=(;),
             action_map=NameMap(:second_choice => :choice),
         )
-        @test [observation.reward for observation in observations] == [NoValue(), 1.0, 1.0]
+        @test [observation.reward for observation in observations] == [NoValue(), 0.8, 0.8]
         @test actions == fill((; first_choice=false, second_choice=true), 3)
         simulation = simulate_for_test(
             TwoChoices(),
-            RewardsTrue();
+            NoOutputBeforeFirstInputEnvironment(Means());
             n_steps=3,
             cognitive_parameters=(;),
-            environment_parameters=(;),
             action_map=NameMap(:first_choice => :choice),
         )
-        @test [observation.reward for observation in simulation.observations] == [NoValue(), 0.0, 0.0]
+        @test [observation.reward for observation in simulation.observations] == [NoValue(), 0.4, 0.4]
         @test simulation.environment.actions == fill((; choice=false), 3)
     end
 
     @testset "A map must take names that are given, and give exactly the names in the receiver's attributes" begin
-        @test_throws "The observation_map takes the observations (:prize,), but an environment model of type PaysForLever gives (:payoff, :cue). A map can only take observations the environment gives." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
+        @test_throws "The observation_map takes the observations (:prize,), but an environment model of type OtherNamesEnvironment{ByHand} gives (:payoff, :timestep_number). A map can only take observations the environment gives." simulate_for_test(
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             observation_map=NameMap(:prize => :reward),
             action_map=CHOICE_AS_LEVER,
         )
-        @test_throws "The observation_map gives the observations (:reward, :cue), but the attributes of a cognitive model of type LearnsRewards have (:reward,) as inputs. A map must give exactly the observations in the cognitive model's attributes." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
-            observation_map=NameMap(:payoff => :reward, :cue),
+        @test_throws "The observation_map gives the observations (:reward, :timestep_number), but the attributes of a cognitive model of type Baseline{ByHand} have (:reward,) as inputs. A map must give exactly the observations in the cognitive model's attributes." simulate_for_test(
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
+            observation_map=NameMap(:payoff => :reward, :timestep_number),
             action_map=CHOICE_AS_LEVER,
         )
-        @test_throws "The observation_map gives the observations (:cue,), but the attributes of a cognitive model of type LearnsRewards have (:reward,) as inputs." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
-            observation_map=NameMap(:cue),
+        @test_throws "The observation_map gives the observations (:timestep_number,), but the attributes of a cognitive model of type Baseline{ByHand} have (:reward,) as inputs." simulate_for_test(
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
+            observation_map=NameMap(:timestep_number),
             action_map=CHOICE_AS_LEVER,
         )
-        @test_throws "The action_map takes the actions (:press,), but a cognitive model of type LearnsRewards gives (:choice,). A map can only take actions the cognitive model gives." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
+        @test_throws "The action_map takes the actions (:press,), but a cognitive model of type Baseline{ByHand} gives (:choice,). A map can only take actions the cognitive model gives." simulate_for_test(
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             observation_map=PAYOFF_AS_REWARD,
             action_map=NameMap(:press => :lever),
         )
-        @test_throws "The action_map gives the actions (:choice,), but the attributes of an environment model of type PaysForLever have (:lever,) as inputs. A map must give exactly the actions in the environment's attributes." simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
+        @test_throws "The action_map gives the actions (:choice,), but the attributes of an environment model of type OtherNamesEnvironment{ByHand} have (:lever,) as inputs. A map must give exactly the actions in the environment's attributes." simulate_for_test(
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             observation_map=PAYOFF_AS_REWARD,
             action_map=NameMap(:choice),
         )
         #Only a NameMap is taken
         @test_throws TypeError simulate_for_test(
-            LearnsRewards(),
-            PaysForLever();
-            environment_parameters=(;),
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             observation_map=(:payoff => :reward,),
         )
     end
@@ -2736,11 +2546,11 @@ end
     @testset "Maps keep the return type known and the loop free of allocations, and their checks cost nothing" begin
         rng = Xoshiro(1)
         run_simulation(who_starts, n_steps) = simulate(
-            LearnsRewards(),
-            PaysWithProbability();
+            Baseline(ByHand()),
+            OtherNamesEnvironment(ByHand());
             who_starts,
             n_steps,
-            cognitive_parameters=LEARNING,
+            cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
             cognitive_save_history=SaveHistory(SaveEverything()),
@@ -2754,9 +2564,10 @@ end
                 who_starts, 10
             )
             run_simulation(who_starts, 10)
-            #As without maps for the cognitive model: 8 bytes each for an observation, an action distribution and a state, 1 for an
-            #action, and a byte each for which type they have. The environment's observations and observation distributions have the
-            #cue too, 16 bytes each, and its actions 1
+            #As without maps for the cognitive model: 8 bytes each for an action distribution and a state, 1 each for an
+            #observation and an action, and a byte each for which type they have. The environment's observations and observation
+            #distributions have the number of the timestep too, 16 bytes each with a byte for which type they have, its actions 2
+            #bytes and its state 8
             extra_bytes =
                 @allocated(run_simulation(who_starts, 20_000)) -
                 @allocated(run_simulation(who_starts, 10_000))
@@ -2764,8 +2575,8 @@ end
         end
         @test folds(
             CognitiveModeling.check_names_fit,
-            LearnsRewards,
-            PaysForLever,
+            Baseline{ByHand},
+            OtherNamesEnvironment{ByHand},
             typeof(PAYOFF_AS_REWARD),
             typeof(CHOICE_AS_LEVER),
         )
@@ -2773,10 +2584,14 @@ end
 
     @testset "With maps, each history has the names of its own side" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(
-            PaysForLever(), (;); save_history=SaveHistory(SaveEverything())
+            OtherNamesEnvironment(ByHand()),
+            REWARDS;
+            save_history=SaveHistory(SaveEverything()),
         )
         simulation = simulate!(
             agent,
@@ -2794,10 +2609,11 @@ end
             agent.history.output_distributions[1] === (; choice=BeforeFirstTimestep())
         @test all(observation -> keys(observation) == (:reward,), agent.history.inputs)
         @test all(action -> keys(action) == (:choice,), agent.history.outputs)
-        #The environment's are the same values, under its own names, with the cue the model didn't receive, and are the ones
-        #returned under environment
+        #The environment's are the same values, under its own names, with the number of the timestep the model didn't receive,
+        #and are the ones returned under environment
         @test all(
-            observation -> keys(observation) == (:payoff, :cue), environment.history.outputs
+            observation -> keys(observation) == (:payoff, :timestep_number),
+            environment.history.outputs,
         )
         @test all(action -> keys(action) == (:lever,), environment.history.inputs)
         @test isequal(
@@ -2810,9 +2626,9 @@ end
         @test environment.history.output_distributions[2:end] ==
             simulation.environment.observation_distributions
         @test environment.history.output_distributions[1] ===
-            (; payoff=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
+            (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep())
         #Where they are left for the next simulation, each side has its own names too
-        @test keys(environment.previous_output) == (:payoff, :cue)
+        @test keys(environment.previous_output) == (:payoff, :timestep_number)
         @test keys(agent.previous_output) == (:choice,)
         @test simulate!(
             agent,
@@ -2828,18 +2644,20 @@ end
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=2,
-            observation_map=NameMap(:cue),
+            observation_map=NameMap(:timestep_number),
             action_map=CHOICE_AS_LEVER,
         )
     end
 
     @testset "It stops when the environment's stopping criterion is met, and the environment must then be reset" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(
-            EndsAfterTimesteps(),
-            (; last_timestep=4);
+            WithStoppingCriterionEnvironment(ByHand()),
+            (; REWARDS..., last_timestep=4);
             save_history=SaveHistory(SaveEverything()),
         )
         #Two timesteps run in full, and the next call stops after the two that are left
@@ -2862,7 +2680,7 @@ end
         @test environment.history.timestep_sizes == agent.history.timestep_sizes
         @test length(environment.history.states) == 5
         #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of an environment model of type EndsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
+        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
         @test length(agent.history.states) == 5
@@ -2884,41 +2702,46 @@ end
     end
 
     @testset "It stops when the agent's stopping criterion is met, and the agent must then be reset" begin
+        #WithStoppingCriterion ends once its expected reward is above 0.8, which rewards of 1 take a learning rate of a quarter
+        #to on the fourth timestep, at 0.841796875
         agent = InstantiatedModel(
-            StopsAfterTimesteps(),
-            (; last_timestep=4);
+            WithStoppingCriterion(ByHand()),
+            (; learning_rate=0.25, inverse_temperature=2.0);
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(
-            RewardsWithProbability(), REWARDS; save_history=SaveHistory(SaveEverything())
+            FixedObservationsEnvironment((; reward=fill(1.0, 10))),
+            (;);
+            save_history=SaveHistory(SaveEverything()),
+        )
+        simulate_steps!(n_steps) = simulate!(
+            agent,
+            environment;
+            who_starts=EnvironmentStarts(),
+            n_steps,
+            action_map=NameMap(),
         )
         #Two timesteps run in full, and the next call stops after the two that are left
-        @test length(
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2).actions
-        ) == 2
-        simulation = simulate!(
-            agent, environment; who_starts=EnvironmentStarts(), n_steps=10
-        )
+        @test length(simulate_steps!(2).actions) == 2
+        simulation = simulate_steps!(10)
         @test all(vector -> length(vector) == 2, saved_vectors(simulation))
-        @test agent.state == (; n_timesteps=4)
+        @test agent.state == (; expected_reward=0.841796875)
         @test length(agent.history.states) == length(environment.history.states) == 5
         #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of a cognitive model of type StopsAfterTimesteps is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
-            agent, environment; who_starts=EnvironmentStarts(), n_steps=10
+        @test_throws "The stopping criterion of a cognitive model of type WithStoppingCriterion{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_steps!(
+            10
         )
         reset!(agent)
-        @test length(
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10).actions,
-        ) == 4
+        @test length(simulate_steps!(10).actions) == 4
     end
 
     @testset "An error in a timestep method gives the same errors as in simulate" begin
         agent = InstantiatedModel(ReturnsTuple(), (;))
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(ReturnsObservation(), (;))
         @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
@@ -2928,7 +2751,7 @@ end
 
 @testset "simulate! on a single input" begin
     @testset "It updates the agent and returns the sampled action" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         action = simulate!(agent, (; reward=1.0); rng=Xoshiro(1))
         @test action isa @NamedTuple{choice::Bool}
         @test agent.previous_output === action
@@ -2938,17 +2761,18 @@ end
     @testset "Several in a row give the same as a simulation with the same observations" begin
         rewards = [1.0, 0.0, 1.0, 1.0]
         one_simulation = simulate(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=rewards));
             who_starts=EnvironmentStarts(),
             n_steps=4,
-            cognitive_parameters=LEARNING,
-            environment_parameters=(; rewards),
+            cognitive_parameters=BASELINE_PARAMETERS,
+            environment_parameters=(;),
+            action_map=NameMap(),
             rng=Xoshiro(9),
             cognitive_save_history=SaveHistory(SaveEverything()),
         )
 
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         rng = Xoshiro(9)
         actions = [simulate!(agent, (; reward); rng) for reward in rewards]
 
@@ -2960,7 +2784,7 @@ end
     @testset "The same seed gives the same action" begin
         action_with_seed(seed) = [
             simulate!(
-                InstantiatedModel(LearnsRewards(), LEARNING),
+                InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
                 (; reward=1.0);
                 rng=Xoshiro(seed),
             ) for _ in 1:20
@@ -2970,14 +2794,14 @@ end
     end
 
     @testset "An observation can be NoValue" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         simulate!(agent, (; reward=NoValue()))
         @test agent.state == (; expected_reward=0.5)
     end
 
     @testset "The input must be a NamedTuple with the inputs in the model's attributes, and can have more" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type LearnsRewards, (:reward,)." simulate!(
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate!(
             agent, 1.0
         )
         @test_throws "must be a NamedTuple with the inputs" simulate!(agent, NoValue())
@@ -2985,14 +2809,16 @@ end
         @test simulate!(agent, (; reward=1.0, cue=1.0)) isa NamedTuple
         @test agent.state == (; expected_reward=0.75)
         #A model without inputs takes an empty NamedTuple
-        @test simulate!(InstantiatedModel(OnlyChooses(), (;)), (;)) isa NamedTuple
+        @test simulate!(
+            InstantiatedModel(WithoutInputs(ByHand()), BASELINE_PARAMETERS), (;)
+        ) isa NamedTuple
         #The check costs nothing when the types are known
         JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_timestep(
-            LearnsRewards(),
+            Baseline(ByHand()),
             (; reward=1.0, cue=1.0),
             (; expected_reward=0.5),
             (; choice=NoValue()),
-            LEARNING,
+            BASELINE_PARAMETERS,
             1,
             Xoshiro(1),
             SaveHistory(),
@@ -3000,20 +2826,23 @@ end
     end
 
     @testset "An environment model can be run on a single input too, which is an action" begin
+        #BaselineEnvironment, with the means of its distributions, gives the reward for a choice exactly
         environment = InstantiatedModel(
-            RewardsWithDefaults(), (; bias=0.5); save_history=SaveHistory(SaveEverything())
+            BaselineEnvironment(Means()),
+            REWARDS;
+            save_history=SaveHistory(SaveEverything()),
         )
         observation = simulate!(environment, (; choice=true); rng=Xoshiro(1))
-        @test observation === (; reward=1.5)
+        @test observation === (; reward=0.8)
         @test environment.previous_output === observation
-        @test environment.state === (; last_choice=true)
+        @test environment.state === (; n_timesteps=1)
         @test environment.history.inputs ==
             [(; choice=BeforeFirstTimestep()), (; choice=true)]
         @test environment.history.outputs ==
-            [(; reward=BeforeFirstTimestep()), (; reward=1.5)]
+            [(; reward=BeforeFirstTimestep()), (; reward=0.8)]
         @test environment.history.output_distributions ==
-            [(; reward=BeforeFirstTimestep()), (; reward=Deterministic(1.5))]
-        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type RewardsWithDefaults, (:choice,)." simulate!(
+            [(; reward=BeforeFirstTimestep()), (; reward=Deterministic(0.8))]
+        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type BaselineEnvironment{Means}, (:choice,)." simulate!(
             environment, (; cue=1)
         )
     end
@@ -3030,8 +2859,14 @@ end
     @testset "It works without actions, and with several actions" begin
         @test simulate!(InstantiatedModel(WithoutOutputs(), LEARNING), (; reward=1.0)) ===
             (;)
-        @test simulate!(InstantiatedModel(TwoChoices(), (;)), (; reward=1.0)) ===
-            (; first_choice=false, second_choice=true)
+        #ManyAttributes chooses, rates its confidence and reports the last reward, which the means of the distributions give
+        #exactly
+        @test simulate!(
+            InstantiatedModel(
+                ManyAttributes(Means()), (; BASELINE_PARAMETERS..., noise=0.2)
+            ),
+            (; reward=1.0, cue=0.5, bonus=0.0),
+        ) === (; choice=inv(1 + exp(-0.5)), confidence=0.75, report=1.0)
     end
 
     @testset "An error in the timestep method gives the same errors as in simulate" begin
@@ -3047,42 +2882,47 @@ end
 @testset "simulate on a single input" begin
     @testset "It returns the sampled output and the new state, starting from the initial state by default" begin
         action, cognitive_state = simulate(
-            LearnsRewards(), (; reward=1.0); parameters=LEARNING, rng=Xoshiro(1)
+            Baseline(ByHand()),
+            (; reward=1.0);
+            parameters=BASELINE_PARAMETERS,
+            rng=Xoshiro(1),
         )
         @test action isa @NamedTuple{choice::Bool}
         @test cognitive_state == (; expected_reward=0.75)
         #The same as simulate! of an agent
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         @test simulate!(agent, (; reward=1.0); rng=Xoshiro(1)) === action
         @test agent.state === cognitive_state
         #An environment model runs on an action in the same way
-        @test simulate(RewardsWithDefaults(), (; choice=true); parameters=(; bias=0.5)) ===
-            ((; reward=1.5), (; last_choice=true))
+        @test simulate(
+            BaselineEnvironment(Means()), (; choice=true); parameters=REWARDS
+        ) === ((; reward=0.8), (; n_timesteps=1))
     end
 
     @testset "Passing the state and the output on gives the same as a simulation with the same observations" begin
         rewards = [1.0, 0.0, 1.0, 1.0]
         one_simulation = simulate(
-            LearnsRewards(),
-            FixedRewards();
+            Baseline(ByHand()),
+            FixedObservationsEnvironment((; reward=rewards));
             who_starts=EnvironmentStarts(),
             n_steps=4,
-            cognitive_parameters=LEARNING,
-            environment_parameters=(; rewards),
+            cognitive_parameters=BASELINE_PARAMETERS,
+            environment_parameters=(;),
+            action_map=NameMap(),
             rng=Xoshiro(9),
             cognitive_save_history=SaveHistory(SaveEverything()),
         )
 
         rng = Xoshiro(9)
         action, cognitive_state = simulate(
-            LearnsRewards(), (; reward=rewards[1]); parameters=LEARNING, rng
+            Baseline(ByHand()), (; reward=rewards[1]); parameters=BASELINE_PARAMETERS, rng
         )
         actions = [action]
         for reward in rewards[2:end]
             action, cognitive_state = simulate(
-                LearnsRewards(),
+                Baseline(ByHand()),
                 (; reward);
-                parameters=LEARNING,
+                parameters=BASELINE_PARAMETERS,
                 previous_state=cognitive_state,
                 previous_output=action,
                 rng,
@@ -3096,6 +2936,7 @@ end
     end
 
     @testset "It fills in the default parameters, and checks the names and the input" begin
+        #HasDefaults starts from a parameter with a default, which no example model does
         _, cognitive_state = simulate(
             HasDefaults(),
             (; reward=1.0);
@@ -3104,29 +2945,31 @@ end
         @test cognitive_state == (; expected_reward=0.9)
         @test simulate(HasDefaults(), (; reward=1.0); parameters=(;))[2].expected_reward ≈
             0.55
-        @test_throws "The parameters are named (:learning_rate, :initial_value, :noise), but the parameters in the attributes of a cognitive model of type HasDefaults" simulate(
-            HasDefaults(), (; reward=1.0); parameters=(; noise=0.1)
+        @test_throws "The parameters are named (:inverse_temperature, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{ByHand}" simulate(
+            WithDefaultParameters(ByHand()), (; reward=1.0); parameters=(; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type LearnsRewards" simulate(
-            LearnsRewards(),
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type Baseline{ByHand}" simulate(
+            Baseline(ByHand()),
             (; reward=1.0);
-            parameters=LEARNING,
+            parameters=BASELINE_PARAMETERS,
             previous_state=(; value=0.5),
         )
         @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs" simulate(
-            LearnsRewards(),
+            Baseline(ByHand()),
             (; reward=1.0);
-            parameters=LEARNING,
+            parameters=BASELINE_PARAMETERS,
             previous_output=(; bet=true),
         )
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type LearnsRewards, (:reward,)." simulate(
-            LearnsRewards(), 1.0; parameters=LEARNING
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate(
+            Baseline(ByHand()), 1.0; parameters=BASELINE_PARAMETERS
         )
         #An input can have more than the inputs in the model's attributes, and an observation can be NoValue
-        @test simulate(LearnsRewards(), (; reward=1.0, cue=2); parameters=LEARNING)[2] ==
-            (; expected_reward=0.75)
-        @test simulate(LearnsRewards(), (; reward=NoValue()); parameters=LEARNING)[2] ==
-            (; expected_reward=0.5)
+        @test simulate(
+            Baseline(ByHand()), (; reward=1.0, cue=2); parameters=BASELINE_PARAMETERS
+        )[2] == (; expected_reward=0.75)
+        @test simulate(
+            Baseline(ByHand()), (; reward=NoValue()); parameters=BASELINE_PARAMETERS
+        )[2] == (; expected_reward=0.5)
     end
 
     @testset "The model gets the size of the timestep, and the same seed gives the same action" begin
@@ -3141,9 +2984,9 @@ end
         )[2] === (; received_timestep_size=0.5)
         actions_with_seed(seed) = [
             simulate(
-                LearnsRewards(),
+                Baseline(ByHand()),
                 (; reward=1.0);
-                parameters=LEARNING,
+                parameters=BASELINE_PARAMETERS,
                 rng=Xoshiro(seed + i),
             )[1] for i in 1:20
         ]
@@ -3154,9 +2997,9 @@ end
     @testset "The return type is known, and nothing is allocated" begin
         rng = Xoshiro(1)
         simulate_one_timestep(cognitive_state, action) = simulate(
-            LearnsRewards(),
+            Baseline(ByHand()),
             (; reward=1.0);
-            parameters=LEARNING,
+            parameters=BASELINE_PARAMETERS,
             previous_state=cognitive_state,
             previous_output=action,
             rng,
@@ -3170,7 +3013,9 @@ end
             0
         #The first timestep, from the defaults, is known too
         @test @inferred(
-            simulate(LearnsRewards(), (; reward=1.0); parameters=LEARNING, rng)
+            simulate(
+                Baseline(ByHand()), (; reward=1.0); parameters=BASELINE_PARAMETERS, rng
+            )
         ) isa Tuple
     end
 end
@@ -3178,7 +3023,9 @@ end
 @testset "The history of an agent" begin
     @testset "It starts where the agent starts" begin
         history = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         ).history
         @test history isa CognitiveModeling.ModelHistory
         @test history.inputs == [(; reward=BeforeFirstTimestep())]
@@ -3190,8 +3037,8 @@ end
         @test history.states isa Vector{Any} && history.timestep_sizes isa Vector{Any}
         #Also if the state and the previous output are given
         history = InstantiatedModel(
-            LearnsRewards(),
-            LEARNING,
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS,
             (; expected_reward=0.25),
             (; choice=true);
             save_history=SaveHistory(SaveEverything()),
@@ -3204,21 +3051,28 @@ end
 
     @testset "It starts empty when the initial timestep values aren't saved, and then has one element for each timestep" begin
         save_history = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
-        agent = InstantiatedModel(LearnsRewards(), LEARNING; save_history)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS; save_history)
         environment = InstantiatedModel(
-            FixedRewards(), (; rewards=[1.0, 0.0]); save_history
+            FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;); save_history
         )
         @test isempty(agent.history.states) &&
             isempty(agent.history.timestep_sizes) &&
             isempty(environment.history.states)
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2)
+        simulate!(
+            agent,
+            environment;
+            who_starts=EnvironmentStarts(),
+            n_steps=2,
+            action_map=NameMap(),
+        )
         simulate!(agent, (; reward=1.0); timestep_size=0.5)
         @test agent.history.states == [
             (; expected_reward=0.75), (; expected_reward=0.375), (; expected_reward=0.6875)
         ]
         @test agent.history.inputs == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]
         @test agent.history.timestep_sizes == [1, 1, 0.5]
-        @test environment.history.states == [(; n_timesteps=1), (; n_timesteps=2)]
+        @test environment.history.states ==
+            [(; n_observations_given=1), (; n_observations_given=2)]
         @test environment.history.outputs == [(; reward=1.0), (; reward=0.0)]
         @test environment.history.output_distributions ==
             [(; reward=Deterministic(1.0)), (; reward=Deterministic(0.0))]
@@ -3228,21 +3082,29 @@ end
     end
 
     @testset "Nothing is saved by default, and a SaveHistory selects what is" begin
-        @test InstantiatedModel(LearnsRewards(), LEARNING).save_history === SaveHistory()
-        @test InstantiatedModel(
-            LearnsRewards(), LEARNING, (; expected_reward=0.25), (; choice=NoValue())
-        ).save_history === SaveHistory()
-        @test InstantiatedModel(RewardsWithProbability(), REWARDS).save_history ===
+        @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).save_history ===
             SaveHistory()
         @test InstantiatedModel(
-            RewardsWithProbability(), REWARDS, (;), (; reward=NoValue())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS,
+            (; expected_reward=0.25),
+            (; choice=NoValue()),
+        ).save_history === SaveHistory()
+        @test InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS).save_history ===
+            SaveHistory()
+        @test InstantiatedModel(
+            BaselineEnvironment(ByHand()), REWARDS, (; n_timesteps=0), (; reward=NoValue())
         ).save_history === SaveHistory()
         save_history = SaveHistory(; states=:n_timesteps)
-        agent = InstantiatedModel(LearnsAndCounts(), LEARNING; save_history)
+        agent = InstantiatedModel(
+            DependsOnPreviousOutput(ByHand()),
+            DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS;
+            save_history,
+        )
         @test agent.save_history === save_history
         @test InstantiatedModel(
-            LearnsAndCounts(),
-            LEARNING,
+            DependsOnPreviousOutput(ByHand()),
+            DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             (; expected_reward=0.25, n_timesteps=0),
             (; choice=NoValue());
             save_history,
@@ -3255,7 +3117,7 @@ end
         #It gets what is selected on a single input and with an environment, which selects its own
         simulate!(agent, (; reward=1.0))
         environment = InstantiatedModel(
-            FixedRewards(), (; rewards=[1.0, 0.0]); save_history=SaveHistory()
+            BaselineEnvironment(ByHand()), REWARDS; save_history=SaveHistory()
         )
         @test environment.save_history === SaveHistory()
         simulation = simulate!(
@@ -3273,39 +3135,49 @@ end
     end
 
     @testset "A history can only select names in the model's attributes" begin
-        @test_throws "The SaveHistory selects the inputs (:reward,), but the inputs in the attributes of a cognitive model of type OnlyChooses are (). A history can only select names in the model's attributes." InstantiatedModel(
-            OnlyChooses(), (;); save_history=SaveHistory(; inputs=:reward)
+        @test_throws "The SaveHistory selects the inputs (:reward,), but the inputs in the attributes of a cognitive model of type WithoutInputs{ByHand} are (). A history can only select names in the model's attributes." InstantiatedModel(
+            WithoutInputs(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(; inputs=:reward),
         )
-        @test_throws "The SaveHistory selects the outputs (:bet,), but the outputs in the attributes of a cognitive model of type LearnsRewards are (:choice,)." InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(; outputs=:bet)
+        @test_throws "The SaveHistory selects the outputs (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,)." InstantiatedModel(
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(; outputs=:bet),
         )
         #For an environment, the inputs are the actions it receives, and the outputs the observations it gives
-        @test_throws "The SaveHistory selects the inputs (:choice,), but the inputs in the attributes of an environment model of type RewardsAndCues are ()." InstantiatedModel(
-            RewardsAndCues(), (;); save_history=SaveHistory(; inputs=:choice)
+        @test_throws "The SaveHistory selects the inputs (:choice,), but the inputs in the attributes of an environment model of type WithoutInputsEnvironment{ByHand} are ()." InstantiatedModel(
+            WithoutInputsEnvironment(ByHand()),
+            REWARDS;
+            save_history=SaveHistory(; inputs=:choice),
         )
-        @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type FixedRewards are (:reward,)" InstantiatedModel(
-            FixedRewards(), (; rewards=[1.0]); save_history=SaveHistory(; outputs=:cue)
+        @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
+            BaselineEnvironment(ByHand()), REWARDS; save_history=SaveHistory(; outputs=:cue)
         )
-        @test_throws "The SaveHistory selects the output distributions (:cue,), but the outputs in the attributes of an environment model of type FixedRewards are (:reward,)" InstantiatedModel(
-            FixedRewards(),
-            (; rewards=[1.0]);
+        @test_throws "The SaveHistory selects the output distributions (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
+            BaselineEnvironment(ByHand()),
+            REWARDS;
             save_history=SaveHistory(; output_distributions=:cue),
         )
         #The states are checked too, since prepare_state_for_saving returns a state with the names in the model's attributes
-        @test_throws "The SaveHistory selects the states (:first_value,), but the states in the attributes of a cognitive model of type LearnsInPlace" InstantiatedModel(
-            LearnsInPlace(deepcopy),
-            LEARNING;
+        @test_throws "The SaveHistory selects the states (:first_value,), but the states in the attributes of a cognitive model of type StateChangedInPlaceSavedWithDeepcopy{ByHand}" InstantiatedModel(
+            StateChangedInPlaceSavedWithDeepcopy(ByHand()),
+            BASELINE_PARAMETERS;
             save_history=SaveHistory(; states=:first_value),
         )
         #Everything can always be selected, and an input with more than the inputs in the model's attributes is saved in full
         agent = InstantiatedModel(
-            OnlyChooses(), (;); save_history=SaveHistory(SaveEverything())
+            WithoutInputs(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
         simulate!(agent, (; cue=1.0))
         @test agent.history.inputs == [(;), (; cue=1.0)]
         #A selected input is kept from an input with more
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(; inputs=:reward)
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(; inputs=:reward),
         )
         simulate!(agent, (; reward=1.0, cue=1.0))
         @test agent.history.inputs == [(; reward=BeforeFirstTimestep()), (; reward=1.0)]
@@ -3314,9 +3186,11 @@ end
     @testset "It adds what simulate! returns" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             agent = InstantiatedModel(
-                LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+                Baseline(ByHand()),
+                BASELINE_PARAMETERS;
+                save_history=SaveHistory(SaveEverything()),
             )
-            environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+            environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
             rng = Xoshiro(9)
             first_part = simulate!(agent, environment; who_starts, n_steps=3, rng)
             second_part = simulate!(agent, environment; who_starts, n_steps=2, rng)
@@ -3341,7 +3215,9 @@ end
 
     @testset "It adds what happens on a single input" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
         first_action = simulate!(agent, (; reward=1.0))
         second_action = simulate!(agent, (; reward=NoValue()))
@@ -3352,8 +3228,8 @@ end
             [(; choice=BeforeFirstTimestep()), first_action, second_action]
         @test agent.history.output_distributions == [
             (; choice=BeforeFirstTimestep()),
-            (; choice=ChooseWithProbability(0.75)),
-            (; choice=ChooseWithProbability(0.75)),
+            (; choice=ExampleModels.BernoulliByHand(baseline_choice_probability(0.75))),
+            (; choice=ExampleModels.BernoulliByHand(baseline_choice_probability(0.75))),
         ]
         @test agent.history.states ==
             [(; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.75)]
@@ -3361,9 +3237,11 @@ end
 
     @testset "A single input and an environment can be used on the same agent" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate!(agent, (; reward=1.0))
         simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         simulate!(agent, (; reward=0.0))
@@ -3376,8 +3254,8 @@ end
     end
 
     @testset "It stays empty by default" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate!(agent, (; reward=1.0))
         simulation = simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3
@@ -3393,18 +3271,28 @@ end
     end
 
     @testset "It keeps the values of a state changed in place, with a method which copies it" begin
-        for prepare_state in (deepcopy, state -> (; values=copy(state.values)))
+        #StateChangedInPlaceSavedWithDeepcopy copies its state with deepcopy, and StateChangedInPlace copies the vector in it
+        for model in
+            (StateChangedInPlaceSavedWithDeepcopy(ByHand()), StateChangedInPlace(ByHand()))
             agent = InstantiatedModel(
-                LearnsInPlace(prepare_state),
-                LEARNING;
-                save_history=SaveHistory(SaveEverything()),
+                model, BASELINE_PARAMETERS; save_history=SaveHistory(SaveEverything())
             )
-            environment = InstantiatedModel(FixedRewards(), (; rewards=[1.0, 0.0]))
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2)
+            environment = InstantiatedModel(
+                FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;)
+            )
+            simulate!(
+                agent,
+                environment;
+                who_starts=EnvironmentStarts(),
+                n_steps=2,
+                action_map=NameMap(),
+            )
             simulate!(agent, (; reward=1.0))
             #The initial state is copied by the same method
-            @test [state.values[1] for state in agent.history.states] == [0.5, 0.75, 0.375, 0.6875]
-            @test allunique(objectid(state.values) for state in agent.history.states)
+            @test [state.expected_reward[1] for state in agent.history.states] == [0.5, 0.75, 0.375, 0.6875]
+            @test allunique(
+                objectid(state.expected_reward) for state in agent.history.states
+            )
         end
     end
 
@@ -3427,9 +3315,11 @@ end
 
     @testset "Later simulations don't change it" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
-        environment = InstantiatedModel(RewardsWithProbability(), REWARDS)
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         states_so_far = copy(agent.history.states)
         simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
@@ -3494,12 +3384,15 @@ end
     end
 
     @testset "The environment has a history too, with the same observations and actions as its outputs and inputs" begin
+        #BaselineEnvironment, with the means of its distributions, gives the reward for each choice exactly
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(
-            FixedRewards(),
-            (; rewards=[1.0, 0.0, 1.0]);
+            BaselineEnvironment(Means()),
+            REWARDS;
             save_history=SaveHistory(SaveEverything()),
         )
         @test environment.history isa CognitiveModeling.ModelHistory
@@ -3507,7 +3400,9 @@ end
         #It starts with the actions in its attributes as inputs, which an environment can have none of
         @test environment.history.inputs == [(; choice=BeforeFirstTimestep())]
         @test InstantiatedModel(
-            RewardsAndCues(), (;); save_history=SaveHistory(SaveEverything())
+            WithoutInputsEnvironment(ByHand()),
+            REWARDS;
+            save_history=SaveHistory(SaveEverything()),
         ).history.inputs == [(;)]
         @test environment.history.states == [(; n_timesteps=0)]
         #Before the first timestep, it has given nothing to sample the observations from
@@ -3519,21 +3414,22 @@ end
         @test environment.history.inputs[2:end] == agent.history.outputs[2:end]
         @test environment.history.states ==
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2), (; n_timesteps=3)]
-        #The observation distributions are what it gave its observations to be sampled from
+        #The observation distributions are what it gave its observations to be sampled from: a reward of a half for no choice,
+        #before the first, and then the reward for each choice
         @test environment.history.output_distributions == [
             (; reward=BeforeFirstTimestep()),
-            (; reward=Deterministic(1.0)),
-            (; reward=Deterministic(0.0)),
-            (; reward=Deterministic(1.0)),
+            (; reward=Deterministic(0.5)),
+            (; reward=Deterministic(reward_for_choice(agent.history.outputs[2].choice))),
+            (; reward=Deterministic(reward_for_choice(agent.history.outputs[3].choice))),
         ]
         #Its selection is its own
         environment = InstantiatedModel(
-            FixedRewards(),
-            (; rewards=[1.0, 0.0, 1.0]);
+            BaselineEnvironment(ByHand()),
+            REWARDS;
             save_history=SaveHistory(; states=:n_timesteps),
         )
         simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=2,
@@ -3544,9 +3440,9 @@ end
         @test environment.history.states ==
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2)]
         #It stays empty by default
-        environment = InstantiatedModel(FixedRewards(), (; rewards=[1.0, 0.0, 1.0]))
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=2,
@@ -3561,9 +3457,11 @@ end
 @testset "reset!" begin
     @testset "An agent goes back to where a new one starts, with a new history" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS;
+            save_history=SaveHistory(SaveEverything()),
         )
-        environment = InstantiatedModel(RewardsTrue(), (;))
+        environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         first_run = simulate!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=5, rng=Xoshiro(2)
         )
@@ -3571,7 +3469,7 @@ end
         @test reset!(agent) === agent
         @test agent.state === (; expected_reward=0.5)
         @test agent.previous_output === (; choice=BeforeFirstTimestep())
-        @test agent.parameters === LEARNING
+        @test agent.parameters === BASELINE_PARAMETERS
         #The history is a new one, and the one from before is as it was
         @test agent.history !== history
         @test length(history.states) == 6
@@ -3595,7 +3493,7 @@ end
 
     @testset "An agent keeps its parameters and its selection, and gets a new state object" begin
         agent = InstantiatedModel(
-            HasDefaults(),
+            WithDefaultParameters(ByHand()),
             (; learning_rate=0.3);
             save_history=SaveHistory(; states=SaveEverything()),
         )
@@ -3606,12 +3504,14 @@ end
         @test agent.save_history === SaveHistory(; states=SaveEverything())
         @test agent.history.inputs == [(;)] && length(agent.history.states) == 1
         #A state that is changed in place is made again
-        agent = InstantiatedModel(LearnsInPlace(deepcopy), LEARNING)
-        values = agent.state.values
+        agent = InstantiatedModel(
+            StateChangedInPlaceSavedWithDeepcopy(ByHand()), BASELINE_PARAMETERS
+        )
+        expected_reward_vector = agent.state.expected_reward
         simulate!(agent, (; reward=1.0))
         reset!(agent)
-        @test agent.state.values == [0.5, 0.5]
-        @test agent.state.values !== values
+        @test agent.state.expected_reward == [0.5]
+        @test agent.state.expected_reward !== expected_reward_vector
         #A history that saves nothing stays empty
         @test isempty(agent.history.inputs) &&
             isempty(agent.history.outputs) &&
@@ -3620,7 +3520,10 @@ end
 
     @testset "An agent that was given a state of its own goes back to the initial state" begin
         agent = InstantiatedModel(
-            LearnsRewards(), LEARNING, (; expected_reward=0.25), (; choice=true)
+            Baseline(ByHand()),
+            BASELINE_PARAMETERS,
+            (; expected_reward=0.25),
+            (; choice=true),
         )
         reset!(agent)
         @test agent.state === (; expected_reward=0.5)
@@ -3629,34 +3532,38 @@ end
 
     @testset "An environment goes back to where a new one starts, with a new history" begin
         environment = InstantiatedModel(
-            FixedRewards(),
-            (; rewards=[1.0, 0.0, 1.0]);
+            FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0])),
+            (;);
             save_history=SaveHistory(SaveEverything()),
         )
         simulate!(
-            InstantiatedModel(LearnsRewards(), LEARNING),
+            InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=2,
+            action_map=NameMap(),
         )
         history = environment.history
         @test reset!(environment) === environment
-        @test environment.state === (; n_timesteps=0)
+        @test environment.state === (; n_observations_given=0)
         @test environment.previous_output === (; reward=BeforeFirstTimestep())
         @test environment.history !== history
         @test length(history.states) == 3
         @test environment.history.outputs == [(; reward=BeforeFirstTimestep())]
-        @test environment.history.inputs == [(; choice=BeforeFirstTimestep())]
+        @test environment.history.inputs == [(;)]
         @test environment.history.output_distributions == [(; reward=BeforeFirstTimestep())]
-        @test environment.history.states == [(; n_timesteps=0)]
+        @test environment.history.states == [(; n_observations_given=0)]
         #It can then be simulated from the start again
         (; observations) = simulate!(
             InstantiatedModel(
-                LearnsRewards(), LEARNING; save_history=SaveHistory(SaveEverything())
+                Baseline(ByHand()),
+                BASELINE_PARAMETERS;
+                save_history=SaveHistory(SaveEverything()),
             ),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=3,
+            action_map=NameMap(),
         )
         @test observations == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]
     end
@@ -3664,9 +3571,11 @@ end
 
 @testset "An instantiated model counts its timesteps" begin
     @testset "Both forms of simulate! add to n_timesteps, whatever is saved, and reset! sets it to 0" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(
-            RewardsTrue(), (;); save_history=SaveHistory(SaveEverything())
+            BaselineEnvironment(ByHand()),
+            REWARDS;
+            save_history=SaveHistory(SaveEverything()),
         )
         @test agent.n_timesteps == environment.n_timesteps == 0
         simulate!(agent, (; reward=1.0))
@@ -3679,8 +3588,10 @@ end
     end
 
     @testset "Only the timesteps that ran are counted when a stopping criterion ends them" begin
-        agent = InstantiatedModel(LearnsRewards(), LEARNING)
-        environment = InstantiatedModel(EndsAfterTimesteps(), (; last_timestep=4))
+        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
+        environment = InstantiatedModel(
+            WithStoppingCriterionEnvironment(ByHand()), (; REWARDS..., last_timestep=4)
+        )
         simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
         @test agent.n_timesteps == environment.n_timesteps == 4
     end
