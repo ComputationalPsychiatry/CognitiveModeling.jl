@@ -65,7 +65,7 @@ const EXAMPLE_PAIRS = [
         model=ContinuousOutput,
         environment=ContinuousInputEnvironment,
         cognitive_parameters=(; learning_rate=0.3, noise=0.2),
-        environment_parameters=(; reward_noise=0.2),
+        environment_parameters=(; reward_scale=0.8, reward_noise=0.2),
     ),
     (;
         name="SymbolOutput",
@@ -272,7 +272,7 @@ const EXAMPLE_PAIRS = [
             rate=2.0,
         ),
         environment_parameters=(;
-            reward_probability=0.8,
+            reward_probability=0.7,
             payoffs=[0.4, 0.6, 0.8],
             noise=0.2,
             cue_mean=0.5,
@@ -295,7 +295,7 @@ const EXAMPLE_PAIRS = [
             rating_noise=0.2,
         ),
         environment_parameters=(;
-            reward_probability=0.8,
+            reward_probability=0.7,
             payoffs=[0.4, 0.6, 0.8],
             noise=0.2,
             cue_mean=0.5,

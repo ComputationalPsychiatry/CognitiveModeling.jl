@@ -149,24 +149,25 @@ function log_likelihood_by_hand(
     )
 end
 
-#Receives the choices and counts those of true, but gives no observations, for a cognitive model without inputs
+#Receives the choices and adds them up as numbers, so that its state keeps its type, but gives no observations, for a
+#cognitive model without inputs
 struct WithoutOutputsEnvironment <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(
     environment::WithoutOutputsEnvironment, parameters
 )
-    return (; n_choices_of_true=0)
+    return (; total_of_choices=0.0)
 end
 function CognitiveModeling.run_timestep(
     environment::WithoutOutputsEnvironment, context::ModelContext
 )
-    choice = value_or(context.input.choice, false)
+    choice = 1.0 * value_or(context.input.choice, false)
     return ModelOutput(
-        (;), (; n_choices_of_true=context.previous_state.n_choices_of_true + choice)
+        (;), (; total_of_choices=context.previous_state.total_of_choices + choice)
     )
 end
 function CognitiveModeling.attribute_names(environment::WithoutOutputsEnvironment)
     return ModelAttributes(;
-        parameters=(), states=:n_choices_of_true, inputs=:choice, outputs=()
+        parameters=(), states=:total_of_choices, inputs=:choice, outputs=()
     )
 end
 function log_likelihood_by_hand(
@@ -403,14 +404,14 @@ end
 ## For the cognitive models with other inputs and outputs ##
 #The partner of ManyAttributes, with three of each attribute: it rewards the choice as the baseline does, gives a cue
 #around the confidence, and a bonus around the report times its size, both with noise. It remembers the last choice and
-#the last confidence, and counts its timesteps
+#the last confidence, and counts its timesteps. The last choice is kept as a number, so that the state keeps its type
 struct ManyAttributesEnvironment{Tdistributions} <: AbstractEnvironmentModel
     distributions::Tdistributions
 end
 function CognitiveModeling.initialize_state(
     environment::ManyAttributesEnvironment, parameters
 )
-    return (; n_timesteps=0, last_choice=false, last_confidence=0.5)
+    return (; n_timesteps=0, last_choice=0.0, last_confidence=0.5)
 end
 function CognitiveModeling.run_timestep(
     environment::ManyAttributesEnvironment, context::ModelContext
@@ -430,7 +431,7 @@ function CognitiveModeling.run_timestep(
         ),
         (;
             n_timesteps=context.previous_state.n_timesteps + 1,
-            last_choice=value_or(choice, context.previous_state.last_choice),
+            last_choice=1.0 * value_or(choice, context.previous_state.last_choice),
             last_confidence=value_or(confidence, context.previous_state.last_confidence),
         ),
     )
@@ -577,7 +578,8 @@ function log_likelihood_by_hand(
     return log_likelihood
 end
 
-#The partner of ContinuousOutput: a reward around the rating, with noise
+#The partner of ContinuousOutput: a reward around the rating times a scale, plus the rest of the scale up to one, with
+#noise, so that a rating of one gets a reward around one, and the expected reward of a model which rates it moves
 struct ContinuousInputEnvironment{Tdistributions} <: AbstractEnvironmentModel
     distributions::Tdistributions
 end
@@ -589,17 +591,21 @@ end
 function CognitiveModeling.run_timestep(
     environment::ContinuousInputEnvironment, context::ModelContext
 )
+    scale = context.parameters.reward_scale
     return ModelOutput((;
         reward=normal(
             environment.distributions,
-            value_or(context.input.rating, 0.5),
+            scale * value_or(context.input.rating, 0.5) + 1 - scale,
             context.parameters.reward_noise,
         )
     ))
 end
 function CognitiveModeling.attribute_names(environment::ContinuousInputEnvironment)
     return ModelAttributes(;
-        parameters=:reward_noise, states=(), inputs=:rating, outputs=:reward
+        parameters=(:reward_scale, :reward_noise),
+        states=(),
+        inputs=:rating,
+        outputs=:reward,
     )
 end
 function log_likelihood_by_hand(
@@ -608,8 +614,9 @@ function log_likelihood_by_hand(
     log_likelihood = 0.0
     for timestep in timesteps
         rating = timestep.input.rating isa AbstractNoValue ? 0.5 : timestep.input.rating
+        mean = parameters.reward_scale * rating + 1 - parameters.reward_scale
         log_likelihood += log_density_if_given(
-            NormalByHand(rating, parameters.reward_noise), timestep.output.reward
+            NormalByHand(mean, parameters.reward_noise), timestep.output.reward
         )
     end
     return log_likelihood

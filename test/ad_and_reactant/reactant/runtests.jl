@@ -4,7 +4,10 @@ using Enzyme: Enzyme, Reverse
 using FiniteDifferences: central_fdm, grad
 using Reactant: Reactant, @jit
 
-include("../test_cases.jl")
+#The example models and the simulation cases that the suites share, and the sessions run by hand
+include(joinpath(@__DIR__, "..", "..", "example_models", "ExampleModels.jl"))
+using .ExampleModels
+include(joinpath(@__DIR__, "..", "..", "test_cases", "simulation_cases.jl"))
 include("../session_by_hand.jl")
 
 # The test cases read their parameters from a vector one number at a time. The package doesn't need this
@@ -27,8 +30,13 @@ function test_compiled(f, x)
 end
 
 @testset "Reactant" begin
-    @testset "$(case.name)" for case in filter(case -> case.reactant, TEST_CASES)
-        test_compiled(case.f, case.x)
+    #Every simulation case with a gradient that Reactant can compile, with the means of the distributions, as the sum of
+    #every number that it saved
+    @testset "$(case.name)" for case in filter(
+        case -> case.reactant && case.differentiated, simulation_cases(Means())
+    )
+        run = case.run
+        test_compiled(x -> sum_of_reals(run(x)), case.x)
     end
 
     # The functions for use within the model of an inference backend, in sessions that are run by hand

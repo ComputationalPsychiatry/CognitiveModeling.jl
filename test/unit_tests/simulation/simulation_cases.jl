@@ -13,7 +13,9 @@ function without_distributions(values::NamedTuple{names}) where {names}
     kept = filter(name -> !(name in DISTRIBUTION_NAMES), names)
     return NamedTuple{kept}(map(name -> without_distributions(values[name]), kept))
 end
-without_distributions(values::AbstractVector) = map(without_distributions, values)
+function without_distributions(values::Union{Tuple,AbstractVector})
+    return map(without_distributions, values)
+end
 without_distributions(value) = value
 
 #The lengths of the vectors that a call of simulate saved, of both models, leaving out the empty ones, which a model that

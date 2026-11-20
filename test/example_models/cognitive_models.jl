@@ -198,21 +198,22 @@ end
 log_likelihood_by_hand(model::WithoutOutputs, parameters, timesteps, latents=(;)) = 0.0
 
 ## More and other kinds of values ##
-#Three of each attribute: it learns from the reward, and remembers the last reward, false before the first, and how many
-#timesteps it has seen.
+#Three of each attribute: it learns from the reward, and remembers the last reward as a number, zero before the first,
+#and how many timesteps it has seen.
 #It chooses with the expected reward and a cue, rates its confidence around the expected reward and a bonus, and reports
 #the last reward it saw, both with noise. A cue or a bonus that isn't given stands at a half and at zero
 struct ManyAttributes{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 function CognitiveModeling.initialize_state(model::ManyAttributes, parameters)
-    return (; expected_reward=0.5, last_reward=false, n_timesteps=0)
+    return (; expected_reward=0.5, last_reward=0.0, n_timesteps=0)
 end
 function CognitiveModeling.run_timestep(model::ManyAttributes, context::ModelContext)
     (; learning_rate, inverse_temperature, noise) = context.parameters
     (; reward, cue, bonus) = context.input
     expected_reward = learn(context.previous_state.expected_reward, learning_rate, reward)
-    last_reward = value_or(reward, context.previous_state.last_reward)
+    #As a number, also when the reward is a Bool, so that the state keeps its type
+    last_reward = 1.0 * value_or(reward, context.previous_state.last_reward)
     n_timesteps = context.previous_state.n_timesteps + 1
     logit = choice_logit(expected_reward + value_or(cue, 0.5) - 0.5, inverse_temperature)
     return ModelOutput(
@@ -1088,7 +1089,7 @@ function CognitiveModeling.initialize_state(model::EveryFeatureFamily, parameter
         expected_reward=parameters.initial_value,
         noise=0.0,
         n_timesteps=0,
-        expected_rewards=[0.5, 0.5, 0.5] .* one(eltype(parameters.learning_rates)),
+        expected_rewards=[0.5 * one(eltype(parameters.learning_rates)) for _ in 1:3],
         beliefs=(; last_cue=0.5),
     )
 end
@@ -1109,10 +1110,14 @@ function update_with_noise(model::EveryFeatureFamily, context::ModelContext, noi
     step = parameters.learns * (1 - exp(-parameters.learning_rate * context.timestep_size))
     expected_reward = learn(previous.expected_reward, step, reward) + noise
 
-    #The expected rewards of the options, changed in place
+    #The expected rewards of the options, changed in place, one at a time
     expected_rewards = previous.expected_rewards
     if !(rewards isa AbstractNoValue)
-        expected_rewards .+= parameters.learning_rates .* (rewards .- expected_rewards)
+        for option in 1:3
+            expected_rewards[option] +=
+                parameters.learning_rates[option] *
+                (rewards[option] - expected_rewards[option])
+        end
     end
 
     #The last cue it saw

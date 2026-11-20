@@ -2,13 +2,16 @@
 
 Simulations can be differentiated with ForwardDiff, ReverseDiff, Enzyme and Mooncake, and
 compiled with Reactant. Every commit is tested against every form of each backend, on the
-cases in `test/ad_and_reactant/test_cases.jl`: simulations with an environment, with sampled
-actions and rewards, with timestep sizes and with gradients of the sizes themselves, without
-states, with a state changed in place, with a selection of what is saved, with maps of names
-between the model and the environment, with an environment which ends the simulation, with a
-reward that isn't given on every timestep, with an environment of fixed observations, with
-parameter domains, and on single observations, and agents simulated with an environment or
-on single observations, with and without a history, and with a state saved with `deepcopy`.
+simulation cases that the test suites share, in `test/test_cases/simulation_cases.jl`: each
+example model of `test/example_models` simulated with its environment, with either starting,
+the baseline model with each setting of a simulation, such as timestep sizes and gradients
+of the sizes themselves, a selection of what is saved, an environment of fixed observations,
+given previous states, actions and observations, and a stopping criterion that isn't
+checked, agents instantiated and simulated with `simulate!`, also twice and after `reset!`,
+and models run on single observations. The models give the means of their distributions, so
+that a simulation is deterministic and the gradient goes all the way round its loop, and a
+few cases also sample from a seeded `Xoshiro`. The gradient is that of the sum of every real
+number that the simulation saved.
 Code in the package's extensions is differentiated in suites of its own, each with its own
 environment, in `test/ad_and_reactant`. The one for Turing.jl, in
 `test/ad_and_reactant/turing`, differentiates the log density of Turing.jl models of a
@@ -45,8 +48,8 @@ criterion is met, and with several sessions.
 
 ## Known failures
 
-These are bugs in the backends, which the package doesn't work around. Their tests are
-marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
+These are bugs and limitations of the backends, which the package doesn't work around. Their
+tests are marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
 `test/ad_and_reactant/turing`, so that the suites pass while the bug is there,
 and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, ReverseDiff
 1.18.10, Enzyme 0.13.220, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
@@ -56,7 +59,11 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, Revers
 | Enzyme reverse, with and without runtime activity | `simulate` when the agent starts, actions and rewards are sampled from one seeded `Xoshiro`, and the number of timesteps is a constant | wrong gradient, no error | reported as Enzyme.jl issue 3912 |
 | Enzyme forward with runtime activity | `simulate!` of an agent with an environment, when the model's state starts as a constant such as `(; expected_reward = 0.5)` | wrong gradient, no error | reported as Enzyme.jl issue 3911 |
 | Enzyme reverse with runtime activity | the same | throws a `MethodError` from `create_shadow_ret` | reported as Enzyme.jl issue 3911 |
-| Enzyme forward and reverse without runtime activity | `simulate` with a [`FixedObservationsEnvironment`](@ref) whose observations have two types, such as a reward that is `NoValue` on some timesteps | throws an `EnzymeRuntimeActivityError` | use runtime activity, which is right. Observations of one type pass |
+| Enzyme forward without runtime activity | `simulate` with a [`FixedObservationsEnvironment`](@ref) whose observations have two types, such as a reward that is `NoValue` on some timesteps | throws an `EnzymeRuntimeActivityError` | use runtime activity, which is right. Observations of one type pass |
+| Enzyme reverse, with and without runtime activity | `simulate` where an output of either model, an action or an observation, is `NoValue` on some timesteps, so that it has two types in the loop over the timesteps | throws a `TypeError`, that a `RefValue` was given where a value was expected, or an `EnzymeNoTypeError` | to be reported; forward mode is right, but for the row below |
+| Enzyme forward, with and without runtime activity | `simulate` where the cognitive model's action is `NoValue` on some timesteps and the environment starts | wrong gradient, no error | to be reported; right when the agent starts |
+| Enzyme, every form | `simulate` where a state changes type, such as an integer before the first timestep and a number after it, and a model with every feature, whose choice is `NoValue` on some timesteps among outputs of other kinds | throws an `IllegalTypeAnalysisException` | related to Enzyme.jl issue 4031; a state that keeps its type is right |
+| ReverseDiff with a compiled tape | `simulate` where the model stops once a value passes a threshold, or samples its choices and rewards from a seeded `Xoshiro` | wrong gradient, no error, at points where the other branch is taken | a limitation of compiled tapes, see the pitfalls below |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl model of a session with an imputed action, an environment, or a model which samples within a timestep, and of the full model | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. A plain session passes |
 | Enzyme reverse, with and without runtime activity, and Enzyme forward when the agent starts | a session with one observation, which is `NoValue` on some timesteps, so that a row of the data is one of two `NamedTuple`s | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4031; an action that is `MissingValue` on some timesteps is fine, and so is a session with three observations of which one is `NoValue` on some timesteps |
 | Enzyme forward, with and without runtime activity | the log density of a Turing.jl model with an output from a normal distribution over vectors, `MvNormal`, whose mean or covariance depends on a parameter | throws an `EnzymeNoDerivativeError`, since Enzyme has no forward rule for LAPACK's triangular solve, `trtrs` | reported as Enzyme.jl issue 1991; use reverse mode, which is right |
@@ -64,10 +71,8 @@ and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, Revers
 | Mooncake forward | the log density of a Turing.jl full model where only some sessions have latent variables, such as imputed values, differentiated as a function that holds the model's `LogDensityFunction` | throws an `UndefRefError` | reported as Mooncake.jl issue 1476; Turing.jl's samplers aren't affected, since they differentiate through `LogDensityFunction(model; adtype)`, which is right |
 
 A state which depends on the parameters from the start isn't affected, and neither is
-`simulate!` on single observations. A simulation where an observation isn't made on every
-timestep is right on every backend when the observations aren't saved, and on Enzyme's
-forward mode when they are. The other forms of Enzyme, and the other backends, are right on
-all of these cases. ForwardDiff, ReverseDiff and Mooncake's reverse mode are right on every
+`simulate!` on single observations. The other forms of Enzyme, and the other backends, are
+right on all of these cases. ForwardDiff, ReverseDiff and Mooncake's reverse mode are right on every
 Turing.jl case, Mooncake's forward mode on every case but those above, and both forms of
 Enzyme with runtime activity on a session where every column of the data has one type.
 

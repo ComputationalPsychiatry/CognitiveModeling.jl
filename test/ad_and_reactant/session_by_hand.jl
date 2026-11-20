@@ -49,6 +49,36 @@ using Random: default_rng
 
 ## Distributions with their log densities written out, since Distributions.jl can't be compiled with Reactant ##
 
+# A Rescorla-Wagner model which gives its action as a Taction of its probability. Its state starts as a Float64, whatever
+# number type the parameters have
+struct LearnsRewards{Taction} <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.run_timestep(
+    model::LearnsRewards{Taction}, context::ModelContext
+) where {Taction}
+    V₋₁ = context.previous_state.expected_reward
+    α = context.parameters.learning_rate
+    β = context.parameters.inverse_temperature
+    Vₜ = if context.input.reward isa AbstractNoValue
+        V₋₁
+    else
+        V₋₁ + α * (context.input.reward - V₋₁)
+    end
+    return ModelOutput(
+        (; choice=Taction(inv(1 + exp(-β * (Vₜ - 0.5))))), (; expected_reward=Vₜ)
+    )
+end
+function CognitiveModeling.attribute_names(model::LearnsRewards)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end
+
 # A choice that is made with a probability
 struct ChoiceByHand{T}
     probability::T

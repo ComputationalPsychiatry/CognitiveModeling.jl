@@ -3,7 +3,9 @@
 #suite can check what the simulation saved, differentiate it by x, or compile it. simulation_cases(distributions) gives
 #every case with a kind of distributions of the example models: with their means in the AD and Reactant suites, where a
 #simulation is deterministic and the gradients go all the way round its loop, and with the distributions written by hand
-#in the main suite, where a case samples with a random number generator of its own, seeded on every run
+#in the main suite, where a case samples with a random number generator of its own, seeded on every run. A runner
+#includes this file after ExampleModels.jl
+using Random: Xoshiro
 
 ## The real numbers of the parameters ##
 #The real numbers among the values of a NamedTuple of parameters, in order, which a case is differentiated by: numbers
@@ -43,16 +45,30 @@ function both_with_real_numbers(cognitive_parameters, environment_parameters, x)
 end
 
 ## The sum that is differentiated ##
-#The sum of every real number in what a case returned, which the AD and Reactant suites differentiate. Markers and
-#Symbols add nothing, a Deterministic adds its value, and other distributions add nothing
-sum_of_reals(value::Real) = value
-function sum_of_reals(values::Union{Tuple,NamedTuple,AbstractArray})
-    return sum(sum_of_reals, values; init=0.0)
+#The sum of every number in what a case returned, which the AD and Reactant suites differentiate, a number of an
+#automatic differentiation package and a traced number of Reactant included. Markers and Symbols add nothing, a
+#Deterministic adds its value, and other distributions add nothing. The elements of a tuple are added one by one, those
+#of an array of numbers in one sum, which Reactant compiles as one reduction, and those of other arrays in a loop, which
+#every backend differentiates and Reactant compiles
+sum_of_reals(value::Number) = value
+sum_of_reals(values::NamedTuple) = sum_of_reals(Tuple(values))
+sum_of_reals(::Tuple{}) = 0.0
+sum_of_reals(values::Tuple) = sum_of_reals(first(values)) + sum_of_reals(Base.tail(values))
+sum_of_reals(values::AbstractArray{<:Number}) = isempty(values) ? 0.0 : sum(values)
+function sum_of_reals(values::AbstractArray)
+    total = 0.0
+    for value in values
+        total += sum_of_reals(value)
+    end
+    return total
 end
 sum_of_reals(deterministic::Deterministic) = sum_of_reals(deterministic.value)
 sum_of_reals(value) = 0.0
 
 ## The kinds of cases ##
+#Every case is a NamedTuple with its name, the function that runs it at x, x itself, whether Reactant compiles it,
+#whether the type of what it returns is inferred, whether a second run gives the same, and whether it has a gradient to
+#compare, which it doesn't when x is empty or nothing that the case saves depends on x
 #The random number generator of a run of a case: a new one with a seed on every run, so that two runs give the same,
 #with the distributions written by hand, which sample, and none with the means, which sample nothing, so that the
 #default is passed on untouched, which Reactant can compile
@@ -73,6 +89,7 @@ function simulate_case(
     environment_parameters,
     reactant=true,
     inferred=true,
+    differentiated=true,
     keywords...,
 )
     function run(x)
@@ -88,12 +105,21 @@ function simulate_case(
         )
     end
     x = vcat(real_numbers(cognitive_parameters), real_numbers(environment_parameters))
-    return (; name, run, x, reactant, inferred, deterministic=true)
+    return (;
+        name,
+        run,
+        x,
+        reactant,
+        inferred,
+        deterministic=true,
+        differentiated=differentiated && !isempty(x),
+    )
 end
 
 #A case of an agent and an environment, instantiated with the real numbers of their parameters, and simulated with
-#simulate! once or more, which returns the trajectories of every call and the agent's history after them, read the way
-#a user reads it, as vectors
+#simulate! once, or twice, with both models reset between the two calls or not, which returns the trajectories of every
+#call and the agent's history after them, read the way a user reads it, as vectors. The calls are written out, without a
+#loop, which Reactant would turn into a traced broadcast
 function instantiated_case(
     name,
     distributions;
@@ -103,8 +129,8 @@ function instantiated_case(
     environment_parameters,
     save_history=SaveHistory(SaveEverything()),
     environment_save_history=SaveHistory(),
-    n_calls=1,
-    reset_before_last_call=false,
+    twice=false,
+    reset_between=false,
     reactant=true,
     keywords...,
 )
@@ -116,16 +142,16 @@ function instantiated_case(
         environment_instance = InstantiatedModel(
             environment, environment_values; save_history=environment_save_history
         )
-        trajectories = map(1:n_calls) do call
-            if reset_before_last_call && call == n_calls
+        call_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
+        first_trajectories = simulate!(agent, environment_instance; call_keywords...)
+        trajectories = if twice
+            if reset_between
                 reset!(agent)
                 reset!(environment_instance)
             end
-            return simulate!(
-                agent,
-                environment_instance;
-                with_random_number_generator(NamedTuple(keywords), distributions)...,
-            )
+            (first_trajectories, simulate!(agent, environment_instance; call_keywords...))
+        else
+            (first_trajectories,)
         end
         history = agent.history
         return (;
@@ -140,7 +166,15 @@ function instantiated_case(
         )
     end
     x = vcat(real_numbers(cognitive_parameters), real_numbers(environment_parameters))
-    return (; name, run, x, reactant, inferred=false, deterministic=true)
+    return (;
+        name,
+        run,
+        x,
+        reactant,
+        inferred=false,
+        deterministic=true,
+        differentiated=(!isempty(x)),
+    )
 end
 
 #A case of a cognitive model run on one input at a time with simulate, which passes its output and its state on to the
@@ -170,12 +204,22 @@ function single_inputs_case(
         end
         return (; outputs, states)
     end
+    x = real_numbers(parameters)
     return (;
-        name, run, x=real_numbers(parameters), reactant, inferred=false, deterministic=true
+        name,
+        run,
+        x,
+        reactant,
+        inferred=false,
+        deterministic=true,
+        differentiated=(!isempty(x)),
     )
 end
 
-#A case of an agent run on one input at a time with simulate!, which returns its outputs and its history
+#A case of an agent run on one input at a time with simulate!, which returns its outputs, in a tuple, and the states of
+#its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode gives a wrong
+#gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is then only known
+#when it runs
 function instantiated_single_inputs_case(
     name,
     distributions;
@@ -186,15 +230,23 @@ function instantiated_single_inputs_case(
     reactant=true,
     keywords...,
 )
+    inputs_tuple = Tuple(inputs)
     function run(x)
         parameter_values, _ = with_real_numbers(parameters, x, 1)
         agent = InstantiatedModel(model, parameter_values; save_history)
         rng_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
-        outputs = [simulate!(agent, input; rng_keywords...) for input in inputs]
+        outputs = map(input -> simulate!(agent, input; rng_keywords...), inputs_tuple)
         return (; outputs, states=agent.history.states)
     end
+    x = real_numbers(parameters)
     return (;
-        name, run, x=real_numbers(parameters), reactant, inferred=false, deterministic=true
+        name,
+        run,
+        x,
+        reactant,
+        inferred=false,
+        deterministic=true,
+        differentiated=(!isempty(x)),
     )
 end
 
@@ -221,7 +273,15 @@ function timestep_sizes_case(
             with_random_number_generator(NamedTuple(keywords), distributions)...,
         )
     end
-    return (; name, run, x=timestep_sizes, reactant, inferred=true, deterministic=true)
+    return (;
+        name,
+        run,
+        x=timestep_sizes,
+        reactant,
+        inferred=true,
+        deterministic=true,
+        differentiated=true,
+    )
 end
 
 ## The cases ##
@@ -250,6 +310,11 @@ const NOT_INFERRED = (
     "EveryFeature",
     "EveryFeatureWithoutSampling",
 )
+
+#A choice and a reward of the kind of distributions, which a simulation can be given as the action and the observation
+#before its first timestep: a Bool with the distributions written by hand, and a number with their means
+a_choice_or_reward(distributions) = true
+a_choice_or_reward(::Means) = 1.0
 
 #The rewards that the cases on single observations receive, which the agents start without
 const SINGLE_REWARDS = [(; reward=reward) for reward in (1.0, 0.0, 1.0, 1.0, 0.0)]
@@ -314,6 +379,7 @@ function simulation_cases(distributions)
                     "Baseline saving nothing, $starts",
                     distributions;
                     baseline_parts...,
+                    differentiated=false,
                     who_starts,
                     n_steps=10,
                 ),
@@ -358,9 +424,9 @@ function simulation_cases(distributions)
                     who_starts,
                     n_steps=10,
                     previous_cognitive_state=(; expected_reward=0.7),
-                    previous_action=(; choice=true),
+                    previous_action=(; choice=a_choice_or_reward(distributions)),
                     previous_environment_state=(; n_timesteps=5),
-                    previous_observation=(; reward=true),
+                    previous_observation=(; reward=a_choice_or_reward(distributions)),
                     SAVE_BOTH...,
                 ),
                 simulate_case(
@@ -437,7 +503,7 @@ function simulation_cases(distributions)
                     distributions;
                     baseline_parts...,
                     environment_save_history=SaveHistory(SaveEverything()),
-                    n_calls=2,
+                    twice=true,
                     who_starts,
                     n_steps=5,
                 ),
@@ -445,8 +511,8 @@ function simulation_cases(distributions)
                     "An agent and an environment reset before the second simulation, $starts",
                     distributions;
                     baseline_parts...,
-                    n_calls=2,
-                    reset_before_last_call=true,
+                    twice=true,
+                    reset_between=true,
                     who_starts,
                     n_steps=5,
                 ),
@@ -587,7 +653,7 @@ function simulation_cases(distributions)
                     n_steps=10,
                     previous_action=merge(
                         CognitiveModeling.output_before_first_timestep(parts.model),
-                        (; choice=true),
+                        (; choice=a_choice_or_reward(distributions)),
                     ),
                     SAVE_BOTH...,
                     pair.keywords...,
