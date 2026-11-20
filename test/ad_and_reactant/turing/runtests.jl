@@ -41,13 +41,19 @@ isempty(SELECTED_BACKENDS) && throw(
     ),
 )
 
+#Whether this process runs on macOS without bounds checks forced on, as the suite does on one's own Mac, but not on CI,
+#which runs Linux
+on_macos_without_bounds_checks() = Sys.isapple() && Base.JLOptions().check_bounds != 1
+
 # Gradients that are wrong or throw because of a bug or a limitation in a backend, which the
 # package doesn't work around. Their tests are marked broken, so that the suite passes while the
 # bug is there, and a fix shows up as an unexpected pass. A bug that kills the process, which no
 # test can catch, says kills_the_process = true, and its tests are skipped, so that a fix doesn't
-# show up, and the bug must be checked by hand. Each entry has the bug, the backends and the test
-# cases it hits. The documentation page on automatic differentiation lists the same bugs, so
-# update both together.
+# show up, and the bug must be checked by hand. A bug that only happens in some settings says
+# only_when, a function which tells whether this process is in them, and is tested as any other
+# case elsewhere. Each entry has the bug, the backends and the test cases it hits. The
+# documentation page on automatic differentiation lists the same bugs, so update both together.
+
 const KNOWN_FAILURES = [
     (;
         bug="Enzyme without runtime activity throws an EnzymeRuntimeActivityError on every full model, and on many sessions: those with imputed values, of models whose outputs are numbers from a normal distribution, vectors or NamedTuples, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or which has names of its own. Turing.jl documents that Enzyme needs runtime activity for its models. The sessions of the baseline and of most models whose outputs are choices pass",
@@ -127,8 +133,9 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="Enzyme reverse with runtime activity throws an LLVMException, \"Referring to an instruction in another function!\", when it links its code for the full model with a parameter that is a vector, in a new process and after another form of Enzyme failed on the model, though it was right in a process that had differentiated many other models before it. Not reported yet",
+        bug="Enzyme reverse with runtime activity throws an LLVMException on macOS without bounds checks, \"Referring to an instruction in another function!\", when it links its code for the full model with a parameter that is a vector. LLVM's GVN pass makes a load in one function refer to a load in another, which llvm/llvm-project#223456 fixes, after LLVM 20.1.8 of Julia 1.13.4. With --check-bounds=yes, and on CI's Linux, it is right. Not reported to Enzyme.jl yet",
         backends=["Enzyme reverse, runtime activity"],
+        only_when=on_macos_without_bounds_checks,
         cases=["A parameter that is a vector, without missing values"],
     ),
     (;
@@ -181,10 +188,14 @@ const KNOWN_FAILURES = [
     ),
 ]
 
-#The known failure of a case and a backend, or nothing. One that kills the process is looked for first, so that it is
-#never run
+#The known failure of a case and a backend on this system, or nothing. One that kills the process is looked for first,
+#so that it is never run
 function known_failure(case_name, backend_name)
-    matches(failure) = backend_name in failure.backends && case_name in failure.cases
+    function matches(failure)
+        return backend_name in failure.backends &&
+               case_name in failure.cases &&
+               get(failure, :only_when, Returns(true))()
+    end
     index = findfirst(
         failure -> matches(failure) && get(failure, :kills_the_process, false),
         KNOWN_FAILURES,

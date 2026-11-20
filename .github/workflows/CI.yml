@@ -61,7 +61,8 @@ jobs:
         # The tutorials that the documentation shows without running have one each, with the packages they use, and so do
         # the examples in docs/examples, which run to the end.
         # The two suites of automatic differentiation test each group of backends in a job of its own, which the runner
-        # selects by the arguments it is given: the backends whose names start with one of them
+        # selects by the arguments it is given: the backends whose names start with one of them. The Turing.jl extension's
+        # suite runs its two parts, the tests of its features and the shared inference cases, in a job each
         include:
           - name: ad, ForwardDiff and ReverseDiff
             path: test/ad_and_reactant/ad
@@ -77,8 +78,14 @@ jobs:
             arguments: Mooncake
           - name: reactant
             path: test/ad_and_reactant/reactant
-          - name: turing
+          - name: turing, features
             path: test/unit_tests/extensions/turing
+            arguments: features
+            julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
+            coverage: true
+          - name: turing, shared cases
+            path: test/unit_tests/extensions/turing
+            arguments: shared_cases
             julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
             coverage: true
           - name: turing ad, ForwardDiff and ReverseDiff
@@ -90,9 +97,12 @@ jobs:
           - name: turing ad, Enzyme reverse
             path: test/ad_and_reactant/turing
             arguments: '"Enzyme reverse"'
-          - name: turing ad, Mooncake
+          - name: turing ad, Mooncake reverse
             path: test/ad_and_reactant/turing
-            arguments: Mooncake
+            arguments: '"Mooncake reverse"'
+          - name: turing ad, Mooncake forward
+            path: test/ad_and_reactant/turing
+            arguments: '"Mooncake forward"'
           - name: reinforcement learning tutorial
             path: test/documentation/tutorials/reinforcement_learning
           - name: pomdps tutorial
