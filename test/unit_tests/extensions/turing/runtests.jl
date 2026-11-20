@@ -13,6 +13,12 @@ using JET: JET
 using Random: Xoshiro
 using Turing
 
+#The example models that the suites share, with their methods for Turing.jl
+const EXAMPLE_MODELS_DIRECTORY = joinpath(@__DIR__, "..", "..", "..", "example_models")
+include(joinpath(EXAMPLE_MODELS_DIRECTORY, "ExampleModels.jl"))
+using .ExampleModels
+include(joinpath(EXAMPLE_MODELS_DIRECTORY, "turing_methods.jl"))
+
 #Whether a report is about a local variable being undefined. DynamicPPL's ~ expands to code which reads
 #its left-hand side before assigning it, on a branch that is never taken, so JET reports every ~ this way
 function is_about_undefined_local(report)
@@ -36,6 +42,9 @@ end
         @test isempty(reports)
         isempty(reports) || show(stdout, result)
     end
+
+    #The example models with the distributions of Distributions.jl and their methods for Turing.jl
+    include(joinpath(EXAMPLE_MODELS_DIRECTORY, "turing_runtests.jl"))
 
     include("extension_defaults.jl")
     include("turing_behavioral_session.jl")
