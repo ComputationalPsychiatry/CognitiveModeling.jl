@@ -59,18 +59,40 @@ jobs:
         # bounds checks and coverage. Its automatic differentiation tests are in an environment of their own, in
         # test/ad_and_reactant beside those of the package itself.
         # The tutorials that the documentation shows without running have one each, with the packages they use, and so do
-        # the examples in docs/examples, which run to the end
+        # the examples in docs/examples, which run to the end.
+        # The two suites of automatic differentiation test each group of backends in a job of its own, which the runner
+        # selects by the arguments it is given: the backends whose names start with one of them
         include:
-          - name: ad
+          - name: ad, ForwardDiff and ReverseDiff
             path: test/ad_and_reactant/ad
+            arguments: ForwardDiff ReverseDiff
+          - name: ad, Enzyme forward
+            path: test/ad_and_reactant/ad
+            arguments: '"Enzyme forward"'
+          - name: ad, Enzyme reverse
+            path: test/ad_and_reactant/ad
+            arguments: '"Enzyme reverse"'
+          - name: ad, Mooncake
+            path: test/ad_and_reactant/ad
+            arguments: Mooncake
           - name: reactant
             path: test/ad_and_reactant/reactant
           - name: turing
             path: test/unit_tests/extensions/turing
             julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
             coverage: true
-          - name: turing ad
+          - name: turing ad, ForwardDiff and ReverseDiff
             path: test/ad_and_reactant/turing
+            arguments: ForwardDiff ReverseDiff
+          - name: turing ad, Enzyme forward
+            path: test/ad_and_reactant/turing
+            arguments: '"Enzyme forward"'
+          - name: turing ad, Enzyme reverse
+            path: test/ad_and_reactant/turing
+            arguments: '"Enzyme reverse"'
+          - name: turing ad, Mooncake
+            path: test/ad_and_reactant/turing
+            arguments: Mooncake
           - name: reinforcement learning tutorial
             path: test/documentation/tutorials/reinforcement_learning
           - name: pomdps tutorial
@@ -90,7 +112,7 @@ jobs:
       - name: Install the test environment
         run: julia --color=yes --project=${{ matrix.path }} -e 'using Pkg; Pkg.instantiate()'
       - name: Run the tests
-        run: julia --color=yes ${{ matrix.julia_flags }} --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl
+        run: julia --color=yes ${{ matrix.julia_flags }} --project=${{ matrix.path }} ${{ matrix.path }}/runtests.jl ${{ matrix.arguments }}
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v7

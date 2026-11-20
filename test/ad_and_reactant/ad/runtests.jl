@@ -65,6 +65,18 @@ const BACKENDS = [
     "Mooncake forward" => AutoMooncakeForward(),
 ]
 
+#The backends that this run tests: every one when the suite is run without arguments, and otherwise those whose names
+#start with one of the arguments, such as Enzyme or "Enzyme forward", so that CI can test the backends in jobs of their
+#own: julia --project=<this folder> <this folder>/runtests.jl ForwardDiff ReverseDiff
+const SELECTED_BACKENDS = filter(BACKENDS) do (name, backend)
+    return isempty(ARGS) || any(prefix -> startswith(name, prefix), ARGS)
+end
+isempty(SELECTED_BACKENDS) && throw(
+    ArgumentError(
+        "No backend's name starts with any of $(ARGS). The backends are $(first.(BACKENDS)).",
+    ),
+)
+
 # Gradients that are wrong or throw because of a bug or a limitation in a backend, which the
 # package doesn't work around. Their tests are marked broken, so that the suite passes while the
 # bug is there, and a fix shows up as an unexpected pass. Each entry has the bug, the backends and
@@ -181,7 +193,7 @@ end
         (; f, x) = case
         reference = grad(central_fdm(5, 1), f, x)[1]
 
-        @testset "$name" for (name, backend) in BACKENDS
+        @testset "$name" for (name, backend) in SELECTED_BACKENDS
             failure = known_failure(case.name, name)
             if failure === nothing
                 @test DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6
