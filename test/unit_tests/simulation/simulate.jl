@@ -44,25 +44,6 @@ function CognitiveModeling.attribute_names(model::OnlyChooses)
     return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=:choice)
 end
 
-#Has no actions
-struct OnlyLearns <: AbstractCognitiveModel end
-CognitiveModeling.initialize_state(model::OnlyLearns, parameters) = (; expected_reward=0.5)
-function CognitiveModeling.run_timestep(model::OnlyLearns, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    return ModelOutput(
-        (;),
-        (;
-            expected_reward=V₋₁ +
-                            context.parameters.learning_rate * (context.input.reward - V₋₁)
-        ),
-    )
-end
-function CognitiveModeling.attribute_names(model::OnlyLearns)
-    return ModelAttributes(;
-        parameters=:learning_rate, states=:expected_reward, inputs=:reward, outputs=()
-    )
-end
-
 #Has two named actions, and receives a reward which it does nothing with
 struct TwoChoices <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::TwoChoices, parameters) = (;)
@@ -1264,7 +1245,7 @@ end
         @test eltype(simulation.environment.observations) === @NamedTuple{reward::Float64}
         #A model without actions, with an environment which takes none
         simulation = simulate_for_test(
-            OnlyLearns(),
+            WithoutOutputs(),
             RewardsAndCues();
             environment_parameters=(;),
             observation_map=NameMap(:reward),
@@ -1355,7 +1336,7 @@ end
             ObservesInGroups(), (;); save_history=SaveHistory(SaveEverything())
         )
         simulate!(
-            InstantiatedModel(OnlyLearns(), LEARNING),
+            InstantiatedModel(WithoutOutputs(), LEARNING),
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=3,
@@ -1786,7 +1767,7 @@ end
         for cognitive_save_history in
             (SaveHistory(; outputs=(), save_initial_timestep_values=false), EVERY_TIMESTEP)
             (; actions) = simulate_for_test(
-                OnlyLearns(),
+                WithoutOutputs(),
                 RewardsAndCues();
                 n_steps=3,
                 environment_parameters=(;),
@@ -1801,7 +1782,7 @@ end
         #For a cognitive model, the outputs are its actions
         @test CognitiveModeling.output_before_first_timestep(LearnsRewards()) ===
             (; choice=BeforeFirstTimestep())
-        @test CognitiveModeling.output_before_first_timestep(OnlyLearns()) === (;)
+        @test CognitiveModeling.output_before_first_timestep(WithoutOutputs()) === (;)
         #The names are in the type, so it is inferred
         @test @inferred(CognitiveModeling.output_before_first_timestep(TwoChoices())) ===
             (; first_choice=BeforeFirstTimestep(), second_choice=BeforeFirstTimestep())
@@ -2588,8 +2569,8 @@ end
             environment_parameters=(;),
         )
         #A model which gives fewer actions than the inputs in the environment's attributes, or more
-        @test_throws "A cognitive model of type OnlyLearns gives the actions (), but the attributes of an environment model of type RewardsTrue have (:choice,) as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
-            OnlyLearns(), RewardsTrue(); environment_parameters=(;)
+        @test_throws "A cognitive model of type WithoutOutputs gives the actions (), but the attributes of an environment model of type RewardsTrue have (:choice,) as inputs. Without a map, the two must have the same actions in their attributes. A NameMap as action_map can select and rename them." simulate_for_test(
+            WithoutOutputs(), RewardsTrue(); environment_parameters=(;)
         )
         @test_throws "A cognitive model of type LearnsRewards gives the actions (:choice,), but the attributes of an environment model of type RewardsAndCues have () as inputs. Without a map, the two must have the same actions in their attributes." simulate_for_test(
             LearnsRewards(),
@@ -2612,7 +2593,7 @@ end
             n_steps=2,
         )
         @test_throws "Without a map, the two must have the same actions in their attributes." simulate!(
-            InstantiatedModel(OnlyLearns(), LEARNING),
+            InstantiatedModel(WithoutOutputs(), LEARNING),
             InstantiatedModel(RewardsTrue(), (;));
             who_starts=EnvironmentStarts(),
             n_steps=2,
@@ -3047,7 +3028,8 @@ end
     end
 
     @testset "It works without actions, and with several actions" begin
-        @test simulate!(InstantiatedModel(OnlyLearns(), LEARNING), (; reward=1.0)) === (;)
+        @test simulate!(InstantiatedModel(WithoutOutputs(), LEARNING), (; reward=1.0)) ===
+            (;)
         @test simulate!(InstantiatedModel(TwoChoices(), (;)), (; reward=1.0)) ===
             (; first_choice=false, second_choice=true)
     end
