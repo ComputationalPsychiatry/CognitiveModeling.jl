@@ -10,7 +10,7 @@ ReinforcementLearningTrajectories = "6486599b-a3cd-4e92-a99a-2cea90cc8c3c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
-CognitiveModeling = {path = "../../.."}
+CognitiveModeling = {path = "../../../.."}
 
 [compat]
 CommonRLInterface = "0.3"

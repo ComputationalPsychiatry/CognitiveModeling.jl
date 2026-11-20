@@ -46,37 +46,37 @@ julia --project=test/ad_and_reactant/reactant -e 'using Pkg; Pkg.instantiate(); 
 The Turing.jl extension is tested in an environment of its own, since Turing.jl holds FlexiChains.jl at an older version than the main tests use:
 
 ```bash
-julia --project=test/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/runtests.jl")'
+julia --project=test/unit_tests/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/unit_tests/extensions/turing/runtests.jl")'
 ```
 
 Automatic differentiation of the Turing.jl extension is tested in another environment, with its own cases:
 
 ```bash
-julia --project=test/extensions/turing/ad -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/ad/runtests.jl")'
+julia --project=test/ad_and_reactant/turing -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/turing/runtests.jl")'
 ```
 
 The tutorials that the documentation shows without running are run by tests of their own, each in an environment with the packages it uses:
 
 ```bash
-julia --project=test/tutorials/reinforcement_learning -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/reinforcement_learning/runtests.jl")'
+julia --project=test/documentation/tutorials/reinforcement_learning -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/reinforcement_learning/runtests.jl")'
 ```
 
 ```bash
-julia --project=test/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/pomdps/runtests.jl")'
+julia --project=test/documentation/tutorials/pomdps -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/pomdps/runtests.jl")'
 ```
 
 ```bash
-julia --project=test/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/juliacontrol/runtests.jl")'
+julia --project=test/documentation/tutorials/juliacontrol -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/juliacontrol/runtests.jl")'
 ```
 
 ```bash
-julia --project=test/tutorials/sequential_sampling_models -e 'using Pkg; Pkg.instantiate(); include("test/tutorials/sequential_sampling_models/runtests.jl")'
+julia --project=test/documentation/tutorials/sequential_sampling_models -e 'using Pkg; Pkg.instantiate(); include("test/documentation/tutorials/sequential_sampling_models/runtests.jl")'
 ```
 
 The examples in `docs/examples` run to the end in an environment of their own:
 
 ```bash
-julia --project=test/examples -e 'using Pkg; Pkg.instantiate(); include("test/examples/runtests.jl")'
+julia --project=test/documentation/examples -e 'using Pkg; Pkg.instantiate(); include("test/documentation/examples/runtests.jl")'
 ```
 
 Run the benchmarks of simulating and of fitting with each automatic differentiation backend. The `Benchmarks` workflow runs them on every push to `dev` and `main`, and keeps a history of the results with charts at <https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/benchmarks/>:

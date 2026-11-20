@@ -4,7 +4,7 @@ using Turing.DynamicPPL:
 
 # Test cases for the log density of Turing.jl models of a session, which only this suite runs,
 # since Turing.jl isn't loaded by the AD and Reactant suites of the package itself, in
-# test/ad_and_reactant. Each case
+# test/ad_and_reactant/ad and test/ad_and_reactant/reactant. Each case
 # differentiates the log density the way a sampler does: through a LogDensityFunction made
 # once, with the parameters and the latents in one vector in the order of the model. The
 # parameters have flat priors, so the log density is the session's own.

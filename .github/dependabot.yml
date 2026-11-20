@@ -16,8 +16,8 @@ updates:
       - "/docs"
       - "/test/ad_and_reactant/ad"
       - "/test/ad_and_reactant/reactant"
-      - "/test/extensions/turing"
-      - "/test/extensions/turing/ad"
+      - "/test/ad_and_reactant/turing"
+      - "/test/unit_tests/extensions/turing"
       - "/benchmark"
     target-branch: "dev"
     schedule:

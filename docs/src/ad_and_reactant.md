@@ -10,8 +10,8 @@ reward that isn't given on every timestep, with an environment of fixed observat
 parameter domains, and on single observations, and agents simulated with an environment or
 on single observations, with and without a history, and with a state saved with `deepcopy`.
 Code in the package's extensions is differentiated in suites of its own, each with its own
-environment, beside the other tests of the extension. The one for Turing.jl, in
-`test/extensions/turing/ad`, differentiates the log density of Turing.jl models of a
+environment, in `test/ad_and_reactant`. The one for Turing.jl, in
+`test/ad_and_reactant/turing`, differentiates the log density of Turing.jl models of a
 session, in its `turing_cases.jl`: with the agent or the environment starting, with imputed
 actions, with an environment filling in observations, with an environment which doesn't run
 because nothing in the data is missing, with observations imputed from an environment's
@@ -47,7 +47,7 @@ criterion is met, and with several sessions.
 
 These are bugs in the backends, which the package doesn't work around. Their tests are
 marked broken in `runtests.jl` of `test/ad_and_reactant/ad` and of
-`test/extensions/turing/ad`, so that the suites pass while the bug is there,
+`test/ad_and_reactant/turing`, so that the suites pass while the bug is there,
 and a fix shows up as an unexpected pass. Last checked with Julia 1.13.4, ReverseDiff
 1.18.10, Enzyme 0.13.220, Mooncake 0.5.70, Turing 0.49.0 and DynamicPPL 0.42.14.
 

@@ -13,8 +13,8 @@ function is_about_undefined_local(report)
 end
 
 #The tests of the Turing.jl extension, in an environment of their own, since Turing.jl holds FlexiChains.jl at an older
-#version than the main suite tests. Automatic differentiation of its models is tested in the ad folder, which has its own
-#environment and its own runner
+#version than the main suite tests. Automatic differentiation of its models is tested in test/ad_and_reactant/turing,
+#which has its own environment and its own runner
 @testset "Turing extension" begin
     extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
     @test extension isa Module
