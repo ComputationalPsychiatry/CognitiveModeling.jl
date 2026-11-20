@@ -18,6 +18,7 @@ const EXAMPLE_MODELS_DIRECTORY = joinpath(@__DIR__, "..", "..", "..", "example_m
 include(joinpath(EXAMPLE_MODELS_DIRECTORY, "ExampleModels.jl"))
 using .ExampleModels
 include(joinpath(EXAMPLE_MODELS_DIRECTORY, "turing_methods.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "test_cases", "inference_cases.jl"))
 
 #Whether a report is about a local variable being undefined. DynamicPPL's ~ expands to code which reads
 #its left-hand side before assigning it, on a branch that is never taken, so JET reports every ~ this way
@@ -56,4 +57,7 @@ end
     include("vector_parameters.jl")
     include("multivariate_attributes.jl")
     include("outputs_of_any_type.jl")
+
+    #What holds for every inference case that the suites share
+    include("inference_cases.jl")
 end

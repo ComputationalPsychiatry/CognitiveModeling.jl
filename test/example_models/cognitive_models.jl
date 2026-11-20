@@ -12,9 +12,10 @@ function learn(expected_reward, learning_rate, reward)
 end
 learn(expected_reward, learning_rate, reward::AbstractNoValue) = expected_reward
 
-#The probability of choosing true, which grows with the expected reward
-function choice_probability(expected_reward, inverse_temperature)
-    return inv(1 + exp(-inverse_temperature * (expected_reward - 0.5)))
+#The log odds of choosing true, which grow with the expected reward. The models give their choices of true and false as
+#log odds, which Distributions.jl's BernoulliLogit takes for any size of them
+function choice_logit(expected_reward, inverse_temperature)
+    return inverse_temperature * (expected_reward - 0.5)
 end
 
 #A value, or what stands in for it when it is a marker
@@ -50,11 +51,9 @@ function CognitiveModeling.run_timestep(model::Baseline, context::ModelContext)
         context.parameters.learning_rate,
         context.input.reward,
     )
-    probability = choice_probability(
-        expected_reward, context.parameters.inverse_temperature
-    )
+    logit = choice_logit(expected_reward, context.parameters.inverse_temperature)
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), (; expected_reward)
+        (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward)
     )
 end
 function CognitiveModeling.attribute_names(model::Baseline)
@@ -127,8 +126,8 @@ end
 CognitiveModeling.initialize_state(model::WithoutStates, parameters) = (;)
 function CognitiveModeling.run_timestep(model::WithoutStates, context::ModelContext)
     reward = value_or(context.input.reward, 0.5)
-    probability = choice_probability(reward, context.parameters.inverse_temperature)
-    return ModelOutput((; choice=bernoulli(model.distributions, probability)))
+    logit = choice_logit(reward, context.parameters.inverse_temperature)
+    return ModelOutput((; choice=bernoulli_logit(model.distributions, logit)))
 end
 function CognitiveModeling.attribute_names(model::WithoutStates)
     return ModelAttributes(;
@@ -154,8 +153,8 @@ end
 CognitiveModeling.initialize_state(model::WithoutInputs, parameters) = (; habit=0.5)
 function CognitiveModeling.run_timestep(model::WithoutInputs, context::ModelContext)
     habit = learn(context.previous_state.habit, context.parameters.learning_rate, 1.0)
-    probability = choice_probability(habit, context.parameters.inverse_temperature)
-    return ModelOutput((; choice=bernoulli(model.distributions, probability)), (; habit))
+    logit = choice_logit(habit, context.parameters.inverse_temperature)
+    return ModelOutput((; choice=bernoulli_logit(model.distributions, logit)), (; habit))
 end
 function CognitiveModeling.attribute_names(model::WithoutInputs)
     return ModelAttributes(;
@@ -215,12 +214,10 @@ function CognitiveModeling.run_timestep(model::ManyAttributes, context::ModelCon
     expected_reward = learn(context.previous_state.expected_reward, learning_rate, reward)
     last_reward = value_or(reward, context.previous_state.last_reward)
     n_timesteps = context.previous_state.n_timesteps + 1
-    probability = choice_probability(
-        expected_reward + value_or(cue, 0.5) - 0.5, inverse_temperature
-    )
+    logit = choice_logit(expected_reward + value_or(cue, 0.5) - 0.5, inverse_temperature)
     return ModelOutput(
         (;
-            choice=bernoulli(model.distributions, probability),
+            choice=bernoulli_logit(model.distributions, logit),
             confidence=normal(
                 model.distributions, expected_reward + value_or(bonus, 0.0), noise
             ),
@@ -354,9 +351,13 @@ function CognitiveModeling.run_timestep(model::NamedTupleAttributes, context::Mo
             last_cue=feedback.cue,
         )
     end
-    probability = choice_probability(
-        beliefs.expected_reward + beliefs.last_cue - 0.5,
-        context.parameters.inverse_temperature,
+    probability = inv(
+        1 + exp(
+            -choice_logit(
+                beliefs.expected_reward + beliefs.last_cue - 0.5,
+                context.parameters.inverse_temperature,
+            ),
+        ),
     )
     return ModelOutput(
         (;
@@ -452,8 +453,8 @@ function CognitiveModeling.run_timestep(model::SymbolOutput, context::ModelConte
         context.parameters.learning_rate,
         context.input.reward,
     )
-    probability = choice_probability(
-        expected_reward, context.parameters.inverse_temperature
+    probability = inv(
+        1 + exp(-choice_logit(expected_reward, context.parameters.inverse_temperature))
     )
     return ModelOutput(
         (; choice=symbol_choice(model.distributions, probability)), (; expected_reward)
@@ -500,13 +501,13 @@ function CognitiveModeling.run_timestep(model::WithSymbolParameter, context::Mod
         context.parameters.learning_rate,
         context.input.reward,
     )
-    probability = if context.parameters.strategy === :learning
-        choice_probability(expected_reward, context.parameters.inverse_temperature)
+    logit = if context.parameters.strategy === :learning
+        choice_logit(expected_reward, context.parameters.inverse_temperature)
     else
-        0.5
+        0.0
     end
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), (; expected_reward)
+        (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward)
     )
 end
 function CognitiveModeling.attribute_names(model::WithSymbolParameter)
@@ -546,11 +547,9 @@ function CognitiveModeling.run_timestep(model::WithDiscreteParameter, context::M
         context.parameters.learns * context.parameters.learning_rate,
         context.input.reward,
     )
-    probability = choice_probability(
-        expected_reward, context.parameters.inverse_temperature
-    )
+    logit = choice_logit(expected_reward, context.parameters.inverse_temperature)
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), (; expected_reward)
+        (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward)
     )
 end
 function CognitiveModeling.attribute_names(model::WithDiscreteParameter)
@@ -669,11 +668,9 @@ function CognitiveModeling.run_timestep(
     )
     n_timesteps = context.previous_state.n_timesteps + 1
     pull = n_timesteps == 1 ? 0 : repetition(context.previous_output.choice)
-    probability = inv(
-        1 + exp(-(inverse_temperature * (expected_reward - 0.5) + stickiness * pull))
-    )
+    logit = choice_logit(expected_reward, inverse_temperature) + stickiness * pull
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)),
+        (; choice=bernoulli_logit(model.distributions, logit)),
         (; expected_reward, n_timesteps),
     )
 end
@@ -727,11 +724,9 @@ function CognitiveModeling.run_timestep(model::UsesTimestepSize, context::ModelC
         1 - exp(-context.parameters.learning_rate * context.timestep_size),
         context.input.reward,
     )
-    probability = choice_probability(
-        expected_reward, context.parameters.inverse_temperature
-    )
+    logit = choice_logit(expected_reward, context.parameters.inverse_temperature)
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), (; expected_reward)
+        (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward)
     )
 end
 function CognitiveModeling.attribute_names(model::UsesTimestepSize)
@@ -849,11 +844,9 @@ function update_with_noise(model::SamplingWithinTimestep, context::ModelContext,
             context.parameters.learning_rate,
             context.input.reward,
         ) + noise
-    probability = choice_probability(
-        expected_reward, context.parameters.inverse_temperature
-    )
+    logit = choice_logit(expected_reward, context.parameters.inverse_temperature)
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), (; expected_reward, noise)
+        (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward, noise)
     )
 end
 function CognitiveModeling.run_timestep(
@@ -977,11 +970,9 @@ function CognitiveModeling.run_timestep(model::StateChangedInPlace, context::Mod
     expected_reward[1] = learn(
         expected_reward[1], context.parameters.learning_rate, context.input.reward
     )
-    probability = choice_probability(
-        expected_reward[1], context.parameters.inverse_temperature
-    )
+    logit = choice_logit(expected_reward[1], context.parameters.inverse_temperature)
     return ModelOutput(
-        (; choice=bernoulli(model.distributions, probability)), context.previous_state
+        (; choice=bernoulli_logit(model.distributions, logit)), context.previous_state
     )
 end
 function CognitiveModeling.prepare_state_for_saving(model::StateChangedInPlace, state)
@@ -1128,25 +1119,18 @@ function update_with_noise(model::EveryFeatureFamily, context::ModelContext, noi
     beliefs = feedback isa AbstractNoValue ? previous.beliefs : (; last_cue=feedback.cue)
     n_timesteps = previous.n_timesteps + 1
 
-    #The probability of choosing true, with the pull of the previous choice after the first timestep
+    #The log odds of choosing true, with the pull of the previous choice after the first timestep
     pull = n_timesteps == 1 ? 0 : repetition(context.previous_output.choice)
-    probability = if parameters.strategy === :learning
-        inv(
-            1 + exp(
-                -(
-                    parameters.inverse_temperature *
-                    (expected_reward + beliefs.last_cue - 1) +
-                    parameters.stickiness * pull
-                ),
-            ),
-        )
+    logit = if parameters.strategy === :learning
+        choice_logit(expected_reward + beliefs.last_cue - 0.5, parameters.inverse_temperature) + parameters.stickiness * pull
     else
-        0.5
+        0.0
     end
+    probability = inv(1 + exp(-logit))
     choice = if iszero(mod(n_timesteps, 3))
         NoValue()
     else
-        bernoulli(model.distributions, probability)
+        bernoulli_logit(model.distributions, logit)
     end
     outputs = (;
         choice,

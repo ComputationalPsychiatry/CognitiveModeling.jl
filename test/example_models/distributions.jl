@@ -15,6 +15,9 @@ struct Means end
 #A choice of true with a probability, and false otherwise
 function bernoulli end
 
+#A choice of true with the probability whose log odds are given, and false otherwise
+function bernoulli_logit end
+
 #A number from a normal distribution with a mean and a standard deviation
 function normal end
 
@@ -48,6 +51,7 @@ function log_density(distribution::BernoulliByHand, value)
     return value ? log(distribution.probability) : log1p(-distribution.probability)
 end
 bernoulli(::ByHand, probability) = BernoulliByHand(probability)
+bernoulli_logit(::ByHand, logit) = BernoulliByHand(inv(1 + exp(-logit)))
 
 struct NormalByHand{T<:Real}
     mean::T
@@ -157,6 +161,7 @@ end
 
 ## Their means ##
 bernoulli(::Means, probability) = Deterministic(probability)
+bernoulli_logit(::Means, logit) = Deterministic(inv(1 + exp(-logit)))
 normal(::Means, mean, standard_deviation) = Deterministic(mean)
 categorical(::Means, probabilities) = Deterministic(probabilities)
 independent_normals(::Means, means, standard_deviation) = Deterministic(means)

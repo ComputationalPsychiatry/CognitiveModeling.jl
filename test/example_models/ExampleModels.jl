@@ -16,7 +16,7 @@ include("example_pairs.jl")
 
 #The kinds of distributions, and the functions that give the distributions of a kind
 export ByHand, Means
-export bernoulli, normal, categorical, symbol_choice, independent_normals
+export bernoulli, bernoulli_logit, normal, categorical, symbol_choice, independent_normals
 export choice_and_time, reward_and_cue
 
 #The cognitive models
@@ -46,6 +46,6 @@ export run_timestep_with_latents
 
 #Each cognitive model with the environment it runs with, and helpers to simulate them and to read their data
 export EXAMPLE_PAIRS, PAIRS_WITH_MEANS, pair_named, simulate_pair
-export inputs_received, timesteps_of, sizes_of_timesteps, columns
+export inputs_received, timesteps_of, sizes_of_timesteps, columns, WHO_STARTS
 
 end

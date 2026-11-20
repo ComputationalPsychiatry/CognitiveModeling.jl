@@ -225,11 +225,6 @@ function timestep_sizes_case(
 end
 
 ## The cases ##
-#Who starts, and its name in the names of the cases
-const WHO_STARTS = (
-    (EnvironmentStarts(), "environment starts"), (AgentStarts(), "agent starts")
-)
-
 #Saving everything of both models
 const SAVE_BOTH = (;
     cognitive_save_history=SaveHistory(SaveEverything()),

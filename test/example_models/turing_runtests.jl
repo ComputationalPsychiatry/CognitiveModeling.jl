@@ -54,8 +54,9 @@ const PAIRS_WITH_TURING_METHODS = map(
         environment_parameters = merge(
             CognitiveModeling.default_parameters(environment), pair.environment_parameters
         )
-        cognitive_latents = latents_from_variables(model, values, n_timesteps)
-        environment_latents = latents_from_variables(environment, values, n_timesteps)
+        variable = variables_of(values)
+        cognitive_latents = latents_from_variables(model, variable, n_timesteps)
+        environment_latents = latents_from_variables(environment, variable, n_timesteps)
         cognitive_timesteps = timesteps_of(
             inputs_received(simulation.observations, who_starts isa AgentStarts),
             simulation.actions,

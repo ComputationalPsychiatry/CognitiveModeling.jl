@@ -51,7 +51,7 @@ const EXAMPLE_PAIRS = [
         model=VectorAttributes,
         environment=VectorAttributesEnvironment,
         cognitive_parameters=(; learning_rates=[0.2, 0.3, 0.4], noise=0.2),
-        environment_parameters=(; payoffs=[0.2, 0.5, 0.8], noise=0.1),
+        environment_parameters=(; payoffs=[0.4, 0.6, 0.8], noise=0.1),
     ),
     (;
         name="NamedTupleAttributes",
@@ -273,7 +273,7 @@ const EXAMPLE_PAIRS = [
         ),
         environment_parameters=(;
             reward_probability=0.8,
-            payoffs=[0.2, 0.5, 0.8],
+            payoffs=[0.4, 0.6, 0.8],
             noise=0.2,
             cue_mean=0.5,
             drift_noise=0.05,
@@ -296,7 +296,7 @@ const EXAMPLE_PAIRS = [
         ),
         environment_parameters=(;
             reward_probability=0.8,
-            payoffs=[0.2, 0.5, 0.8],
+            payoffs=[0.4, 0.6, 0.8],
             noise=0.2,
             cue_mean=0.5,
             drift_noise=0.05,
@@ -337,8 +337,13 @@ function sizes_of_timesteps(keywords, n_timesteps)
     return sizes isa AbstractVector ? sizes[1:n_timesteps] : fill(sizes, n_timesteps)
 end
 
-#Simulates a pair with a kind of distributions, saving everything of both models
+#Simulates a pair with a kind of distributions, saving everything of both models, with as many of the pair's sizes of
+#timesteps as there are timesteps
 function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(1))
+    keywords = get(pair, :keywords, (;))
+    if haskey(keywords, :timestep_sizes)
+        keywords = merge(keywords, (; timestep_sizes=sizes_of_timesteps(keywords, n_steps)))
+    end
     return simulate(
         pair.model(distributions),
         pair.environment(distributions);
@@ -349,7 +354,7 @@ function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(
         rng,
         cognitive_save_history=SaveHistory(SaveEverything()),
         environment_save_history=SaveHistory(SaveEverything()),
-        get(pair, :keywords, (;))...,
+        keywords...,
     )
 end
 
@@ -358,3 +363,8 @@ function columns(values)
     names = keys(first(values))
     return NamedTuple{names}(map(name -> [value[name] for value in values], names))
 end
+
+#Who starts, and its name in the names of tests and cases
+const WHO_STARTS = (
+    (EnvironmentStarts(), "environment starts"), (AgentStarts(), "agent starts")
+)
