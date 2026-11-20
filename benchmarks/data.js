@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795197938013,
+  "lastUpdate": 1795203859041,
   "repoUrl": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl",
   "entries": {
     "CognitiveModeling.jl": [
@@ -1084,6 +1084,132 @@ window.BENCHMARK_DATA = {
           {
             "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/log density",
             "value": 227414,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=324160\nallocs=887\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "committer": {
+            "email": "peter@waade.net",
+            "name": "PTWaade",
+            "username": "PTWaade"
+          },
+          "distinct": true,
+          "id": "8bdbf6784293985ddedf042f5f19b74559cfb672",
+          "message": "Test every script of the documentation, and run the tutorials that take long only in the builds of a release. docs/how_scripts_are_run.toml says for each tutorial whether every build runs it, \"always\", only the builds of a release, which are those of a tag and of a pull request into main, \"for_releases\", or none, \"never\", and for each script the tier of its tests: \"fast\" on every push, \"long\" on pull requests into main and when started by hand, in the new workflow LongTests.yml, or \"none\". Other builds show only the code of a tutorial for releases, with a note, and Docs.yml sets DOCUMENTATION_FOR_A_RELEASE for tags and pull requests into main. Every script has a folder for its tests named after it, whose results.jl checks what it gave. The tutorials that the build runs are tested in the documentation's environment by test/documentation/tutorials/runtests.jl, those that it doesn't in environments of their own, whose folders are renamed after their tutorials, and the examples by test/documentation/examples/runtests.jl. Each runner takes the tier as its argument, and one with an environment of its own fails when it is run for another tier than its script's. The placeholder tutorials have a results.jl with nothing to check yet, the tutorial on discrete parameters simulates its sessions and samples very little, so that it runs, also in the build, and a check in the main suite keeps the settings, the scripts and the folders of their tests in step",
+          "timestamp": "2026-11-20T20:10:02+01:00",
+          "tree_id": "90aeb013bf433875630be1581ac0d0e61fc3408b",
+          "url": "https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/commit/8bdbf6784293985ddedf042f5f19b74559cfb672"
+        },
+        "date": 1795203857713,
+        "tool": "julia",
+        "benches": [
+          {
+            "name": "simulate/saving everything",
+            "value": 3365,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5024\nallocs=16\nparams={\"evals\":9,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "simulate/saving nothing",
+            "value": 1506.2,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=512\nallocs=16\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Enzyme",
+            "value": 133569.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=200272\nallocs=698\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ForwardDiff",
+            "value": 121661,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=339584\nallocs=392\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, Mooncake",
+            "value": 105262.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=93312\nallocs=982\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/gradient, ReverseDiff",
+            "value": 1473682,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1544944\nallocs=42152\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/full model, independent sessions/log density",
+            "value": 19830,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=22800\nallocs=175\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Enzyme",
+            "value": 7756.666666666667,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=16688\nallocs=29\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ForwardDiff",
+            "value": 3809.375,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=4904\nallocs=16\nparams={\"evals\":8,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, Mooncake",
+            "value": 6551.333333333333,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=5936\nallocs=51\nparams={\"evals\":6,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/gradient, ReverseDiff",
+            "value": 147751,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=154144\nallocs=4209\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/single session/log density",
+            "value": 1744.6,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1904\nallocs=13\nparams={\"evals\":10,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, Enzyme",
+            "value": 882457,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=2076416\nallocs=2561\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, ForwardDiff",
+            "value": 8429840.5,
+            "unit": "ns",
+            "extra": "gctime=2135659\nmemory=34279408\nallocs=8975\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, Mooncake",
+            "value": 755598.5,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=1047128\nallocs=4108\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/gradient, ReverseDiff",
+            "value": 17857957,
+            "unit": "ns",
+            "extra": "gctime=0\nmemory=15300720\nallocs=413250\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
+          },
+          {
+            "name": "turing/study of 50 sessions of 200 timesteps, parameters by group/log density",
+            "value": 187159,
             "unit": "ns",
             "extra": "gctime=0\nmemory=324160\nallocs=887\nparams={\"evals\":1,\"evals_set\":false,\"gcsample\":false,\"gctrial\":true,\"memory_tolerance\":0.01,\"overhead\":0,\"samples\":10000,\"seconds\":5,\"time_tolerance\":0.05}"
           }
