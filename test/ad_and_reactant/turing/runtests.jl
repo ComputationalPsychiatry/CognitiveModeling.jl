@@ -59,6 +59,7 @@ const KNOWN_FAILURES = [
         bug="Enzyme without runtime activity throws an EnzymeRuntimeActivityError on every full model, and on many sessions: those with imputed values, of models whose outputs are numbers from a normal distribution, vectors or NamedTuples, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or which has names of its own. Turing.jl documents that Enzyme needs runtime activity for its models. The sessions of the baseline and of most models whose outputs are choices pass",
         backends=["Enzyme forward", "Enzyme reverse"],
         cases=[
+            "ManyAttributes with its environment, environment starts",
             "ManyAttributes with a missing confidence, environment starts",
             "ManyAttributes with a missing cue observed, environment starts",
             "VectorAttributes with its environment, environment starts",
@@ -129,43 +130,26 @@ const KNOWN_FAILURES = [
         backends=["Enzyme forward, runtime activity"],
         cases=[
             "VectorAttributes with its environment, environment starts",
-            "A parameter that is a vector, without missing values",
-        ],
-    ),
-    (;
-        bug="Enzyme reverse with runtime activity throws an LLVMException on macOS without bounds checks, \"Referring to an instruction in another function!\", when it links its code for the full model with a parameter that is a vector. LLVM's GVN pass makes a load in one function refer to a load in another, which llvm/llvm-project#223456 fixes, after LLVM 20.1.8 of Julia 1.13.4. With --check-bounds=yes, and on CI's Linux, it is right. Not reported to Enzyme.jl yet",
-        backends=["Enzyme reverse, runtime activity"],
-        only_when=on_macos_without_bounds_checks,
-        cases=["A parameter that is a vector, without missing values"],
-    ),
-    (;
-        bug="Enzyme forward, with and without runtime activity, kills the process, with an illegal insertion in its type analysis, \"UNREACHABLE executed at TypeTree.h:364\", when an output of a model is NoValue on some timesteps. The message is that of Enzyme.jl issue 3476",
-        backends=["Enzyme forward", "Enzyme forward, runtime activity"],
-        kills_the_process=true,
-        cases=[
-            "OutputNotEveryTimestep with its environment, environment starts",
-            "Baseline with OutputNotEveryTimestepEnvironment with its environment, environment starts",
-            "Baseline with OutputNotEveryTimestepEnvironment with its environment, agent starts",
-            "Baseline with NoOutputBeforeFirstInputEnvironment with its environment, environment starts",
-        ],
-    ),
-    (;
-        bug="Enzyme with runtime activity, forward and reverse, kills the process with the same illegal insertion on a session with an imputed value among several outputs, such as a missing confidence beside a choice, or a missing vector of ratings, and on the full model with a parameter that is a vector and a missing rating",
-        backends=["Enzyme forward, runtime activity", "Enzyme reverse, runtime activity"],
-        kills_the_process=true,
-        cases=[
-            "ManyAttributes with a missing confidence, environment starts",
-            "ManyAttributes with a missing cue observed, environment starts",
             "VectorAttributes with a missing ratings, environment starts",
+            "A parameter that is a vector, without missing values",
             "A parameter that is a vector",
         ],
     ),
     (;
-        bug="Enzyme forward with runtime activity kills the process with the same illegal insertion on a session with an environment whose outputs have names of their own, which maps of names connect to the cognitive model",
-        backends=["Enzyme forward, runtime activity"],
-        kills_the_process=true,
+        bug="Enzyme reverse with runtime activity throws an EnzymeNoShadowError on a session with an imputed value among several outputs, a missing confidence beside a choice or a missing cue among the observations: it finds no shadow for the values of the timestep before, which the model of each timestep takes. Not reported yet",
+        backends=["Enzyme reverse, runtime activity"],
         cases=[
-            "Baseline with OtherNamesEnvironment with its environment, environment starts"
+            "ManyAttributes with a missing confidence, environment starts",
+            "ManyAttributes with a missing cue observed, environment starts",
+        ],
+    ),
+    (;
+        bug="Enzyme reverse with runtime activity throws an LLVMException on macOS without bounds checks, \"Referring to an instruction in another function!\", when it links its code for the full model with a parameter that is a vector, with and without missing values. LLVM's GVN pass makes a load in one function refer to a load in another, which llvm/llvm-project#223456 fixes, after LLVM 20.1.8 of Julia 1.13.4. With --check-bounds=yes, and on CI's Linux, it is right. Not reported to Enzyme.jl yet",
+        backends=["Enzyme reverse, runtime activity"],
+        only_when=on_macos_without_bounds_checks,
+        cases=[
+            "A parameter that is a vector, without missing values",
+            "A parameter that is a vector",
         ],
     ),
     (;

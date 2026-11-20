@@ -233,12 +233,17 @@ struct SessionInfo{
     Taction_map,
     Tenvironment_observations,
     Tprevious_environment_observation,
+    Tinclude_environment,
+    Tcheck_stopping_criterion,
 }
     cognitive_model::Tcognitive_model
     environment::Tenvironment
     observation_map::Tobservation_map
     action_map::Taction_map
-    include_environment::Union{Nothing,Bool}
+    #The choices as they were given, nothing or a Bool, each of a type of its own, so that the fields have concrete
+    #types: Enzyme kills the process when it differentiates a function that returns a struct with a field of a Union
+    #type which Julia stores inline, such as Union{Nothing,Bool}, see Enzyme.jl issue 3476
+    include_environment::Tinclude_environment
     includes_environment::Bool
     observations::Tobservations
     actions::Tactions
@@ -251,7 +256,7 @@ struct SessionInfo{
     saved_timestep_sizes::Tsaved_timestep_sizes
     cognitive_save_history::Tcognitive_save_history
     environment_save_history::Tenvironment_save_history
-    check_stopping_criterion::Union{Nothing,Bool}
+    check_stopping_criterion::Tcheck_stopping_criterion
     first_timestep_to_check_stopping::Int
     check_parameter_domains::Bool
     previous_observation::Tprevious_observation
