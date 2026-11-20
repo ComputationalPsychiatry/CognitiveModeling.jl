@@ -15,6 +15,9 @@ using CognitiveModeling:
     turing_initialize_state,
     turing_parameters_model,
     turing_downstream_model,
+    turing_behavioral_session,
+    turing_multiple_behavioral_sessions,
+    turing_full_model,
     turing_catch_invalid_parameters
 using CognitiveModeling:
     merge_default_parameters,

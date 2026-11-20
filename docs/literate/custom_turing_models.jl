@@ -5,8 +5,8 @@
 # [`full_model`](@ref) fits several sessions with parameter models, which
 # give the parameters of every session in one of the ways the package offers. A Turing.jl
 # model of one's own can give them in any other way, and run the sessions inside it as a
-# submodel: [`turing_multiple_behavioral_sessions`](@ref) runs several sessions, and
-# [`turing_behavioral_session`](@ref) runs one. Both return the parameters they were given,
+# submodel: [`multiple_sessions_model`](@ref) with `TuringBackend()` runs several sessions,
+# and [`session_model`](@ref) runs one. Both return the parameters they were given,
 # with the trajectories the sessions saved. So when a model of one's own returns what they
 # return, [`get_session_parameters`](@ref) and [`get_session_trajectories`](@ref) read
 # its fit as they read that of a full model, also when the parameters are transformations of
@@ -111,7 +111,7 @@ sessions_info = MultipleSessionsInfo(
 # participant's is the mean of the population plus a standardized deviation scaled by the
 # population's standard deviation, which `logistic` then takes to between 0 and 1. The
 # participants share one inverse temperature. The model gives
-# [`turing_multiple_behavioral_sessions`](@ref) the parameters as a `NamedTuple` with a
+# [`multiple_sessions_model`](@ref) the parameters as a `NamedTuple` with a
 # vector for each parameter, with a value for every session in the order of
 # `sessions_info.session_ids`, and returns what that submodel returns:
 
@@ -131,7 +131,8 @@ sessions_info = MultipleSessionsInfo(
 
     #The sessions, each with its own parameters, as a submodel without a prefix of its own
     sessions ~ to_submodel(
-        turing_multiple_behavioral_sessions(
+        multiple_sessions_model(
+            TuringBackend(),
             sessions_info,
             (;
                 learning_rate, inverse_temperature=fill(inverse_temperature, n_participants)
@@ -186,7 +187,7 @@ merge(parameters, trajectories)
 # ## A single session
 #
 # A single session goes in a model of one's own with
-# [`turing_behavioral_session`](@ref), with a prefix of its own, here with the learning rate
+# [`session_model`](@ref), with a prefix of its own, here with the learning rate
 # sampled on the logit scale:
 
 session_info = SessionInfo(
@@ -205,7 +206,8 @@ session_info = SessionInfo(
     #The session, with its variables under the prefix session
     session ~ to_submodel(
         prefix(
-            turing_behavioral_session(
+            session_model(
+                TuringBackend(),
                 session_info,
                 (; learning_rate=logistic(learning_rate_logit), inverse_temperature),
             ),
@@ -227,8 +229,8 @@ merge(get_session_parameters(single_results), get_session_trajectories(single_re
 
 # ## What a model of one's own needs
 #
-# - It returns what [`turing_multiple_behavioral_sessions`](@ref) or
-#   [`turing_behavioral_session`](@ref) returns, as it is, for `returned` to give it to
+# - It returns what [`multiple_sessions_model`](@ref) or [`session_model`](@ref) returns,
+#   as it is, for `returned` to give it to
 #   [`get_session_parameters`](@ref) and [`get_session_trajectories`](@ref).
 # - The parameters of several sessions are a `NamedTuple` with one vector for each
 #   parameter, with a value for every session in the order of `sessions_info.session_ids`.

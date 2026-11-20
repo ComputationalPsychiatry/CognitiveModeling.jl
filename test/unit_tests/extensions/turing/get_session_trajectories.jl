@@ -180,7 +180,7 @@ end
         @test @varname(S1.expected_reward) in Turing.FlexiChains.parameters(merged) &&
             @varname(S1.learning_rate) in Turing.FlexiChains.parameters(merged)
         #The form with a model takes only the package's models, which have the session info to name the parameters by
-        @test_throws "get_session_parameters(model, chain) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session" get_session_parameters(
+        @test_throws "get_session_parameters(model, chain) takes a model made by full_model, multiple_sessions_model or session_model" get_session_parameters(
             hierarchical_model, own_chain
         )
 

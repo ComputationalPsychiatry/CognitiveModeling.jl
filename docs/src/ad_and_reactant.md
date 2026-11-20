@@ -96,10 +96,10 @@ These aren't failures of the package's own code, but a model can run into them.
   a session or a model which samples within a timestep, because building the variables runs
   DynamicPPL's warning about growable arrays, and a `@warn` holds a `try`. Samplers go through
   a `LogDensityFunction`, where the variables exist already, and that is fine. The same `try`
-  is why [`turing_catch_invalid_parameters`](@ref) is only used when asked for, and
+  is why [`catch_invalid_parameters`](@ref) is only used when asked for, and
   a compiled ReverseDiff tape doesn't see the error it catches either, so the rejected
   parameters get a finite log density with no error.
-- **Catching invalid parameters:** [`turing_catch_invalid_parameters`](@ref), and a full
+- **Catching invalid parameters:** [`catch_invalid_parameters`](@ref), and a full
   model with `catch_invalid_parameters = true`, work with ForwardDiff and with Enzyme.
   Anything that uses what the model returns after a rejection, which is `nothing`, can't be
   differentiated with Enzyme, so return or stop at once when it is `nothing`. Mooncake can't

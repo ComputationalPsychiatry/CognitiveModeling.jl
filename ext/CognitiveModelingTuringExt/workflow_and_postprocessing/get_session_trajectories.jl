@@ -30,7 +30,7 @@ function CognitiveModeling.get_session_parameters(
     if !is_session_model(model)
         throw(
             ArgumentError(
-                "get_session_parameters(model, chain) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_parameters what returned(model, chain) gives instead.",
+                "get_session_parameters(model, chain) takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give get_session_parameters what returned(model, chain) gives instead.",
             ),
         )
     end
@@ -125,7 +125,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by full_model, turing_multiple_behavioral_sessions or turing_behavioral_session, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
+                "$function_name(model, chain; cognitive_save_history) takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
             ),
         )
     end

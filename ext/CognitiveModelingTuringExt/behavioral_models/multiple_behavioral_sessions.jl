@@ -101,3 +101,16 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     #The parameters as they were given, with the trajectories each session saved
     return (; cognitive_parameters, environment_parameters, saved_trajectories)
 end
+
+#The model of several sessions under the name that every inference backend has for it, which takes the parallelization as a keyword, as the full model does
+function CognitiveModeling.multiple_sessions_model(
+    ::TuringBackend,
+    sessions_info::MultipleSessionsInfo,
+    cognitive_parameters,
+    environment_parameters=(;);
+    parallelization=SerialSessions(),
+)
+    return turing_multiple_behavioral_sessions(
+        sessions_info, cognitive_parameters, environment_parameters, parallelization
+    )
+end

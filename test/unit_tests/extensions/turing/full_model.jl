@@ -1281,3 +1281,44 @@ end
     )
     @test all(session -> session.includes_environment, saving.args.sessions_info.sessions)
 end
+
+@testset "session_model, multiple_sessions_model and catch_invalid_parameters make the Turing.jl models with TuringBackend()" begin
+    sessions_info = sessions_for_test(; impute_missing_actions=false)
+    parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
+    session_parameters = (; learning_rate=0.2, inverse_temperature=1.0)
+    session_info = sessions_info.sessions[1]
+
+    #The model of one session, without and with environment parameters
+    @test session_model(TuringBackend(), session_info, session_parameters) ===
+        turing_behavioral_session(session_info, session_parameters)
+    with_environment = sessions_for_test(
+        SessionRescorlaWagner(),
+        TWO_MISSING_REWARDS_TABLE;
+        environment=RewardsAroundMean(),
+        impute_missing_actions=false,
+    )
+    @test session_model(
+        TuringBackend(),
+        with_environment.sessions[1],
+        session_parameters,
+        (; mean_reward=0.5),
+    ) === turing_behavioral_session(
+        with_environment.sessions[1], session_parameters, (; mean_reward=0.5)
+    )
+
+    #The model of several sessions, with the parallelization as a keyword
+    @test multiple_sessions_model(TuringBackend(), sessions_info, parameters) ===
+        turing_multiple_behavioral_sessions(
+        sessions_info, parameters, (;), SerialSessions()
+    )
+    @test multiple_sessions_model(
+        TuringBackend(), sessions_info, parameters; parallelization=ParallelSessions()
+    ) === turing_multiple_behavioral_sessions(
+        sessions_info, parameters, (;), ParallelSessions()
+    )
+
+    #The model which rejects invalid parameters, around any of them
+    session = turing_behavioral_session(session_info, session_parameters)
+    @test catch_invalid_parameters(TuringBackend(), session) ===
+        turing_catch_invalid_parameters(session)
+end

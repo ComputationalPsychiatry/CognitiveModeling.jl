@@ -1,4 +1,5 @@
 using CognitiveModeling
+using CognitiveModeling: turing_behavioral_session, turing_multiple_behavioral_sessions
 using Test
 using ADTypes
 using DifferentiationInterface: DifferentiationInterface as DI

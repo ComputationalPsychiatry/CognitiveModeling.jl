@@ -91,9 +91,8 @@ export AbstractParametersModel,
     CompositeParameters
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions
-export AbstractInferenceBackend, TuringBackend, full_model
-export turing_behavioral_session,
-    turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
+export AbstractInferenceBackend, TuringBackend
+export full_model, session_model, multiple_sessions_model, catch_invalid_parameters
 export get_session_trajectories, get_session_parameters, predict_session_trajectories
 
 #What users call with the package's name, as in CognitiveModeling.run_timestep
@@ -103,6 +102,8 @@ public parameter_domains, input_domains, output_domains
 public discrete_parameter_names, continuous_parameter_names
 public turing_run_timestep,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
+public turing_behavioral_session,
+    turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 

@@ -137,6 +137,18 @@ function CognitiveModeling.turing_behavioral_session(
     return turing_behavioral_session(session_info, cognitive_parameters)
 end
 
+#The model of one session under the name that every inference backend has for it
+function CognitiveModeling.session_model(
+    ::TuringBackend,
+    session_info::SessionInfo,
+    cognitive_parameters,
+    environment_parameters=(;),
+)
+    return turing_behavioral_session(
+        session_info, cognitive_parameters, environment_parameters
+    )
+end
+
 ### THE TIMESTEPS OF A SESSION ###
 
 """

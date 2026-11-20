@@ -22,11 +22,12 @@ Pages = ["inference/types.jl"]
 Filter = t -> t !== AbstractParametersModel
 ```
 
-## The full model
+## The models of an inference backend
 
-Each inference backend makes its full model with [`full_model`](@ref), given the marker of
-the backend, such as [`TuringBackend`](@ref) on the page
-[Fitting with Turing.jl](fitting_with_turing.md).
+Each inference backend makes its full model with [`full_model`](@ref), the model of one
+session with [`session_model`](@ref), and that of several sessions with
+[`multiple_sessions_model`](@ref), given the marker of the backend, such as
+[`TuringBackend`](@ref) on the page [Fitting with Turing.jl](fitting_with_turing.md).
 
 ```@autodocs
 Modules = [CognitiveModeling]

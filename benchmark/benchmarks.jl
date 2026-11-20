@@ -96,7 +96,9 @@ Turing.@model function fit_single_session(session_info)
     learning_rate ~ Beta(2, 2)
     inverse_temperature ~ LogNormal(0, 1)
     session ~ to_submodel(
-        turing_behavioral_session(session_info, (; learning_rate, inverse_temperature)),
+        session_model(
+            TuringBackend(), session_info, (; learning_rate, inverse_temperature)
+        ),
         false,
     )
     return nothing

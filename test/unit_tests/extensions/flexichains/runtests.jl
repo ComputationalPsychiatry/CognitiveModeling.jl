@@ -266,10 +266,10 @@ end
         @test entry_names(merge(get_session_trajectories(single), single_chain)) ==
             ["expected_value", "learning_rate", "environment.mean_reward"]
         #Results of another kind are errors
-        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample" get_session_parameters(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what the model of full_model or of multiple_sessions_model returns for each sample" get_session_parameters(
             single, chain_sessions()
         )
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns for each sample" get_session_parameters(
+        @test_throws "Without a session info, the returned values must be what the model of session_model returns for each sample" get_session_parameters(
             several
         )
     end
@@ -409,14 +409,14 @@ end
         @test_throws "There are no returned values to make a chain of." get_session_trajectories(
             Matrix{Any}(undef, 0, 1)
         )
-        @test_throws "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns" get_session_trajectories(
+        @test_throws "With a MultipleSessionsInfo, the returned values must be what the model of full_model or of multiple_sessions_model returns" get_session_trajectories(
             reshape([one_session], 1, 1), chain_sessions()
         )
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" get_session_trajectories(
+        @test_throws "Without a session info, the returned values must be what the model of session_model returns" get_session_trajectories(
             reshape([one_of_several], 1, 1)
         )
         #What a session saved alone isn't what a model returns
-        @test_throws "Without a session info, the returned values must be what turing_behavioral_session returns" get_session_trajectories(
+        @test_throws "Without a session info, the returned values must be what the model of session_model returns" get_session_trajectories(
             reshape([saves_expected_values([0.0, 0.0, 0.5])], 1, 1)
         )
         @test_throws "A sample has nothing as its returned value" get_session_trajectories(

@@ -11,3 +11,10 @@ Turing.@model function CognitiveModeling.turing_catch_invalid_parameters(model)
     end
     return returned_value
 end
+
+#The model which rejects invalid parameters under the name that every inference backend has for it
+function CognitiveModeling.catch_invalid_parameters(
+    ::TuringBackend, model::DynamicPPL.Model
+)
+    return turing_catch_invalid_parameters(model)
+end

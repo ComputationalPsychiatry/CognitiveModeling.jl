@@ -330,7 +330,7 @@ function check_returned_values_of_multiple_sessions(
     )
         throw(
             ArgumentError(
-                "With a MultipleSessionsInfo, the returned values must be what turing_full_model or turing_multiple_behavioral_sessions returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a single session are given without a session info.",
+                "With a MultipleSessionsInfo, the returned values must be what the model of full_model or of multiple_sessions_model returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a single session are given without a session info.",
             ),
         )
     end
@@ -345,7 +345,7 @@ function check_returned_values_of_single_session(returned_value)
     )
         throw(
             ArgumentError(
-                "Without a session info, the returned values must be what turing_behavioral_session returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a full model or of several sessions are given with their MultipleSessionsInfo.",
+                "Without a session info, the returned values must be what the model of session_model returns for each sample, but they are of type $(typeof(returned_value)). The returned values of a full model or of several sessions are given with their MultipleSessionsInfo.",
             ),
         )
     end

@@ -3,8 +3,10 @@
 """
     TuringBackend()
 
-Marker of Turing.jl as the inference backend, which [`full_model`](@ref) takes to make the
-Turing.jl model of a full model. This needs Turing.jl to be loaded.
+Marker of Turing.jl as the inference backend, which [`full_model`](@ref),
+[`session_model`](@ref), [`multiple_sessions_model`](@ref) and
+[`catch_invalid_parameters`](@ref) take to make Turing.jl models. This needs Turing.jl to be
+loaded.
 """
 struct TuringBackend <: AbstractInferenceBackend end
 
@@ -18,10 +20,11 @@ the timesteps of its data with `cognitive_parameters`, and the actions in the da
 scored against the action distributions it gives. The second form is for a session with an
 environment model, which takes its parameters too. This needs Turing.jl to be loaded.
 
-The model is a building block for a Turing.jl model which samples the parameters, as a
-submodel with its own prefix: `to_submodel(prefix(turing_behavioral_session(...),
-@varname(session)), false)`. [`turing_multiple_behavioral_sessions`](@ref) runs one for
-each of several sessions, and [`turing_full_model`](@ref) samples their parameters too.
+[`session_model`](@ref) with `TuringBackend()` makes this model. It is a building block for
+a Turing.jl model which samples the parameters, as a submodel with its own prefix:
+`to_submodel(prefix(session_model(TuringBackend(), ...), @varname(session)), false)`.
+[`multiple_sessions_model`](@ref) runs one for each of several sessions, and
+[`full_model`](@ref) samples their parameters too.
 
 # Arguments
 - `session_info::SessionInfo`: the data, the models and the settings of the session,
@@ -155,7 +158,9 @@ session_info = SessionInfo(
     inverse_temperature ~ LogNormal(0, 1)
     session ~ to_submodel(
         prefix(
-            turing_behavioral_session(session_info, (; learning_rate, inverse_temperature)),
+            session_model(
+                TuringBackend(), session_info, (; learning_rate, inverse_temperature)
+            ),
             @varname(session),
         ),
         false,
@@ -201,11 +206,12 @@ for every session in the order of `sessions_info`, which is what a parameter mod
 see [`turing_parameters_model`](@ref), and `environment_parameters` is in the same form. It
 returns a `NamedTuple` with `cognitive_parameters` and `environment_parameters` as they were
 given, and `saved_trajectories`, a vector with the trajectories each session saved, in the
-same order, as [`turing_behavioral_session`](@ref) returns them. The model is a building
-block for a Turing.jl model which samples the parameters of the sessions in some way of its
-own, as a submodel without a prefix:
-`to_submodel(turing_multiple_behavioral_sessions(sessions_info, parameters), false)`.
-[`turing_full_model`](@ref) does this with parameter models. A model of one's own can return
+same order, as [`turing_behavioral_session`](@ref) returns them.
+[`multiple_sessions_model`](@ref) with `TuringBackend()` makes this model, and takes
+`parallelization` as a keyword. It is a building block for a Turing.jl model which samples
+the parameters of the sessions in some way of its own, as a submodel without a prefix:
+`to_submodel(multiple_sessions_model(TuringBackend(), sessions_info, parameters), false)`.
+[`full_model`](@ref) does this with parameter models. A model of one's own can return
 the same `NamedTuple`, and [`get_session_trajectories`](@ref) and
 [`get_session_parameters`](@ref) then read what it returns too, also when it transforms its
 variables into the parameters.
@@ -254,8 +260,7 @@ loaded.
   parameter must be one in the model's attributes.
 - `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
   session rejects the sample instead of stopping the sampler, by running the sessions inside
-  [`turing_catch_invalid_parameters`](@ref), which gives the parameters a log density of
-  `-Inf`. If the first draw is rejected and the downstream model has variables of its own,
+  [`catch_invalid_parameters`](@ref), which gives the parameters a log density of `-Inf`. If the first draw is rejected and the downstream model has variables of its own,
   give the sampler valid `initial_params`. A [`ParameterDomainError`](@ref) isn't caught,
   and stops the sampler.
 - `parallelization=SerialSessions()`: whether the sessions run over the threads Julia was
@@ -367,7 +372,8 @@ Create a Turing.jl model which runs `model`, any Turing.jl model, inside a `try`
 gives the parameters a log density of `-Inf`, so that a sampler rejects the sample instead
 of stopping, and the model returns `nothing` for that sample. Otherwise it returns what
 `model` returns. Any other error is thrown as it is, also a [`ParameterDomainError`](@ref)
-for a parameter outside its domain. This needs Turing.jl to be loaded.
+for a parameter outside its domain. [`catch_invalid_parameters`](@ref) with
+`TuringBackend()` makes this model. This needs Turing.jl to be loaded.
 
 It goes around the part of a model that can throw, with the parameters sampled outside it,
 as in
@@ -376,15 +382,16 @@ as in
 @model function fit_one_session(session_info)
     learning_rate ~ Beta(2, 2)
     session ~ to_submodel(
-        turing_catch_invalid_parameters(
-            turing_behavioral_session(session_info, (; learning_rate)),
+        catch_invalid_parameters(
+            TuringBackend(),
+            session_model(TuringBackend(), session_info, (; learning_rate)),
         ),
         false,
     )
 end
 ```
 
-and [`turing_full_model`](@ref) does this with `catch_invalid_parameters = true`. The
+and [`full_model`](@ref) does this with `catch_invalid_parameters = true`. The
 variables sampled inside the `try` block are lost when it catches an error, so around a
 whole model a sampler can't start when its first draw is rejected. Nothing in the package
 catches the error unless this is used, so a sampler stops with it otherwise. Not every

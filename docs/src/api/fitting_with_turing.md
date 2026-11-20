@@ -9,6 +9,10 @@ Pages = ["fitting_with_turing.md"]
 
 ## Turing.jl models
 
+[`full_model`](@ref), [`session_model`](@ref), [`multiple_sessions_model`](@ref) and
+[`catch_invalid_parameters`](@ref) make these models when they are given `TuringBackend()`.
+The models are public, but not exported.
+
 ```@autodocs
 Modules = [CognitiveModeling]
 Private = false
@@ -18,10 +22,9 @@ Pages = ["extensions/turing/turing_models.jl"]
 ## Postprocessing
 
 With Turing.jl loaded, which loads FlexiChains.jl, [`get_session_trajectories`](@ref) and
-[`get_session_parameters`](@ref) take a model made by [`full_model`](@ref) with
-`TuringBackend()`, [`turing_multiple_behavioral_sessions`](@ref) or
-[`turing_behavioral_session`](@ref), or such a model inside
-[`turing_catch_invalid_parameters`](@ref), and the `FlexiChain` that
+[`get_session_parameters`](@ref) take a model made by [`full_model`](@ref),
+[`multiple_sessions_model`](@ref) or [`session_model`](@ref) with `TuringBackend()`, or
+such a model inside [`catch_invalid_parameters`](@ref), and the `FlexiChain` that
 `sample` gives for it. A model of one's own around the sessions gives them the values that
 `returned(model, chain)` gives instead, with the `MultipleSessionsInfo` of several sessions.
 
@@ -37,9 +40,9 @@ parameters = get_session_parameters(returned(own_model, chain), sessions_info)
 ### Predictive checks
 
 With Turing.jl loaded, [`predict_session_trajectories`](@ref) takes a model made by
-[`full_model`](@ref) with `TuringBackend()`,
-[`turing_multiple_behavioral_sessions`](@ref) or [`turing_behavioral_session`](@ref), or
-such a model inside [`turing_catch_invalid_parameters`](@ref), and a chain sampled from it.
+[`full_model`](@ref), [`multiple_sessions_model`](@ref) or [`session_model`](@ref) with
+`TuringBackend()`, or such a model inside [`catch_invalid_parameters`](@ref), and a chain
+sampled from it.
 It returns the simulated trajectories as a `FlexiChain`, as
 [`get_session_trajectories`](@ref) makes it. For a prior predictive check, give a chain
 sampled from the prior, such as `sample(model, Prior(), 1000)`.
@@ -65,8 +68,8 @@ CognitiveModeling.turing_initialize_state
 
 ## Fitting several sessions
 
-These are what the parts of [`turing_full_model`](@ref) are written with, beside the types
-and functions on the pages [Fitting](fitting.md) and
+These are what the parts of [`CognitiveModeling.turing_full_model`](@ref) are written with,
+beside the types and functions on the pages [Fitting](fitting.md) and
 [Parameter models](parameter_models.md). They are public, but not exported.
 In a Turing.jl model of several sessions, session `i` of
 [`CognitiveModeling.session_index`](@ref) has its variables under `session[i]`.
