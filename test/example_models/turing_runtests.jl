@@ -4,8 +4,6 @@
 #environment runs in each session, so that its observations are scored too. A runner includes this file after
 #ExampleModels.jl and turing_methods.jl
 
-include("example_pairs.jl")
-
 #The pairs which need what turing_methods.jl adds
 const PAIRS_WITH_TURING_METHODS = map(
     pair_named,
@@ -19,14 +17,6 @@ const PAIRS_WITH_TURING_METHODS = map(
         "EveryFeature",
     ],
 )
-
-#The values of one name on each timestep, from a vector of NamedTuples, as a column of the data
-column(values, name) = [value[name] for value in values]
-function columns(values)
-    return NamedTuple{keys(first(values))}(
-        map(name -> column(values, name), keys(first(values)))
-    )
-end
 
 @testset "Example models with Turing.jl" begin
     @testset "$(pair.name), $(nameof(typeof(who_starts)))" for pair in

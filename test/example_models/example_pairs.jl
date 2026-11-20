@@ -1,6 +1,5 @@
-using Random: Xoshiro
-
-#Each example cognitive model with the environment it runs with, for the tests of the example models with every kind of
+## Each cognitive model with the environment it runs with ##
+#The pairs that the example models' own tests simulate, and that the test cases are made from, with every kind of
 #distributions, and helpers to simulate them and to read what each model received
 
 #Each cognitive model with the environment it runs with, as functions of a kind of distributions, and their parameters
@@ -352,4 +351,10 @@ function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(
         environment_save_history=SaveHistory(SaveEverything()),
         get(pair, :keywords, (;))...,
     )
+end
+
+#The values of each name on every timestep, from a vector of NamedTuples, as the columns of a session's data
+function columns(values)
+    names = keys(first(values))
+    return NamedTuple{names}(map(name -> [value[name] for value in values], names))
 end

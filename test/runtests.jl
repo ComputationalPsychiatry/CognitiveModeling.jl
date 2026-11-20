@@ -7,9 +7,10 @@ using CommonRLInterface: CommonRLInterface
 using FlexiChains: FlexiChains
 using Tables: Tables
 
-#The example models that the suites share
+#The example models and the test cases that the suites share
 include("example_models/ExampleModels.jl")
 using .ExampleModels
+include("test_cases/simulation_cases.jl")
 
 @testset "CognitiveModeling.jl" begin
     include("code_quality/runtests.jl")

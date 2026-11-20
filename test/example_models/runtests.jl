@@ -4,7 +4,7 @@
 #from the states it saved. The models that can give the means of their distributions also simulate with them, without
 #randomness
 
-include("example_pairs.jl")
+using Random: Xoshiro
 
 #The log likelihood of the outputs that a model gave in a simulation, from the distributions that it gives when it is run
 #again on each timestep from the state it saved before it, with what it sampled of its own in the simulation. The inputs

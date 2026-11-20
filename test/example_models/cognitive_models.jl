@@ -199,14 +199,15 @@ end
 log_likelihood_by_hand(model::WithoutOutputs, parameters, timesteps, latents=(;)) = 0.0
 
 ## More and other kinds of values ##
-#Three of each attribute: it learns from the reward, and remembers the last reward and how many timesteps it has seen.
+#Three of each attribute: it learns from the reward, and remembers the last reward, false before the first, and how many
+#timesteps it has seen.
 #It chooses with the expected reward and a cue, rates its confidence around the expected reward and a bonus, and reports
 #the last reward it saw, both with noise. A cue or a bonus that isn't given stands at a half and at zero
 struct ManyAttributes{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 function CognitiveModeling.initialize_state(model::ManyAttributes, parameters)
-    return (; expected_reward=0.5, last_reward=0.5, n_timesteps=0)
+    return (; expected_reward=0.5, last_reward=false, n_timesteps=0)
 end
 function CognitiveModeling.run_timestep(model::ManyAttributes, context::ModelContext)
     (; learning_rate, inverse_temperature, noise) = context.parameters
@@ -238,7 +239,7 @@ function CognitiveModeling.attribute_names(model::ManyAttributes)
 end
 function log_likelihood_by_hand(model::ManyAttributes, parameters, timesteps, latents=(;))
     expected_reward = 0.5
-    last_reward = 0.5
+    last_reward = 0.0
     log_likelihood = 0.0
     for timestep in timesteps
         (; reward, cue, bonus) = timestep.input
