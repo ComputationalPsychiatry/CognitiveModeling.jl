@@ -65,7 +65,7 @@
         imputing = full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(SessionRescorlaWagner(), table),
+            sessions_for_test(WithDefaultParameters(DistributionsJl()), table),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
         #predict_session_trajectories simulates the imputed choices again, like the others, from the parameters of each sample
@@ -93,7 +93,9 @@
         different_lengths = full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
+            sessions_for_test(
+                WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
+            ),
         )
         prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
         simulated = @test_logs match_mode = :any predict_session_trajectories(
@@ -118,7 +120,7 @@
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 DIFFERENT_LENGTHS_TABLE;
                 environment=RewardsPreviousChoice(),
             ),

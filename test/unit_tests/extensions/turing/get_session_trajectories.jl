@@ -23,7 +23,7 @@ function some_sessions_running_environment()
         TuringBackend(),
         IndependentParameters(FULL_PRIORS),
         sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             TWO_MISSING_REWARDS_TABLE;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
@@ -204,7 +204,7 @@ end
         end
         single_model = own_single_session_model(
             SessionInfo(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_REWARDS,
                 SESSION_CHOICES;
                 who_starts=EnvironmentStarts(),
@@ -242,7 +242,7 @@ end
         imputing = full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(SessionRescorlaWagner(), table),
+            sessions_for_test(WithDefaultParameters(DistributionsJl()), table),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(
@@ -255,7 +255,9 @@ end
         different_lengths = full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(SessionRescorlaWagner(), DIFFERENT_LENGTHS_TABLE),
+            sessions_for_test(
+                WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
+            ),
         )
         prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(

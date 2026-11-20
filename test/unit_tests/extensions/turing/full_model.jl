@@ -82,7 +82,9 @@ const GROUPED_FULL_TABLE = merge(
 const GROUP_PRIORS = (; mean=Normal(0, 1), sd=Exponential(1))
 
 #The sessions of the table, prepared once for the tests
-function sessions_for_test(model=SessionRescorlaWagner(), table=FULL_TABLE; keywords...)
+function sessions_for_test(
+    model=WithDefaultParameters(DistributionsJl()), table=FULL_TABLE; keywords...
+)
     return MultipleSessionsInfo(
         model,
         table;
@@ -167,7 +169,7 @@ end
         #S1 misses a reward, and S2 and S3 have all of theirs
         table = (; FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0])
         sessions_info = sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             table;
             environment=DriftingRewards(),
             impute_missing_actions=false,
@@ -221,7 +223,7 @@ end
             FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, missing, 0.0, 1.0]
         )
         sessions_info = sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             table;
             environment=RewardsPreviousChoice(),
             impute_missing_actions=false,
@@ -691,7 +693,7 @@ end
         #S1 misses a reward, which its environment gives around its own mean
         table = (; FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0])
         sessions_info = sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             table;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
@@ -727,7 +729,7 @@ end
     @testset "Sessions that run their environment and a session that doesn't save their trajectories in one vector, also in parallel" begin
         #S1 and S3 run their environment, whose mean is fixed, to impute a reward each, and S2 doesn't run it
         sessions_info = sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             TWO_MISSING_REWARDS_TABLE;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
@@ -1013,7 +1015,9 @@ end
         model_with(n_timesteps) = full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(SessionRescorlaWagner(), table_with(n_timesteps)),
+            sessions_for_test(
+                WithDefaultParameters(DistributionsJl()), table_with(n_timesteps)
+            ),
         )
         given = Dict(
             @varname(learning_rate.session) => [0.2, 0.3],
@@ -1031,23 +1035,6 @@ end
 
 ## Parameter domains in fits ##
 
-#The Rescorla-Wagner model of the sessions with domains for its two parameters
-struct BoundedRescorlaWagner <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::BoundedRescorlaWagner, parameters)
-    return initialize_state(SessionRescorlaWagner(), parameters)
-end
-function CognitiveModeling.run_timestep(model::BoundedRescorlaWagner, context::ModelContext)
-    return run_timestep(SessionRescorlaWagner(), context)
-end
-function CognitiveModeling.attribute_names(model::BoundedRescorlaWagner)
-    return CognitiveModeling.attribute_names(SessionRescorlaWagner())
-end
-function CognitiveModeling.parameter_domains(model::BoundedRescorlaWagner)
-    return (;
-        learning_rate=Domain(; lower=0, upper=1), inverse_temperature=Domain(; lower=0)
-    )
-end
-
 #The environment with rewards around a mean, with a domain for the mean
 struct BoundedRewardsAroundMean <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(::BoundedRewardsAroundMean, parameters)
@@ -1064,9 +1051,13 @@ function CognitiveModeling.parameter_domains(::BoundedRewardsAroundMean)
 end
 
 @testset "Parameter domains in fits" begin
-    sessions_info = sessions_for_test(BoundedRescorlaWagner(); impute_missing_actions=false)
+    sessions_info = sessions_for_test(
+        WithDomains(DistributionsJl()); impute_missing_actions=false
+    )
     unchecked_sessions = sessions_for_test(
-        BoundedRescorlaWagner(); impute_missing_actions=false, check_parameter_domains=false
+        WithDomains(DistributionsJl());
+        impute_missing_actions=false,
+        check_parameter_domains=false,
     )
     within_domains = IndependentParameters((;
         learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
@@ -1090,7 +1081,7 @@ end
             @varname(inverse_temperature.session) => fill(2.0, 3),
         )
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(model, proposed_outside)
         #The error isn't the one that rejects a sample, so it stops the evaluation there too
         @test_throws ParameterDomainError logjoint(
@@ -1107,7 +1098,7 @@ end
     @testset "A number of ForwardDiff.jl that equals a bound of its domain is within it" begin
         Dual = Turing.ForwardDiff.Dual
         check(learning_rate) = CognitiveModeling.check_parameters_in_domains(
-            BoundedRescorlaWagner(), (; learning_rate, inverse_temperature=2.0)
+            WithDomains(DistributionsJl()), (; learning_rate, inverse_temperature=2.0)
         )
         #A learning rate of exactly 1 or 0, as when a transformation reaches the bound while a sampler explores, with a derivative that points beyond it
         @test check(Dual(1.0, 1.0e-30)) === nothing
@@ -1120,7 +1111,7 @@ end
 
     @testset "A fixed value outside its domain is an error when the sessions run" begin
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(full_model(TuringBackend(), outside_domains, sessions_info), (;))
         @test_throws ParameterDomainError logjoint(
             full_model(
@@ -1151,7 +1142,7 @@ end
 
     @testset "The parameters of an environment that runs are checked too" begin
         with_environment = sessions_for_test(
-            BoundedRescorlaWagner();
+            WithDomains(DistributionsJl());
             environment=BoundedRewardsAroundMean(),
             include_environment=true,
             impute_missing_actions=false,
@@ -1200,7 +1191,7 @@ end
             ),
         )
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(
             sampled,
             Dict(
@@ -1215,7 +1206,7 @@ end
         session_info = first(sessions_info.sessions)
         parameters = (; learning_rate=1.5, inverse_temperature=2.0)
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(turing_behavioral_session(session_info, parameters), (;))
         @test_throws ParameterDomainError logjoint(
             turing_catch_invalid_parameters(
@@ -1248,7 +1239,7 @@ end
             ),
         )
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is -0.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is -0.5, which is outside its domain, from 0 to 1.",
         ) logjoint(
             model,
             Dict(
@@ -1292,7 +1283,7 @@ end
     @test session_model(TuringBackend(), session_info, session_parameters) ===
         turing_behavioral_session(session_info, session_parameters)
     with_environment = sessions_for_test(
-        SessionRescorlaWagner(),
+        WithDefaultParameters(DistributionsJl()),
         TWO_MISSING_REWARDS_TABLE;
         environment=RewardsAroundMean(),
         impute_missing_actions=false,

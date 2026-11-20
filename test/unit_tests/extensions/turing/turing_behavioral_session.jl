@@ -1,30 +1,4 @@
 ## Models and environments for the sessions ##
-#A Rescorla-Wagner model with a softmax choice, which doesn't learn when there is no observation
-struct SessionRescorlaWagner <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::SessionRescorlaWagner, parameters)
-    return (; expected_reward=0.5)
-end
-function CognitiveModeling.run_timestep(model::SessionRescorlaWagner, context::ModelContext)
-    V₋₁ = context.previous_state.expected_reward
-    r = context.input.reward
-    Vₜ = r isa AbstractNoValue ? V₋₁ : V₋₁ + context.parameters.learning_rate * (r - V₋₁)
-    return ModelOutput(
-        (; choice=BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))),
-        (; expected_reward=Vₜ),
-    )
-end
-function CognitiveModeling.attribute_names(model::SessionRescorlaWagner)
-    return ModelAttributes(;
-        parameters=(:learning_rate, :inverse_temperature),
-        states=:expected_reward,
-        inputs=:reward,
-        outputs=:choice,
-    )
-end
-function CognitiveModeling.default_parameters(model::SessionRescorlaWagner)
-    return (; inverse_temperature=2.0)
-end
-
 #Two continuous actions, so that missing ones can be imputed
 struct TwoContinuousActions <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::TwoContinuousActions, parameters)
@@ -247,13 +221,14 @@ function CognitiveModeling.stopping_criterion(
     return state.pulls >= parameters.last_pull
 end
 
-#A cognitive model which stops when its expected reward is high enough, otherwise like SessionRescorlaWagner
+#A cognitive model which stops when its expected reward is high enough, otherwise like the baseline with a default
+#inverse temperature
 struct StopsWhenSure <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StopsWhenSure, parameters)
     return (; expected_reward=0.5)
 end
 function CognitiveModeling.run_timestep(model::StopsWhenSure, context::ModelContext)
-    return run_timestep(SessionRescorlaWagner(), context)
+    return run_timestep(WithDefaultParameters(DistributionsJl()), context)
 end
 function CognitiveModeling.attribute_names(model::StopsWhenSure)
     return ModelAttributes(;
@@ -366,7 +341,7 @@ const SESSION_PARAMETERS = (; learning_rate=0.3, inverse_temperature=2.0)
 
 #Shortens the calls below: prepares the session and makes the Turing model of it, with the environment parameters when there are any
 function session_for_test(
-    model=SessionRescorlaWagner(),
+    model=WithDefaultParameters(DistributionsJl()),
     parameters=SESSION_PARAMETERS,
     observations=SESSION_REWARDS,
     actions=SESSION_CHOICES;
@@ -433,44 +408,53 @@ end
 
     @testset "Default parameters are filled in, and the names and the data are checked" begin
         @test logjoint(
-            session_for_test(SessionRescorlaWagner(), (; learning_rate=0.3)), (;)
+            session_for_test(
+                WithDefaultParameters(DistributionsJl()), (; learning_rate=0.3)
+            ),
+            (;),
         ) ≈ logjoint(session_for_test(), (;))
         #The parameters are only known when the model is evaluated, so they are checked then
-        @test_throws "The parameters are named (:inverse_temperature, :learning_rate, :noise), but the parameters in the attributes of a cognitive model of type SessionRescorlaWagner" logjoint(
-            session_for_test(SessionRescorlaWagner(), (; learning_rate=0.3, noise=1.0)), (;)
+        @test_throws "The parameters are named (:inverse_temperature, :learning_rate, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{DistributionsJl}" logjoint(
+            session_for_test(
+                WithDefaultParameters(DistributionsJl()), (; learning_rate=0.3, noise=1.0)
+            ),
+            (;),
         )
         #The data is checked when the session is prepared
-        @test_throws "The observations in the data are named (:cue,), but the observations in the attributes of a cognitive model of type SessionRescorlaWagner, its inputs, are (:reward,). The data must have every observation in the cognitive model's attributes." session_for_test(
-            SessionRescorlaWagner(),
+        @test_throws "The observations in the data are named (:cue,), but the observations in the attributes of a cognitive model of type WithDefaultParameters{DistributionsJl}, its inputs, are (:reward,). The data must have every observation in the cognitive model's attributes." session_for_test(
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; cue=[1.0, 0.0]),
             (; choice=[true, false]),
         )
-        @test_throws "The actions in the data are named (:bet,), but the actions in the attributes of a cognitive model of type SessionRescorlaWagner, its outputs, are (:choice,)." session_for_test(
-            SessionRescorlaWagner(),
+        @test_throws "The actions in the data are named (:bet,), but the actions in the attributes of a cognitive model of type WithDefaultParameters{DistributionsJl}, its outputs, are (:choice,)." session_for_test(
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             SESSION_REWARDS,
             (; bet=SESSION_CHOICES.choice),
         )
         @test_throws "Every observation and action in the data must have one value for each timestep, but their lengths are (reward = 2,) and (choice = 5,)." session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[1.0, 0.0]),
             SESSION_CHOICES,
         )
         @test_throws "must each be a NamedTuple with one vector for each name" session_for_test(
-            SessionRescorlaWagner(), SESSION_PARAMETERS, [(; reward=1.0)], [(; choice=true)]
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            [(; reward=1.0)],
+            [(; choice=true)],
         )
         @test_throws "timestep_sizes must have one size for each timestep, but it has 2 sizes and the data has 5 timesteps." session_for_test(;
             timestep_sizes=[1.0, 2.0]
         )
-        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type SessionRescorlaWagner" logjoint(
+        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs in the attributes of a cognitive model of type WithDefaultParameters{DistributionsJl}" logjoint(
             session_for_test(; previous_action=(; bet=true)), (;)
         )
         #The data can have more observations than those in the model's attributes
         @test logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=SESSION_REWARDS.reward, cue=1:5),
             ),
@@ -498,7 +482,7 @@ end
     end
 
     @testset "The states where the session starts come from initialize_state with the parameters, so a start which is a parameter is fitted" begin
-        #StartsFromParameter has initial_value as a parameter with a default of 0.5, which SessionRescorlaWagner starts from
+        #StartsFromParameter has initial_value as a parameter with a default of 0.5, which WithDefaultParameters starts from
         @test logjoint(
             session_for_test(StartsFromParameter(), (; learning_rate=0.3)), (;)
         ) ≈ logjoint(session_for_test(), (;))
@@ -535,7 +519,7 @@ end
 
     @testset "A missing in the data becomes MissingValue, or the marker for one that isn't imputed, and a column keeps one type" begin
         session_info = SessionInfo(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing, 0.0]),
             (; choice=[true, missing, false]);
             who_starts=EnvironmentStarts(),
@@ -553,13 +537,13 @@ end
             [@varname(timestep[2].choice.imputed)]
         #A column whose element type allows missing gets the marker in its type even without a missing, so that sessions of one table have one type
         @test SessionInfo(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
         ).actions.choice isa Vector{Union{MissingValue,Bool}}
         @test SessionInfo(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
@@ -567,14 +551,14 @@ end
         ).actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
         #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
         )
         #It can be passed on unimputed: the model receives the marker as its observation, which this one doesn't learn from, and nothing is sampled
         unimputed = SessionInfo(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
@@ -827,7 +811,7 @@ end
 
         #The environment receives the marker too: RewardsPreviousChoice gives 0.5 for it, and the previous choice otherwise
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 3)),
             choices;
@@ -844,10 +828,13 @@ end
         full = (; reward=[0.5, 1.0, 0.0, 1.0, 1.0])
         with_missing = (; reward=[0.5, MissingValue(), 0.0, MissingValue(), 1.0])
         reference = session_for_test(
-            SessionRescorlaWagner(), SESSION_PARAMETERS, full, SESSION_CHOICES
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            full,
+            SESSION_CHOICES,
         )
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             with_missing,
             SESSION_CHOICES;
@@ -860,7 +847,7 @@ end
         #The environment's defaults are filled in and its names checked when the model is evaluated
         @test_throws "the parameters in the attributes of an environment model of type RewardsPreviousChoice" logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 with_missing,
                 SESSION_CHOICES;
@@ -871,7 +858,7 @@ end
         )
         #Its parameters scale what it gives
         scaled = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             with_missing,
             SESSION_CHOICES;
@@ -882,8 +869,8 @@ end
         @test returned(scaled, (;)).saved_trajectories.observations[2:end] == [
             (; reward=0.5), (; reward=2.0), (; reward=0.0), (; reward=2.0), (; reward=1.0)
         ]
-        @test_throws "The attributes of a cognitive model of type SessionRescorlaWagner have the observations (:reward,) as inputs, but an environment model of type GivesNothing gives (). Without a map, the two must have the same observations in their attributes." session_for_test(
-            SessionRescorlaWagner(),
+        @test_throws "The attributes of a cognitive model of type WithDefaultParameters{DistributionsJl} have the observations (:reward,) as inputs, but an environment model of type GivesNothing gives (). Without a map, the two must have the same observations in their attributes." session_for_test(
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             SESSION_REWARDS,
             SESSION_CHOICES;
@@ -891,7 +878,7 @@ end
         )
         #When the agent starts, the environment responds to the action of the same timestep
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 5)),
             SESSION_CHOICES;
@@ -903,11 +890,14 @@ end
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
         @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
-            SessionRescorlaWagner(), SESSION_PARAMETERS, with_missing, SESSION_CHOICES
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            with_missing,
+            SESSION_CHOICES,
         )
         #An observation that the environment doesn't give stays NoValue
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 3)),
             (; choice=[true, false, true]);
@@ -927,7 +917,7 @@ end
         )
         for who_starts in (EnvironmentStarts(), AgentStarts())
             without_maps = session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 rewards,
                 choices;
@@ -936,7 +926,7 @@ end
                 saves_everything...,
             )
             with_maps = session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 rewards,
                 choices;
@@ -979,7 +969,7 @@ end
         #Each one is named after its timestep and the observation, under the environment, and there is none where the data has the observation
         choices = (; choice=[true, false, true])
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[MissingValue(), 1.0, MissingValue()]),
             choices;
@@ -1000,7 +990,7 @@ end
             [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
         #They count in the log density with the environment's distribution, beside the choices given those rewards, and so does the reward in the data
         nothing_imputed = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[0.7, 1.0, -0.4]),
             choices,
@@ -1015,7 +1005,7 @@ end
             loglikelihood(nothing_imputed, (;)) + logpdf(Normal(0.5, 1.0), 1.0)
         #With the data complete, the environment doesn't run, with no warning, so the session is the same as one without it
         model = @test_logs session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[0.7, 1.0, -0.4]),
             choices;
@@ -1029,7 +1019,7 @@ end
         #The agent starts, so each reward follows the choice of its timestep
         rewards = (; reward=[1.0, 0.0, 1.0])
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             (; choice=[true, MissingValue(), true]);
@@ -1038,7 +1028,7 @@ end
         )
         for imputed_choice in (true, false)
             nothing_imputed = session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 rewards,
                 (; choice=[true, imputed_choice, true]);
@@ -1059,21 +1049,21 @@ end
         matching = (; reward=[0.5, 1.0, 0.0])
         choices = (; choice=[true, false, MissingValue()])
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             matching,
             choices;
             environment=RewardsPreviousChoice(),
         )
         remake_session_without_environment = session_for_test(
-            SessionRescorlaWagner(), SESSION_PARAMETERS, matching, choices
+            WithDefaultParameters(DistributionsJl()), SESSION_PARAMETERS, matching, choices
         )
         imputed = Dict(@varname(timestep[3].choice.imputed) => true)
         @test (@test_logs match_mode = :any loglikelihood(model, imputed)) ≈
             loglikelihood(remake_session_without_environment, imputed)
         #A reward the environment couldn't have given makes the log density -Inf
         mismatching = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[0.5, 0.0, 0.0]),
             choices;
@@ -1083,7 +1073,7 @@ end
         #A Deterministic which isn't a number can't be scored, and a value in the data where the environment gives nothing is an error too
         @test_throws "A value in the data is scored against what the model gave for it, which is Deterministic(:win), of type Symbol. Only a number or a Bool can be scored as a point mass." logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=[1.0, MissingValue()]),
                 (; choice=[true, false]);
@@ -1093,7 +1083,7 @@ end
         )
         @test_throws "An environment model of type RewardsAfterFirstChoice gave no output reward on a timestep where the data has 1.0 for it." logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=[1.0, MissingValue()]),
                 (; choice=[true, false]);
@@ -1108,7 +1098,7 @@ end
         rewards = (; reward=[0.5, 1.0, 0.0])
         choices = (; choice=[true, false, true])
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             choices;
@@ -1139,12 +1129,17 @@ end
         ]
         #The rewards all match, so the log density is that of the session without the environment
         @test logjoint(model, (;)) ≈ logjoint(
-            session_for_test(SessionRescorlaWagner(), SESSION_PARAMETERS, rewards, choices),
+            session_for_test(
+                WithDefaultParameters(DistributionsJl()),
+                SESSION_PARAMETERS,
+                rewards,
+                choices,
+            ),
             (;),
         )
         #A session whose environment doesn't run has an empty record of it, and one without an environment has none
         not_running = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             choices;
@@ -1160,7 +1155,10 @@ end
         @test !haskey(
             returned(
                 session_for_test(
-                    SessionRescorlaWagner(), SESSION_PARAMETERS, rewards, choices
+                    WithDefaultParameters(DistributionsJl()),
+                    SESSION_PARAMETERS,
+                    rewards,
+                    choices,
                 ),
                 (;),
             ).saved_trajectories,
@@ -1168,7 +1166,7 @@ end
         )
         #With timestep 0 left out, the environment's record has one element per timestep too
         from_first = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             choices;
@@ -1187,7 +1185,7 @@ end
         choices = (; choice=fill(MissingValue(), 5))
         #A predictive session, where nothing is data, ends when the environment has ended, with what it saved until then
         predictive = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             choices;
@@ -1216,7 +1214,7 @@ end
         @test [state.expected_reward for state in saved_sure.states] == [0.5, 0.75, 0.875]
         #With a fit, the criterion is never checked by default, so every timestep runs
         fitted = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=fill(1.0, 5)),
             (; choice=fill(true, 5));
@@ -1228,7 +1226,7 @@ end
         #Checked on every timestep, a criterion met while the data continues is an error, and one met before the first timestep too
         @test_throws "A stopping criterion is met before timestep 4, but the data of the session has values until timestep 5. A session can't end while its data continues." logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=fill(1.0, 5)),
                 (; choice=fill(true, 5));
@@ -1240,7 +1238,7 @@ end
         )
         @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep" logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=fill(1.0, 2)),
                 (; choice=fill(true, 2));
@@ -1254,7 +1252,7 @@ end
         @test length(
             returned(
                 session_for_test(
-                    SessionRescorlaWagner(),
+                    WithDefaultParameters(DistributionsJl()),
                     SESSION_PARAMETERS,
                     (; reward=fill(1.0, 3)),
                     (; choice=fill(true, 3));
@@ -1267,7 +1265,7 @@ end
             ).saved_trajectories.states,
         ) == 4
         never = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
             choices;
@@ -1283,7 +1281,7 @@ end
 
     @testset "An environment which samples within a timestep has its variables under the timestep" begin
         model = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=fill(MissingValue(), 2)),
             (; choice=[true, false]);
@@ -1303,7 +1301,7 @@ end
             [(; reward=0.75), (; reward=0.25)]
         #With every reward in the data, it doesn't run, so there are no drifts, and the session is the same as one without it
         complete = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=[1.0, 0.0]),
             (; choice=[true, false]);
@@ -1312,7 +1310,7 @@ end
         @test isempty(keys(rand(Xoshiro(1), complete)))
         @test logjoint(complete, (;)) ≈ logjoint(
             session_for_test(
-                SessionRescorlaWagner(),
+                WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
                 (; reward=[1.0, 0.0]),
                 (; choice=[true, false]),
@@ -1469,7 +1467,7 @@ end
 
     @testset "Evaluating a session only allocates the distributions it keeps, so each timestep is compiled with its types known" begin
         session_with(n_timesteps) = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=repeat([1.0, 0.0], n_timesteps ÷ 2)),
             (; choice=repeat([true, false], n_timesteps ÷ 2)),
@@ -1486,7 +1484,7 @@ end
         @test extra_bytes <= 40 * 10_000
         #The same holds for a column which can hold a MissingValue, since the rows and the imputed values have the type of their column
         union_session_with(n_timesteps) = session_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             (; reward=repeat([1.0, 0.0], n_timesteps ÷ 2)),
             (; choice=Vector{Union{Missing,Bool}}(repeat([true, false], n_timesteps ÷ 2))),

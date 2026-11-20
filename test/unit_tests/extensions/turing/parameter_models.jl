@@ -108,7 +108,9 @@ end
 
 @testset "HierarchicalGroupedParameters and CompositeParameters" begin
     sessions_info = sessions_for_test(
-        SessionRescorlaWagner(), GROUPED_FULL_TABLE; impute_missing_actions=false
+        WithDefaultParameters(DistributionsJl()),
+        GROUPED_FULL_TABLE;
+        impute_missing_actions=false,
     )
 
     @testset "Each session's value is its group's mean plus a standard normal value times its group's standard deviation, transformed" begin
@@ -329,7 +331,9 @@ end
 
 @testset "HierarchicalRegressionParameters" begin
     sessions_info = sessions_for_test(
-        SessionRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
+        WithDefaultParameters(DistributionsJl()),
+        REGRESSION_FULL_TABLE;
+        impute_missing_actions=false,
     )
     regression = HierarchicalRegressionParameters((;
         learning_rate=RegressionParameter(
@@ -560,7 +564,7 @@ end
             (; learning_rate=fill(0.5, 3), inverse_temperature=fill(3.0, 3))
         #The mean reward of the environment of each session, by its group
         with_environment = sessions_for_test(
-            SessionRescorlaWagner(),
+            WithDefaultParameters(DistributionsJl()),
             REGRESSION_FULL_TABLE;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
@@ -761,7 +765,9 @@ end
 
     @testset "A value that a regression gives outside a domain stops the evaluation" begin
         bounded_sessions = sessions_for_test(
-            BoundedRescorlaWagner(), REGRESSION_FULL_TABLE; impute_missing_actions=false
+            WithDomains(DistributionsJl()),
+            REGRESSION_FULL_TABLE;
+            impute_missing_actions=false,
         )
         model = full_model(
             TuringBackend(),
@@ -779,7 +785,7 @@ end
         )
         @test isfinite(logjoint(model, given_intercept(0.3)))
         @test_throws ParameterDomainError(
-            "The parameter learning_rate of a cognitive model of type BoundedRescorlaWagner is 1.5, which is outside its domain, from 0 to 1.",
+            "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(model, given_intercept(1.5))
     end
 end
