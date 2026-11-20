@@ -483,6 +483,7 @@ function sessions_cases(distributions)
     cases = []
     for name in (
             "Baseline",
+            "ContinuousOutput",
             "VectorAttributes",
             "NamedTupleAttributes",
             "SamplingWithinTimestep",
@@ -539,9 +540,15 @@ function full_model_case(
     who_starts=EnvironmentStarts(),
     missing_actions=((; choice=(3,)), (;), (;)),
     missing_observations=((;), (;), (;)),
+    missing_values=true,
     sessions_keywords=(;),
     full_model_keywords...,
 )
+    #Without missing values when they are left out, such as for the gradients, which a discrete imputed value has none of
+    if !missing_values
+        missing_actions = ((;), (;), (;))
+        missing_observations = ((;), (;), (;))
+    end
     sessions = sessions_case(
         name,
         distributions;
@@ -564,12 +571,15 @@ end
 
 #Every case of a full model with a kind of distributions of the example models, which are those of Distributions.jl, for
 #the priors of the parameter models: each parameter model, with the features it has, on three sessions of the baseline,
-#where the first has a missing choice, so that only it includes its environment
-function full_model_cases(distributions)
+#where the first has a missing choice, so that only it includes its environment. With missing_values = false, no value is
+#missing in any case
+function full_model_cases(distributions; missing_values=true)
     baseline = pair_named("Baseline")
+    case(arguments...; keywords...) =
+        full_model_case(arguments...; keywords..., missing_values)
     group_priors = (; mean=Normal(0, 1), sd=Exponential(1))
     return [
-        full_model_case(
+        case(
             "Independent parameters without missing values",
             distributions;
             pair=baseline,
@@ -578,7 +588,7 @@ function full_model_cases(distributions)
                 learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
             )),
         ),
-        full_model_case(
+        case(
             "Independent parameters",
             distributions;
             pair=baseline,
@@ -586,7 +596,7 @@ function full_model_cases(distributions)
                 learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
             )),
         ),
-        full_model_case(
+        case(
             "Independent parameters, agent starts",
             distributions;
             pair=baseline,
@@ -595,7 +605,7 @@ function full_model_cases(distributions)
                 learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
             )),
         ),
-        full_model_case(
+        case(
             "Identical parameters",
             distributions;
             pair=baseline,
@@ -603,7 +613,7 @@ function full_model_cases(distributions)
                 learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
             )),
         ),
-        full_model_case(
+        case(
             "Fixed parameters",
             distributions;
             pair=baseline,
@@ -611,7 +621,7 @@ function full_model_cases(distributions)
                 learning_rate=0.3, inverse_temperature=2.0
             )),
         ),
-        full_model_case(
+        case(
             "Fixed parameters for each session",
             distributions;
             pair=baseline,
@@ -621,14 +631,14 @@ function full_model_cases(distributions)
                 S3=(; learning_rate=0.4, inverse_temperature=3.0),
             )),
         ),
-        full_model_case(
+        case(
             "A parameter fixed by keyword",
             distributions;
             pair=baseline,
             parameters_model=IndependentParameters((; learning_rate=Beta(2, 2))),
             fixed_cognitive_parameters=(; inverse_temperature=2.0),
         ),
-        full_model_case(
+        case(
             "Hierarchical parameters, centered and non-centered",
             distributions;
             pair=baseline,
@@ -642,7 +652,7 @@ function full_model_cases(distributions)
                 inverse_temperature=HierarchicalParameter(group_priors; transformation=exp),
             )),
         ),
-        full_model_case(
+        case(
             "A regression with every kind of term",
             distributions;
             pair=baseline,
@@ -671,7 +681,7 @@ function full_model_cases(distributions)
                 ),
             )),
         ),
-        full_model_case(
+        case(
             "Composite parameters",
             distributions;
             pair=baseline,
@@ -682,7 +692,7 @@ function full_model_cases(distributions)
                 )),
             ),
         ),
-        full_model_case(
+        case(
             "Environment parameters estimated",
             distributions;
             pair=baseline,
@@ -693,7 +703,7 @@ function full_model_cases(distributions)
                 reward_probability=Beta(2, 2)
             )),
         ),
-        full_model_case(
+        case(
             "A discrete parameter",
             distributions;
             pair=pair_named("WithDiscreteParameter, learning"),
@@ -703,7 +713,7 @@ function full_model_cases(distributions)
                 learns=Bernoulli(0.7),
             )),
         ),
-        full_model_case(
+        case(
             "A parameter that is a vector",
             distributions;
             pair=pair_named("VectorAttributes"),
@@ -713,7 +723,7 @@ function full_model_cases(distributions)
                 noise=LogNormal(-1, 0.5),
             )),
         ),
-        full_model_case(
+        case(
             "Every feature with a regression",
             distributions;
             pair=pair_named("EveryFeature"),
@@ -735,7 +745,7 @@ function full_model_cases(distributions)
                 )),
             ),
         ),
-        full_model_case(
+        case(
             "Invalid parameters caught",
             distributions;
             pair=pair_named("ThrowsInvalidParameters"),
