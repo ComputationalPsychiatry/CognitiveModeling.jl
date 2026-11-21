@@ -37,7 +37,9 @@ observation too when the session has an environment model that it can include, s
 inference backend's model of the copy simulates them instead of fitting to them. This can be
 used for predictive checks: evaluating the model of the copy with the samples of a fit to
 the sessions, or sampling it from its prior, simulates each session again, with the same
-number of timesteps at most, the same settings and the same environment. The observations of
+number of timesteps at most, the same settings and the same environment. Where an inference
+backend has a function `decondition` for its models, its method for the models that the
+package makes does this to their sessions. The observations of
 a session without an environment stay those in the data, as for an experiment whose
 observations are fixed in advance. Every action is simulated, whatever it was in the data,
 also one that was [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). The copy checks the

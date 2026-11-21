@@ -96,8 +96,10 @@ include("parameter_models/hierarchical_grouped_parameters.jl")
 include("parameter_models/hierarchical_regression_parameters.jl")
 include("parameter_models/composite_parameters.jl")
 
-#Reading the trajectories and the parameters of fitted sessions from a chain, and simulating the sessions again
+#Reading the trajectories and the parameters of fitted sessions from a chain, and simulating the sessions again, also
+#with Turing.jl's own functions
 include("workflow_and_postprocessing/get_session_trajectories.jl")
 include("workflow_and_postprocessing/predict_session_trajectories.jl")
+include("workflow_and_postprocessing/decondition_and_predict.jl")
 
 end

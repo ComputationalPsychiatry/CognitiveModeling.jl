@@ -55,6 +55,18 @@ simulated = predict_session_trajectories(model, chain; cognitive_save_history = 
 simulated[@varname(P1.choice)]
 ```
 
+Turing.jl's own `decondition` has a method for these models, which also deconditions their
+sessions with [`decondition_sessions`](@ref), since the models take their data as arguments,
+which Turing.jl's `decondition` otherwise leaves as they are. Turing.jl's own functions then
+simulate the data: `sample` with `Prior()` from the prior, and `predict` with the parameters
+of each sample of a chain, keeping the values that the chain has for actions imputed in the
+fit.
+
+```julia
+prior_predictions = sample(decondition(model), Prior(), 1000)
+predictions = predict(decondition(model), chain)
+```
+
 ## Functions that a model can implement for Turing.jl
 
 A model can add methods of these to change how it runs when it is fitted with Turing.jl,
