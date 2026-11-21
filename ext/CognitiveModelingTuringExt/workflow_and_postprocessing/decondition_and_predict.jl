@@ -30,3 +30,38 @@ function DynamicPPL.decondition(model::SessionModel)
         DynamicPPL.decondition, Tuple{DynamicPPL.Model}, with_deconditioned_sessions
     )
 end
+
+#Turing.jl's predict keeps the value that the chain has for a variable, so the actions that a fit imputed would stay as they were, so the method for the models of the package leaves the variables within the timesteps out of the chain first, as predict_session_trajectories does. That also keeps FlexiChains.jl from rebuilding a sample whose sessions have variables at different timesteps, which fails, as without_timestep_variables says
+"""
+    predict([rng,] model, chain; include_all=true)
+
+Simulate `model`, a Turing.jl model made by [`full_model`](@ref),
+[`multiple_sessions_model`](@ref) or [`session_model`](@ref) with `TuringBackend()`, or such
+a model inside [`catch_invalid_parameters`](@ref), for every sample of `chain`, a
+`FlexiChain`, and return a `FlexiChain` of the variables it simulated, beside the variables
+of `chain` when `include_all` is `true`, as Turing.jl's own `predict` does. The parameters of
+each sample, and any start that a model samples, are taken from `chain`, and every variable
+within the timesteps of the sessions is simulated again, also an action or an observation
+that was imputed in the fit, as data is in a predictive check. With a model from
+`decondition(model)`, every action is simulated, and every observation too when the sessions
+have an environment.
+"""
+function DynamicPPL.predict(
+    rng::AbstractRNG,
+    model::SessionModel,
+    chain::Turing.FlexiChains.FlexiChain{<:VarName};
+    include_all::Bool=true,
+)
+    #The statistics of the sampler are kept, which Turing.jl's own predict returns too
+    chain_without_timestep_variables = merge(
+        Turing.FlexiChains.subset_extras(chain), without_timestep_variables(chain)
+    )
+    return invoke(
+        DynamicPPL.predict,
+        Tuple{AbstractRNG,DynamicPPL.Model,typeof(chain_without_timestep_variables)},
+        rng,
+        model,
+        chain_without_timestep_variables;
+        include_all,
+    )
+end

@@ -78,6 +78,86 @@
         )
     end
 
+    @testset "predict simulates every choice again, also those the fit imputed at different timesteps in different sessions" begin
+        prior_chain = sample(Xoshiro(3), imputing, Prior(), 20; progress=false)
+        predictions = @test_logs match_mode = :any predict(
+            Xoshiro(4), decondition(imputing), prior_chain
+        )
+        @test issetequal(
+            Turing.FlexiChains.parameters(predictions), [parameter_names; every_choice]
+        )
+        #The parameters are those of the chain, and the choices that the fit imputed are simulated again
+        for name in parameter_names
+            @test vec(predictions[name]) == vec(prior_chain[name])
+        end
+        for name in (
+            @varname(session[2].timestep[2].choice.imputed),
+            @varname(session[3].timestep[5].choice.imputed),
+        )
+            @test vec(predictions[name]) != vec(prior_chain[name])
+        end
+        #Without include_all, the simulated variables alone, and without a random number generator, the default one
+        only_simulated = @test_logs match_mode = :any predict(
+            Xoshiro(4), decondition(imputing), prior_chain; include_all=false
+        )
+        @test issetequal(Turing.FlexiChains.parameters(only_simulated), every_choice)
+        default_generator = @test_logs match_mode = :any predict(
+            decondition(imputing), prior_chain
+        )
+        @test issetequal(
+            Turing.FlexiChains.parameters(default_generator),
+            [parameter_names; every_choice],
+        )
+    end
+
+    @testset "With an environment, predict simulates every observation again too, also those the fit imputed" begin
+        #S1 and S3 impute a reward each at timestep 2 in the fit
+        some_running = some_sessions_running_environment()
+        prior_chain = sample(Xoshiro(5), some_running, Prior(), 5; progress=false)
+        predictions = @test_logs match_mode = :any predict(
+            Xoshiro(6), decondition(some_running), prior_chain
+        )
+        every_reward = [
+            @varname(session[i].timestep[t].environment.reward.imputed) for
+            (i, n_timesteps) in enumerate((3, 2, 4)) for t in 1:n_timesteps
+        ]
+        @test every_reward ⊆ Turing.FlexiChains.parameters(predictions)
+        for name in (
+            @varname(session[1].timestep[2].environment.reward.imputed),
+            @varname(session[3].timestep[2].environment.reward.imputed),
+        )
+            @test vec(predictions[name]) != vec(prior_chain[name])
+        end
+    end
+
+    @testset "predict keeps the statistics of the sampler, as Turing.jl's own predict does" begin
+        recorded = full_model(
+            TuringBackend(),
+            IndependentParameters(FULL_PRIORS),
+            sessions_for_test(; impute_missing_actions=false),
+        )
+        chain = sample(Xoshiro(7), recorded, NUTS(), 20; progress=false)
+        predictions = @test_logs match_mode = :any predict(
+            Xoshiro(8), decondition(recorded), chain
+        )
+        @test Turing.FlexiChains.extras(chain) ⊆ Turing.FlexiChains.extras(predictions)
+        step_size = Turing.FlexiChains.Extra(:step_size)
+        @test vec(predictions[step_size]) == vec(chain[step_size])
+    end
+
+    @testset "predict on the model as it was fitted simulates again what the fit imputed, and keeps the data" begin
+        prior_chain = sample(Xoshiro(9), imputing, Prior(), 20; progress=false)
+        predictions = @test_logs match_mode = :any predict(
+            Xoshiro(10), imputing, prior_chain
+        )
+        @test issetequal(
+            Turing.FlexiChains.parameters(predictions),
+            Turing.FlexiChains.parameters(prior_chain),
+        )
+        imputed = @varname(session[3].timestep[5].choice.imputed)
+        @test vec(predictions[imputed]) != vec(prior_chain[imputed])
+    end
+
     @testset "A model of one's own is deconditioned by Turing.jl's own method" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
         @test isempty(
