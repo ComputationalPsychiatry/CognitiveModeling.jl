@@ -9,7 +9,7 @@ Simulate the sessions of `model`, an inference backend's model of fitted session
 with the parameters of every sample in `chain`, and return the trajectories they saved for
 every sample. This can be used for prior and posterior predictive checks.
 
-The sessions are prepared with [`prepare_for_prediction`](@ref), so that every action is
+The sessions are deconditioned with [`decondition_sessions`](@ref), so that every action is
 simulated, and every observation too when the sessions have an environment, and they save
 what the two save histories select. The model of those sessions then runs once for each
 sample, with the sample's parameters, and any start that a model samples, and with every
@@ -28,8 +28,8 @@ function predict_session_trajectories end
 ## Sessions whose data is simulated instead of fitted to ##
 
 """
-    prepare_for_prediction(session_info; check_stopping_criterion=nothing)
-    prepare_for_prediction(sessions_info; check_stopping_criterion=nothing)
+    decondition_sessions(session_info; check_stopping_criterion=nothing)
+    decondition_sessions(sessions_info; check_stopping_criterion=nothing)
 
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
 [`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
@@ -54,11 +54,11 @@ julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; paramete
 
 julia> session_info = SessionInfo(Counter(), [1.0, 0.0, 1.0], [true, false, true]; who_starts = EnvironmentStarts());
 
-julia> prepare_for_prediction(session_info).actions
+julia> decondition_sessions(session_info).actions
 (choice = [MissingValue(), MissingValue(), MissingValue()],)
 ```
 """
-function prepare_for_prediction(
+function decondition_sessions(
     session_info::SessionInfo; check_stopping_criterion::Union{Nothing,Bool}=nothing
 )
 
@@ -93,11 +93,9 @@ function prepare_for_prediction(
     )
 end
 
-function prepare_for_prediction(sessions_info::MultipleSessionsInfo; keywords...)
+function decondition_sessions(sessions_info::MultipleSessionsInfo; keywords...)
     return MultipleSessionsInfo(
-        map(
-            session -> prepare_for_prediction(session; keywords...), sessions_info.sessions
-        ),
+        map(session -> decondition_sessions(session; keywords...), sessions_info.sessions),
         sessions_info.session_ids;
         table=sessions_info.table,
         session_rows=sessions_info.session_rows,

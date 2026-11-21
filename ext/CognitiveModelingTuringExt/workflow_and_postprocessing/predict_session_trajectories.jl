@@ -12,7 +12,7 @@ function CognitiveModeling.predict_session_trajectories(
 )
     predictive_model = with_session_info(
         model,
-        info -> prepare_for_prediction(
+        info -> decondition_sessions(
             with_save_history(info, cognitive_save_history, environment_save_history)
         ),
         "predict_session_trajectories",

@@ -68,7 +68,7 @@ export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
 export simulate, simulate!, reset!
-export SessionInfo, MultipleSessionsInfo, NoEnvironment, prepare_for_prediction
+export SessionInfo, MultipleSessionsInfo, NoEnvironment, decondition_sessions
 export AbstractParametersModel,
     NoParameters,
     FixedParameters,

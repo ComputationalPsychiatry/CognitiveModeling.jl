@@ -1,4 +1,4 @@
-@testset "prepare_for_prediction" begin
+@testset "decondition_sessions" begin
     @testset "Every action is missing, and the observations stay those in the data without an environment" begin
         session_info = SessionInfo(
             SessionCounter(),
@@ -9,7 +9,7 @@
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
             impute_missing_actions=false,
         )
-        predictive = prepare_for_prediction(session_info)
+        predictive = decondition_sessions(session_info)
         @test predictive.actions == (; choice=fill(MissingValue(), 3))
         @test predictive.observations === session_info.observations
         @test isempty(predictive.actions_to_condition_on) &&
@@ -30,7 +30,7 @@
             who_starts=AgentStarts(),
             check_parameter_domains=false,
         )
-        @test prepare_for_prediction(unchecked).check_parameter_domains === false
+        @test decondition_sessions(unchecked).check_parameter_domains === false
     end
 
     @testset "With an environment, every observation is missing too, so the environment runs" begin
@@ -41,7 +41,7 @@
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         )
-        predictive = prepare_for_prediction(session_info)
+        predictive = decondition_sessions(session_info)
         @test predictive.observations == (; reward=fill(MissingValue(), 3))
         @test predictive.includes_environment && predictive.environment === GivesReward()
         #With no values in the data, the stopping criterion is checked from the first timestep
@@ -59,10 +59,10 @@
         )
         @test never_checked.first_timestep_to_check_stopping == 4
         #By default as a simulation does, from the first timestep, since the copy has no data
-        @test prepare_for_prediction(never_checked).first_timestep_to_check_stopping == 1
-        @test prepare_for_prediction(never_checked).check_stopping_criterion === nothing
+        @test decondition_sessions(never_checked).first_timestep_to_check_stopping == 1
+        @test decondition_sessions(never_checked).check_stopping_criterion === nothing
         #Or never, when it is told so
-        @test prepare_for_prediction(never_checked; check_stopping_criterion=false).first_timestep_to_check_stopping ==
+        @test decondition_sessions(never_checked; check_stopping_criterion=false).first_timestep_to_check_stopping ==
             4
     end
 
@@ -75,7 +75,7 @@
             session_columns=:id,
             who_starts=EnvironmentStarts(),
         )
-        predictive = prepare_for_prediction(sessions_info)
+        predictive = decondition_sessions(sessions_info)
         @test predictive.session_ids == sessions_info.session_ids
         @test [session.n_timesteps for session in predictive.sessions] == [2, 3]
         @test all(
@@ -84,7 +84,7 @@
         #A keyword is passed on to every session
         @test all(
             session -> session.check_stopping_criterion === false,
-            prepare_for_prediction(sessions_info; check_stopping_criterion=false).sessions,
+            decondition_sessions(sessions_info; check_stopping_criterion=false).sessions,
         )
     end
 end

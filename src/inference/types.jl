@@ -208,8 +208,8 @@ julia> session_info.actions_to_condition_on
 When the stopping criterion is checked follows from the data. The last timestep with data is
 the last one where an observation or an action isn't `MissingValue()`. With
 `check_stopping_criterion = nothing`, the criterion is only checked after it, so that a fit,
-where every timestep has data, never checks it, and a session prepared by
-[`prepare_for_prediction`](@ref), whose data is all `MissingValue()`, ends as a simulation
+where every timestep has data, never checks it, and a session from
+[`decondition_sessions`](@ref), whose data is all `MissingValue()`, ends as a simulation
 does. With `true`, the session includes its environment, whose criterion is checked too. A
 criterion that is met while the data continues is then an error, since the values in the
 data after that timestep couldn't be scored, which checks that the models agree with the

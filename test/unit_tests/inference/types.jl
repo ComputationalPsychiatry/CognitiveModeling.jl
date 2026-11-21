@@ -169,7 +169,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test SessionInfo(
             session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
         ).observation_map === NameMap(:payoff => :reward)
-        @test prepare_for_prediction(session_info).action_map === NameMap(:choice => :pull)
+        @test decondition_sessions(session_info).action_map === NameMap(:choice => :pull)
     end
 
     @testset "Maps of names must fit the models, and need an environment" begin
@@ -380,7 +380,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             SessionInfo(kept; cognitive_save_history=SaveHistory(; states=:n_timesteps)).observations.reward,
             [1.0, missing, 1.0],
         )
-        @test isequal(prepare_for_prediction(kept).observations.reward, [1.0, missing, 1.0])
+        @test isequal(decondition_sessions(kept).observations.reward, [1.0, missing, 1.0])
     end
 
     @testset "A column written with a marker in it has the element type Any, and is narrowed to the types it holds" begin
@@ -485,7 +485,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test left_out.include_environment === false && !left_out.includes_environment
         #The setting is kept in a copy with other save histories, and a copy for prediction then keeps its observations
         @test SessionInfo(included; cognitive_save_history=SaveHistory(SaveEverything())).includes_environment
-        predictive = prepare_for_prediction(left_out)
+        predictive = decondition_sessions(left_out)
         @test predictive.observations === left_out.observations &&
             !predictive.includes_environment
         #What needs the environment is an error without it
@@ -988,7 +988,7 @@ const COUNTER_TABLE = (;
             MultipleSessionsInfo(
                 sessions_info; cognitive_save_history=SaveHistory(SaveEverything())
             ),
-            prepare_for_prediction(sessions_info),
+            decondition_sessions(sessions_info),
         )
             @test copy.table === COUNTER_TABLE
             @test copy.session_rows == [[1, 2], [3, 4, 5]]

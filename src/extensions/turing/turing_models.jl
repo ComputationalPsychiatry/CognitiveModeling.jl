@@ -90,7 +90,7 @@ the environment's history isn't saved, the session is the same as one without an
 environment, with the same variables. The [`stopping_criterion`](@ref) of the models is
 checked as the `check_stopping_criterion` of `session_info` says: by default only after the
 last timestep with data, so that a fit runs every timestep and a session from
-[`prepare_for_prediction`](@ref) can end early.
+[`decondition_sessions`](@ref) can end early.
 
 # What it returns
 A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as
