@@ -65,7 +65,7 @@ theirs must be checked by hand. Last checked with Julia 1.13.4, ReverseDiff
 | Enzyme forward, with and without runtime activity | `simulate` where the cognitive model's action is `NoValue` on some timesteps and the environment starts | wrong gradient, no error | to be reported; right when the agent starts |
 | Enzyme, every form | `simulate` where a state changes type, such as an integer before the first timestep and a number after it, and a model with every feature, whose choice is `NoValue` on some timesteps among outputs of other kinds | throws an `IllegalTypeAnalysisException` | related to Enzyme.jl issue 4031; a state that keeps its type is right |
 | ReverseDiff with a compiled tape | `simulate` where the model stops once a value passes a threshold, or samples its choices and rewards from a seeded `Xoshiro` | wrong gradient, no error, at points where the other branch is taken | a limitation of compiled tapes, see the pitfalls below |
-| Enzyme forward and reverse without runtime activity | the log density of a Turing.jl full model, and of many sessions: with imputed values, of models whose outputs are numbers from a normal distribution, vectors or `NamedTuple`s, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or has names of its own | throws an `EnzymeRuntimeActivityError` | a limitation Turing.jl documents: use runtime activity. The sessions of the baseline and of most models whose outputs are choices pass |
+| Enzyme forward and reverse without runtime activity | the log density of a Turing.jl full model, and of many sessions: with imputed values, of models whose outputs are numbers from a normal distribution, vectors or `NamedTuple`s, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or has names of its own | throws an `EnzymeRuntimeActivityError` | a limitation of Enzyme: use runtime activity, which Turing.jl's own tests run Enzyme with. The sessions of the baseline and of most models whose outputs are choices pass |
 | Enzyme, every form | a Turing.jl session whose observation is a vector, missing on one timestep and imputed: the imputed vector is a view of the parameters, which meets the recorded vectors in the loop over the timesteps | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4106 |
 | Enzyme, every form | a Turing.jl session or full model of the model with every feature, whose choice is `NoValue` on some timesteps among outputs of other kinds, and sessions where the agent starts and an observation is imputed, so that a value of one of two types goes from one timestep to the next | throws an `IllegalTypeAnalysisException` | related to Enzyme.jl issue 4031 |
 | Enzyme reverse, with and without runtime activity | a Turing.jl session where an output of either model is `NoValue` on some timesteps | throws a `TypeError`, that a `RefValue` was given where a value was expected | reported as Enzyme.jl issue 4044 |
@@ -99,9 +99,9 @@ These aren't failures of the package's own code, but a model can run into them.
 - **Compiled ReverseDiff tapes:** a tape records one path through the code, so a model with
   a branch on a value gives wrong gradients at points where the other branch is taken, with
   no error. The tests prepare the tape at a different point to catch this.
-- **Turing.jl models and Enzyme:** Enzyme needs runtime activity to differentiate a Turing.jl
-  model, as Turing's own documentation says; without it, it throws an
-  `EnzymeRuntimeActivityError`.
+- **Turing.jl models and Enzyme:** Enzyme needs runtime activity to differentiate most
+  Turing.jl models, and Turing.jl's own tests run Enzyme only with it; without it, it throws
+  an `EnzymeRuntimeActivityError`.
 - **Turing.jl models and Mooncake:** Mooncake can't differentiate `logjoint(model, values)`
   when the model has latent variables under an indexed prefix, such as the imputed actions of
   a session or a model which samples within a timestep, because building the variables runs

@@ -56,7 +56,7 @@ on_macos_without_bounds_checks() = Sys.isapple() && Base.JLOptions().check_bound
 
 const KNOWN_FAILURES = [
     (;
-        bug="Enzyme without runtime activity throws an EnzymeRuntimeActivityError on every full model, and on many sessions: those with imputed values, of models whose outputs are numbers from a normal distribution, vectors or NamedTuples, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or which has names of its own. Turing.jl documents that Enzyme needs runtime activity for its models. The sessions of the baseline and of most models whose outputs are choices pass",
+        bug="Enzyme without runtime activity throws an EnzymeRuntimeActivityError on every full model, and on many sessions: those with imputed values, of models whose outputs are numbers from a normal distribution, vectors or NamedTuples, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or which has names of its own. Turing.jl's own tests run Enzyme only with runtime activity. The sessions of the baseline and of most models whose outputs are choices pass",
         backends=["Enzyme forward", "Enzyme reverse"],
         cases=[
             "ManyAttributes with its environment, environment starts",

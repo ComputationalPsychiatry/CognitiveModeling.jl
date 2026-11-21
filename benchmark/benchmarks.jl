@@ -107,7 +107,7 @@ Turing.@model function fit_single_session(session_info)
     return nothing
 end
 
-# The automatic differentiation backends that the gradient is benchmarked with. Enzyme has the settings that Turing.jl documents for it
+# The automatic differentiation backends that the gradient is benchmarked with. Enzyme has runtime activity, which Turing.jl's own tests run it with
 const AD_BACKENDS = [
     "ForwardDiff" => AutoForwardDiff(),
     "ReverseDiff" => AutoReverseDiff(),
