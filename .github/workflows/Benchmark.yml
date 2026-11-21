@@ -32,7 +32,8 @@ jobs:
         run: julia --color=yes --project=benchmark benchmark/run_benchmarks.jl
       # Adds the results to the history on the gh-pages branch, with a page of charts, in a folder of its own beside
       # the folders that Documenter deploys. A benchmark that got much slower gives a comment on the commit, without
-      # failing the run, since the timings of the runners vary
+      # failing the run, since the timings of the runners vary: runs on different runners have differed by up to 1.8
+      # times with no change to the code, so the threshold is twice the time of the run before
       - name: Store the results
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -43,7 +44,7 @@ jobs:
           auto-push: true
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: benchmarks
-          alert-threshold: '150%'
+          alert-threshold: '200%'
           comment-on-alert: true
           fail-on-alert: false
           summary-always: true
