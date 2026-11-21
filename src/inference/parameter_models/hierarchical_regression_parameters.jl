@@ -334,12 +334,18 @@ julia> VaryingEffects((:id, :block), Intercept(Exponential(1))).name
 ```
 """
 struct VaryingEffects{
-    Tcolumns<:Tuple{Vararg{Symbol}},Tterms<:NamedTuple,Tgroup_by<:Tuple{Vararg{Symbol}}
+    Tcolumns<:Tuple{Vararg{Symbol}},
+    Tterms<:NamedTuple,
+    Tgroup_by<:Tuple{Vararg{Symbol}},
+    Tcentered<:Union{Nothing,Bool},
 } <: AbstractRegressionTerm
     columns::Tcolumns
     terms::Tterms
     group_by::Tgroup_by
-    centered::Union{Nothing,Bool}
+    #The choice as it was given, nothing or a Bool, of a type of its own, so that the field has a concrete type, as the
+    #choices of a SessionInfo have: Enzyme kills the process when it differentiates a function that returns a struct
+    #with a field of a Union type which Julia stores inline, such as Union{Nothing,Bool}, see Enzyme.jl issue 3476
+    centered::Tcentered
     name::Symbol
 
     #Checks its terms, which take the priors of their standard deviations, keeps them under their names, and is named after its columns unless another name is given
@@ -373,13 +379,32 @@ struct VaryingEffects{
         terms_by_name = collect_terms_by_name(terms, description)
         columns_to_group_by =
             group_by === nothing ? () : as_tuple(group_by)::Tuple{Vararg{Symbol}}
-        return new{typeof(columns_tuple),typeof(terms_by_name),typeof(columns_to_group_by)}(
-            columns_tuple,
-            terms_by_name,
-            columns_to_group_by,
-            centered,
-            varying_effects_name,
-        )
+        #The choice of centering is kept with its own type, Nothing or Bool, with a branch for each, so that the type is
+        #known in each branch
+        if centered === nothing
+            return new{
+                typeof(columns_tuple),
+                typeof(terms_by_name),
+                typeof(columns_to_group_by),
+                Nothing,
+            }(
+                columns_tuple,
+                terms_by_name,
+                columns_to_group_by,
+                nothing,
+                varying_effects_name,
+            )
+        else
+            return new{
+                typeof(columns_tuple),typeof(terms_by_name),typeof(columns_to_group_by),Bool
+            }(
+                columns_tuple,
+                terms_by_name,
+                columns_to_group_by,
+                centered,
+                varying_effects_name,
+            )
+        end
     end
 end
 
