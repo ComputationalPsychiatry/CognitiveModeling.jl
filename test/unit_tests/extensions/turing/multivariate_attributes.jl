@@ -4,7 +4,7 @@ struct RatesAndChoosesOptions <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RatesAndChoosesOptions, parameters)
     return (; expected_payoffs=0.5 .* one.(parameters.learning_rates), n_updates=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::RatesAndChoosesOptions, context::ModelContext
 )
     (; expected_payoffs, n_updates) = context.previous_state

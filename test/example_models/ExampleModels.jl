@@ -6,7 +6,7 @@
 module ExampleModels
 
 using CognitiveModeling
-using CognitiveModeling: run_timestep, initialize_state, attribute_names
+using CognitiveModeling: timestep_model, initialize_state, attribute_names
 using Random: AbstractRNG, Xoshiro
 
 include("distributions.jl")
@@ -42,7 +42,7 @@ export EveryFeatureEnvironment
 
 #The log likelihoods by hand, and what the models sample of their own
 export log_likelihood_by_hand, latents_from_states, log_density_of_latents_by_hand
-export run_timestep_with_latents
+export timestep_model_with_latents
 
 #Each cognitive model with the environment it runs with, and helpers to simulate them and to read their data
 export EXAMPLE_PAIRS, PAIRS_WITH_MEANS, pair_named, simulate_pair

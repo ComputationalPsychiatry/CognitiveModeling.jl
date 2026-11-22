@@ -1,11 +1,11 @@
 ### DEFAULT METHODS OF THE FUNCTIONS THAT MODELS AND THE PARTS OF A FULL MODEL IMPLEMENT ###
 
-#Default implementation of turing_run_timestep for both kinds of model, which just calls the normal run_timestep function
+#Default implementation of turing_timestep_model for both kinds of model, which just calls the normal timestep_model function
 #Can be extended for specific cognitive models or environment models that sample within a timestep
-Turing.@model function CognitiveModeling.turing_run_timestep(
+Turing.@model function CognitiveModeling.turing_timestep_model(
     model::AbstractTimestepModel, context
 )
-    return run_timestep(model, context)
+    return timestep_model(model, context)
 end
 
 #Default implementation of turing_initialize_state for both kinds of model, which just calls the normal initialize_state function

@@ -25,7 +25,7 @@ function log_likelihood_by_running(
             rng=Xoshiro(0),
         )
         output_distribution =
-            run_timestep_with_latents(model, context, latents, t).output_distribution
+            timestep_model_with_latents(model, context, latents, t).output_distribution
         for name in keys(output_distribution)
             distribution = output_distribution[name]
             distribution isa AbstractNoValue && continue
@@ -206,7 +206,7 @@ end
         #DependsOnPreviousOutput doesn't look at the choice before the first timestep
         model = DependsOnPreviousOutput(ByHand())
         parameters = (; learning_rate=0.3, inverse_temperature=2.0, stickiness=1.0)
-        first_timestep(previous_choice) = CognitiveModeling.run_timestep(
+        first_timestep(previous_choice) = CognitiveModeling.timestep_model(
             model,
             ModelContext(;
                 input=(; reward=true),

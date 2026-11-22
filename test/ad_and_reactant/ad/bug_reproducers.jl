@@ -19,7 +19,7 @@ struct LearnsRewards{Taction} <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::LearnsRewards{Taction}, context::ModelContext
 ) where {Taction}
     V₋₁ = context.previous_state.expected_reward
@@ -46,7 +46,9 @@ end
 #An environment which takes the choice, and whose reward is sampled whatever it is
 struct SampledRewards <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::SampledRewards, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::SampledRewards, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    environment::SampledRewards, context::ModelContext
+)
     return ModelOutput((; reward=SampledReward(context.parameters.reward_probability)))
 end
 function CognitiveModeling.attribute_names(environment::SampledRewards)

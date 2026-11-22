@@ -60,7 +60,7 @@ CommonRLInterface.terminated(rl_env::Bandit) = rl_env.pulls == 2
 #A model which always pulls the first arm
 struct PullsFirstArm <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
-CognitiveModeling.run_timestep(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
+CognitiveModeling.timestep_model(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), inputs = (:observation, :reward, :terminated), outputs = :arm)
 
 #The simulation stops when the episode ends, before it has run all of n_steps

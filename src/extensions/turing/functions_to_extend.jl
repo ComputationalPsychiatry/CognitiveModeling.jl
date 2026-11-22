@@ -1,18 +1,18 @@
 ## Functions that a cognitive model or an environment model can implement ##
 
 """
-    turing_run_timestep(model::AbstractTimestepModel, context::ModelContext)
+    turing_timestep_model(model::AbstractTimestepModel, context::ModelContext)
 
 Create a Turing.jl model for a single timestep of `model`, a cognitive model or an
 environment model, to be used as a submodel, which returns a [`ModelOutput`](@ref). This
 needs Turing.jl to be loaded.
 
 # Implementation
-A model can add a method of this function. The default calls [`run_timestep`](@ref). A model
-which samples within a timestep needs to add a method, however; or if any other changes are
-desired within Turing. It must sample with `~` instead of from `context.rng`. Otherwise the
-model has a different log density each time it is evaluated, with no error. The same holds
-for an environment model, which fitting uses to fill in observations that are
+A model can add a method of this function. The default calls [`timestep_model`](@ref). A
+model which samples within a timestep needs to add a method, however; or if any other
+changes are desired within Turing. It must sample with `~` instead of from `context.rng`.
+Otherwise the model has a different log density each time it is evaluated, with no error.
+The same holds for an environment model, which fitting uses to fill in observations that are
 [`MissingValue`](@ref) in the data: what it samples itself, such as a change of its state,
 must be sampled with `~`, while fitting samples the observations from what it returns.
 
@@ -23,7 +23,7 @@ using Turing
 
 struct NoisyRescorlaWagner <: AbstractCognitiveModel end
 
-Turing.@model function CognitiveModeling.turing_run_timestep(
+Turing.@model function CognitiveModeling.turing_timestep_model(
         model::NoisyRescorlaWagner,
         context::ModelContext,
     )
@@ -46,7 +46,7 @@ Turing.@model function CognitiveModeling.turing_run_timestep(
 end
 ```
 """
-function turing_run_timestep end
+function turing_timestep_model end
 
 """
     turing_initialize_state(model::AbstractTimestepModel, parameters)
@@ -61,7 +61,7 @@ enough for most models, since a starting state that is fitted is simply one that
 from a parameter there: a fitted session runs it with the parameters of each evaluation, so
 a prior on the parameter is a prior on the starting state. A model which samples something
 of its own when it initializes needs to add a method, and sample it with `~`, as for
-[`turing_run_timestep`](@ref). Its variables are named under `initial_cognitive_state`, or
+[`turing_timestep_model`](@ref). Its variables are named under `initial_cognitive_state`, or
 `initial_environment_state` for an environment model.
 
 # Examples

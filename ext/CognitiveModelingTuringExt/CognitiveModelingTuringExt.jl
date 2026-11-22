@@ -3,7 +3,7 @@ module CognitiveModelingTuringExt
 using CognitiveModeling
 using CognitiveModeling:
     AbstractTimestepModel,
-    run_timestep,
+    timestep_model,
     initialize_state,
     attribute_names,
     NoEnvironment,
@@ -11,7 +11,7 @@ using CognitiveModeling:
     get_session_parameters,
     with_save_history
 using CognitiveModeling:
-    turing_run_timestep,
+    turing_timestep_model,
     turing_initialize_state,
     turing_parameters_model,
     turing_downstream_model,

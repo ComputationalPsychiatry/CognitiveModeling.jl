@@ -79,7 +79,7 @@ and must when it samples anything of its own, within a timestep or when it start
 public, but not exported.
 
 ```@docs
-CognitiveModeling.turing_run_timestep
+CognitiveModeling.turing_timestep_model
 CognitiveModeling.turing_initialize_state
 ```
 

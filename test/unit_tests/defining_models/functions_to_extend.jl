@@ -3,7 +3,7 @@ struct EnvironmentWithoutMethods <: AbstractEnvironmentModel end
 
 #Leaves the context without a type annotation, which must not be ambiguous with the fallback
 struct ModelWithUnannotatedContext <: AbstractCognitiveModel end
-function CognitiveModeling.run_timestep(model::ModelWithUnannotatedContext, context)
+function CognitiveModeling.timestep_model(model::ModelWithUnannotatedContext, context)
     return ModelOutput((; choice=0.7))
 end
 
@@ -12,23 +12,23 @@ end
     environment_context = ModelContext((; choice=NoValue()), (;), (; reward=NoValue()), (;))
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "There is no run_timestep method for a cognitive model of type ModelWithoutMethods with a context of type" CognitiveModeling.run_timestep(
+        @test_throws "There is no timestep_model method for a cognitive model of type ModelWithoutMethods with a context of type" CognitiveModeling.timestep_model(
             ModelWithoutMethods(), model_context
         )
-        @test_throws "CognitiveModeling.run_timestep(model::ModelWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.run_timestep(
+        @test_throws "CognitiveModeling.timestep_model(model::ModelWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.timestep_model(
             ModelWithoutMethods(), model_context
         )
         #An environment model gets the same message, named as one
-        @test_throws "There is no run_timestep method for an environment model of type EnvironmentWithoutMethods with a context of type" CognitiveModeling.run_timestep(
+        @test_throws "There is no timestep_model method for an environment model of type EnvironmentWithoutMethods with a context of type" CognitiveModeling.timestep_model(
             EnvironmentWithoutMethods(), environment_context
         )
-        @test_throws "CognitiveModeling.run_timestep(model::EnvironmentWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.run_timestep(
+        @test_throws "CognitiveModeling.timestep_model(model::EnvironmentWithoutMethods, context::CognitiveModeling.ModelContext)" CognitiveModeling.timestep_model(
             EnvironmentWithoutMethods(), environment_context
         )
     end
 
     @testset "A timestep method can leave its context without a type" begin
-        @test CognitiveModeling.run_timestep(
+        @test CognitiveModeling.timestep_model(
             ModelWithUnannotatedContext(), model_context
         ).output_distribution.choice == 0.7
     end
@@ -71,13 +71,13 @@ end
 
     @testset "The functions to extend are public, but not exported" begin
         for name in (
-            :run_timestep,
+            :timestep_model,
             :initialize_state,
             :attribute_names,
             :prepare_state_for_saving,
             :default_parameters,
             :stopping_criterion,
-            :turing_run_timestep,
+            :turing_timestep_model,
         )
             @test Base.ispublic(CognitiveModeling, name)
             @test !Base.isexported(CognitiveModeling, name)

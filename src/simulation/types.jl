@@ -112,7 +112,7 @@ julia> struct LearnsRewards <: AbstractCognitiveModel end
 
 julia> CognitiveModeling.initialize_state(::LearnsRewards, parameters) = (; expected_reward = 0.5);
 
-julia> function CognitiveModeling.run_timestep(::LearnsRewards, context::ModelContext)
+julia> function CognitiveModeling.timestep_model(::LearnsRewards, context::ModelContext)
            V = context.previous_state.expected_reward
            V = V + context.parameters.learning_rate * (context.input.reward - V)
            return ModelOutput((; choice = Deterministic(V > 0.5)), (; expected_reward = V))
@@ -252,7 +252,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = 0.5)
 end
 
-function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     return ModelOutput((; choice = Bernoulli(Vₜ)), (; expected_reward = Vₜ))

@@ -37,7 +37,7 @@ log_density_of_latents_by_hand(model, parameters, latents) = 0.0
 
 #Runs timestep t of a model with what it sampled of its own on that timestep in a simulation, read with
 #latents_from_states, so that it gives the distributions it gave in the simulation. Most models sample nothing of their own
-run_timestep_with_latents(model, context, latents, t) = run_timestep(model, context)
+timestep_model_with_latents(model, context, latents, t) = timestep_model(model, context)
 
 ## The baseline ##
 #Learns the expected reward of choosing true, and chooses true with a probability that grows with it
@@ -45,7 +45,7 @@ struct Baseline{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 CognitiveModeling.initialize_state(model::Baseline, parameters) = (; expected_reward=0.5)
-function CognitiveModeling.run_timestep(model::Baseline, context::ModelContext)
+function CognitiveModeling.timestep_model(model::Baseline, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learning_rate,
@@ -90,7 +90,7 @@ end
 function CognitiveModeling.initialize_state(model::WithoutParameters, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithoutParameters, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithoutParameters, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward, 0.5, context.input.reward
     )
@@ -124,7 +124,7 @@ struct WithoutStates{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 CognitiveModeling.initialize_state(model::WithoutStates, parameters) = (;)
-function CognitiveModeling.run_timestep(model::WithoutStates, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithoutStates, context::ModelContext)
     reward = value_or(context.input.reward, 0.5)
     logit = choice_logit(reward, context.parameters.inverse_temperature)
     return ModelOutput((; choice=bernoulli_logit(model.distributions, logit)))
@@ -151,7 +151,7 @@ struct WithoutInputs{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 CognitiveModeling.initialize_state(model::WithoutInputs, parameters) = (; habit=0.5)
-function CognitiveModeling.run_timestep(model::WithoutInputs, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithoutInputs, context::ModelContext)
     habit = learn(context.previous_state.habit, context.parameters.learning_rate, 1.0)
     logit = choice_logit(habit, context.parameters.inverse_temperature)
     return ModelOutput((; choice=bernoulli_logit(model.distributions, logit)), (; habit))
@@ -182,7 +182,7 @@ struct WithoutOutputs <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::WithoutOutputs, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithoutOutputs, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithoutOutputs, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learning_rate,
@@ -208,7 +208,7 @@ end
 function CognitiveModeling.initialize_state(model::ManyAttributes, parameters)
     return (; expected_reward=0.5, last_reward=0.0, n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(model::ManyAttributes, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ManyAttributes, context::ModelContext)
     (; learning_rate, inverse_temperature, noise) = context.parameters
     (; reward, cue, bonus) = context.input
     expected_reward = learn(context.previous_state.expected_reward, learning_rate, reward)
@@ -272,7 +272,7 @@ end
 function CognitiveModeling.initialize_state(model::VectorAttributes, parameters)
     return (; expected_rewards=[0.5, 0.5, 0.5])
 end
-function CognitiveModeling.run_timestep(model::VectorAttributes, context::ModelContext)
+function CognitiveModeling.timestep_model(model::VectorAttributes, context::ModelContext)
     previous = context.previous_state.expected_rewards
     rewards = context.input.rewards
     expected_rewards = if rewards isa AbstractNoValue
@@ -337,7 +337,9 @@ end
 function CognitiveModeling.initialize_state(model::NamedTupleAttributes, parameters)
     return (; beliefs=(; expected_reward=0.5, last_cue=0.5))
 end
-function CognitiveModeling.run_timestep(model::NamedTupleAttributes, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    model::NamedTupleAttributes, context::ModelContext
+)
     previous = context.previous_state.beliefs
     feedback = context.input.feedback
     beliefs = if feedback isa AbstractNoValue
@@ -407,7 +409,7 @@ end
 function CognitiveModeling.initialize_state(model::ContinuousOutput, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::ContinuousOutput, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ContinuousOutput, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learning_rate,
@@ -448,7 +450,7 @@ end
 function CognitiveModeling.initialize_state(model::SymbolOutput, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::SymbolOutput, context::ModelContext)
+function CognitiveModeling.timestep_model(model::SymbolOutput, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learning_rate,
@@ -496,7 +498,7 @@ end
 function CognitiveModeling.initialize_state(model::WithSymbolParameter, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithSymbolParameter, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithSymbolParameter, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learning_rate,
@@ -542,7 +544,9 @@ end
 function CognitiveModeling.initialize_state(model::WithDiscreteParameter, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithDiscreteParameter, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    model::WithDiscreteParameter, context::ModelContext
+)
     expected_reward = learn(
         context.previous_state.expected_reward,
         context.parameters.learns * context.parameters.learning_rate,
@@ -584,8 +588,10 @@ end
 function CognitiveModeling.initialize_state(model::WithDefaultParameters, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithDefaultParameters, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(
+    model::WithDefaultParameters, context::ModelContext
+)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::WithDefaultParameters)
     return attribute_names(Baseline(model.distributions))
@@ -606,8 +612,8 @@ struct WithDomains{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
 CognitiveModeling.initialize_state(model::WithDomains, parameters) = (; expected_reward=0.5)
-function CognitiveModeling.run_timestep(model::WithDomains, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(model::WithDomains, context::ModelContext)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::WithDomains)
     return attribute_names(Baseline(model.distributions))
@@ -631,8 +637,10 @@ end
 function CognitiveModeling.initialize_state(model::WithStoppingCriterion, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::WithStoppingCriterion, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(
+    model::WithStoppingCriterion, context::ModelContext
+)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::WithStoppingCriterion)
     return attribute_names(Baseline(model.distributions))
@@ -660,7 +668,7 @@ end
 #The pull of the previous choice: towards true after true, towards false after false, and none without one
 repetition(previous_choice) = 2 * previous_choice - 1
 repetition(previous_choice::AbstractNoValue) = 0
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::DependsOnPreviousOutput, context::ModelContext
 )
     (; learning_rate, inverse_temperature, stickiness) = context.parameters
@@ -719,7 +727,7 @@ end
 function CognitiveModeling.initialize_state(model::UsesTimestepSize, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::UsesTimestepSize, context::ModelContext)
+function CognitiveModeling.timestep_model(model::UsesTimestepSize, context::ModelContext)
     expected_reward = learn(
         context.previous_state.expected_reward,
         1 - exp(-context.parameters.learning_rate * context.timestep_size),
@@ -758,10 +766,10 @@ end
 function CognitiveModeling.initialize_state(model::InitialStateFromParameter, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::InitialStateFromParameter, context::ModelContext
 )
-    return run_timestep(Baseline(model.distributions), context)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::InitialStateFromParameter)
     return ModelAttributes(;
@@ -800,8 +808,8 @@ end
 function CognitiveModeling.initialize_state(model::SampledInitialState, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.run_timestep(model::SampledInitialState, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(model::SampledInitialState, context::ModelContext)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::SampledInitialState)
     return ModelAttributes(;
@@ -850,7 +858,7 @@ function update_with_noise(model::SamplingWithinTimestep, context::ModelContext,
         (; choice=bernoulli_logit(model.distributions, logit)), (; expected_reward, noise)
     )
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::SamplingWithinTimestep, context::ModelContext
 )
     noise = rand(
@@ -889,7 +897,7 @@ end
 function latents_from_states(model::SamplingWithinTimestep, states)
     return (; noise=[state.noise for state in states[2:end]])
 end
-function run_timestep_with_latents(model::SamplingWithinTimestep, context, latents, t)
+function timestep_model_with_latents(model::SamplingWithinTimestep, context, latents, t)
     return update_with_noise(model, context, latents.noise[t])
 end
 function log_density_of_latents_by_hand(model::SamplingWithinTimestep, parameters, latents)
@@ -907,10 +915,10 @@ end
 function CognitiveModeling.initialize_state(model::OutputNotEveryTimestep, parameters)
     return (; expected_reward=0.5, n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::OutputNotEveryTimestep, context::ModelContext
 )
-    baseline_output = run_timestep(Baseline(model.distributions), context)
+    baseline_output = timestep_model(Baseline(model.distributions), context)
     n_timesteps = context.previous_state.n_timesteps + 1
     choice = isodd(n_timesteps) ? baseline_output.output_distribution.choice : NoValue()
     return ModelOutput(
@@ -940,13 +948,13 @@ end
 function CognitiveModeling.initialize_state(model::ThrowsInvalidParameters, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::ThrowsInvalidParameters, context::ModelContext
 )
     if context.parameters.learning_rate > 0.9
         throw(InvalidParametersError("The learning rate is above 0.9."))
     end
-    return run_timestep(Baseline(model.distributions), context)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::ThrowsInvalidParameters)
     return attribute_names(Baseline(model.distributions))
@@ -966,7 +974,7 @@ end
 function CognitiveModeling.initialize_state(model::StateChangedInPlace, parameters)
     return (; expected_reward=[0.5 * one(parameters.learning_rate)])
 end
-function CognitiveModeling.run_timestep(model::StateChangedInPlace, context::ModelContext)
+function CognitiveModeling.timestep_model(model::StateChangedInPlace, context::ModelContext)
     expected_reward = context.previous_state.expected_reward
     expected_reward[1] = learn(
         expected_reward[1], context.parameters.learning_rate, context.input.reward
@@ -997,10 +1005,10 @@ function CognitiveModeling.initialize_state(
 )
     return initialize_state(StateChangedInPlace(model.distributions), parameters)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::StateChangedInPlaceSavedWithDeepcopy, context::ModelContext
 )
-    return run_timestep(StateChangedInPlace(model.distributions), context)
+    return timestep_model(StateChangedInPlace(model.distributions), context)
 end
 function CognitiveModeling.prepare_state_for_saving(
     model::StateChangedInPlaceSavedWithDeepcopy, state
@@ -1023,8 +1031,8 @@ end
 function CognitiveModeling.initialize_state(model::StateChangesType, parameters)
     return (; expected_reward=1)
 end
-function CognitiveModeling.run_timestep(model::StateChangesType, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(model::StateChangesType, context::ModelContext)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::StateChangesType)
     return attribute_names(Baseline(model.distributions))
@@ -1043,8 +1051,8 @@ abstract type BaselineFamily <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::BaselineFamily, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::BaselineFamily, context::ModelContext)
-    return run_timestep(Baseline(model.distributions), context)
+function CognitiveModeling.timestep_model(model::BaselineFamily, context::ModelContext)
+    return timestep_model(Baseline(model.distributions), context)
 end
 function CognitiveModeling.attribute_names(model::BaselineFamily)
     return attribute_names(Baseline(model.distributions))
@@ -1155,13 +1163,13 @@ function outputs_with_sampling(model::EveryFeature, probability, parameters)
         side=symbol_choice(model.distributions, probability),
     )
 end
-function CognitiveModeling.run_timestep(model::EveryFeature, context::ModelContext)
+function CognitiveModeling.timestep_model(model::EveryFeature, context::ModelContext)
     noise = rand(
         context.rng, normal(model.distributions, 0.0, context.parameters.update_noise)
     )
     return update_with_noise(model, context, noise)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::EveryFeatureWithoutSampling, context::ModelContext
 )
     return update_with_noise(model, context, 0.0)
@@ -1282,7 +1290,7 @@ end
 function latents_from_states(model::EveryFeatureWithoutSampling, states)
     return (; initial_offset=0.0, noise=zeros(length(states) - 1))
 end
-function run_timestep_with_latents(model::EveryFeature, context, latents, t)
+function timestep_model_with_latents(model::EveryFeature, context, latents, t)
     return update_with_noise(model, context, latents.noise[t])
 end
 function log_density_of_latents_by_hand(model::EveryFeature, parameters, latents)

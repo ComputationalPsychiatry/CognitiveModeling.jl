@@ -34,7 +34,7 @@ end
 #An environment which gives a reward around a mean which is a parameter, so that the rewards in the data inform the mean
 struct RewardsAroundMean <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsAroundMean, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::RewardsAroundMean, context::ModelContext
 )
     return ModelOutput((; reward=Normal(context.parameters.mean_reward, 1.0)))
@@ -48,7 +48,7 @@ end
 #An environment which gives a reward with a probability which it calls the learning rate, like the cognitive model does
 struct RewardsWithLearningRate <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::RewardsWithLearningRate, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::RewardsWithLearningRate, context::ModelContext
 )
     return ModelOutput((; reward=Bernoulli(context.parameters.learning_rate)))
@@ -1040,8 +1040,8 @@ struct BoundedRewardsAroundMean <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(::BoundedRewardsAroundMean, parameters)
     return (;)
 end
-function CognitiveModeling.run_timestep(::BoundedRewardsAroundMean, context::ModelContext)
-    return run_timestep(RewardsAroundMean(), context)
+function CognitiveModeling.timestep_model(::BoundedRewardsAroundMean, context::ModelContext)
+    return timestep_model(RewardsAroundMean(), context)
 end
 function CognitiveModeling.attribute_names(::BoundedRewardsAroundMean)
     return CognitiveModeling.attribute_names(RewardsAroundMean())

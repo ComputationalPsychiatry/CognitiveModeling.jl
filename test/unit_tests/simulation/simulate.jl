@@ -20,7 +20,7 @@ Base.rand(rng::AbstractRNG, reward::ZeroOrOne) = float(rand(rng) < reward.probab
 #Has two named actions, and receives a reward which it does nothing with
 struct TwoChoices <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::TwoChoices, parameters) = (;)
-function CognitiveModeling.run_timestep(model::TwoChoices, context::ModelContext)
+function CognitiveModeling.timestep_model(model::TwoChoices, context::ModelContext)
     return ModelOutput((;
         first_choice=ChooseWithProbability(0.0), second_choice=ChooseWithProbability(1.0)
     ))
@@ -39,7 +39,7 @@ function CognitiveModeling.prepare_state_for_saving(model::LearnsInPlace, state)
     return model.prepare_state(state)
 end
 CognitiveModeling.initialize_state(model::LearnsInPlace, parameters) = (; values=[0.5, 0.5])
-function CognitiveModeling.run_timestep(model::LearnsInPlace, context::ModelContext)
+function CognitiveModeling.timestep_model(model::LearnsInPlace, context::ModelContext)
     values = context.previous_state.values
     values[1] += context.parameters.learning_rate * (context.input.reward - values[1])
     return ModelOutput((; choice=ChooseWithProbability(0.5)), context.previous_state)
@@ -57,7 +57,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::EnvironmentRecordsWhoStarts, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)), (; who_starts=context.who_starts))
@@ -73,7 +73,7 @@ struct RecordsWhoStarts <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::RecordsWhoStarts, parameters)
     return (; who_starts=UnknownWhoStarts())
 end
-function CognitiveModeling.run_timestep(model::RecordsWhoStarts, context::ModelContext)
+function CognitiveModeling.timestep_model(model::RecordsWhoStarts, context::ModelContext)
     return ModelOutput((; choice=Deterministic(true)), (; who_starts=context.who_starts))
 end
 function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
@@ -85,7 +85,7 @@ end
 #Has an action that is never taken, and a NamedTuple of actions
 struct ChoosesInGroups <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ChoosesInGroups, parameters) = (;)
-function CognitiveModeling.run_timestep(model::ChoosesInGroups, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ChoosesInGroups, context::ModelContext)
     return ModelOutput((;
         choice=ChooseWithProbability(1.0),
         skipped=NoValue(),
@@ -106,7 +106,7 @@ end
 function CognitiveModeling.initialize_state(model::HasDefaults, parameters)
     return (; expected_reward=parameters.initial_value)
 end
-function CognitiveModeling.run_timestep(model::HasDefaults, context::ModelContext)
+function CognitiveModeling.timestep_model(model::HasDefaults, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     return ModelOutput(
         (; choice=ChooseWithProbability(V₋₁)),
@@ -128,7 +128,7 @@ end
 #Has no names, so it can't be simulated
 struct WithoutNames <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::WithoutNames, parameters) = (;)
-function CognitiveModeling.run_timestep(model::WithoutNames, context::ModelContext)
+function CognitiveModeling.timestep_model(model::WithoutNames, context::ModelContext)
     return ModelOutput((; choice=ChooseWithProbability(0.5)))
 end
 
@@ -140,7 +140,7 @@ end
 function CognitiveModeling.initialize_state(environment::RewardsWithDefaults, parameters)
     return (; last_choice=NoValue())
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::RewardsWithDefaults, context::ModelContext
 )
     reward = if context.input.choice isa AbstractNoValue
@@ -164,7 +164,7 @@ end
 #Gives only a cue, which a model which learns from rewards can't use
 struct OnlyCues <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::OnlyCues, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::OnlyCues, context::ModelContext)
+function CognitiveModeling.timestep_model(environment::OnlyCues, context::ModelContext)
     return ModelOutput((; cue=Deterministic(2)))
 end
 function CognitiveModeling.attribute_names(environment::OnlyCues)
@@ -174,7 +174,7 @@ end
 #Has no names, so it can't be simulated
 struct EnvironmentWithoutNames <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::EnvironmentWithoutNames, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::EnvironmentWithoutNames, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)))
@@ -183,7 +183,7 @@ end
 #Changes a Vector in its state in place, and copies its state when it's saved
 struct CountsInPlace <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::CountsInPlace, parameters) = (; counts=[0])
-function CognitiveModeling.run_timestep(environment::CountsInPlace, context::ModelContext)
+function CognitiveModeling.timestep_model(environment::CountsInPlace, context::ModelContext)
     context.previous_state.counts[1] += 1
     return ModelOutput((; reward=Deterministic(1.0)), context.previous_state)
 end
@@ -200,7 +200,7 @@ struct SavesTimestepSize <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::SavesTimestepSize, parameters)
     return (; received_timestep_size=0)
 end
-function CognitiveModeling.run_timestep(model::SavesTimestepSize, context::ModelContext)
+function CognitiveModeling.timestep_model(model::SavesTimestepSize, context::ModelContext)
     return ModelOutput(
         (; choice=ChooseWithProbability(0.5)),
         (; received_timestep_size=context.timestep_size),
@@ -218,7 +218,7 @@ end
 #Gives the timestep size it gets as its observation
 struct ObservesTimestepSize <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ObservesTimestepSize, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::ObservesTimestepSize, context::ModelContext
 )
     return ModelOutput((; timestep_size=Deterministic(context.timestep_size)))
@@ -232,7 +232,7 @@ end
 #Returns a tuple instead of a ModelOutput
 struct ReturnsTuple <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ReturnsTuple, parameters) = (;)
-function CognitiveModeling.run_timestep(model::ReturnsTuple, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ReturnsTuple, context::ModelContext)
     return (ChooseWithProbability(0.5), (;))
 end
 function CognitiveModeling.attribute_names(model::ReturnsTuple)
@@ -242,7 +242,7 @@ end
 #Returns the observation instead of a ModelOutput
 struct ReturnsObservation <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ReturnsObservation, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::ReturnsObservation, context::ModelContext
 )
     return (; reward=1.0)
@@ -269,14 +269,14 @@ end
 
 #Have a method for a timestep, but none for the initial state, so they must be given a state
 struct NeedsGivenState <: AbstractCognitiveModel end
-function CognitiveModeling.run_timestep(model::NeedsGivenState, context::ModelContext)
+function CognitiveModeling.timestep_model(model::NeedsGivenState, context::ModelContext)
     return ModelOutput((; choice=ChooseWithProbability(0.5)), context.previous_state)
 end
 function CognitiveModeling.attribute_names(model::NeedsGivenState)
     return ModelAttributes(; parameters=(), states=:value, inputs=:reward, outputs=:choice)
 end
 struct EnvironmentNeedsGivenState <: AbstractEnvironmentModel end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::EnvironmentNeedsGivenState, context::ModelContext
 )
     return ModelOutput((; reward=Deterministic(1.0)), context.previous_state)
@@ -288,7 +288,7 @@ end
 #Has an observation that is never made, and a NamedTuple of observations, and takes no actions
 struct ObservesInGroups <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(environment::ObservesInGroups, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::ObservesInGroups, context::ModelContext
 )
     return ModelOutput((;
@@ -308,7 +308,9 @@ struct RemembersReward <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::RemembersReward, parameters)
     return (; previous_reward=BeforeFirstTimestep())
 end
-function CognitiveModeling.run_timestep(environment::RemembersReward, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    environment::RemembersReward, context::ModelContext
+)
     return ModelOutput(
         (; reward=ZeroOrOne(0.5)), (; previous_reward=context.previous_output.reward)
     )
@@ -324,7 +326,9 @@ struct GivesUnwrapped{T} <: AbstractEnvironmentModel
     reward::T
 end
 CognitiveModeling.initialize_state(environment::GivesUnwrapped, parameters) = (;)
-function CognitiveModeling.run_timestep(environment::GivesUnwrapped, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    environment::GivesUnwrapped, context::ModelContext
+)
     return ModelOutput((; reward=environment.reward))
 end
 function CognitiveModeling.attribute_names(environment::GivesUnwrapped)
@@ -334,7 +338,7 @@ struct ChoosesUnwrapped{T} <: AbstractCognitiveModel
     choice::T
 end
 CognitiveModeling.initialize_state(model::ChoosesUnwrapped, parameters) = (;)
-function CognitiveModeling.run_timestep(model::ChoosesUnwrapped, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ChoosesUnwrapped, context::ModelContext)
     return ModelOutput((; choice=model.choice))
 end
 function CognitiveModeling.attribute_names(model::ChoosesUnwrapped)
@@ -437,7 +441,7 @@ end
 #An environment whose reward probability has a domain, and which gives the reward 1.0 on every timestep
 struct RewardsWithinDomain <: AbstractEnvironmentModel end
 CognitiveModeling.initialize_state(::RewardsWithinDomain, parameters) = (;)
-function CognitiveModeling.run_timestep(::RewardsWithinDomain, context::ModelContext)
+function CognitiveModeling.timestep_model(::RewardsWithinDomain, context::ModelContext)
     return ModelOutput((; reward=Deterministic(1.0)))
 end
 function CognitiveModeling.attribute_names(::RewardsWithinDomain)
@@ -607,7 +611,9 @@ struct PaysEachOption <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::PaysEachOption, parameters)
     return (; n_choices=zeros(Int, length(parameters.payoff_sizes)), n_trials=0)
 end
-function CognitiveModeling.run_timestep(environment::PaysEachOption, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    environment::PaysEachOption, context::ModelContext
+)
     (; n_choices, n_trials) = context.previous_state
     choice = context.input.choice
     if !(choice isa AbstractNoValue)
@@ -1713,13 +1719,13 @@ end
     end
 
     @testset "A missing timestep method gives an informative error" begin
-        @test_throws "There is no run_timestep method for a cognitive model of type OnlyInitializesState with a context of type " simulate_for_test(
+        @test_throws "There is no timestep_model method for a cognitive model of type OnlyInitializesState with a context of type " simulate_for_test(
             OnlyInitializesState(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
-        @test_throws "Each model must define CognitiveModeling.run_timestep(model::OnlyInitializesState, context::CognitiveModeling.ModelContext)." simulate_for_test(
+        @test_throws "Each model must define CognitiveModeling.timestep_model(model::OnlyInitializesState, context::CognitiveModeling.ModelContext)." simulate_for_test(
             OnlyInitializesState(), BaselineEnvironment(ByHand()); cognitive_parameters=(;)
         )
-        @test_throws "There is no run_timestep method for an environment model of type EnvironmentOnlyInitializesState" simulate_for_test(
+        @test_throws "There is no timestep_model method for an environment model of type EnvironmentOnlyInitializesState" simulate_for_test(
             Baseline(ByHand()),
             EnvironmentOnlyInitializesState();
             environment_parameters=(;),
@@ -1752,13 +1758,13 @@ end
 
     @testset "A timestep method which returns the wrong type gives an informative error" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput, but it returned a value of type Tuple" simulate_for_test(
+            @test_throws "The timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput, but it returned a value of type Tuple" simulate_for_test(
                 ReturnsTuple(),
                 BaselineEnvironment(ByHand());
                 who_starts,
                 cognitive_parameters=(;),
             )
-            @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput, but it returned a value of type @NamedTuple" simulate_for_test(
+            @test_throws "The timestep_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput, but it returned a value of type @NamedTuple" simulate_for_test(
                 Baseline(ByHand()),
                 ReturnsObservation();
                 who_starts,
@@ -2743,12 +2749,12 @@ end
     @testset "An error in a timestep method gives the same errors as in simulate_session" begin
         agent = InstantiatedModel(ReturnsTuple(), (;))
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_session!(
+        @test_throws "The timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(ReturnsObservation(), (;))
-        @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate_session!(
+        @test_throws "The timestep_model method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
     end
@@ -2880,10 +2886,10 @@ end
     end
 
     @testset "An error in the timestep method gives the same errors as in simulate_session" begin
-        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_timestep!(
+        @test_throws "The timestep_model method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_timestep!(
             InstantiatedModel(ReturnsTuple(), (;)), (; reward=1.0)
         )
-        @test_throws "There is no run_timestep method for a cognitive model of type OnlyInitializesState" simulate_timestep!(
+        @test_throws "There is no timestep_model method for a cognitive model of type OnlyInitializesState" simulate_timestep!(
             InstantiatedModel(OnlyInitializesState(), (;)), (; reward=1.0)
         )
     end

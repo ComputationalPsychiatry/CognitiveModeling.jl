@@ -88,7 +88,7 @@ end
 # that fits what was observed, and returns the probabilities its policy gives each action.
 # The agent is changed in place, so the same object is passed on as the new state.
 
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::TemporalDifferenceAgent, context::ModelContext
 )
 
@@ -158,7 +158,7 @@ function CognitiveModeling.initialize_state(model::TemporalDifferenceLearner, pa
     return (; rl_learner, previous_observation=0)
 end
 
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::TemporalDifferenceLearner, context::ModelContext
 )
 

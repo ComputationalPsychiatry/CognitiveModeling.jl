@@ -308,7 +308,7 @@ struct LearnsOrNot <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsOrNot, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::LearnsOrNot, context::ModelContext)
+function CognitiveModeling.timestep_model(model::LearnsOrNot, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = if context.parameters.uses_rewards
         V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)

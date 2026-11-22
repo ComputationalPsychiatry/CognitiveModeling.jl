@@ -19,7 +19,7 @@ end
 function CognitiveModeling.initialize_state(environment::BaselineEnvironment, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::BaselineEnvironment, context::ModelContext
 )
     probability = reward_probability(
@@ -61,7 +61,7 @@ struct WithoutStatesEnvironment{Tdistributions} <: AbstractEnvironmentModel
     distributions::Tdistributions
 end
 CognitiveModeling.initialize_state(environment::WithoutStatesEnvironment, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::WithoutStatesEnvironment, context::ModelContext
 )
     probability = reward_probability(
@@ -89,7 +89,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::WithoutParametersEnvironment, context::ModelContext
 )
     probability = reward_probability(context.input.choice, 0.75)
@@ -120,7 +120,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::WithoutInputsEnvironment, context::ModelContext
 )
     return ModelOutput(
@@ -157,7 +157,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; total_of_choices=0.0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::WithoutOutputsEnvironment, context::ModelContext
 )
     choice = 1.0 * value_or(context.input.choice, false)
@@ -186,7 +186,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::OutputNotEveryTimestepEnvironment, context::ModelContext
 )
     n_timesteps = context.previous_state.n_timesteps + 1
@@ -219,10 +219,10 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::WithStoppingCriterionEnvironment, context::ModelContext
 )
-    return run_timestep(BaselineEnvironment(environment.distributions), context)
+    return timestep_model(BaselineEnvironment(environment.distributions), context)
 end
 function CognitiveModeling.attribute_names(environment::WithStoppingCriterionEnvironment)
     return ModelAttributes(;
@@ -255,10 +255,12 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::NoOutputBeforeFirstInputEnvironment, context::ModelContext
 )
-    baseline_output = run_timestep(BaselineEnvironment(environment.distributions), context)
+    baseline_output = timestep_model(
+        BaselineEnvironment(environment.distributions), context
+    )
     reward = if context.input.choice isa AbstractNoValue
         NoValue()
     else
@@ -302,7 +304,7 @@ function update_with_drift(
         (; level, drift),
     )
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::SamplingWithinTimestepEnvironment, context::ModelContext
 )
     drift = rand(
@@ -335,7 +337,7 @@ end
 function latents_from_states(environment::SamplingWithinTimestepEnvironment, states)
     return (; drift=[state.drift for state in states[2:end]])
 end
-function run_timestep_with_latents(
+function timestep_model_with_latents(
     environment::SamplingWithinTimestepEnvironment, context, latents, t
 )
     return update_with_drift(environment, context, latents.drift[t])
@@ -358,7 +360,7 @@ end
 function CognitiveModeling.initialize_state(environment::OtherNamesEnvironment, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::OtherNamesEnvironment, context::ModelContext
 )
     n_timesteps = context.previous_state.n_timesteps + 1
@@ -413,7 +415,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0, last_choice=0.0, last_confidence=0.5)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::ManyAttributesEnvironment, context::ModelContext
 )
     (; reward_probability, noise, bonus_size) = context.parameters
@@ -482,7 +484,7 @@ end
 chosen_shares(choice::Integer) = [option == choice ? 1.0 : 0.0 for option in 1:3]
 chosen_shares(probabilities::AbstractVector) = probabilities
 chosen_shares(choice::AbstractNoValue) = [0.0, 0.0, 0.0]
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::VectorAttributesEnvironment, context::ModelContext
 )
     means = context.parameters.payoffs .+ 0.1 .* chosen_shares(context.input.choice)
@@ -533,7 +535,7 @@ end
 #Whether the response chose the first option, or nothing before the first response
 chose_first(response) = response.choice == 1
 chose_first(response::AbstractNoValue) = response
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::NamedTupleAttributesEnvironment, context::ModelContext
 )
     (; reward_probability, cue_mean, cue_noise) = context.parameters
@@ -588,7 +590,7 @@ function CognitiveModeling.initialize_state(
 )
     return (;)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::ContinuousInputEnvironment, context::ModelContext
 )
     scale = context.parameters.reward_scale
@@ -630,7 +632,7 @@ CognitiveModeling.initialize_state(environment::SymbolInputEnvironment, paramete
 #Whether the choice is :right, or nothing before the first choice
 chose_right(choice::Symbol) = choice === :right
 chose_right(choice::AbstractNoValue) = choice
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::SymbolInputEnvironment, context::ModelContext
 )
     probability = reward_probability(
@@ -702,7 +704,7 @@ function update_with_drift(
         (; n_timesteps, level, drift),
     )
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::EveryFeatureEnvironment, context::ModelContext
 )
     drift = rand(
@@ -771,7 +773,7 @@ end
 function latents_from_states(environment::EveryFeatureEnvironment, states)
     return (; drift=[state.drift for state in states[2:end]])
 end
-function run_timestep_with_latents(
+function timestep_model_with_latents(
     environment::EveryFeatureEnvironment, context, latents, t
 )
     return update_with_drift(environment, context, latents.drift[t])

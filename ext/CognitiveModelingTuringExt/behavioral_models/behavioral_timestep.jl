@@ -181,7 +181,7 @@ end
     turing_timestep_one_perspective(model, context, data_columns, t)
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
-environment model: `model` runs on `context` with [`turing_run_timestep`](@ref), and its
+environment model: `model` runs on `context` with [`turing_timestep_model`](@ref), and its
 outputs are then taken from row `t` of `data_columns`, the data for them, where it has
 values, imputed from what the model gave where they are [`MissingValue`](@ref), as
 [`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
@@ -196,7 +196,7 @@ Turing.@model function turing_timestep_one_perspective(model, context, data_colu
     data_output = select_row(data_columns, t)
 
     #Run the model's timestep with the Turing version, so that a model can sample within it, and check that it returned a ModelOutput
-    model_output ~ to_submodel(turing_run_timestep(model, context), false)
+    model_output ~ to_submodel(turing_timestep_model(model, context), false)
     model_output = check_model_output(model_output, model)
 
     #Take the outputs from the data where it has them, and impute those that are missing from the distributions the model gave

@@ -9,7 +9,7 @@
 # ext/CognitiveModelingTuringExt, so a change in what those call belongs here too.
 using CognitiveModeling:
     AbstractTimestepModel,
-    run_timestep,
+    timestep_model,
     initialize_state,
     stopping_criterion,
     merge_default_parameters,
@@ -55,7 +55,7 @@ struct LearnsRewards{Taction} <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::LearnsRewards, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::LearnsRewards{Taction}, context::ModelContext
 ) where {Taction}
     V₋₁ = context.previous_state.expected_reward
@@ -104,7 +104,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::NoisyRewardsFollowActions, context::ModelContext
 )
     action = context.input.choice isa AbstractNoValue ? 0.5 : context.input.choice
@@ -126,7 +126,7 @@ function CognitiveModeling.initialize_state(
 )
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::NoisyPayoffsFollowLevers, context::ModelContext
 )
     action = context.input.lever isa AbstractNoValue ? 0.5 : context.input.lever
@@ -146,10 +146,10 @@ struct NoisyRewardsUntilEnd <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::NoisyRewardsUntilEnd, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::NoisyRewardsUntilEnd, context::ModelContext
 )
-    return run_timestep(NoisyRewardsFollowActions(), context)
+    return timestep_model(NoisyRewardsFollowActions(), context)
 end
 function CognitiveModeling.attribute_names(environment::NoisyRewardsUntilEnd)
     return CognitiveModeling.attribute_names(NoisyRewardsFollowActions())
@@ -165,11 +165,13 @@ struct ActsAfterFirstReward <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::ActsAfterFirstReward, parameters)
     return (; expected_reward=0.5)
 end
-function CognitiveModeling.run_timestep(model::ActsAfterFirstReward, context::ModelContext)
+function CognitiveModeling.timestep_model(
+    model::ActsAfterFirstReward, context::ModelContext
+)
     if context.input.reward isa AbstractNoValue
         return ModelOutput((; choice=NoValue()), context.previous_state)
     end
-    return run_timestep(LearnsRewards{ChoiceByHand}(), context)
+    return timestep_model(LearnsRewards{ChoiceByHand}(), context)
 end
 function CognitiveModeling.attribute_names(model::ActsAfterFirstReward)
     return CognitiveModeling.attribute_names(LearnsRewards{ChoiceByHand}())
@@ -689,7 +691,7 @@ end
 # outputs are then taken from the data where it has values, and imputed from what the model gave where they are missing
 function model_timestep_by_hand(model, context, data_columns, t, evaluation)
     data_output = select_row(data_columns, t)
-    model_output = check_model_output(run_timestep(model, context), model)
+    model_output = check_model_output(timestep_model(model, context), model)
     output = impute_by_hand(data_output, model_output.output_distribution, evaluation)
     outputs_to_condition_on = find_outputs_to_condition_on(
         data_output, model_output.output_distribution, model

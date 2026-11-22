@@ -24,7 +24,7 @@ end
 #A cognitive model which responds with a choice and a time, and with a confidence, a number, around its choice probability
 struct RespondsWithChoiceAndTime <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::RespondsWithChoiceAndTime, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::RespondsWithChoiceAndTime, context::ModelContext
 )
     probability = context.parameters.choice_probability
@@ -84,7 +84,7 @@ end
 #A cognitive model which reports two numbers at once, from a normal distribution over vectors around a mean that is a parameter
 struct ReportsTwoNumbers <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ReportsTwoNumbers, parameters) = (;)
-function CognitiveModeling.run_timestep(model::ReportsTwoNumbers, context::ModelContext)
+function CognitiveModeling.timestep_model(model::ReportsTwoNumbers, context::ModelContext)
     return ModelOutput((; report=MvNormal(fill(context.parameters.mean, 2), IDENTITY_2)))
 end
 function CognitiveModeling.attribute_names(model::ReportsTwoNumbers)

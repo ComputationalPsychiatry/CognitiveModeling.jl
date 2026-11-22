@@ -29,7 +29,7 @@ struct DriftDiffusion <: AbstractCognitiveModel end
 #No state carries over from one trial to the next
 CognitiveModeling.initialize_state(model::DriftDiffusion, parameters) = (;)
 
-function CognitiveModeling.run_timestep(model::DriftDiffusion, context::ModelContext)
+function CognitiveModeling.timestep_model(model::DriftDiffusion, context::ModelContext)
     #The drift points toward the boundary of the choice that matches the stimulus
     parameters = context.parameters
     drift_rate = if context.input.stimulus == 1
@@ -78,7 +78,7 @@ struct RandomStimuli <: AbstractEnvironmentModel end
 #The environment keeps no state either
 CognitiveModeling.initialize_state(model::RandomStimuli, parameters) = (;)
 
-function CognitiveModeling.run_timestep(model::RandomStimuli, context::ModelContext)
+function CognitiveModeling.timestep_model(model::RandomStimuli, context::ModelContext)
     #Each stimulus is as likely as the other
     return ModelOutput((; stimulus=Categorical(2)))
 end
@@ -273,7 +273,7 @@ function CognitiveModeling.initialize_state(
 )
     return (;)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::DriftDiffusionWithMissingParts, context::ModelContext
 )
     #The DDM of the first model

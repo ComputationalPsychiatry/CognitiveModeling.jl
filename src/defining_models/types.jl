@@ -29,7 +29,7 @@ there are, and `attribute_names` gives them. On one line, as inside a vector, a 
 its type and its kind.
 
 # Implementation
-Create a subtype and add methods of [`run_timestep`](@ref), [`initialize_state`](@ref) and
+Create a subtype and add methods of [`timestep_model`](@ref), [`initialize_state`](@ref) and
 [`attribute_names`](@ref) for it. A model can also add methods of
 [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
@@ -73,7 +73,7 @@ own kind.
 
 # Implementation
 Create a subtype and add the same methods as for an [`AbstractCognitiveModel`](@ref):
-[`run_timestep`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
+[`timestep_model`](@ref), [`initialize_state`](@ref) and [`attribute_names`](@ref), and
 optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
@@ -231,7 +231,7 @@ struct UnknownWhoStarts end
     ModelContext(input, previous_state, previous_output, parameters, timestep_size=1,
                  rng=default_rng(), who_starts=UnknownWhoStarts())
 
-Everything a model needs to run a single timestep, which [`run_timestep`](@ref) receives.
+Everything a model needs to run a single timestep, which [`timestep_model`](@ref) receives.
 The arguments can be given by name, which says what each one is, or in this order.
 
 Each argument is kept in a field of the same name, such as `context.input`. For a cognitive
@@ -331,7 +331,7 @@ end
 """
     ModelOutput(output_distribution, new_state=(;))
 
-The outputs of a model for a single timestep, which [`run_timestep`](@ref) returns.
+The outputs of a model for a single timestep, which [`timestep_model`](@ref) returns.
 
 Each argument is kept in a field of the same name, such as `output.new_state`.
 
@@ -879,8 +879,8 @@ name_of_constraint(constraint) = repr(constraint)
     InvalidParametersError(message)
     InvalidParametersError()
 
-An error for a model to throw from [`run_timestep`](@ref) or [`initialize_state`](@ref) when
-its parameters aren't valid, as in `throw(InvalidParametersError())`.
+An error for a model to throw from [`timestep_model`](@ref) or [`initialize_state`](@ref)
+when its parameters aren't valid, as in `throw(InvalidParametersError())`.
 
 The default message says that the parameters are not valid, possibly dependent on the
 observations, actions and states, and a model can give a more specific one. A simulation

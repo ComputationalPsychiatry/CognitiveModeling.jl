@@ -300,8 +300,8 @@ const SAVE_BOTH = (;
     environment_save_history=SaveHistory(SaveEverything()),
 )
 
-#The models that Reactant can't compile, which branch on a value that the gradient goes through, in their run_timestep,
-#or in a stopping criterion that every timestep checks
+#The models that Reactant can't compile, which branch on a value that the gradient goes through, in their
+#timestep_model, or in a stopping criterion that every timestep checks
 const NOT_COMPILED_BY_REACTANT = (
     "WithStoppingCriterion",
     "ThrowsInvalidParameters",

@@ -82,7 +82,7 @@ end
 
 ## The models which sample something of their own ##
 #The noise of each timestep, named timestep[t].noise in a session
-Turing.@model function CognitiveModeling.turing_run_timestep(
+Turing.@model function CognitiveModeling.turing_timestep_model(
     model::Union{SamplingWithinTimestep,EveryFeature}, context::ModelContext
 )
     noise ~ ExampleModels.normal(model.distributions, 0.0, context.parameters.update_noise)
@@ -100,7 +100,7 @@ Turing.@model function CognitiveModeling.turing_initialize_state(
 end
 
 #The drift of each timestep, named timestep[t].environment.drift in a session
-Turing.@model function CognitiveModeling.turing_run_timestep(
+Turing.@model function CognitiveModeling.turing_timestep_model(
     environment::Union{SamplingWithinTimestepEnvironment,EveryFeatureEnvironment},
     context::ModelContext,
 )

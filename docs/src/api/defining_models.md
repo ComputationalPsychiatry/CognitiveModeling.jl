@@ -18,10 +18,10 @@ Pages = ["defining_models/types.jl"]
 ## Functions that a model must implement
 
 These and the functions that a model can implement are public, but not exported, so use them
-with the package's name, as in `CognitiveModeling.run_timestep`.
+with the package's name, as in `CognitiveModeling.timestep_model`.
 
 ```@docs
-CognitiveModeling.run_timestep
+CognitiveModeling.timestep_model
 CognitiveModeling.initialize_state
 CognitiveModeling.attribute_names
 ```

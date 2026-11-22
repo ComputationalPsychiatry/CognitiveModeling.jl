@@ -43,7 +43,7 @@ struct PullsArm <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::PullsArm, parameters)
     return (; last_reward=NoValue())
 end
-function CognitiveModeling.run_timestep(model::PullsArm, context::ModelContext)
+function CognitiveModeling.timestep_model(model::PullsArm, context::ModelContext)
     return ModelOutput(
         (; arm=Deterministic(context.parameters.arm_to_pull)),
         (; last_reward=context.input.reward),
@@ -61,7 +61,7 @@ end
 #Has two actions, of which a map passes one on to the environment, and only the reward as an input
 struct PullsTwoArms <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::PullsTwoArms, parameters) = (;)
-function CognitiveModeling.run_timestep(model::PullsTwoArms, context::ModelContext)
+function CognitiveModeling.timestep_model(model::PullsTwoArms, context::ModelContext)
     return ModelOutput((; first=Deterministic(1), second=Deterministic(2)))
 end
 function CognitiveModeling.attribute_names(model::PullsTwoArms)
@@ -168,7 +168,7 @@ end
         observations = run_bandit(rl_env).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
         #An episode that has ended isn't started again by an action given to it by hand
-        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate_session starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.run_timestep(
+        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate_session starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.timestep_model(
             environment, ModelContext((; arm=1), (; rl_env), observations[end], (;))
         )
         @test rl_env.pulls == 3
@@ -178,7 +178,7 @@ end
         rl_env = CountingBandit(0, 0)
         environment = CommonRLEnvironment(rl_env; action_name=:arm)
         for no_action in (BeforeFirstTimestep(), NoValue())
-            output = CognitiveModeling.run_timestep(
+            output = CognitiveModeling.timestep_model(
                 environment,
                 ModelContext(
                     (; arm=no_action),
@@ -196,7 +196,7 @@ end
         end
         #Without an action after the episode has ended, it still says that the episode has ended
         rl_env = CountingBandit(3, 0)
-        output = CognitiveModeling.run_timestep(
+        output = CognitiveModeling.timestep_model(
             CommonRLEnvironment(rl_env; action_name=:arm),
             ModelContext((; arm=NoValue()), (; rl_env), (;), (;)),
         )
@@ -207,7 +207,7 @@ end
     @testset "What the environment gives after an action is passed on as it is, with nothing sampled" begin
         rl_env = CountingBandit(0, 0)
         environment = CommonRLEnvironment(rl_env; action_name=:arm)
-        output = CognitiveModeling.run_timestep(
+        output = CognitiveModeling.timestep_model(
             environment,
             ModelContext(
                 (; arm=1),

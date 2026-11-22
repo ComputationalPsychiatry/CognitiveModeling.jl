@@ -47,7 +47,7 @@ state ~ to_submodel(turing_initialize_state(cognitive_model, cognitive_parameter
 for t in 1:n_timesteps
 
     #The cognitive model gives a distribution for each action, under the prefix timestep[t]
-    output ~ to_submodel(turing_run_timestep(cognitive_model, context))
+    output ~ to_submodel(turing_timestep_model(cognitive_model, context))
 
     #An action that is missing in the data is a latent variable with that distribution
     choice.imputed ~ output.output_distribution.choice
@@ -67,7 +67,7 @@ starts, and scores the observations in the data like the actions.
 The states where the session starts come from [`turing_initialize_state`](@ref) of each
 model with the parameters, so that a starting state which is a parameter is fitted like any
 other, and a model can sample its start. Both models are treated the same way on each
-timestep: [`turing_run_timestep`](@ref) of the cognitive model runs as a submodel with the
+timestep: [`turing_timestep_model`](@ref) of the cognitive model runs as a submodel with the
 prefix `timestep[t]`, so a model which samples within a timestep has its own variables for
 each timestep, such as `timestep[3].noise`, and an environment model runs with the prefix
 `timestep[t].environment`. The outputs of each, the actions and the observations, are then
@@ -125,7 +125,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward = parameters.initial_value)
 end
 
-function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.timestep_model(model::RescorlaWagner, context::ModelContext)
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
     Pₜ = BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))

@@ -1,6 +1,6 @@
 using CognitiveModeling
 using CognitiveModeling:
-    run_timestep, initialize_state, turing_run_timestep, turing_initialize_state
+    timestep_model, initialize_state, turing_timestep_model, turing_initialize_state
 #The Turing.jl models of the sessions, which are public but not exported, since session_model and the other functions
 #that every inference backend has make them
 using CognitiveModeling:

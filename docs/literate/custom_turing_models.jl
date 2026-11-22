@@ -33,7 +33,7 @@ function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
     return (; expected_reward=0.5)
 end
 
-function CognitiveModeling.run_timestep(model::RescorlaWagner, context::ModelContext)
+function CognitiveModeling.timestep_model(model::RescorlaWagner, context::ModelContext)
     #The expected reward before this timestep, and after its reward
     V₋₁ = context.previous_state.expected_reward
     Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
@@ -59,7 +59,7 @@ struct BernoulliRewards <: AbstractEnvironmentModel end
 
 CognitiveModeling.initialize_state(environment::BernoulliRewards, parameters) = (;)
 
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::BernoulliRewards, context::ModelContext
 )
     return ModelOutput((; reward=Bernoulli(context.parameters.reward_probability)))

@@ -2,7 +2,7 @@
 #A cognitive model which chooses one of three options with probabilities that are a parameter, a vector, mixed with a lapse rate, a number, which makes every option equally likely and is zero unless it is given
 struct ChoosesWithProbabilities <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::ChoosesWithProbabilities, parameters) = (;)
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     model::ChoosesWithProbabilities, context::ModelContext
 )
     choice_probabilities = context.parameters.choice_probabilities

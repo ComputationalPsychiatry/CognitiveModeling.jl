@@ -2,7 +2,7 @@
 #Only has the normal functions, so it gets the defaults in Turing
 struct OnlyNormalFunction <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::OnlyNormalFunction, parameters) = (; total=0.0)
-function CognitiveModeling.run_timestep(model::OnlyNormalFunction, context::ModelContext)
+function CognitiveModeling.timestep_model(model::OnlyNormalFunction, context::ModelContext)
     return ModelOutput(
         (; choice=Bernoulli(0.5)),
         (; total=context.previous_state.total + context.input.reward),
@@ -14,7 +14,7 @@ end
 
 #Has its own Turing version, which samples within the timestep
 struct SamplesWithinTimestep <: AbstractCognitiveModel end
-Turing.@model function CognitiveModeling.turing_run_timestep(
+Turing.@model function CognitiveModeling.turing_timestep_model(
     model::SamplesWithinTimestep, context::ModelContext
 )
     noise ~ Normal(0, 1)
@@ -25,12 +25,12 @@ Turing.@model function CognitiveModeling.turing_run_timestep(
 end
 
 #Runs several timesteps as submodels, each with its own prefix
-Turing.@model function run_timesteps_as_submodels(model, rewards)
+Turing.@model function timestep_models_as_submodels(model, rewards)
     state = (; total=0.0)
     for t in eachindex(rewards)
         context = ModelContext((; reward=rewards[t]), state, (; choice=NoValue()), (;))
         output ~ to_submodel(
-            prefix(turing_run_timestep(model, context), @varname(timestep[t])), false
+            prefix(turing_timestep_model(model, context), @varname(timestep[t])), false
         )
         state = output.new_state
     end
@@ -54,7 +54,7 @@ struct OnlyNormalEnvironment <: AbstractEnvironmentModel end
 function CognitiveModeling.initialize_state(environment::OnlyNormalEnvironment, parameters)
     return (; n_timesteps=0)
 end
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::OnlyNormalEnvironment, context::ModelContext
 )
     return ModelOutput(
@@ -131,25 +131,25 @@ end
     )
 end
 
-@testset "turing_run_timestep" begin
+@testset "turing_timestep_model" begin
     context = ModelContext((; reward=1.0), (; total=0.5), (; choice=NoValue()), (;))
 
-    @testset "The default gives what run_timestep returns" begin
-        output = turing_run_timestep(OnlyNormalFunction(), context)()
+    @testset "The default gives what timestep_model returns" begin
+        output = turing_timestep_model(OnlyNormalFunction(), context)()
         @test output isa ModelOutput
-        @test output.new_state == run_timestep(OnlyNormalFunction(), context).new_state
+        @test output.new_state == timestep_model(OnlyNormalFunction(), context).new_state
         @test output.output_distribution ==
-            run_timestep(OnlyNormalFunction(), context).output_distribution
+            timestep_model(OnlyNormalFunction(), context).output_distribution
     end
 
     @testset "The default works as a submodel, and has no variables" begin
-        model = run_timesteps_as_submodels(OnlyNormalFunction(), [1.0, 2.0])
+        model = timestep_models_as_submodels(OnlyNormalFunction(), [1.0, 2.0])
         @test isempty(keys(rand(Xoshiro(1), model)))
         @test model() == (; total=3.0)
     end
 
-    @testset "A model without an run_timestep method gives the informative error" begin
-        @test_throws "Each model must define" turing_run_timestep(
+    @testset "A model without a timestep_model method gives the informative error" begin
+        @test_throws "Each model must define" turing_timestep_model(
             ModelWithoutMethods(), context
         )()
     end
@@ -158,17 +158,18 @@ end
         environment_context = ModelContext(
             (; choice=true), (; n_timesteps=2), (; reward=0.0), (;), 1
         )
-        output = turing_run_timestep(OnlyNormalEnvironment(), environment_context)()
+        output = turing_timestep_model(OnlyNormalEnvironment(), environment_context)()
         @test output isa ModelOutput && output.new_state === (; n_timesteps=3)
     end
 
     @testset "A model's own method is used instead of the default" begin
-        @test @varname(noise) in
-            keys(rand(Xoshiro(1), turing_run_timestep(SamplesWithinTimestep(), context)))
+        @test @varname(noise) in keys(
+            rand(Xoshiro(1), turing_timestep_model(SamplesWithinTimestep(), context))
+        )
     end
 
     @testset "Each timestep has its own variable, and they count in the log density" begin
-        model = run_timesteps_as_submodels(SamplesWithinTimestep(), [1.0, 2.0])
+        model = timestep_models_as_submodels(SamplesWithinTimestep(), [1.0, 2.0])
         #Turing warns about the array of timesteps when it handles the values, which @test_logs hides
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) ==

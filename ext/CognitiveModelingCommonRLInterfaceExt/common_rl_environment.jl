@@ -25,7 +25,7 @@ function CognitiveModeling.initialize_state(environment::CommonRLEnvironment, pa
 end
 
 #Gives the observation the environment is at when there is no action to take, and acts otherwise
-function CognitiveModeling.run_timestep(
+function CognitiveModeling.timestep_model(
     environment::CommonRLEnvironment{Trl_env,action_name}, context::ModelContext
 ) where {Trl_env,action_name}
     rl_env = context.previous_state.rl_env

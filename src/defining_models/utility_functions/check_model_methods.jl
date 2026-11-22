@@ -21,7 +21,7 @@ end
 """
     check_model_output(output, model)
 
-Return `output` if it is the `ModelOutput` that an `run_timestep` method of `model` must
+Return `output` if it is the `ModelOutput` that a `timestep_model` method of `model` must
 return, and throw an error otherwise. Used on each timestep of [`simulate_session`](@ref),
 [`simulate_session!`](@ref), [`simulate_timestep`](@ref), [`simulate_timestep!`](@ref) and
 fitted sessions.
@@ -33,7 +33,7 @@ end
 #Untyped, so that there is always a method, whatever the model is inferred as
 function check_model_output(output, model)
     return error(
-        "The run_timestep method of $(describe_model(model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
+        "The timestep_model method of $(describe_model(model)) must return a CognitiveModeling.ModelOutput, but it returned a value of type $(typeof(output)).",
     )
 end
 
