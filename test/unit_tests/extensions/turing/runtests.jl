@@ -67,7 +67,7 @@ end
         include("parameter_models.jl")
         include("get_session_trajectories.jl")
         include("predict_session_trajectories.jl")
-        include("decondition_and_predict.jl")
+        include("decondition_sessions.jl")
         include("discrete_and_continuous_variables.jl")
         include("vector_parameters.jl")
         include("multivariate_attributes.jl")

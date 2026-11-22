@@ -55,20 +55,21 @@ simulated = predict_session_trajectories(model, chain; cognitive_save_history = 
 simulated[@varname(P1.choice)]
 ```
 
-Turing.jl's own `decondition` has a method for these models, which also deconditions their
-sessions with [`decondition_sessions`](@ref), since the models take their data as arguments,
-which Turing.jl's `decondition` otherwise leaves as they are. Turing.jl's own functions then
-simulate the data: `sample` with `Prior()` from the prior, and `predict` with the parameters
-of each sample of a chain. `predict` has a method for these models too, which takes only the
-parameters, and any start that a model samples, from the chain, and simulates every variable
-within the timesteps again, also an action that was imputed in the fit, where Turing.jl's
-`predict` otherwise keeps the values that the chain has. It returns the simulated actions
-and observations as variables, such as `session[1].timestep[3].choice.imputed`, where
-[`predict_session_trajectories`](@ref) returns the trajectories that the sessions save.
+[`decondition_sessions`](@ref) takes these models too, and returns a copy whose sessions are
+deconditioned, since the models take the data of their sessions as arguments, which
+Turing.jl's `decondition` leaves as they are. Turing.jl's own functions then simulate the
+data: `sample` with `Prior()` from the prior, and `predict` with the parameters of each
+sample of a chain. They return the simulated actions and observations as variables, such as
+`session[1].timestep[3].choice.imputed`, where [`predict_session_trajectories`](@ref)
+returns the trajectories that the sessions save. `predict` keeps the values that the chain
+has for actions and observations imputed in the fit, and fails when the fit imputed them at
+different timesteps in different sessions, where [`predict_session_trajectories`](@ref)
+simulates them again. Turing.jl's `condition` and `decondition` work on these models as on
+any other, also for a variable within the sessions, such as an imputed action.
 
 ```julia
-prior_predictions = sample(decondition(model), Prior(), 1000)
-predictions = predict(decondition(model), chain)
+prior_predictions = sample(decondition_sessions(model), Prior(), 1000)
+predictions = predict(decondition_sessions(model), chain)
 ```
 
 ## Functions that a model can implement for Turing.jl

@@ -43,6 +43,25 @@ function CognitiveModeling.predict_session_trajectories(
     return predict_session_trajectories(default_rng(), model, chain; keywords...)
 end
 
+#The models of the package take the data of their sessions as arguments, which Turing.jl's decondition leaves as they are, so a copy of the model is made whose sessions are deconditioned. Turing.jl's own functions then simulate the data, and condition and decondition work on the copy as on any model
+function CognitiveModeling.decondition_sessions(
+    model::DynamicPPL.Model; check_stopping_criterion::Union{Nothing,Bool}=nothing
+)
+    #A model of one's own has no session info that the package can find, so its sessions are deconditioned before it is given them
+    if !is_session_model(model)
+        throw(
+            ArgumentError(
+                "decondition_sessions(model) takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give it the sessions that decondition_sessions(sessions_info) gives instead.",
+            ),
+        )
+    end
+    return with_session_info(
+        model,
+        info -> decondition_sessions(info; check_stopping_criterion),
+        "decondition_sessions",
+    )
+end
+
 #Everything within the timesteps is simulated again, as the data is in a predictive check. Leaving those variables out of the chain also keeps FlexiChains.jl from rebuilding a sample whose sessions have variables at different timesteps, which fails: DynamicPPL.jl's skeleton gives the timesteps of every session the shape of the first session's (DynamicPPL 0.42)
 """
     without_timestep_variables(chain)
