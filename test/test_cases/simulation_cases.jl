@@ -79,7 +79,8 @@ function with_random_number_generator(keywords, distributions)
     return rng === nothing ? keywords : merge(keywords, (; rng))
 end
 
-#A case of simulate with a cognitive model and an environment, run with the real numbers of both models' parameters
+#A case of simulate_session with a cognitive model and an environment, run with the real numbers of both models'
+#parameters
 function simulate_case(
     name,
     distributions;
@@ -96,7 +97,7 @@ function simulate_case(
         cognitive_values, environment_values = both_with_real_numbers(
             cognitive_parameters, environment_parameters, x
         )
-        return simulate(
+        return simulate_session(
             model,
             environment;
             cognitive_parameters=cognitive_values,
@@ -117,9 +118,9 @@ function simulate_case(
 end
 
 #A case of an agent and an environment, instantiated with the real numbers of their parameters, and simulated with
-#simulate! once, or twice, with both models reset between the two calls or not, which returns the trajectories of every
-#call and the agent's history after them, read the way a user reads it, as vectors. The calls are written out, without a
-#loop, which Reactant would turn into a traced broadcast
+#simulate_session! once, or twice, with both models reset between the two calls or not, which returns the trajectories
+#of every call and the agent's history after them, read the way a user reads it, as vectors. The calls are written out,
+#without a loop, which Reactant would turn into a traced broadcast
 function instantiated_case(
     name,
     distributions;
@@ -143,13 +144,18 @@ function instantiated_case(
             environment, environment_values; save_history=environment_save_history
         )
         call_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
-        first_trajectories = simulate!(agent, environment_instance; call_keywords...)
+        first_trajectories = simulate_session!(
+            agent, environment_instance; call_keywords...
+        )
         trajectories = if twice
             if reset_between
                 reset!(agent)
                 reset!(environment_instance)
             end
-            (first_trajectories, simulate!(agent, environment_instance; call_keywords...))
+            (
+                first_trajectories,
+                simulate_session!(agent, environment_instance; call_keywords...),
+            )
         else
             (first_trajectories,)
         end
@@ -177,21 +183,21 @@ function instantiated_case(
     )
 end
 
-#A case of a cognitive model run on one input at a time with simulate, which passes its output and its state on to the
-#next, and returns the outputs and the states
+#A case of a cognitive model run on one input at a time with simulate_timestep, which passes its output and its state on
+#to the next, and returns the outputs and the states
 function single_inputs_case(
     name, distributions; model, parameters, inputs, reactant=true, keywords...
 )
     function run(x)
         parameter_values, _ = with_real_numbers(parameters, x, 1)
         rng_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
-        first_output, first_state = simulate(
+        first_output, first_state = simulate_timestep(
             model, first(inputs); parameters=parameter_values, rng_keywords...
         )
         outputs = [first_output]
         states = [first_state]
         for input in inputs[2:end]
-            output, state = simulate(
+            output, state = simulate_timestep(
                 model,
                 input;
                 parameters=parameter_values,
@@ -216,10 +222,10 @@ function single_inputs_case(
     )
 end
 
-#A case of an agent run on one input at a time with simulate!, which returns its outputs, in a tuple, and the states of
-#its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode gives a wrong
-#gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is then only known
-#when it runs
+#A case of an agent run on one input at a time with simulate_timestep!, which returns its outputs, in a tuple, and the
+#states of its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode gives a
+#wrong gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is then only
+#known when it runs
 function instantiated_single_inputs_case(
     name,
     distributions;
@@ -235,7 +241,9 @@ function instantiated_single_inputs_case(
         parameter_values, _ = with_real_numbers(parameters, x, 1)
         agent = InstantiatedModel(model, parameter_values; save_history)
         rng_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
-        outputs = map(input -> simulate!(agent, input; rng_keywords...), inputs_tuple)
+        outputs = map(
+            input -> simulate_timestep!(agent, input; rng_keywords...), inputs_tuple
+        )
         return (; outputs, states=agent.history.states)
     end
     x = real_numbers(parameters)
@@ -250,7 +258,8 @@ function instantiated_single_inputs_case(
     )
 end
 
-#A case of simulate where x is the sizes of the timesteps, which the gradient is of, with the parameters as they are
+#A case of simulate_session where x is the sizes of the timesteps, which the gradient is of, with the parameters as they
+#are
 function timestep_sizes_case(
     name,
     distributions;
@@ -263,7 +272,7 @@ function timestep_sizes_case(
     keywords...,
 )
     function run(x)
-        return simulate(
+        return simulate_session(
             model,
             environment;
             cognitive_parameters,

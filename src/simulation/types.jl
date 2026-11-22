@@ -9,15 +9,15 @@ Each argument is `:given => :received`, for an output which has another name in 
 receiver's attributes, or a single `Symbol`, for one which keeps its name. Outputs that
 aren't in the map aren't passed on, and each name can only be there once.
 
-[`simulate`](@ref) and [`simulate!`](@ref) take one as `observation_map`, from the
-observations the environment model gives to those in the cognitive model's attributes, and
-one as `action_map`, from the actions the cognitive model gives to those in the environment
-model's attributes. A cognitive model and an environment which name things differently, or
-where one gives something that isn't in the other's attributes, can then be used together,
-and the map says which outputs the receiver gets: it must give exactly the names in the
-receiver's attributes, from [`attribute_names`](@ref). `NameMap()` passes nothing on, for a
-receiver without inputs in its attributes. Without a map, the two must have the same names
-in their attributes.
+[`simulate_session`](@ref) and [`simulate_session!`](@ref) take one as `observation_map`,
+from the observations the environment model gives to those in the cognitive model's
+attributes, and one as `action_map`, from the actions the cognitive model gives to those in
+the environment model's attributes. A cognitive model and an environment which name things
+differently, or where one gives something that isn't in the other's attributes, can then be
+used together, and the map says which outputs the receiver gets: it must give exactly the
+names in the receiver's attributes, from [`attribute_names`](@ref). `NameMap()` passes
+nothing on, for a receiver without inputs in its attributes. Without a map, the two must
+have the same names in their attributes.
 
 # Examples
 ```jldoctest
@@ -66,7 +66,8 @@ received_name(names::Pair{Symbol,Symbol}) = last(names)
                       save_history=SaveHistory(), check_parameter_domains=true)
 
 A cognitive model or an environment model with its parameters, current state and previous
-output, which [`simulate!`](@ref) can update iteratively.
+output, which [`simulate_session!`](@ref) and [`simulate_timestep!`](@ref) can update
+iteratively.
 
 Each argument is kept in a field of the same name, such as `agent.state`. Parameters that
 aren't given take the values in [`default_parameters`](@ref), if the model provides defaults
@@ -95,13 +96,15 @@ kind of its model and how many timesteps it has simulated.
 
 An instantiated model is a convenience, and isn't type stable, by design: its state and its
 previous output can change type, as an output does from `BeforeFirstTimestep()` to a `Bool`,
-and so can what its history saves, so they are kept untyped. Each call of `simulate!` on it
-is therefore dynamically dispatched, and the compiler doesn't know what it returns, whatever
-is saved. Where that matters, use [`simulate`](@ref) on the models themselves, one timestep
-at a time or for a whole simulation.
+and so can what its history saves, so they are kept untyped. Each call of
+`simulate_session!` or `simulate_timestep!` on it is therefore dynamically dispatched, and
+the compiler doesn't know what it returns, whatever is saved. Where that matters, use
+[`simulate_timestep`](@ref) or [`simulate_session`](@ref) on the models themselves, one
+timestep at a time or for a whole session.
 
 The same type serves as the agent and as the environment of a simulation, since both are
-models. See also [`simulate!`](@ref) and [`reset!`](@ref).
+models. See also [`simulate_session!`](@ref), [`simulate_timestep!`](@ref) and
+[`reset!`](@ref).
 
 # Examples
 ```jldoctest
@@ -119,7 +122,7 @@ julia> CognitiveModeling.attribute_names(::LearnsRewards) = ModelAttributes(; pa
 
 julia> agent = InstantiatedModel(LearnsRewards(), (; learning_rate = 0.5));
 
-julia> simulate!(agent, (; reward = 1.0));
+julia> simulate_timestep!(agent, (; reward = 1.0));
 
 julia> agent
 -- Instantiated cognitive model --
@@ -261,8 +264,8 @@ end
 
 agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
 
-simulate!(agent, (; reward = 1.0))
-simulate!(agent, (; reward = 1.0))
+simulate_timestep!(agent, (; reward = 1.0))
+simulate_timestep!(agent, (; reward = 1.0))
 reset!(agent)
 
 agent.state, agent.previous_output, agent.history.states

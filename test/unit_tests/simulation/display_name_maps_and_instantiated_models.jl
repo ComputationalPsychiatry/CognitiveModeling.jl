@@ -17,7 +17,7 @@ end
 
     @testset "The REPL shows its model's kind and type, the timesteps, and the values of the parameters and the state" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         @test repr("text/plain", agent) == """
         -- Instantiated cognitive model --
         Type: Baseline
@@ -51,7 +51,7 @@ end
             (; reward_probability=0.8, last_timestep=2),
         )
         @test !occursin("Stopping criterion", repr("text/plain", environment))
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
         @test endswith(
             repr("text/plain", environment),
             "\nStopping criterion met: reset! to simulate it again",
@@ -63,7 +63,7 @@ end
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         @test repr(agent) ==
             "Baseline (instantiated cognitive model, 0 timesteps simulated)"
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         @test repr(agent) == "Baseline (instantiated cognitive model, 1 timestep simulated)"
         @test occursin(
             "OnlyCues (instantiated environment model, 0 timesteps simulated)",

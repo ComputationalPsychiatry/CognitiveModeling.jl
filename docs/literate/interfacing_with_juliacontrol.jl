@@ -144,7 +144,7 @@ end
 # A session of the agent controlling the plant, with the observations and the actions saved:
 
 timestep_size = 0.1
-simulation = simulate(
+simulation = simulate_session(
     PIDController(timestep_size),
     FirstOrderPlant(; timestep_size);
     who_starts=EnvironmentStarts(),
@@ -168,7 +168,7 @@ true_parameters = [
     (; K=1.5, Ti=2.0, Td=0.05, motor_noise=0.2),
 ]
 simulations = map(enumerate(true_parameters)) do (session, parameters)
-    return simulate(
+    return simulate_session(
         PIDController(timestep_size),
         FirstOrderPlant(; timestep_size);
         who_starts=EnvironmentStarts(),
@@ -308,7 +308,7 @@ end
 
 # A session of the tracker:
 
-tracking = simulate(
+tracking = simulate_session(
     KalmanTracker(),
     DriftingTarget();
     who_starts=EnvironmentStarts(),

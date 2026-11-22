@@ -112,7 +112,7 @@ Nothing checks that they match while the model runs.
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. A model
-without one kind of attribute gives `()` for it. [`simulate`](@ref) and
+without one kind of attribute gives `()` for it. [`simulate_session`](@ref) and
 [`InstantiatedModel`](@ref) use the output names for the output before the first timestep,
 and check the parameters, the previous output and the state against the names. A simulation
 with an environment also checks that the two models fit together: the outputs of each must
@@ -180,9 +180,9 @@ end
     default_parameters(model::AbstractTimestepModel)
 
 Return the default parameter values of a cognitive model or of an environment model, such as
-`(; learning_rate = 0.1)`, which [`InstantiatedModel`](@ref) and [`simulate`](@ref) use for
-the parameters they aren't given. The display of a model shows each default value after the
-name of its parameter.
+`(; learning_rate = 0.1)`, which [`InstantiatedModel`](@ref) and [`simulate_session`](@ref)
+use for the parameters they aren't given. The display of a model shows each default value
+after the name of its parameter.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
@@ -201,11 +201,11 @@ parameter that has one. A parameter without a domain can take any value.
 
 The parameters of a simulation and of a fitted session are checked against their domains
 before anything runs, and a value outside its domain throws a
-[`ParameterDomainError`](@ref), unless [`simulate`](@ref), [`InstantiatedModel`](@ref) or
-[`SessionInfo`](@ref) is given `check_parameter_domains = false`.
-[`CognitiveModeling.discrete_parameter_names`](@ref) gives the discrete parameters, and
-[`CognitiveModeling.continuous_parameter_names`](@ref) the continuous ones, which are
-sampled in different ways. The display of a model shows each domain after the name of its
+[`ParameterDomainError`](@ref), unless [`simulate_session`](@ref),
+[`InstantiatedModel`](@ref) or [`SessionInfo`](@ref) is given
+`check_parameter_domains = false`. [`CognitiveModeling.discrete_parameter_names`](@ref)
+gives the discrete parameters, and [`CognitiveModeling.continuous_parameter_names`](@ref)
+the continuous ones, which are sampled in different ways. The display of a model shows each domain after the name of its
 parameter.
 
 # Implementation
@@ -316,8 +316,8 @@ Return whether `model`, a cognitive model or an environment model, with `state` 
 after a timestep and its `parameters`, has signaled for a simulation to stop there instead
 of running all of `n_steps`.
 
-[`simulate`](@ref) and [`simulate!`](@ref) check it for both models before each timestep,
-with the states that the timestep before left, unless they are given
+[`simulate_session`](@ref) and [`simulate_session!`](@ref) check it for both models before
+each timestep, with the states that the timestep before left, unless they are given
 `check_stopping_criterion = false`. When it returns `true` for either, no further timestep
 runs, and what is returned and added to the histories has the timesteps that ran. When the
 environment starts, the cognitive model has then made its last observation and acted on it,

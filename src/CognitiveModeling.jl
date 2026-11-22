@@ -67,7 +67,7 @@ export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
-export simulate, simulate!, reset!
+export simulate_session, simulate_session!, simulate_timestep, simulate_timestep!, reset!
 export SessionInfo, MultipleSessionsInfo, NoEnvironment, decondition_sessions
 export AbstractParametersModel,
     NoParameters,

@@ -30,13 +30,13 @@ const ENVIRONMENT = BaselineEnvironment(DistributionsJl())
 ## The simulations and the data ##
 
 # A simulation of one session
-function simulate_session(
+function simulate_baseline_session(
     rng,
     save_history;
     n_timesteps=100,
     cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
 )
-    return simulate(
+    return simulate_session(
         COGNITIVE_MODEL,
         ENVIRONMENT;
         who_starts=EnvironmentStarts(),
@@ -57,7 +57,7 @@ function simulate_table(n_sessions, n_timesteps)
         session <= n_sessions ÷ 2 ? "a" : "b" for session in 1:n_sessions
     ]
     simulations = [
-        simulate_session(
+        simulate_baseline_session(
             Xoshiro(session),
             save_history;
             n_timesteps,
@@ -138,10 +138,10 @@ end
 const SUITE = BenchmarkGroup()
 
 SUITE["simulate"] = BenchmarkGroup()
-SUITE["simulate"]["saving nothing"] = @benchmarkable simulate_session(rng, $(SaveHistory())) setup = (
-    rng = Xoshiro(1)
-)
-SUITE["simulate"]["saving everything"] = @benchmarkable simulate_session(
+SUITE["simulate"]["saving nothing"] = @benchmarkable simulate_baseline_session(
+    rng, $(SaveHistory())
+) setup = (rng = Xoshiro(1))
+SUITE["simulate"]["saving everything"] = @benchmarkable simulate_baseline_session(
     rng, $(SaveHistory(SaveEverything()))
 ) setup = (rng = Xoshiro(1))
 

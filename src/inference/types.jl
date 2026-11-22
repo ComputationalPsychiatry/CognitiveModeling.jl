@@ -84,8 +84,8 @@ table.
 # Keyword arguments
 - `who_starts::Union{AgentStarts, EnvironmentStarts}`: whether the model acts on the
   observation of the same timestep, `EnvironmentStarts()`, or on the observation of the
-  timestep before, `AgentStarts()`, as in [`simulate`](@ref). It has no default, because a
-  wrong choice shifts the model by a timestep without any error.
+  timestep before, `AgentStarts()`, as in [`simulate_session`](@ref). It has no default,
+  because a wrong choice shifts the model by a timestep without any error.
 - `environment::Union{NoEnvironment, AbstractTimestepModel}=NoEnvironment()`: an environment
   model, usually an [`AbstractEnvironmentModel`](@ref), which imputes the observations that
   are `MissingValue()`, and against whose distributions the observations in the data are
@@ -107,19 +107,19 @@ table.
   `MissingValue()`, a selection in `environment_save_history` and
   `check_stopping_criterion = true` are then errors, and an action that is `MissingValue()`
   is imputed without the observations informing it.
-- `observation_map::Union{Nothing, NameMap}=nothing` and
-  `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
-  cognitive model receives, and which of its actions the environment receives, and under
-  which names, as [`NameMap`](@ref)s, as for `simulate`. The data is in the cognitive
-  model's names, and is scored against the environment's distributions as the map passes
-  them on. An output of the environment that the map doesn't pass on isn't in the data, so
-  it is imputed on every timestep. Each model's history is in its own names.
-- `timestep_sizes=1`: how much time each timestep covers, as in `simulate`.
+- `observation_map::Union{Nothing, NameMap}=nothing` and `action_map::Union{Nothing,
+  NameMap}=nothing`: which observations of `environment` the cognitive model receives, and
+  which of its actions the environment receives, and under which names, as
+  [`NameMap`](@ref)s, as for `simulate_session`. The data is in the cognitive model's names,
+  and is scored against the environment's distributions as the map passes them on. An output
+  of the environment that the map doesn't pass on isn't in the data, so it is imputed on
+  every timestep. Each model's history is in its own names.
+- `timestep_sizes=1`: how much time each timestep covers, as in `simulate_session`.
 - `cognitive_save_history::SaveHistory=SaveHistory()`: which states, inputs, outputs and
   output distributions of `cognitive_model` a fitted session returns, by name, and whether
   timestep 0 is, as a [`SaveHistory`](@ref) in the model's own names. Nothing is selected by
   default. What is returned names them by their role, as `states`, `observations`,
-  `actions` and `action_distributions`, as [`simulate`](@ref) does.
+  `actions` and `action_distributions`, as [`simulate_session`](@ref) does.
 - `environment_save_history::SaveHistory=SaveHistory()`: the same for `environment`, whose
   inputs are the actions and whose outputs are the observations, returned under
   `environment`. Selecting anything makes the environment run in the session, also when
@@ -152,11 +152,11 @@ table.
   [`UnimputedMissingValue`](@ref) here, which the models receive as it is.
 - `previous_observation` and `previous_action`: what the first timestep receives as the
   observation and the action before it, in the cognitive model's names, with
-  [`BeforeFirstTimestep`](@ref) for each name by default, as in `simulate`. The environment
-  starts from the same observation in its own names, with `BeforeFirstTimestep()` for an
-  output that `observation_map` doesn't pass on. The states where the session starts are
-  not given here, since they come from [`initialize_state`](@ref) with the parameters that
-  are fitted.
+  [`BeforeFirstTimestep`](@ref) for each name by default, as in `simulate_session`. The
+  environment starts from the same observation in its own names, with
+  `BeforeFirstTimestep()` for an output that `observation_map` doesn't pass on. The states
+  where the session starts are not given here, since they come from
+  [`initialize_state`](@ref) with the parameters that are fitted.
 
 Each argument is kept in a field of the same name, except the values that stand for a
 missing one and whether they are imputed, whose work is done in the data here. The other

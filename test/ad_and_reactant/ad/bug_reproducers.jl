@@ -60,7 +60,7 @@ end
 #with no error, which Enzyme.jl issue 3912 reports. The number of timesteps is a constant because that's part of what
 #triggers it
 function simulate_sampled_for_30_timesteps(x)
-    simulation = simulate(
+    simulation = simulate_session(
         LearnsRewards{SampledChoice}(),
         SampledRewards();
         who_starts=AgentStarts(),

@@ -3,12 +3,12 @@
     check_parameters_in_domains(model, parameters)
 
 Throw a [`ParameterDomainError`](@ref) if a parameter in `parameters` is outside its domain
-in [`parameter_domains`](@ref) of `model`: of another type than the domain's, below its lower
-bound or above its upper bound, not one of its possible values, or not satisfying its
+in [`parameter_domains`](@ref) of `model`: of another type than the domain's, below its
+lower bound or above its upper bound, not one of its possible values, or not satisfying its
 constraint. Real numbers and values that aren't numbers are checked, and so is every element
 of an array or a tuple. A number that isn't a real number is left alone. It is an
-`ArgumentError` when the domains aren't [`Domain`](@ref)s under the names of
-parameters in the model's attributes. Used by [`simulate`](@ref),
+`ArgumentError` when the domains aren't [`Domain`](@ref)s under the names of parameters in
+the model's attributes. Used by [`simulate_session`](@ref), [`simulate_timestep`](@ref),
 [`InstantiatedModel`](@ref) and fitted sessions, before anything runs, unless they are given
 `check_parameter_domains = false`.
 """

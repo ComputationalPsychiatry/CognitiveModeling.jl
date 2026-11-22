@@ -1,8 +1,9 @@
 #What holds for every simulation case that the suites share, with the distributions written by hand, which sample with a
 #seeded random number generator, and with their means, which sample nothing: it runs, a second run gives the same, and
-#the vectors that one call of simulate saves have the same length. With the distributions written by hand, the type of
-#what it returns is inferred where the case says it can be. With the means, the choices and the rewards are numbers
-#instead of Bools, so the states of some models that start with a Bool change type, and their types aren't checked
+#the vectors that one call of simulate_session saves have the same length. With the distributions written by hand, the
+#type of what it returns is inferred where the case says it can be. With the means, the choices and the rewards are
+#numbers instead of Bools, so the states of some models that start with a Bool change type, and their types aren't
+#checked
 
 #What a case returned without the distributions it saved, whose values a second run compares, since the distributions
 #written by hand hold vectors, which isequal compares by identity
@@ -18,8 +19,8 @@ function without_distributions(values::Union{Tuple,AbstractVector})
 end
 without_distributions(value) = value
 
-#The lengths of the vectors that a call of simulate saved, of both models, leaving out the empty ones, which a model that
-#saves nothing of a kind returns
+#The lengths of the vectors that a call of simulate_session saved, of both models, leaving out the empty ones, which a
+#model that saves nothing of a kind returns
 function saved_lengths(trajectories)
     lengths = Int[]
     for name in (:states, :observations, :actions, :action_distributions)

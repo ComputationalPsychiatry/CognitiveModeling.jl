@@ -344,7 +344,7 @@ function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(
     if haskey(keywords, :timestep_sizes)
         keywords = merge(keywords, (; timestep_sizes=sizes_of_timesteps(keywords, n_steps)))
     end
-    return simulate(
+    return simulate_session(
         pair.model(distributions),
         pair.environment(distributions);
         who_starts,

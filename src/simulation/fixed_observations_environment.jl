@@ -40,7 +40,7 @@ end
 environment = FixedObservationsEnvironment((; reward = [1.0, 0.0, 1.0]))
 
 #The simulation stops after the three rewards, before it has run all of n_steps. The environment takes no actions, so the map passes none on
-simulation = simulate(
+simulation = simulate_session(
     LearnsRewards(),
     environment;
     who_starts = EnvironmentStarts(),
@@ -115,7 +115,7 @@ function run_timestep(environment::FixedObservationsEnvironment, context::ModelC
     #Every entry is given once, and the environment doesn't start again from the first
     if n_observations_given > n_fixed_timesteps(environment)
         error(
-            "The FixedObservationsEnvironment has given the observations of all its $(n_fixed_timesteps(environment)) timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate starts from the first again, and so does reset! of an InstantiatedModel.",
+            "The FixedObservationsEnvironment has given the observations of all its $(n_fixed_timesteps(environment)) timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
         )
     end
 

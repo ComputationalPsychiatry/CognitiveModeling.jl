@@ -43,7 +43,7 @@ end
             state -> state.rl_learner.approximator.model,
         ),
     )
-        simulation = simulate(
+        simulation = simulate_session(
             cognitive_model,
             random_walk_environment();
             who_starts=EnvironmentStarts(),

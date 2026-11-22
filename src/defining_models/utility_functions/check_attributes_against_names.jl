@@ -4,9 +4,9 @@
 
 Throw an informative error if the names of the parameters, of the previous output or of the
 state aren't those in the attributes of `model`, a cognitive model or an environment model,
-from [`attribute_names`](@ref), or if the previous output or the state isn't a
-`NamedTuple`. Used by [`InstantiatedModel`](@ref), [`simulate`](@ref) and fitted sessions,
-before anything runs.
+from [`attribute_names`](@ref), or if the previous output or the state isn't a `NamedTuple`.
+Used by [`InstantiatedModel`](@ref), [`simulate_session`](@ref), [`simulate_timestep`](@ref)
+and fitted sessions, before anything runs.
 """
 function check_match_attribute_names(
     model::AbstractTimestepModel, parameters, state, previous_output
@@ -51,8 +51,8 @@ end
 
 Throw an informative error if `input`, given to a model without the other side of a
 simulation, isn't a `NamedTuple` with every input in the attributes of `model`, from
-[`attribute_names`](@ref). It can have more than those. Used by [`simulate`](@ref) and
-[`simulate!`](@ref) on a single input.
+[`attribute_names`](@ref). It can have more than those. Used by [`simulate_timestep`](@ref)
+and [`simulate_timestep!`](@ref).
 """
 function check_input_names(model::AbstractTimestepModel, input)
     attributes = check_type_attribute_names(attribute_names(model), model)

@@ -7,7 +7,7 @@ using POMDPTools: POMDPCommonRLEnv
 using Random: Xoshiro
 
 @testset "The model simulates the tiger problem, and its beliefs are those the updater of POMDPTools.jl gives" begin
-    simulation = simulate(
+    simulation = simulate_session(
         BayesianObserver(TigerPOMDP()),
         CommonRLEnvironment(POMDPCommonRLEnv{Any}(TigerPOMDP()); action_name=:choice);
         who_starts=EnvironmentStarts(),

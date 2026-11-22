@@ -62,7 +62,7 @@ ages = [20.0, 35.0, 50.0, 65.0]
 uses_rewards = [true, true, false, false]
 simulations = map(1:4) do participant
     rewards = Float64.(rand(Xoshiro(participant), 40) .< 0.7)
-    return simulate(
+    return simulate_session(
         LearnsOrNot(),
         FixedObservationsEnvironment((; reward=rewards));
         who_starts=EnvironmentStarts(),

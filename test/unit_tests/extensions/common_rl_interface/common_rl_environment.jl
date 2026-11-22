@@ -85,7 +85,7 @@ function run_bandit(
     ),
     keywords...,
 )
-    return simulate(
+    return simulate_session(
         model,
         CommonRLEnvironment(rl_env; action_name);
         who_starts=EnvironmentStarts(),
@@ -168,7 +168,7 @@ end
         observations = run_bandit(rl_env).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
         #An episode that has ended isn't started again by an action given to it by hand
-        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.run_timestep(
+        @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate_session starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.run_timestep(
             environment, ModelContext((; arm=1), (; rl_env), observations[end], (;))
         )
         @test rl_env.pulls == 3
@@ -276,7 +276,7 @@ end
         @test simulation.environment.states == fill((;), 4)
     end
 
-    @testset "simulate! continues with the same environment object" begin
+    @testset "simulate_session! continues with the same environment object" begin
         rl_env = CountingBandit(0, 0)
         environment = InstantiatedModel(CommonRLEnvironment(rl_env; action_name=:arm), (;))
         @test environment.previous_output === (;
@@ -287,21 +287,23 @@ end
         agent = InstantiatedModel(
             PullsArm(), (; arm_to_pull=1); save_history=SaveHistory(SaveEverything())
         )
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2)
         @test environment.state === (; rl_env)
         @test rl_env.pulls == 1
         observations =
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2).observations
+            simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2).observations
         @test [observation.observation for observation in observations] == [2, 3]
         #The episode has ended, so it can't continue until the environment is reset
-        @test_throws "The stopping criterion of an environment model of type CommonRLEnvironment{CountingBandit, :arm} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
+        @test_throws "The stopping criterion of an environment model of type CommonRLEnvironment{CountingBandit, :arm} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
         #After a reset of both, a call that asks for more timesteps than the episode has stops with it
         CognitiveModeling.reset!(environment)
         CognitiveModeling.reset!(agent)
         @test length(
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10).observations,
+            simulate_session!(
+                agent, environment; who_starts=EnvironmentStarts(), n_steps=10
+            ).observations,
         ) == 4
     end
 
@@ -313,14 +315,14 @@ end
             (; arm_to_pull=1);
             save_history=SaveHistory(; inputs=SaveEverything()),
         )
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4)
         @test rl_env.pulls == 3
         CognitiveModeling.reset!(environment)
         CognitiveModeling.reset!(agent)
         @test environment.state === (; rl_env)
         @test rl_env.pulls == 0
         observations =
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4).observations
+            simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
         @test observations[1].reward === NoValue()
     end

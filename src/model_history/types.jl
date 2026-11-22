@@ -36,12 +36,12 @@ Saving some names of a kind gives a `NamedTuple` with those names on each timest
 saving none gives an empty one, `(;)`. Before the first timestep there is no output
 distribution, so timestep 0 has `BeforeFirstTimestep()` for each name that is saved.
 
-Each model of a simulation has one: [`simulate`](@ref) and [`SessionInfo`](@ref) take
-`cognitive_save_history` and `environment_save_history`, and an [`InstantiatedModel`](@ref)
-takes `save_history`. The trajectories that a simulation or a session returns are named by
-their role: the cognitive model's inputs as `observations` and outputs as `actions`, and the
-environment's inputs as `actions` and outputs as `observations` under `environment`, as
-[`simulate`](@ref) describes.
+Each model of a simulation has one: [`simulate_session`](@ref) and [`SessionInfo`](@ref)
+take `cognitive_save_history` and `environment_save_history`, and an
+[`InstantiatedModel`](@ref) takes `save_history`. The trajectories that a simulation or a
+session returns are named by their role: the cognitive model's inputs as `observations` and
+outputs as `actions`, and the environment's inputs as `actions` and outputs as
+`observations` under `environment`, as [`simulate_session`](@ref) describes.
 
 # Examples
 ```jldoctest
@@ -138,7 +138,8 @@ end
 """
     ModelHistory(states, inputs, outputs, output_distributions, timestep_sizes)
 
-What has happened to an [`InstantiatedModel`](@ref), which [`simulate!`](@ref) adds to.
+What has happened to an [`InstantiatedModel`](@ref), which [`simulate_session!`](@ref) adds
+to.
 
 Each argument is kept in a field of the same name, such as `history.states`. The names are
 the model's own: for a cognitive model the inputs are its observations and the outputs its

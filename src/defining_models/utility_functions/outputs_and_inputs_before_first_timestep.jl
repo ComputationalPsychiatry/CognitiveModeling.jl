@@ -10,8 +10,9 @@ output or the input names in the attributes of `model`, a cognitive model or an 
 model, from [`attribute_names`](@ref), or those that `attributes`, a
 [`ModelAttributes`](@ref), has, each [`BeforeFirstTimestep`](@ref). A model's names are
 checked to be a `ModelAttributes` first. Used wherever a model starts: by
-[`InstantiatedModel`](@ref), [`reset!`](@ref), [`simulate`](@ref) and fitted sessions, for
-the previous output and for the output distributions saved as timestep 0.
+[`InstantiatedModel`](@ref), [`reset!`](@ref), [`simulate_session`](@ref),
+[`simulate_timestep`](@ref) and fitted sessions, for the previous output and for the output
+distributions saved as timestep 0.
 """
 function output_before_first_timestep(model::AbstractTimestepModel)
     return output_before_first_timestep(

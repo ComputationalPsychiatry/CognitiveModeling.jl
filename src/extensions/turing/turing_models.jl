@@ -97,7 +97,7 @@ A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the par
 they were given, without the default values of the models, and `saved_trajectories`, the
 trajectories that the save histories of `session_info` select, which
 `returned(model, chain)` gives for each sample. The trajectories are a `NamedTuple` with the
-same entries as [`simulate`](@ref) returns: `states`, `observations`, `actions` and
+same entries as [`simulate_session`](@ref) returns: `states`, `observations`, `actions` and
 `action_distributions` of the cognitive model, `environment` with the `states`,
 `observations`, `actions` and `observation_distributions` of the environment when the
 session has one, which are empty when it didn't run, and `timestep_sizes`. Each is a vector

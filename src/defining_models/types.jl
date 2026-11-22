@@ -78,7 +78,7 @@ optionally [`prepare_state_for_saving`](@ref), [`default_parameters`](@ref) and
 [`stopping_criterion`](@ref). Fitting with a PPL can need methods of its own, which the
 documentation for that PPL describes.
 
-See also [`simulate`](@ref), which has an example.
+See also [`simulate_session`](@ref), which has an example.
 
 # Examples
 ```jldoctest
@@ -193,8 +193,8 @@ an observation with every entry [`BeforeFirstTimestep`](@ref). Both models recei
 `who_starts` of their [`ModelContext`](@ref), so that a cognitive model can act before it
 updates when that is what it means.
 
-See also [`EnvironmentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
-[`SessionInfo`](@ref).
+See also [`EnvironmentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate_session`](@ref)
+and [`SessionInfo`](@ref).
 """
 struct AgentStarts end
 
@@ -208,7 +208,7 @@ the cognitive model then updates and acts on it. On the first timestep, the envi
 receives an action with every entry [`BeforeFirstTimestep`](@ref). Both models receive it as
 the `who_starts` of their [`ModelContext`](@ref).
 
-See also [`AgentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate`](@ref) and
+See also [`AgentStarts`](@ref), [`UnknownWhoStarts`](@ref), [`simulate_session`](@ref) and
 [`SessionInfo`](@ref).
 """
 struct EnvironmentStarts end
@@ -217,9 +217,9 @@ struct EnvironmentStarts end
     UnknownWhoStarts()
 
 The `who_starts` of a [`ModelContext`](@ref) when neither side is known to move first on a
-timestep, as when a model runs on a single input with [`simulate`](@ref), or is used outside
-a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the other two, which
-a simulation or a fitted session passes on from its own `who_starts`.
+timestep, as when a model runs on a single input with [`simulate_timestep`](@ref), or is
+used outside a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the
+other two, which a simulation or a fitted session passes on from its own `who_starts`.
 """
 struct UnknownWhoStarts end
 
@@ -929,7 +929,7 @@ A simulation and a fit stop with it. A fit which catches an
 [`InvalidParametersError`](@ref), to give the parameters of a sample a probability of zero,
 doesn't catch this one. Give the parameters priors or transformations that stay within the
 domains instead, or leave the check out with `check_parameter_domains = false` in
-[`simulate`](@ref), [`InstantiatedModel`](@ref) or [`SessionInfo`](@ref).
+[`simulate_session`](@ref), [`InstantiatedModel`](@ref) or [`SessionInfo`](@ref).
 
 # Examples
 ```jldoctest

@@ -38,8 +38,9 @@ these three observations, the one action, no parameters and the state `rl_env`. 
 A simulation stops by itself when the episode ends, since the [`stopping_criterion`](@ref)
 of the environment is `terminated` of `rl_env`, so `n_steps` is the most timesteps it can
 take. An episode that has ended isn't started again, and an action given to it throws an
-error. A new call of [`simulate`](@ref) starts a new episode, and so does [`reset!`](@ref)
-of an [`InstantiatedModel`](@ref), since both reset `rl_env` through `initialize_state`.
+error. A new call of [`simulate_session`](@ref) starts a new episode, and so does
+[`reset!`](@ref) of an [`InstantiatedModel`](@ref), since both reset `rl_env` through
+`initialize_state`.
 
 # Examples
 ```jldoctest
@@ -63,7 +64,7 @@ CognitiveModeling.run_timestep(model::PullsFirstArm, context::ModelContext) = Mo
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), inputs = (:observation, :reward, :terminated), outputs = :arm)
 
 #The simulation stops when the episode ends, before it has run all of n_steps
-simulation = simulate(
+simulation = simulate_session(
     PullsFirstArm(),
     CommonRLEnvironment(Bandit(0); action_name = :arm);
     who_starts = EnvironmentStarts(),

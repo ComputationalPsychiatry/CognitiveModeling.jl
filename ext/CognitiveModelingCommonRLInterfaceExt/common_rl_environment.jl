@@ -39,7 +39,7 @@ function CognitiveModeling.run_timestep(
     #An episode that has ended can't take another action, and isn't started again here
     if terminated(rl_env)
         error(
-            "The episode of the environment of type $(typeof(rl_env)) from CommonRLInterface.jl has ended, so it can't take the action $action_name. A simulation stops by itself when the episode ends. A new call of simulate starts a new episode, and so does reset! of an InstantiatedModel.",
+            "The episode of the environment of type $(typeof(rl_env)) from CommonRLInterface.jl has ended, so it can't take the action $action_name. A simulation stops by itself when the episode ends. A new call of simulate_session starts a new episode, and so does reset! of an InstantiatedModel.",
         )
     end
 

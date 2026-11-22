@@ -24,7 +24,7 @@ end
 end
 
 @testset "The Kalman filter believes what the same filter written by hand does" begin
-    with_distributions = simulate(
+    with_distributions = simulate_session(
         KalmanTracker(),
         DriftingTarget();
         who_starts=EnvironmentStarts(),

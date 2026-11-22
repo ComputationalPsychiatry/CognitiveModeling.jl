@@ -76,7 +76,7 @@ end
 
 simulated_learning_rates = [0.2, 0.35, 0.5, 0.65, 0.8]
 simulations = map(enumerate(simulated_learning_rates)) do (participant, learning_rate)
-    return simulate(
+    return simulate_session(
         RescorlaWagner(),
         BernoulliRewards();
         who_starts=EnvironmentStarts(),

@@ -7,8 +7,8 @@ Throw an informative error if `save_history` selects a state, an input, an outpu
 output distribution by name that isn't in the attributes of `model`, a cognitive model or an
 environment model, from [`attribute_names`](@ref), since a history starts from those names,
 and [`prepare_state_for_saving`](@ref) returns a state with them. Used by
-[`InstantiatedModel`](@ref), [`simulate`](@ref) and [`SessionInfo`](@ref), before anything
-is saved.
+[`InstantiatedModel`](@ref), [`simulate_session`](@ref) and [`SessionInfo`](@ref), before
+anything is saved.
 """
 function check_savehistory_selection_names(
     save_history::SaveHistory, model::AbstractTimestepModel

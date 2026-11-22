@@ -34,7 +34,7 @@ end
 
 #Runs a model with an environment of fixed observations, saving everything but timestep 0. The environment takes no actions, so the map passes none on
 function simulate_fixed_observations(environment; model=Baseline(ByHand()), keywords...)
-    return simulate(
+    return simulate_session(
         model,
         environment;
         who_starts=EnvironmentStarts(),
@@ -129,7 +129,7 @@ end
         )
         #A model without actions needs no map
         @test length(
-            simulate(
+            simulate_session(
                 ObservesRewards(),
                 environment;
                 who_starts=EnvironmentStarts(),
@@ -182,7 +182,7 @@ end
         )
         @test CognitiveModeling.n_fixed_timesteps(environment) == 3
         @test_throws ErrorException(
-            "The FixedObservationsEnvironment has given the observations of all its 3 timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate starts from the first again, and so does reset! of an InstantiatedModel.",
+            "The FixedObservationsEnvironment has given the observations of all its 3 timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
         ) simulate_fixed_observations(environment; check_stopping_criterion=false)
         @test length(
             simulate_fixed_observations(
@@ -194,7 +194,7 @@ end
     @testset "An instantiated one is simulated in steps, and starts from its first entry after reset!" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(FixedObservationsEnvironment(rewards), (;))
-        simulate_steps!(n_steps) = simulate!(
+        simulate_steps!(n_steps) = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),

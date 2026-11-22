@@ -395,7 +395,7 @@ function simulate_for_test(
     environment_save_history=EVERY_TIMESTEP,
     keywords...,
 )
-    return simulate(
+    return simulate_session(
         model,
         environment;
         who_starts,
@@ -451,17 +451,17 @@ end
 
 @testset "A parameter outside its domain is an error before anything runs" begin
     @testset "A single timestep checks its parameters, unless it is told not to" begin
-        @test simulate(
+        @test simulate_timestep(
             WithDomains(ByHand()), (; reward=1.0); parameters=BASELINE_PARAMETERS
         )[2] == (; expected_reward=0.75)
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{ByHand} is 1.5, which is outside its domain, from 0 to 1.",
-        ) simulate(
+        ) simulate_timestep(
             WithDomains(ByHand()),
             (; reward=1.0);
             parameters=(; learning_rate=1.5, inverse_temperature=2.0),
         )
-        @test simulate(
+        @test simulate_timestep(
             WithDomains(ByHand()),
             (; reward=1.0);
             parameters=(; learning_rate=1.5, inverse_temperature=2.0),
@@ -472,7 +472,7 @@ end
     @testset "A whole simulation checks the parameters of both models, unless it is told not to" begin
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{ByHand} is 1.5, which is outside its domain, from 0 to 1.",
-        ) simulate(
+        ) simulate_session(
             WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
@@ -482,7 +482,7 @@ end
         )
         @test_throws ParameterDomainError(
             "The parameter reward_probability of an environment model of type RewardsWithinDomain is -0.5, which is outside its domain, from 0 to 1.",
-        ) simulate(
+        ) simulate_session(
             WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
@@ -491,7 +491,7 @@ end
             environment_parameters=(; reward_probability=-0.5),
         )
         #With rewards of 1, a learning rate of 1.5 takes the expected reward past 1, and back
-        simulation = simulate(
+        simulation = simulate_session(
             WithDomains(ByHand()),
             RewardsWithinDomain();
             who_starts=EnvironmentStarts(),
@@ -525,7 +525,7 @@ end
             check_parameter_domains=false,
         )
         @test agent.parameters == (; learning_rate=-0.1, inverse_temperature=2.0)
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         @test agent.state == (; expected_reward=0.45)
         @test InstantiatedModel(
             WithDomains(ByHand()),
@@ -550,7 +550,7 @@ end
         #Rewards of 1 take the expected rewards to 0.6, 0.65 and 0.75, for probabilities of 0.3, 0.325 and 0.375
         rng = Xoshiro(1)
         options = [
-            simulate(
+            simulate_timestep(
                 EveryFeatureWithoutSampling(ByHand()),
                 rewards_of_options([1.0, 1.0, 1.0]);
                 parameters=with_learning_rates([0.2, 0.3, 0.5]),
@@ -562,7 +562,7 @@ end
         @test all(abs.(shares .- [0.3, 0.325, 0.375]) .< 0.03)
         #A view of a vector is taken as the vector is. Learning rates of 1 and rewards of 0 leave the first two options
         #no chance
-        output, _ = simulate(
+        output, _ = simulate_timestep(
             EveryFeatureWithoutSampling(ByHand()),
             rewards_of_options([0.0, 0.0, 1.0]);
             parameters=with_learning_rates(view([1.0, 1.0, 0.5, 9.0], 1:3)),
@@ -578,7 +578,7 @@ end
         )
         @test_throws ParameterDomainError(
             "The parameter learning_rates of a cognitive model of type EveryFeatureWithoutSampling{ByHand} is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
-        ) simulate(
+        ) simulate_timestep(
             EveryFeatureWithoutSampling(ByHand()),
             rewards_of_options([1.0, 1.0, 1.0]);
             parameters=with_learning_rates(0.5),
@@ -650,7 +650,7 @@ end
     vector_parameters = (; learning_rates=[0.2, 0.5, 0.9], noise=0.1)
     vector_environment_parameters = (; payoffs=[0.4, 0.6, 0.8], noise=0.1)
     function simulate_vectors(who_starts; rng=Xoshiro(1))
-        return simulate(
+        return simulate_session(
             VectorAttributes(ByHand()),
             VectorAttributesEnvironment(Means());
             who_starts,
@@ -721,10 +721,10 @@ end
         agent = InstantiatedModel(
             VectorAttributes(ByHand()), (; learning_rates=[1.0, 1.0, 0.9], noise=0.1)
         )
-        action = simulate!(agent, (; rewards=[0.0, 0.0, 3.0]); rng=Xoshiro(2))
+        action = simulate_timestep!(agent, (; rewards=[0.0, 0.0, 3.0]); rng=Xoshiro(2))
         @test length(action.ratings) == 3 && action.choice == 3
         @test agent.state.expected_rewards ≈ [0.0, 0.0, 2.75]
-        simulate!(agent, (; rewards=[0.0, 2.0, 3.0]); rng=Xoshiro(2))
+        simulate_timestep!(agent, (; rewards=[0.0, 2.0, 3.0]); rng=Xoshiro(2))
         @test agent.state == (;
             expected_rewards=[0.0, 0.0, 2.75] .+
                              [1.0, 1.0, 0.9] .* ([0.0, 2.0, 3.0] .- [0.0, 0.0, 2.75])
@@ -733,7 +733,7 @@ end
 
     @testset "Fixed observations that are vectors are given in order, and the simulation stops after the last" begin
         fixed = FixedObservationsEnvironment((; rewards=[[1.0, 0.0, 3.0], [0.0, 2.0, 3.0]]))
-        simulation = simulate(
+        simulation = simulate_session(
             VectorAttributes(ByHand()),
             fixed;
             who_starts=EnvironmentStarts(),
@@ -758,7 +758,7 @@ end
         every_feature = pair_named("EveryFeatureWithoutSampling")
         @test_throws ParameterDomainError(
             "The parameter learning_rates of a cognitive model of type EveryFeatureWithoutSampling{ByHand} has learning_rates[2] = 1.5, which is outside its domain, from 0 to 1.",
-        ) simulate(
+        ) simulate_session(
             EveryFeatureWithoutSampling(ByHand()),
             EveryFeatureEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
@@ -770,7 +770,7 @@ end
         )
         @test_throws ParameterDomainError(
             "The parameter payoff_sizes of an environment model of type PaysEachOption is [3.0, 1.0, 2.0], which doesn't satisfy the constraint issorted of its domain.",
-        ) simulate(
+        ) simulate_session(
             VectorAttributes(ByHand()),
             PaysEachOption();
             who_starts=AgentStarts(),
@@ -782,7 +782,7 @@ end
     end
 end
 
-@testset "simulate" begin
+@testset "simulate_session" begin
     expected_rewards(cognitive_states) =
         [state.expected_reward for state in cognitive_states]
 
@@ -893,7 +893,7 @@ end
 
     @testset "The return type is known and the loop doesn't allocate" begin
         rng = Xoshiro(1)
-        run_simulation(who_starts, n_steps) = simulate(
+        run_simulation(who_starts, n_steps) = simulate_session(
             Baseline(ByHand()),
             BaselineEnvironment(ByHand());
             who_starts,
@@ -1011,7 +1011,7 @@ end
                 (; choice=true, skipped=NoValue(), movement=(; left=false, right=true)),
             actions,
         )
-        @test simulate!(InstantiatedModel(ChoosesInGroups(), (;)), (;)) ===
+        @test simulate_timestep!(InstantiatedModel(ChoosesInGroups(), (;)), (;)) ===
             (; choice=true, skipped=NoValue(), movement=(; left=false, right=true))
     end
 
@@ -1046,7 +1046,7 @@ end
             REWARDS;
             save_history=SaveHistory(; outputs=SaveEverything()),
         )
-        simulate!(
+        simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
@@ -1068,7 +1068,7 @@ end
         environment = InstantiatedModel(
             ObservesInGroups(), (;); save_history=SaveHistory(SaveEverything())
         )
-        simulate!(
+        simulate_session!(
             InstantiatedModel(WithoutOutputs(), LEARNING),
             environment;
             who_starts=EnvironmentStarts(),
@@ -1092,7 +1092,7 @@ end
                 BaselineEnvironment(ByHand());
                 cognitive_parameters=(;),
             )
-            @test_throws ArgumentError simulate!(
+            @test_throws ArgumentError simulate_timestep!(
                 InstantiatedModel(ChoosesUnwrapped(value), (;)), (; reward=1.0)
             )
         end
@@ -1228,7 +1228,7 @@ end
         @test all(
             ==(fill((;), 4)),
             saved_vectors(
-                simulate(
+                simulate_session(
                     Baseline(ByHand()),
                     BaselineEnvironment(ByHand());
                     who_starts=EnvironmentStarts(),
@@ -1353,7 +1353,7 @@ end
                 cognitive_save_history=SaveHistory(; states=:who_starts),
             ).environment.states[end] === (; who_starts)
         end
-        @test simulate(RecordsWhoStarts(), (; reward=1.0); parameters=(;))[2] ===
+        @test simulate_timestep(RecordsWhoStarts(), (; reward=1.0); parameters=(;))[2] ===
             (; who_starts=UnknownWhoStarts())
         #The action distributions are saved when selected, with BeforeFirstTimestep for every action at timestep 0
         fixed_rewards = FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0]))
@@ -1639,7 +1639,7 @@ end
 
     @testset "A selection keeps the return type known and the loop free of allocations" begin
         rng = Xoshiro(1)
-        run_simulation(cognitive_save_history, n_steps) = simulate(
+        run_simulation(cognitive_save_history, n_steps) = simulate_session(
             DependsOnPreviousOutput(ByHand()),
             BaselineEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
@@ -1733,7 +1733,7 @@ end
         @test_throws "There is no initialize_state method for an environment model of type EnvironmentNeedsGivenState" simulate_for_test(
             Baseline(ByHand()), EnvironmentNeedsGivenState(); environment_parameters=(;)
         )
-        simulation = simulate(
+        simulation = simulate_session(
             NeedsGivenState(),
             EnvironmentNeedsGivenState();
             who_starts=EnvironmentStarts(),
@@ -1772,7 +1772,7 @@ end
             [observation.timestep_size for observation in observations]
         received_sizes(states) = [state.received_timestep_size for state in states]
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            run_with_sizes(; keywords...) = simulate(
+            run_with_sizes(; keywords...) = simulate_session(
                 SavesTimestepSize(),
                 ObservesTimestepSize();
                 who_starts,
@@ -1813,7 +1813,7 @@ end
     @testset "Timestep sizes keep the return type known" begin
         #UsesTimestepSize learns more on a timestep the more time it covers
         rng = Xoshiro(1)
-        run_simulation(timestep_sizes) = simulate(
+        run_simulation(timestep_sizes) = simulate_session(
             UsesTimestepSize(ByHand()),
             BaselineEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
@@ -1908,7 +1908,7 @@ end
                 with_timestep_zero.environment.states[end] == (; n_timesteps=7)
             #The return type is still known
             rng = Xoshiro(1)
-            typed_run(n_steps) = simulate(
+            typed_run(n_steps) = simulate_session(
                 Baseline(ByHand()),
                 WithStoppingCriterionEnvironment(ByHand());
                 who_starts,
@@ -2013,10 +2013,10 @@ end
     end
 end
 
-@testset "simulate!" begin
+@testset "simulate_session!" begin
     @testset "Two simulations in a row give the same as one long one" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            one_simulation = simulate(
+            one_simulation = simulate_session(
                 Baseline(ByHand()),
                 NoOutputBeforeFirstInputEnvironment(ByHand());
                 who_starts,
@@ -2039,10 +2039,11 @@ end
                 save_history=SaveHistory(SaveEverything()),
             )
             rng = Xoshiro(9)
-            first_part = simulate!(agent, environment; who_starts, n_steps=25, rng)
-            second_part = simulate!(agent, environment; who_starts, n_steps=35, rng)
+            first_part = simulate_session!(agent, environment; who_starts, n_steps=25, rng)
+            second_part = simulate_session!(agent, environment; who_starts, n_steps=35, rng)
 
-            #simulate! returns no timestep 0, which the one simulation starts with, and which the histories have from where they started
+            #simulate_session! returns no timestep 0, which the one simulation starts with, and which the histories have
+            #from where they started
             for (first_vector, second_vector, whole_vector) in zip(
                 saved_vectors(first_part),
                 saved_vectors(second_part),
@@ -2080,7 +2081,7 @@ end
         #UsesTimestepSize learns more on a timestep the more time it covers
         sizes = [0.5, 2.0, 0.25, 1.5, 3.0]
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            one_simulation = simulate(
+            one_simulation = simulate_session(
                 UsesTimestepSize(ByHand()),
                 BaselineEnvironment(ByHand());
                 who_starts,
@@ -2104,10 +2105,10 @@ end
                 save_history=SaveHistory(SaveEverything()),
             )
             rng = Xoshiro(9)
-            first_part = simulate!(
+            first_part = simulate_session!(
                 agent, environment; who_starts, n_steps=2, timestep_sizes=sizes[1:2], rng
             )
-            second_part = simulate!(
+            second_part = simulate_session!(
                 agent, environment; who_starts, n_steps=3, timestep_sizes=sizes[3:5], rng
             )
 
@@ -2135,24 +2136,24 @@ end
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        (; states) = simulate!(
+        (; states) = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
         last_value = states[end].expected_reward[1]
-        simulate!(
+        simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
         @test states[end].expected_reward[1] == last_value
     end
 
-    @testset "simulate! continues from the state itself, whatever is saved" begin
+    @testset "simulate_session! continues from the state itself, whatever is saved" begin
         agent = InstantiatedModel(
             StateChangedInPlace(ByHand()),
             BASELINE_PARAMETERS;
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        first_states = simulate!(
+        first_states = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2160,7 +2161,7 @@ end
             rng=Xoshiro(1),
         ).states
         @test agent.state.expected_reward[1] == first_states[end].expected_reward[1]
-        second_states = simulate!(
+        second_states = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2273,7 +2274,7 @@ end
         )
     end
 
-    @testset "simulate fills in the default parameters, and checks the names like an agent" begin
+    @testset "simulate_session fills in the default parameters, and checks the names like an agent" begin
         run_with(model, environment; keywords...) =
             simulate_for_test(model, environment; n_steps=2, keywords...)
         #The defaults are used, also for the initial state, and the given values replace them. HasDefaults starts from a
@@ -2402,20 +2403,20 @@ end
             nothing,
             NameMap(:option, :rating, :choice),
         ) === nothing
-        #simulate! checks it too
-        @test_throws "Without a map, the two must have the same observations in their attributes." simulate!(
+        #simulate_session! checks it too
+        @test_throws "Without a map, the two must have the same observations in their attributes." simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             InstantiatedModel(OnlyCues(), (;));
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
-        @test_throws "Without a map, the two must have the same actions in their attributes." simulate!(
+        @test_throws "Without a map, the two must have the same actions in their attributes." simulate_session!(
             InstantiatedModel(WithoutOutputs(), LEARNING),
             InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS);
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
-        @test simulate!(
+        @test simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             InstantiatedModel(OtherNamesEnvironment(ByHand()), REWARDS);
             who_starts=EnvironmentStarts(),
@@ -2545,7 +2546,7 @@ end
 
     @testset "Maps keep the return type known and the loop free of allocations, and their checks cost nothing" begin
         rng = Xoshiro(1)
-        run_simulation(who_starts, n_steps) = simulate(
+        run_simulation(who_starts, n_steps) = simulate_session(
             Baseline(ByHand()),
             OtherNamesEnvironment(ByHand());
             who_starts,
@@ -2593,7 +2594,7 @@ end
             REWARDS;
             save_history=SaveHistory(SaveEverything()),
         )
-        simulation = simulate!(
+        simulation = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2630,7 +2631,7 @@ end
         #Where they are left for the next simulation, each side has its own names too
         @test keys(environment.previous_output) == (:payoff, :timestep_number)
         @test keys(agent.previous_output) == (:choice,)
-        @test simulate!(
+        @test simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2638,8 +2639,8 @@ end
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
         ) isa NamedTuple
-        #simulate! checks the maps too
-        @test_throws "A map must give exactly the observations in the cognitive model's attributes." simulate!(
+        #simulate_session! checks the maps too
+        @test_throws "A map must give exactly the observations in the cognitive model's attributes." simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2662,9 +2663,11 @@ end
         )
         #Two timesteps run in full, and the next call stops after the two that are left
         @test length(
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2).observations,
+            simulate_session!(
+                agent, environment; who_starts=EnvironmentStarts(), n_steps=2
+            ).observations,
         ) == 2
-        simulation = simulate!(
+        simulation = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2680,13 +2683,13 @@ end
         @test environment.history.timestep_sizes == agent.history.timestep_sizes
         @test length(environment.history.states) == 5
         #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate!(
+        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
         @test length(agent.history.states) == 5
         #Unless the check is off, in which case it runs on
         @test length(
-            simulate!(
+            simulate_session!(
                 agent,
                 environment;
                 who_starts=EnvironmentStarts(),
@@ -2697,7 +2700,9 @@ end
         @test environment.state == (; n_timesteps=7)
         reset!(environment)
         @test length(
-            simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10).observations,
+            simulate_session!(
+                agent, environment; who_starts=EnvironmentStarts(), n_steps=10
+            ).observations,
         ) == 4
     end
 
@@ -2714,7 +2719,7 @@ end
             (;);
             save_history=SaveHistory(SaveEverything()),
         )
-        simulate_steps!(n_steps) = simulate!(
+        simulate_steps!(n_steps) = simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
@@ -2735,24 +2740,24 @@ end
         @test length(simulate_steps!(10).actions) == 4
     end
 
-    @testset "An error in a timestep method gives the same errors as in simulate" begin
+    @testset "An error in a timestep method gives the same errors as in simulate_session" begin
         agent = InstantiatedModel(ReturnsTuple(), (;))
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
+        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(ReturnsObservation(), (;))
-        @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate!(
+        @test_throws "The run_timestep method of an environment model of type ReturnsObservation must return a CognitiveModeling.ModelOutput" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
     end
 end
 
-@testset "simulate! on a single input" begin
+@testset "simulate_timestep!" begin
     @testset "It updates the agent and returns the sampled action" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
-        action = simulate!(agent, (; reward=1.0); rng=Xoshiro(1))
+        action = simulate_timestep!(agent, (; reward=1.0); rng=Xoshiro(1))
         @test action isa @NamedTuple{choice::Bool}
         @test agent.previous_output === action
         @test agent.state == (; expected_reward=0.75)
@@ -2760,7 +2765,7 @@ end
 
     @testset "Several in a row give the same as a simulation with the same observations" begin
         rewards = [1.0, 0.0, 1.0, 1.0]
-        one_simulation = simulate(
+        one_simulation = simulate_session(
             Baseline(ByHand()),
             FixedObservationsEnvironment((; reward=rewards));
             who_starts=EnvironmentStarts(),
@@ -2774,7 +2779,7 @@ end
 
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         rng = Xoshiro(9)
-        actions = [simulate!(agent, (; reward); rng) for reward in rewards]
+        actions = [simulate_timestep!(agent, (; reward); rng) for reward in rewards]
 
         #The simulation starts with timestep 0
         @test actions == one_simulation.actions[2:end]
@@ -2783,7 +2788,7 @@ end
 
     @testset "The same seed gives the same action" begin
         action_with_seed(seed) = [
-            simulate!(
+            simulate_timestep!(
                 InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
                 (; reward=1.0);
                 rng=Xoshiro(seed),
@@ -2795,25 +2800,29 @@ end
 
     @testset "An observation can be NoValue" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
-        simulate!(agent, (; reward=NoValue()))
+        simulate_timestep!(agent, (; reward=NoValue()))
         @test agent.state == (; expected_reward=0.5)
     end
 
     @testset "The input must be a NamedTuple with the inputs in the model's attributes, and can have more" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate!(
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate_timestep!(
             agent, 1.0
         )
-        @test_throws "must be a NamedTuple with the inputs" simulate!(agent, NoValue())
-        @test_throws "must be a NamedTuple with the inputs" simulate!(agent, (; cue=1.0))
-        @test simulate!(agent, (; reward=1.0, cue=1.0)) isa NamedTuple
+        @test_throws "must be a NamedTuple with the inputs" simulate_timestep!(
+            agent, NoValue()
+        )
+        @test_throws "must be a NamedTuple with the inputs" simulate_timestep!(
+            agent, (; cue=1.0)
+        )
+        @test simulate_timestep!(agent, (; reward=1.0, cue=1.0)) isa NamedTuple
         @test agent.state == (; expected_reward=0.75)
         #A model without inputs takes an empty NamedTuple
-        @test simulate!(
+        @test simulate_timestep!(
             InstantiatedModel(WithoutInputs(ByHand()), BASELINE_PARAMETERS), (;)
         ) isa NamedTuple
         #The check costs nothing when the types are known
-        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_timestep(
+        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_model_on_input(
             Baseline(ByHand()),
             (; reward=1.0, cue=1.0),
             (; expected_reward=0.5),
@@ -2832,7 +2841,7 @@ end
             REWARDS;
             save_history=SaveHistory(SaveEverything()),
         )
-        observation = simulate!(environment, (; choice=true); rng=Xoshiro(1))
+        observation = simulate_timestep!(environment, (; choice=true); rng=Xoshiro(1))
         @test observation === (; reward=0.8)
         @test environment.previous_output === observation
         @test environment.state === (; n_timesteps=1)
@@ -2842,7 +2851,7 @@ end
             [(; reward=BeforeFirstTimestep()), (; reward=0.8)]
         @test environment.history.output_distributions ==
             [(; reward=BeforeFirstTimestep()), (; reward=Deterministic(0.8))]
-        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type BaselineEnvironment{Means}, (:choice,)." simulate!(
+        @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type BaselineEnvironment{Means}, (:choice,)." simulate_timestep!(
             environment, (; cue=1)
         )
     end
@@ -2850,18 +2859,19 @@ end
     @testset "The model gets the size of the timestep" begin
         agent = InstantiatedModel(SavesTimestepSize(), (;))
         #The default is the integer 1
-        simulate!(agent, (; timestep_size=NoValue()))
+        simulate_timestep!(agent, (; timestep_size=NoValue()))
         @test agent.state.received_timestep_size === 1
-        simulate!(agent, (; timestep_size=NoValue()); timestep_size=0.5)
+        simulate_timestep!(agent, (; timestep_size=NoValue()); timestep_size=0.5)
         @test agent.state.received_timestep_size === 0.5
     end
 
     @testset "It works without actions, and with several actions" begin
-        @test simulate!(InstantiatedModel(WithoutOutputs(), LEARNING), (; reward=1.0)) ===
-            (;)
+        @test simulate_timestep!(
+            InstantiatedModel(WithoutOutputs(), LEARNING), (; reward=1.0)
+        ) === (;)
         #ManyAttributes chooses, rates its confidence and reports the last reward, which the means of the distributions give
         #exactly
-        @test simulate!(
+        @test simulate_timestep!(
             InstantiatedModel(
                 ManyAttributes(Means()), (; BASELINE_PARAMETERS..., noise=0.2)
             ),
@@ -2869,19 +2879,19 @@ end
         ) === (; choice=inv(1 + exp(-0.5)), confidence=0.75, report=1.0)
     end
 
-    @testset "An error in the timestep method gives the same errors as in simulate" begin
-        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate!(
+    @testset "An error in the timestep method gives the same errors as in simulate_session" begin
+        @test_throws "The run_timestep method of a cognitive model of type ReturnsTuple must return a CognitiveModeling.ModelOutput" simulate_timestep!(
             InstantiatedModel(ReturnsTuple(), (;)), (; reward=1.0)
         )
-        @test_throws "There is no run_timestep method for a cognitive model of type OnlyInitializesState" simulate!(
+        @test_throws "There is no run_timestep method for a cognitive model of type OnlyInitializesState" simulate_timestep!(
             InstantiatedModel(OnlyInitializesState(), (;)), (; reward=1.0)
         )
     end
 end
 
-@testset "simulate on a single input" begin
+@testset "simulate_timestep" begin
     @testset "It returns the sampled output and the new state, starting from the initial state by default" begin
-        action, cognitive_state = simulate(
+        action, cognitive_state = simulate_timestep(
             Baseline(ByHand()),
             (; reward=1.0);
             parameters=BASELINE_PARAMETERS,
@@ -2889,19 +2899,19 @@ end
         )
         @test action isa @NamedTuple{choice::Bool}
         @test cognitive_state == (; expected_reward=0.75)
-        #The same as simulate! of an agent
+        #The same as simulate_timestep! of an agent
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
-        @test simulate!(agent, (; reward=1.0); rng=Xoshiro(1)) === action
+        @test simulate_timestep!(agent, (; reward=1.0); rng=Xoshiro(1)) === action
         @test agent.state === cognitive_state
         #An environment model runs on an action in the same way
-        @test simulate(
+        @test simulate_timestep(
             BaselineEnvironment(Means()), (; choice=true); parameters=REWARDS
         ) === ((; reward=0.8), (; n_timesteps=1))
     end
 
     @testset "Passing the state and the output on gives the same as a simulation with the same observations" begin
         rewards = [1.0, 0.0, 1.0, 1.0]
-        one_simulation = simulate(
+        one_simulation = simulate_session(
             Baseline(ByHand()),
             FixedObservationsEnvironment((; reward=rewards));
             who_starts=EnvironmentStarts(),
@@ -2914,12 +2924,12 @@ end
         )
 
         rng = Xoshiro(9)
-        action, cognitive_state = simulate(
+        action, cognitive_state = simulate_timestep(
             Baseline(ByHand()), (; reward=rewards[1]); parameters=BASELINE_PARAMETERS, rng
         )
         actions = [action]
         for reward in rewards[2:end]
-            action, cognitive_state = simulate(
+            action, cognitive_state = simulate_timestep(
                 Baseline(ByHand()),
                 (; reward);
                 parameters=BASELINE_PARAMETERS,
@@ -2937,53 +2947,53 @@ end
 
     @testset "It fills in the default parameters, and checks the names and the input" begin
         #HasDefaults starts from a parameter with a default, which no example model does
-        _, cognitive_state = simulate(
+        _, cognitive_state = simulate_timestep(
             HasDefaults(),
             (; reward=1.0);
             parameters=(; initial_value=0.9, learning_rate=0.0),
         )
         @test cognitive_state == (; expected_reward=0.9)
-        @test simulate(HasDefaults(), (; reward=1.0); parameters=(;))[2].expected_reward ≈
+        @test simulate_timestep(HasDefaults(), (; reward=1.0); parameters=(;))[2].expected_reward ≈
             0.55
-        @test_throws "The parameters are named (:inverse_temperature, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{ByHand}" simulate(
+        @test_throws "The parameters are named (:inverse_temperature, :noise), but the parameters in the attributes of a cognitive model of type WithDefaultParameters{ByHand}" simulate_timestep(
             WithDefaultParameters(ByHand()), (; reward=1.0); parameters=(; noise=0.1)
         )
-        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type Baseline{ByHand}" simulate(
+        @test_throws "The state is named (:value,), but the states in the attributes of a cognitive model of type Baseline{ByHand}" simulate_timestep(
             Baseline(ByHand()),
             (; reward=1.0);
             parameters=BASELINE_PARAMETERS,
             previous_state=(; value=0.5),
         )
-        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs" simulate(
+        @test_throws "The previous output is (bet = true,), but it must be a NamedTuple with the outputs" simulate_timestep(
             Baseline(ByHand()),
             (; reward=1.0);
             parameters=BASELINE_PARAMETERS,
             previous_output=(; bet=true),
         )
-        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate(
+        @test_throws "The input is 1.0, but it must be a NamedTuple with the inputs in the attributes of a cognitive model of type Baseline{ByHand}, (:reward,)." simulate_timestep(
             Baseline(ByHand()), 1.0; parameters=BASELINE_PARAMETERS
         )
         #An input can have more than the inputs in the model's attributes, and an observation can be NoValue
-        @test simulate(
+        @test simulate_timestep(
             Baseline(ByHand()), (; reward=1.0, cue=2); parameters=BASELINE_PARAMETERS
         )[2] == (; expected_reward=0.75)
-        @test simulate(
+        @test simulate_timestep(
             Baseline(ByHand()), (; reward=NoValue()); parameters=BASELINE_PARAMETERS
         )[2] == (; expected_reward=0.5)
     end
 
     @testset "The model gets the size of the timestep, and the same seed gives the same action" begin
-        @test simulate(
+        @test simulate_timestep(
             SavesTimestepSize(), (; timestep_size=NoValue()); parameters=(;)
         )[2] === (; received_timestep_size=1)
-        @test simulate(
+        @test simulate_timestep(
             SavesTimestepSize(),
             (; timestep_size=NoValue());
             parameters=(;),
             timestep_size=0.5,
         )[2] === (; received_timestep_size=0.5)
         actions_with_seed(seed) = [
-            simulate(
+            simulate_timestep(
                 Baseline(ByHand()),
                 (; reward=1.0);
                 parameters=BASELINE_PARAMETERS,
@@ -2996,7 +3006,7 @@ end
 
     @testset "The return type is known, and nothing is allocated" begin
         rng = Xoshiro(1)
-        simulate_one_timestep(cognitive_state, action) = simulate(
+        simulate_one_timestep(cognitive_state, action) = simulate_timestep(
             Baseline(ByHand()),
             (; reward=1.0);
             parameters=BASELINE_PARAMETERS,
@@ -3013,7 +3023,7 @@ end
             0
         #The first timestep, from the defaults, is known too
         @test @inferred(
-            simulate(
+            simulate_timestep(
                 Baseline(ByHand()), (; reward=1.0); parameters=BASELINE_PARAMETERS, rng
             )
         ) isa Tuple
@@ -3058,14 +3068,14 @@ end
         @test isempty(agent.history.states) &&
             isempty(agent.history.timestep_sizes) &&
             isempty(environment.history.states)
-        simulate!(
+        simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=2,
             action_map=NameMap(),
         )
-        simulate!(agent, (; reward=1.0); timestep_size=0.5)
+        simulate_timestep!(agent, (; reward=1.0); timestep_size=0.5)
         @test agent.history.states == [
             (; expected_reward=0.75), (; expected_reward=0.375), (; expected_reward=0.6875)
         ]
@@ -3115,12 +3125,12 @@ end
         @test agent.history.output_distributions == [(;)]
         @test agent.history.states == [(; n_timesteps=0)]
         #It gets what is selected on a single input and with an environment, which selects its own
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         environment = InstantiatedModel(
             BaselineEnvironment(ByHand()), REWARDS; save_history=SaveHistory()
         )
         @test environment.save_history === SaveHistory()
-        simulation = simulate!(
+        simulation = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=2
         )
         @test agent.history.inputs == fill((;), 4)
@@ -3171,7 +3181,7 @@ end
             BASELINE_PARAMETERS;
             save_history=SaveHistory(SaveEverything()),
         )
-        simulate!(agent, (; cue=1.0))
+        simulate_timestep!(agent, (; cue=1.0))
         @test agent.history.inputs == [(;), (; cue=1.0)]
         #A selected input is kept from an input with more
         agent = InstantiatedModel(
@@ -3179,11 +3189,11 @@ end
             BASELINE_PARAMETERS;
             save_history=SaveHistory(; inputs=:reward),
         )
-        simulate!(agent, (; reward=1.0, cue=1.0))
+        simulate_timestep!(agent, (; reward=1.0, cue=1.0))
         @test agent.history.inputs == [(; reward=BeforeFirstTimestep()), (; reward=1.0)]
     end
 
-    @testset "It adds what simulate! returns" begin
+    @testset "It adds what simulate_session! returns" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             agent = InstantiatedModel(
                 Baseline(ByHand()),
@@ -3192,8 +3202,8 @@ end
             )
             environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
             rng = Xoshiro(9)
-            first_part = simulate!(agent, environment; who_starts, n_steps=3, rng)
-            second_part = simulate!(agent, environment; who_starts, n_steps=2, rng)
+            first_part = simulate_session!(agent, environment; who_starts, n_steps=3, rng)
+            second_part = simulate_session!(agent, environment; who_starts, n_steps=2, rng)
 
             @test agent.history.inputs == vcat(
                 [(; reward=BeforeFirstTimestep())],
@@ -3219,8 +3229,8 @@ end
             BASELINE_PARAMETERS;
             save_history=SaveHistory(SaveEverything()),
         )
-        first_action = simulate!(agent, (; reward=1.0))
-        second_action = simulate!(agent, (; reward=NoValue()))
+        first_action = simulate_timestep!(agent, (; reward=1.0))
+        second_action = simulate_timestep!(agent, (; reward=NoValue()))
 
         @test agent.history.inputs ==
             [(; reward=BeforeFirstTimestep()), (; reward=1.0), (; reward=NoValue())]
@@ -3242,9 +3252,9 @@ end
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        simulate!(agent, (; reward=1.0))
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
-        simulate!(agent, (; reward=0.0))
+        simulate_timestep!(agent, (; reward=1.0))
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
+        simulate_timestep!(agent, (; reward=0.0))
         @test length(agent.history.inputs) ==
             length(agent.history.outputs) ==
             length(agent.history.output_distributions) ==
@@ -3256,8 +3266,8 @@ end
     @testset "It stays empty by default" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        simulate!(agent, (; reward=1.0))
-        simulation = simulate!(
+        simulate_timestep!(agent, (; reward=1.0))
+        simulation = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3
         )
         @test isempty(agent.history.inputs)
@@ -3280,14 +3290,14 @@ end
             environment = InstantiatedModel(
                 FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;)
             )
-            simulate!(
+            simulate_session!(
                 agent,
                 environment;
                 who_starts=EnvironmentStarts(),
                 n_steps=2,
                 action_map=NameMap(),
             )
-            simulate!(agent, (; reward=1.0))
+            simulate_timestep!(agent, (; reward=1.0))
             #The initial state is copied by the same method
             @test [state.expected_reward[1] for state in agent.history.states] == [0.5, 0.75, 0.375, 0.6875]
             @test allunique(
@@ -3302,7 +3312,7 @@ end
             LEARNING;
             save_history=SaveHistory(SaveEverything()),
         )
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         @test agent.history.states == [(; first_value=0.5), (; first_value=0.75)]
     end
 
@@ -3320,9 +3330,9 @@ end
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         states_so_far = copy(agent.history.states)
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         @test agent.history.states[1:4] == states_so_far
     end
 
@@ -3339,14 +3349,14 @@ end
         @test agent.history.timestep_sizes == [BeforeFirstTimestep()] &&
             environment.history.timestep_sizes == [BeforeFirstTimestep()]
         #A vector of sizes, and one size for every timestep
-        simulate!(
+        simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=3,
             timestep_sizes=[0.5, 2.0, 0.25],
         )
-        simulate!(
+        simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=2, timestep_sizes=4
         )
         @test agent.history.timestep_sizes == [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4]
@@ -3357,8 +3367,8 @@ end
         #They are the sizes the environment gave the model as observations, its outputs
         @test [observation.timestep_size for observation in environment.history.outputs] == agent.history.timestep_sizes
         #A single input adds the size of its timestep, which is 1 by default
-        simulate!(agent, (; timestep_size=NoValue()); timestep_size=1.5)
-        simulate!(agent, (; timestep_size=NoValue()))
+        simulate_timestep!(agent, (; timestep_size=NoValue()); timestep_size=1.5)
+        simulate_timestep!(agent, (; timestep_size=NoValue()))
         @test agent.history.timestep_sizes ==
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4, 1.5, 1]
         #reset! starts from the marker again
@@ -3371,14 +3381,14 @@ end
             (;);
             save_history=SaveHistory(; outputs=SaveEverything()),
         )
-        simulate!(
+        simulate_session!(
             agent,
             environment;
             who_starts=EnvironmentStarts(),
             n_steps=3,
             timestep_sizes=[0.5, 2.0, 0.25],
         )
-        simulate!(agent, (; timestep_size=1.0); timestep_size=1.5)
+        simulate_timestep!(agent, (; timestep_size=1.0); timestep_size=1.5)
         @test isempty(agent.history.timestep_sizes)
         @test environment.history.timestep_sizes == [BeforeFirstTimestep(), 0.5, 2.0, 0.25]
     end
@@ -3407,7 +3417,7 @@ end
         @test environment.history.states == [(; n_timesteps=0)]
         #Before the first timestep, it has given nothing to sample the observations from
         @test environment.history.output_distributions == [(; reward=BeforeFirstTimestep())]
-        simulate!(
+        simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
         @test environment.history.outputs == agent.history.inputs
@@ -3428,7 +3438,7 @@ end
             REWARDS;
             save_history=SaveHistory(; states=:n_timesteps),
         )
-        simulate!(
+        simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
@@ -3441,7 +3451,7 @@ end
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2)]
         #It stays empty by default
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        simulate!(
+        simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
@@ -3462,7 +3472,7 @@ end
             save_history=SaveHistory(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
-        first_run = simulate!(
+        first_run = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=5, rng=Xoshiro(2)
         )
         history = agent.history
@@ -3480,7 +3490,7 @@ end
         #With the environment reset too, the same simulation runs again
         reset!(environment)
         @test isequal(
-            simulate!(
+            simulate_session!(
                 agent,
                 environment;
                 who_starts=EnvironmentStarts(),
@@ -3498,7 +3508,7 @@ end
             save_history=SaveHistory(; states=SaveEverything()),
         )
         parameters = agent.parameters
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         reset!(agent)
         @test agent.parameters === parameters
         @test agent.save_history === SaveHistory(; states=SaveEverything())
@@ -3508,7 +3518,7 @@ end
             StateChangedInPlaceSavedWithDeepcopy(ByHand()), BASELINE_PARAMETERS
         )
         expected_reward_vector = agent.state.expected_reward
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         reset!(agent)
         @test agent.state.expected_reward == [0.5]
         @test agent.state.expected_reward !== expected_reward_vector
@@ -3536,7 +3546,7 @@ end
             (;);
             save_history=SaveHistory(SaveEverything()),
         )
-        simulate!(
+        simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
             environment;
             who_starts=EnvironmentStarts(),
@@ -3554,7 +3564,7 @@ end
         @test environment.history.output_distributions == [(; reward=BeforeFirstTimestep())]
         @test environment.history.states == [(; n_observations_given=0)]
         #It can then be simulated from the start again
-        (; observations) = simulate!(
+        (; observations) = simulate_session!(
             InstantiatedModel(
                 Baseline(ByHand()),
                 BASELINE_PARAMETERS;
@@ -3570,7 +3580,7 @@ end
 end
 
 @testset "An instantiated model counts its timesteps" begin
-    @testset "Both forms of simulate! add to n_timesteps, whatever is saved, and reset! sets it to 0" begin
+    @testset "Both simulate_session! and simulate_timestep! add to n_timesteps, whatever is saved, and reset! sets it to 0" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         environment = InstantiatedModel(
             BaselineEnvironment(ByHand()),
@@ -3578,9 +3588,9 @@ end
             save_history=SaveHistory(SaveEverything()),
         )
         @test agent.n_timesteps == environment.n_timesteps == 0
-        simulate!(agent, (; reward=1.0))
+        simulate_timestep!(agent, (; reward=1.0))
         @test agent.n_timesteps == 1
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         @test agent.n_timesteps == 4
         @test environment.n_timesteps == 3
         @test reset!(agent).n_timesteps == 0
@@ -3592,7 +3602,7 @@ end
         environment = InstantiatedModel(
             WithStoppingCriterionEnvironment(ByHand()), (; REWARDS..., last_timestep=4)
         )
-        simulate!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
+        simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
         @test agent.n_timesteps == environment.n_timesteps == 4
     end
 end

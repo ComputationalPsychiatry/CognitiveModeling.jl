@@ -6,8 +6,6 @@
 # samples its response from, simulates the model on a task with two choices, and fits it to
 # the responses of three simulated participants with Turing.jl, also when a response has
 # only its choice or only its time. It was run with SequentialSamplingModels.jl 0.13.3.
-# Both packages export a function named `simulate`, so only `DDM` is taken from
-# SequentialSamplingModels.jl.
 
 using CognitiveModeling
 using SequentialSamplingModels: DDM
@@ -100,7 +98,7 @@ parameters = (;
 )
 
 #Five trials, where the environment shows the stimulus before the model responds
-trajectories = simulate(
+trajectories = simulate_session(
     DriftDiffusion(),
     RandomStimuli();
     who_starts=EnvironmentStarts(),
@@ -125,7 +123,7 @@ function simulate_participant(drift_rate, n_trials, seed)
     parameters = (;
         drift_rate, boundary_separation=1.2, starting_point=0.5, non_decision_time=0.3
     )
-    trajectories = simulate(
+    trajectories = simulate_session(
         DriftDiffusion(),
         RandomStimuli();
         who_starts=EnvironmentStarts(),
