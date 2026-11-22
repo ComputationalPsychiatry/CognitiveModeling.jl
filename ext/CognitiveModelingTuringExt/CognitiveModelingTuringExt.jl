@@ -14,6 +14,7 @@ using CognitiveModeling:
     with_common_element_types,
     cut_after_last_timestep_with_data,
     simulates_values,
+    with_sessions,
     value_passed_on,
     LatentValueMarker
 using CognitiveModeling:

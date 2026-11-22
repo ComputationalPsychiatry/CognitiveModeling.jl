@@ -139,6 +139,19 @@ recovery_model = condition_sessions(deconditioned_model, DynamicPPL.subset(simul
 recovered = sample(recovery_model, NUTS(), 1000)
 ```
 
+[`condition_sessions`](@ref) also takes the values as pairs, as Turing.jl's `condition`
+does, and the data in the forms the sessions are made from: a table of several sessions,
+which it reads with the column settings that the sessions were read with, such as one
+written from simulations, or the observations and the actions of a single session, as
+[`SessionInfo`](@ref) takes them. A table must have the same sessions, in the same order,
+since what the model was prepared with for each session must still fit.
+
+```julia
+recovery_model = condition_sessions(deconditioned_model, @varname(simulated_sessions[1].timesteps[1].choice.simulated) => true)
+recovery_model = condition_sessions(model, simulated_table)
+single_recovery_model = condition_sessions(single_session_model, (; reward = rewards), (; choice = choices))
+```
+
 ## Functions that a model can implement for Turing.jl
 
 A model can add methods of these to change how it runs when it is fitted with Turing.jl,

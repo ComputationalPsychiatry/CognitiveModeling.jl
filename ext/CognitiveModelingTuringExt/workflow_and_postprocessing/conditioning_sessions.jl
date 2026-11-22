@@ -72,6 +72,88 @@ function CognitiveModeling.condition_sessions(
     return conditioned_model
 end
 
+#The values given as pairs, as Turing.jl's condition takes them too
+function CognitiveModeling.condition_sessions(
+    model::DynamicPPL.Model,
+    pairs::Pair{<:VarName}...;
+    check_stopping_criterion::Union{Nothing,Bool}=nothing,
+)
+    return condition_sessions(model, Dict{VarName,Any}(pairs...); check_stopping_criterion)
+end
+
+#The data of several sessions in a table, read as the sessions were read from theirs
+function CognitiveModeling.condition_sessions(
+    model::DynamicPPL.Model, table; check_stopping_criterion::Union{Nothing,Bool}=nothing
+)
+    check_takes_data_of(model, :several, "condition_sessions(model, table)")
+    return with_session_info(
+        model,
+        info -> condition_sessions(info, table; check_stopping_criterion),
+        "condition_sessions",
+    )
+end
+
+#The observations and the actions of a single session
+function CognitiveModeling.condition_sessions(
+    model::DynamicPPL.Model,
+    observations::Union{NamedTuple,AbstractVector},
+    actions::Union{NamedTuple,AbstractVector};
+    check_stopping_criterion::Union{Nothing,Bool}=nothing,
+    timestep_sizes=nothing,
+)
+    check_takes_data_of(model, :one, "condition_sessions(model, observations, actions)")
+    return with_session_info(
+        model,
+        info -> condition_sessions(
+            info,
+            observations,
+            actions;
+            check_stopping_criterion,
+            timestep_sizes=if timestep_sizes === nothing
+                info.timestep_sizes
+            else
+                timestep_sizes
+            end,
+        ),
+        "condition_sessions",
+    )
+end
+
+"""
+    check_takes_data_of(model, number_of_sessions, call)
+
+Throw an `ArgumentError` when `model`, a Turing.jl model made by `turing_full_model`,
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, doesn't have the
+number of sessions that `call` gives data for: `:several` for a table, which a full model
+and a model of several sessions take, and `:one` for the observations and the actions of a
+single session. Any other model is an error too, which says what the call takes. Used by
+`condition_sessions`.
+"""
+function check_takes_data_of(model::DynamicPPL.Model, number_of_sessions::Symbol, call)
+    if !is_session_model(model)
+        throw(
+            ArgumentError(
+                "$call takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give it the sessions with the data instead.",
+            ),
+        )
+    end
+    has_one_session = model.f === CognitiveModeling.turing_behavioral_session
+    if number_of_sessions === :several && has_one_session
+        throw(
+            ArgumentError(
+                "$call gives several sessions the data in a table, but the model has a single session, made by session_model. Give it the observations and the actions instead, with condition_sessions(model, observations, actions).",
+            ),
+        )
+    elseif number_of_sessions === :one && !has_one_session
+        throw(
+            ArgumentError(
+                "$call gives a single session its data, but the model has several sessions. Give them the data in a table instead, with condition_sessions(model, table).",
+            ),
+        )
+    end
+    return nothing
+end
+
 """
     prefix_of_model(model)
 
@@ -154,7 +236,7 @@ function with_values_in_data(
         ) for (i, session) in enumerate(sessions_info.sessions)
     ]
 
-    #The sessions keep their data identifiers, and the rows in the table of the timesteps they have left
+    #The sessions keep their data identifiers and their column settings, and the rows in the table of the timesteps they have left
     session_rows = if sessions_info.session_rows === nothing
         nothing
     else
@@ -163,9 +245,7 @@ function with_values_in_data(
             (rows, session) in zip(sessions_info.session_rows, sessions)
         ]
     end
-    return MultipleSessionsInfo(
-        sessions, sessions_info.session_ids; table=sessions_info.table, session_rows
-    )
+    return with_sessions(sessions_info, sessions; session_rows)
 end
 
 """

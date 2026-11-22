@@ -92,3 +92,98 @@
         ).choice isa Vector{Bool}
     end
 end
+
+@testset "condition_sessions on sessions" begin
+    #The sessions of COUNTER_TABLE, read with their column settings, in which a missing choice is imputed
+    sessions_info = MultipleSessionsInfo(
+        SessionCounter(),
+        COUNTER_TABLE;
+        observation_columns=:outcome => :reward,
+        action_columns=:choice,
+        session_columns=:id,
+        timestep_sizes=:dt,
+        who_starts=EnvironmentStarts(),
+        cognitive_save_history=SaveHistory(; states=:n_timesteps),
+    )
+
+    @testset "MultipleSessionsInfo keeps the settings that read its table, and copies of it keep them too" begin
+        settings = sessions_info.column_settings
+        @test settings.observation_columns === (:outcome => :reward) &&
+            settings.action_columns === :choice &&
+            settings.session_columns === :id &&
+            settings.timestep_sizes === :dt
+        @test isequal(settings.missing_observation_values, (missing,)) &&
+            settings.impute_missing_actions === true
+        @test decondition_sessions(sessions_info).column_settings === settings
+        @test MultipleSessionsInfo(sessions_info; cognitive_save_history=SaveHistory()).column_settings ===
+            settings
+        #Sessions that are given already prepared have none
+        given = MultipleSessionsInfo(sessions_info.sessions, sessions_info.session_ids)
+        @test given.column_settings === nothing
+    end
+
+    @testset "A table with the same sessions is read with those settings, and the sessions keep their other settings" begin
+        other_data = (;
+            id=["S1", "S2", "S2", "S2"],
+            outcome=[0.0, 1.0, 0.0, 1.0],
+            choice=[false, true, missing, false],
+            dt=[2.0, 1.0, 1.0, 0.5],
+        )
+        conditioned = condition_sessions(sessions_info, other_data)
+        @test conditioned.session_ids == ["S1", "S2"]
+        @test map(session -> session.n_timesteps, conditioned.sessions) == [1, 3]
+        @test conditioned.sessions[1].observations.reward == [0.0]
+        @test conditioned.sessions[2].observations.reward == [1.0, 0.0, 1.0]
+        #A missing value is imputed, as when the sessions were made, and the sizes of the timesteps are read from the column
+        @test isequal(
+            conditioned.sessions[2].actions.choice, [true, ImputedMissingValue(), false]
+        )
+        @test conditioned.sessions[2].timestep_sizes == [1.0, 1.0, 0.5]
+        @test conditioned.sessions[1].who_starts === EnvironmentStarts() &&
+            conditioned.sessions[1].cognitive_save_history ===
+              SaveHistory(; states=:n_timesteps)
+        @test conditioned.column_settings === sessions_info.column_settings &&
+            conditioned.table === other_data
+        #check_stopping_criterion is given to the sessions
+        @test all(
+            session -> session.check_stopping_criterion === false,
+            condition_sessions(sessions_info, other_data; check_stopping_criterion=false).sessions,
+        )
+    end
+
+    @testset "A table with other sessions, and sessions without column settings, are errors" begin
+        other_sessions = (;
+            id=["S2", "S1"], outcome=[1.0, 0.0], choice=[true, false], dt=[1.0, 1.0]
+        )
+        @test_throws "The table has the sessions [\"S2\", \"S1\"], but the model has [\"S1\", \"S2\"]" condition_sessions(
+            sessions_info, other_sessions
+        )
+        given = MultipleSessionsInfo(sessions_info.sessions, sessions_info.session_ids)
+        @test_throws "The sessions were given already prepared, without the column settings that read them from a table" condition_sessions(
+            given, COUNTER_TABLE
+        )
+    end
+
+    @testset "A single session takes observations and actions, in the forms SessionInfo takes them" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            COUNTER_REWARDS,
+            COUNTER_CHOICES;
+            who_starts=AgentStarts(),
+            check_parameter_domains=false,
+        )
+        conditioned = condition_sessions(
+            session_info, (; reward=[0.0, 1.0]), [false, missing]
+        )
+        @test conditioned.n_timesteps == 2
+        @test conditioned.observations.reward == [0.0, 1.0]
+        @test conditioned.actions.choice[2] === ImputedMissingValue()
+        @test conditioned.who_starts === AgentStarts() &&
+            conditioned.check_parameter_domains === false
+        #Other sizes of the timesteps can be given, as for data with other timesteps
+        sized = SessionInfo(session_info; cognitive_save_history=SaveHistory())
+        @test condition_sessions(
+            sized, [0.0, 1.0], [false, true]; timestep_sizes=[0.5, 2.0]
+        ).timestep_sizes == [0.5, 2.0]
+    end
+end

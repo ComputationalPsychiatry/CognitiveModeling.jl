@@ -158,10 +158,7 @@ function include_environments_if_estimated(
     environment_parameters_model, sessions_info::MultipleSessionsInfo
 )
     estimates_parameters(environment_parameters_model) || return sessions_info
-    return MultipleSessionsInfo(
-        map(remake_session_including_environment, sessions_info.sessions),
-        sessions_info.session_ids;
-        table=sessions_info.table,
-        session_rows=sessions_info.session_rows,
+    return with_sessions(
+        sessions_info, map(remake_session_including_environment, sessions_info.sessions)
     )
 end

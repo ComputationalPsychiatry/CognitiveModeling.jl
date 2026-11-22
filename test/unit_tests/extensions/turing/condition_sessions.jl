@@ -291,6 +291,57 @@
         )
     end
 
+    @testset "The values can be given as pairs, a table of several sessions, or the data of a single session" begin
+        #Pairs, as Turing.jl's condition takes them, give the same as a Dict
+        first_choice = @varname(simulated_sessions[1].timesteps[1].choice.simulated)
+        third_choice = @varname(simulated_sessions[3].timesteps[2].choice.simulated)
+        from_pairs = condition_sessions(
+            deconditioned, first_choice => true, third_choice => false
+        )
+        from_dict = condition_sessions(
+            deconditioned, Dict(first_choice => true, third_choice => false)
+        )
+        @test from_pairs.args.sessions_info.sessions[1].actions.choice == [true]
+        @test isequal(
+            map(session -> session.actions, from_pairs.args.sessions_info.sessions),
+            map(session -> session.actions, from_dict.args.sessions_info.sessions),
+        )
+        #A table with the simulated choices, read as the sessions were read, gives the same log joint as the values
+        simulated_table = (;
+            DIFFERENT_LENGTHS_TABLE...,
+            choice=[
+                draw[@varname(simulated_sessions[i].timesteps[t].choice.simulated)] for
+                (i, n_timesteps) in enumerate((1, 2, 5)) for t in 1:n_timesteps
+            ],
+        )
+        from_table = condition_sessions(deconditioned, simulated_table)
+        for parameters in (some_parameters, other_parameters)
+            @test logjoint(from_table, parameters) ≈
+                logjoint(condition_sessions(deconditioned, simulated_choices), parameters)
+        end
+        #A table with another session is an error, as is a table for a single session
+        @test_throws "The table has the sessions" condition_sessions(
+            deconditioned, (; id=["S9"], reward=[1.0], choice=[true])
+        )
+        single = session_model(
+            TuringBackend(),
+            sessions_info.sessions[3],
+            (; learning_rate=0.3, inverse_temperature=2.0),
+        )
+        @test_throws "gives several sessions the data in a table, but the model has a single session" condition_sessions(
+            single, simulated_table
+        )
+        #A single session takes its observations and actions, also with other timesteps
+        conditioned_single = condition_sessions(
+            decondition_sessions(single), (; reward=[1.0, 0.0]), (; choice=[true, false])
+        )
+        @test conditioned_single.args.session_info.actions.choice == [true, false]
+        @test conditioned_single.args.session_info.n_timesteps == 2
+        @test_throws "gives a single session its data, but the model has several sessions" condition_sessions(
+            deconditioned, (; reward=[1.0]), (; choice=[true])
+        )
+    end
+
     @testset "check_stopping_criterion is given to the sessions" begin
         conditioned = condition_sessions(
             deconditioned, simulated_choices; check_stopping_criterion=false

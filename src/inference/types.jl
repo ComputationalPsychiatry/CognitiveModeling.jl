@@ -450,7 +450,8 @@ end
 """
     MultipleSessionsInfo(cognitive_model, table; observation_columns, action_columns,
                          session_columns, <keyword arguments>)
-    MultipleSessionsInfo(sessions, session_ids; table=nothing, session_rows=nothing)
+    MultipleSessionsInfo(sessions, session_ids; table=nothing, session_rows=nothing,
+                         column_settings=nothing)
 
 Multiple behavioral sessions in a generative model that are fitted together, as a vector of
 [`SessionInfo`](@ref) with a data identifier for each, which an inference backend's models
@@ -468,7 +469,12 @@ model that estimates the environment's parameters, unless `include_environment` 
 otherwise. The table is kept in the field `table`, without being copied, with the rows of
 each session in `session_rows`, so that a parameter model can read the columns it needs,
 such as those that a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the
-predictors of a [`HierarchicalRegressionParameters`](@ref).
+predictors of a [`HierarchicalRegressionParameters`](@ref). The keyword arguments that say
+how the table is read, `observation_columns`, `action_columns`, `session_columns`,
+`timestep_sizes`, `missing_observation_values`, `missing_action_values`,
+`impute_missing_observations` and `impute_missing_actions`, are kept in a `NamedTuple` in the
+field `column_settings`, so that [`condition_sessions`](@ref) reads another table with the
+same sessions in the same way.
 
     MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
 
@@ -517,7 +523,8 @@ The same sessions with other save histories for every one, see [`SessionInfo`](@
 
 The second form takes sessions that are already prepared. They have no table, unless it is
 given as `table`, with the rows of each session in it as `session_rows`, a vector of
-vectors of row numbers. Each argument is kept in a field of the same name.
+vectors of row numbers, and no column settings, unless they are given as `column_settings`.
+Each argument is kept in a field of the same name.
 
 Each session is identified in three ways: by its order, its index in `sessions`, which the
 models of several sessions number it by and [`CognitiveModeling.session_index`](@ref) finds;
@@ -571,12 +578,15 @@ struct MultipleSessionsInfo{
     Tsessions<:AbstractVector{<:SessionInfo},
     Tsession_ids<:AbstractVector,
     Ttable<:Union{Nothing,NamedTuple},
+    Tcolumn_settings<:Union{Nothing,NamedTuple},
 }
     sessions::Tsessions
     session_ids::Tsession_ids
     #Typed by the table itself: Reactant.jl can't compile a function which holds an object with a field declared as NamedTuple, which the sessions are for an inference backend that compiles its models with it
     table::Ttable
     session_rows::Union{Nothing,Vector{Vector{Int}}}
+    #Typed by the settings themselves, for the same reason
+    column_settings::Tcolumn_settings
 
     #Only takes sessions of one type, with a data identifier for each, and the rows of each in the table when there is one
     function MultipleSessionsInfo(
@@ -584,6 +594,7 @@ struct MultipleSessionsInfo{
         session_ids::AbstractVector;
         table::Union{Nothing,NamedTuple}=nothing,
         session_rows::Union{Nothing,AbstractVector{<:AbstractVector{Int}}}=nothing,
+        column_settings::Union{Nothing,NamedTuple}=nothing,
     )
         isempty(sessions) && throw(ArgumentError("There must be at least one session."))
         if length(sessions) != length(session_ids)
@@ -616,8 +627,10 @@ struct MultipleSessionsInfo{
             )
         end
         session_rows = session_rows === nothing ? nothing : map(Vector{Int}, session_rows)
-        return new{typeof(sessions),typeof(session_ids),typeof(table)}(
-            sessions, session_ids, table, session_rows
+        return new{
+            typeof(sessions),typeof(session_ids),typeof(table),typeof(column_settings)
+        }(
+            sessions, session_ids, table, session_rows, column_settings
         )
     end
 end
@@ -689,19 +702,49 @@ function MultipleSessionsInfo(
     end
     session_ids = map(first, sessions_rows)
 
-    #The table is kept with the rows of each session, so that a parameter model can read the columns it needs
+    #The table is kept with the rows of each session, so that a parameter model can read the columns it needs, and the settings which read it, so that another table can be read in the same way
+    column_settings = (;
+        observation_columns,
+        action_columns,
+        session_columns,
+        timestep_sizes,
+        missing_observation_values,
+        missing_action_values,
+        impute_missing_observations,
+        impute_missing_actions,
+    )
     return MultipleSessionsInfo(
-        sessions, session_ids; table, session_rows=map(last, sessions_rows)
+        sessions, session_ids; table, session_rows=map(last, sessions_rows), column_settings
     )
 end
 
 #The same sessions with other save histories
 function MultipleSessionsInfo(sessions_info::MultipleSessionsInfo; keywords...)
-    return MultipleSessionsInfo(
+    return with_sessions(
+        sessions_info,
         map(session -> SessionInfo(session; keywords...), sessions_info.sessions),
+    )
+end
+
+"""
+    with_sessions(sessions_info, sessions; session_rows=sessions_info.session_rows)
+
+Return a copy of `sessions_info`, a [`MultipleSessionsInfo`](@ref), with `sessions` in place
+of its sessions, and its data identifiers, its table, the rows of each session in it and its
+column settings kept, unless other rows are given as `session_rows`. Used wherever the
+sessions are prepared again, such as by [`decondition_sessions`](@ref).
+"""
+function with_sessions(
+    sessions_info::MultipleSessionsInfo,
+    sessions::AbstractVector{<:SessionInfo};
+    session_rows=sessions_info.session_rows,
+)
+    return MultipleSessionsInfo(
+        sessions,
         sessions_info.session_ids;
         table=sessions_info.table,
-        session_rows=sessions_info.session_rows,
+        session_rows,
+        sessions_info.column_settings,
     )
 end
 
