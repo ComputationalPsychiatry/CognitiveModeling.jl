@@ -127,8 +127,9 @@
             composite, (; choice=:choicecol, rt=:rtcol), (missing,), true
         )
         @test named ==
-              [(; choice=true, rt=0.5), (; choice=false, rt=0.7), MissingValue()] &&
-            named isa Vector{Union{MissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
+              [(; choice=true, rt=0.5), (; choice=false, rt=0.7), ImputedMissingValue()] &&
+            named isa
+              Vector{Union{ImputedMissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
         @test CognitiveModeling.build_column(composite, (:rtcol, :cue), (missing,), true) ==
             [(0.5, 1), (0.7, 2), (0.9, 3)]
         @test CognitiveModeling.build_column(
@@ -145,13 +146,13 @@
             (:rtcol, :cue),
             (missing, value -> value isa Float64 && value > 0.8),
             true,
-        ) == [(0.5, 1), (0.7, 2), MissingValue()]
+        ) == [(0.5, 1), (0.7, 2), ImputedMissingValue()]
         #A column given by its name alone is marked as mark_missing_values does, with its arrays narrowed
         ratings = (; ratings=Vector{Union{Missing,Float64}}[[0.1, missing], [0.3, 0.4]])
         has_missing_element(value) = value isa AbstractVector && any(ismissing, value)
         @test CognitiveModeling.build_column(
             ratings, :ratings, (missing, has_missing_element), true
-        ) == [MissingValue(), [0.3, 0.4]]
+        ) == [ImputedMissingValue(), [0.3, 0.4]]
         #Without values to replace, the values are combined as they are
         @test isequal(
             CognitiveModeling.build_column(composite, (:choicecol, :cue), (), true),
@@ -165,7 +166,7 @@
             true,
         )
         @test CognitiveModeling.select_rows(columns, [1, 3]) ==
-            (; ssm_action=[(; choice=true, rt=0.5), MissingValue()], cue=[1, 3])
+            (; ssm_action=[(; choice=true, rt=0.5), ImputedMissingValue()], cue=[1, 3])
     end
 
     @testset "The columns are built for the whole table, and the rows of a session are selected from them" begin
@@ -174,17 +175,20 @@
         #A column with the element type Any is narrowed as a whole, so every session gets the same type
         @test CognitiveModeling.select_rows(
             CognitiveModeling.build_columns(
-                (; choice=[true, false, MissingValue()]), (; choice=:choice), (), true
+                (; choice=[true, false, ImputedMissingValue()]),
+                (; choice=:choice),
+                (),
+                true,
             ),
             [1, 2],
-        ).choice isa Vector{Union{MissingValue,Bool}}
+        ).choice isa Vector{Union{ImputedMissingValue,Bool}}
         #A value is replaced in the whole column, so a session which doesn't have it gets the marker in its type too
         @test CognitiveModeling.select_rows(
             CognitiveModeling.build_columns(
                 (; choice=[1.0, 0.0, -1.0]), (; choice=:choice), (-1,), true
             ),
             [1, 2],
-        ).choice isa Vector{Union{MissingValue,Float64}}
+        ).choice isa Vector{Union{ImputedMissingValue,Float64}}
         @test CognitiveModeling.build_columns(table, (;), (), true) === (;)
         @test CognitiveModeling.select_rows((;), [1, 2]) === (;)
         @test CognitiveModeling.select_timestep_sizes(table, :dt, [1, 2]) == [0.5, 1.0]

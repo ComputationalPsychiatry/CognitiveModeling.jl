@@ -4,7 +4,7 @@ What users work with, by topic:
 
 - [Defining models](defining_models.md): the types that a cognitive model or an environment
   model is written with, and the functions it implements.
-- [Simulation](simulation.md): running models, alone or together.
+- [Simulation](simulation.md): simulating models, alone or together.
 - [Saving histories](saving_histories.md): what a simulation or a fitted session saves of
   each model.
 - [Fitting](fitting.md): the sessions to fit, and what runs after them.

@@ -19,11 +19,11 @@ The state is `(; rl_env)`: `initialize_state` resets `rl_env` with CommonRLInter
 `reset!` and returns it in the state, every timestep changes it in place with `act!` and
 passes it on in the new state, and `prepare_state_for_saving` copies it, with `clone` if it
 provides it and with `deepcopy` otherwise. Every simulation with the same
-`CommonRLEnvironment` therefore resets and changes the same `rl_env`, so simulations that
-run at the same time, such as on several threads, need one each. A method of
-`prepare_state_for_saving` for a `CommonRLEnvironment` with a specific type of `rl_env` can
-save something lighter. The parameters aren't used, and neither is the random number
-generator, since an environment of CommonRLInterface.jl has its own randomness.
+`CommonRLEnvironment` therefore resets and changes the same `rl_env`, so simulations at the
+same time, such as on several threads, need one each. A method of `prepare_state_for_saving`
+for a `CommonRLEnvironment` with a specific type of `rl_env` can save something lighter. The
+parameters aren't used, and neither is the random number generator, since an environment of
+CommonRLInterface.jl has its own randomness.
 
 Each observation is a `NamedTuple` `(; observation, reward, terminated)`: what `observe`
 gives, copied unless it is plain data such as a number, the reward that `act!` returned, and
@@ -63,7 +63,7 @@ CognitiveModeling.initialize_state(model::PullsFirstArm, parameters) = (;)
 CognitiveModeling.timestep_model(model::PullsFirstArm, context::ModelContext) = ModelOutput((; arm = Deterministic(1)))
 CognitiveModeling.attribute_names(model::PullsFirstArm) = ModelAttributes(; parameters = (), states = (), inputs = (:observation, :reward, :terminated), outputs = :arm)
 
-#The simulation stops when the episode ends, before it has run all of n_steps
+#The simulation stops when the episode ends, before it has simulated all of n_steps
 simulation = simulate_session(
     PullsFirstArm(),
     CommonRLEnvironment(Bandit(0); action_name = :arm);

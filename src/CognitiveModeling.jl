@@ -64,7 +64,7 @@ include("extensions/turing/turing_models.jl")
 #What users work with directly
 export AbstractCognitiveModel, AbstractEnvironmentModel
 export AbstractNoValue, NoValue, BeforeFirstTimestep
-export MissingValue, UnimputedMissingValue, SimulatedValue
+export ImputedMissingValue, UnimputedMissingValue, SimulatedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, ValidByDefault
 export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment

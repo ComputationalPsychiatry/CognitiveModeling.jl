@@ -20,7 +20,7 @@ Who starts: environment"""
             "text/plain",
             SessionInfo(
                 SessionCounter(),
-                (; reward=[1.0, MissingValue(), 1.0]),
+                (; reward=[1.0, ImputedMissingValue(), 1.0]),
                 COUNTER_CHOICES;
                 who_starts=AgentStarts(),
                 environment=GivesReward(),

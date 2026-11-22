@@ -199,9 +199,9 @@ end
 
 Return the history that an [`InstantiatedModel`](@ref) starts with: a [`ModelHistory`](@ref)
 with what `save_history` selects of where it starts, as timestep 0, and
-[`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has run yet. When
-nothing is selected, or `save_history` doesn't save the initial timestep values, the vectors
-are empty.
+[`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has been simulated
+yet. When nothing is selected, or `save_history` doesn't save the initial timestep values,
+the vectors are empty.
 
 A model hasn't received anything when it starts, so that entry has every input in the
 model's attributes as `BeforeFirstTimestep()`, and so has every output distribution.

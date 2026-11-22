@@ -727,21 +727,25 @@ function impute_each_by_hand(
     )
 end
 
-# A value that is there is taken as it is, and so is any marker but MissingValue
+# A value that is there is taken as it is, and so is any marker but ImputedMissingValue
 impute_value_by_hand(data_value, distribution, evaluation) = data_value
 
 # A missing value is a latent, with the distribution the model gives for it
-function impute_value_by_hand(::MissingValue, distribution, evaluation)
+function impute_value_by_hand(::ImputedMissingValue, distribution, evaluation)
     value = take_latent!(evaluation)
     evaluation.log_density += log_density(distribution, value)
     return value
 end
 
 # A missing value that the model gives without randomness is that value, and one where the model gives nothing stays as the model gives it
-function impute_value_by_hand(::MissingValue, deterministic::Deterministic, evaluation)
+function impute_value_by_hand(
+    ::ImputedMissingValue, deterministic::Deterministic, evaluation
+)
     return deterministic.value
 end
-impute_value_by_hand(::MissingValue, no_value::AbstractNoValue, evaluation) = no_value
+function impute_value_by_hand(::ImputedMissingValue, no_value::AbstractNoValue, evaluation)
+    return no_value
+end
 
 ## The cases ##
 
@@ -776,18 +780,20 @@ const CHOICES_BY_HAND = (;
     choice=[true, false, true, true, false, false, true, true, false, true]
 )
 const CONTINUOUS_CHOICES_BY_HAND = (;
-    choice=[0.3, 0.6, MissingValue(), 0.4, 0.7, MissingValue(), 0.5, 0.2, 0.8, 0.6]
+    choice=[
+        0.3, 0.6, ImputedMissingValue(), 0.4, 0.7, ImputedMissingValue(), 0.5, 0.2, 0.8, 0.6
+    ]
 )
 const MISSING_REWARDS_BY_HAND = (;
     reward=[
-        MissingValue(),
+        ImputedMissingValue(),
         0.0,
-        MissingValue(),
+        ImputedMissingValue(),
         1.0,
-        MissingValue(),
+        ImputedMissingValue(),
         1.0,
         0.0,
-        MissingValue(),
+        ImputedMissingValue(),
         1.0,
         1.0,
     ]
@@ -879,8 +885,8 @@ end
 function ending_session_by_hand()
     session_info = SessionInfo(
         LearnsRewards{AroundMean}(),
-        (; reward=fill(MissingValue(), 10)),
-        (; choice=[0.3, 0.6, 0.4, 0.7, fill(MissingValue(), 6)...]);
+        (; reward=fill(ImputedMissingValue(), 10)),
+        (; choice=[0.3, 0.6, 0.4, 0.7, fill(ImputedMissingValue(), 6)...]);
         who_starts=EnvironmentStarts(),
         environment=NoisyRewardsUntilEnd(),
         cognitive_save_history=SaveHistory(; states=:expected_reward),

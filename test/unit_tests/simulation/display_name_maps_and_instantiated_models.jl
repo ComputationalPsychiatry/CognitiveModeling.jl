@@ -59,7 +59,7 @@ end
         @test !occursin("Stopping criterion", repr("text/plain", reset!(environment)))
     end
 
-    @testset "On one line it shows its model's type and kind, and how many timesteps it has run" begin
+    @testset "On one line it shows its model's type and kind, and how many timesteps it has simulated" begin
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
         @test repr(agent) ==
             "Baseline (instantiated cognitive model, 0 timesteps simulated)"

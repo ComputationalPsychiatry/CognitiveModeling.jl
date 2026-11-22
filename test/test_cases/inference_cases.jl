@@ -17,13 +17,13 @@ function simulated_data(pair, who_starts; n_steps=10, seed=1)
     return observations, actions, length(simulation.actions) - 1
 end
 
-#The columns with MissingValue() on the timesteps given for each name, in a NamedTuple of names and timesteps
+#The columns with ImputedMissingValue() on the timesteps given for each name, in a NamedTuple of names and timesteps
 function with_missing(columns::NamedTuple{names}, timesteps_by_name) where {names}
     return NamedTuple{names}(
         map(names) do name
             column = Vector{Any}(columns[name])
             for t in get(timesteps_by_name, name, ())
-                column[t] = MissingValue()
+                column[t] = ImputedMissingValue()
             end
             return identity.(column)
         end,
@@ -57,7 +57,7 @@ function filled_row(
     return NamedTuple{names}(
         map(names) do name
             value = columns[name][t]
-            value isa MissingValue || return value
+            value isa ImputedMissingValue || return value
             return imputes ? variable(imputed_name(name)) : UnimputedMissingValue()
         end,
     )
@@ -349,8 +349,8 @@ end
 #The parameters of session i, from a NamedTuple with a vector for each parameter
 parameters_of_session(parameters::NamedTuple, i) = map(values -> values[i], parameters)
 
-#Julia's missing for MissingValue(), as a table has it
-as_table_value(value::MissingValue) = missing
+#Julia's missing for ImputedMissingValue(), as a table has it
+as_table_value(value::ImputedMissingValue) = missing
 as_table_value(value) = value
 
 #A case of several sessions of a pair, in one table with a session column and a column for each observation and action,

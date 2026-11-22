@@ -80,11 +80,17 @@ values of their actions and observations as data, such as that of
 `session[1].timestep[3].choice.simulated`, and a value of any other variable is an error.
 `DynamicPPL.subset` leaves out the parameters of a draw from the prior of the deconditioned
 model, under `@varname(session)` for several sessions and `@varname(timestep)` for a single
-one, so that the copy is fitted to the simulated data, as in a parameter recovery.
-Turing.jl's `condition` on the same values gives the same posterior, as the tutorial
+one, so that the copy is fitted to the simulated data, as in a parameter recovery. Each
+session of the copy ends after its last timestep with a value, so a simulation that a
+[`CognitiveModeling.stopping_criterion`](@ref) ended is fitted with the timesteps it had.
+Turing.jl's `condition` on the same values gives the same posterior for models without a
+stopping criterion of their own, as the tutorial
 [Predictive checks and parameter
 recovery](../generated/predictive_checks_and_parameter_recovery.md)
-shows, which also compares the two ways.
+shows, which also compares the two ways. With one, it keeps the timesteps after the last
+value, and the session ends where the criterion is met at the parameters of each evaluation:
+before its last value, which leaves out the values after it with no error, or after it, with
+a variable for every action and observation that follows.
 
 ```julia
 deconditioned_model = decondition_sessions(model)

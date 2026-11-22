@@ -217,9 +217,9 @@ struct EnvironmentStarts end
     UnknownWhoStarts()
 
 The `who_starts` of a [`ModelContext`](@ref) when neither side is known to move first on a
-timestep, as when a model runs on a single input with [`simulate_timestep`](@ref), or is
-used outside a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are the
-other two, which a simulation or a fitted session passes on from its own `who_starts`.
+timestep, as when a model is simulated on a single input with [`simulate_timestep`](@ref),
+or is used outside a simulation. [`AgentStarts`](@ref) and [`EnvironmentStarts`](@ref) are
+the other two, which a simulation or a fitted session passes on from its own `who_starts`.
 """
 struct UnknownWhoStarts end
 

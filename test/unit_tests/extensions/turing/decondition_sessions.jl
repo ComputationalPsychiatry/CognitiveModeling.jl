@@ -35,7 +35,7 @@ end
         #The sessions are those that decondition_sessions makes, and the rest of the model is as it was
         @test deconditioned.f === imputing.f
         @test all(
-            session -> all(==(SimulatedValue()), session.actions.choice),
+            session -> all(==(SimulatedMissingValue()), session.actions.choice),
             deconditioned.args.sessions_info.sessions,
         )
         prior_predictions = @test_logs match_mode = :any sample(
@@ -68,7 +68,7 @@ end
         @test @varname(learning_rate.session) in
             keys(Turing.DynamicPPL.conditioned(deconditioned))
         @test all(
-            session -> all(==(SimulatedValue()), session.actions.choice),
+            session -> all(==(SimulatedMissingValue()), session.actions.choice),
             deconditioned.args.sessions_info.sessions,
         )
         unconditioned = decondition(conditioned)
@@ -95,7 +95,7 @@ end
             (; learning_rate=0.3, inverse_temperature=2.0),
         )
         @test all(
-            ==(SimulatedValue()),
+            ==(SimulatedMissingValue()),
             decondition_sessions(single).args.session_info.actions.choice,
         )
         several = multiple_sessions_model(
@@ -104,7 +104,7 @@ end
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0]),
         )
         @test all(
-            session -> all(==(SimulatedValue()), session.actions.choice),
+            session -> all(==(SimulatedMissingValue()), session.actions.choice),
             decondition_sessions(several).args.sessions_info.sessions,
         )
     end

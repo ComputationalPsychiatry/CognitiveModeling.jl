@@ -4,13 +4,13 @@
     @testset "is_value_to_condition_on" begin
         @test CognitiveModeling.is_value_to_condition_on(1.0) &&
             CognitiveModeling.is_value_to_condition_on(true)
-        @test !CognitiveModeling.is_value_to_condition_on(MissingValue()) &&
+        @test !CognitiveModeling.is_value_to_condition_on(ImputedMissingValue()) &&
             !CognitiveModeling.is_value_to_condition_on(NoValue())
         @test CognitiveModeling.is_value_to_condition_on(1.0) &&
             !CognitiveModeling.is_value_to_condition_on(NoValue()) &&
-            !CognitiveModeling.is_value_to_condition_on(MissingValue()) &&
+            !CognitiveModeling.is_value_to_condition_on(ImputedMissingValue()) &&
             !CognitiveModeling.is_value_to_condition_on(UnimputedMissingValue()) &&
-            !CognitiveModeling.is_value_to_condition_on(SimulatedValue())
+            !CognitiveModeling.is_value_to_condition_on(SimulatedMissingValue())
     end
 
     @testset "The names to condition on are those with values in the data, and no observation is without an environment" begin
@@ -26,7 +26,7 @@
         with_environment = SessionInfo(
             ScoringModel(),
             (; reward=[1.0, 0.0]),
-            (; choice=[true, MissingValue()]);
+            (; choice=[true, ImputedMissingValue()]);
             who_starts=EnvironmentStarts(),
             environment=ScoringEnvironment(),
         )
@@ -39,7 +39,7 @@
             SessionInfo(
                 ScoringModel(),
                 (; reward=[1.0, 0.0]),
-                (; choice=[MissingValue(), MissingValue()]);
+                (; choice=[ImputedMissingValue(), ImputedMissingValue()]);
                 who_starts=EnvironmentStarts(),
                 environment=ScoringEnvironment(),
             ),
@@ -51,7 +51,9 @@
             (; choice=0.5, bet=NoValue()), distributions, ScoringModel()
         ) === (; choice=true, bet=false)
         @test CognitiveModeling.find_outputs_to_condition_on(
-            (; choice=MissingValue(), bet=MissingValue()), distributions, ScoringModel()
+            (; choice=ImputedMissingValue(), bet=ImputedMissingValue()),
+            distributions,
+            ScoringModel(),
         ) === (; choice=false, bet=false)
         @test CognitiveModeling.find_outputs_to_condition_on((;), (;), ScoringModel()) ===
             (;)

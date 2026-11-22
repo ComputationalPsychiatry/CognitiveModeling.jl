@@ -7,12 +7,12 @@ Return the values to condition on of each action or observation in `columns`, a 
 with one vector per name, as a `NamedTuple` of vectors in the order of the timesteps.
 Fitting scores these against the distributions the model gave on the same timesteps: the
 actions against the cognitive model's, and the observations against the environment's. Each
-vector has the element type of its column without [`MissingValue`](@ref) and the other
-markers, so that a session without values to condition on for a name gets an empty vector of
-the same type as other sessions, which scores nothing. A name whose column can only hold
-those markers is left out, which is decided by its type, so that it is the same for every
-session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its fields
-`actions_to_condition_on` and `observations_to_condition_on`.
+vector has the element type of its column without [`ImputedMissingValue`](@ref) and the
+other markers, so that a session without values to condition on for a name gets an empty
+vector of the same type as other sessions, which scores nothing. A name whose column can
+only hold those markers is left out, which is decided by its type, so that it is the same
+for every session of a table. Used by [`SessionInfo`](@ref), which keeps the results in its
+fields `actions_to_condition_on` and `observations_to_condition_on`.
 """
 function collect_values_to_condition_on(columns::NamedTuple{names}) where {names}
     values_to_condition_on = map(columns) do column
@@ -35,7 +35,7 @@ end
 Return the first timestep before which a session checks the [`stopping_criterion`](@ref) of
 its models, from the `check_stopping_criterion` of [`SessionInfo`](@ref): the timestep after
 the last one with data when it is `nothing`, which is 1 when every value is
-[`MissingValue`](@ref) or [`SimulatedValue`](@ref), 1 when it is `true`, and
+[`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), 1 when it is `true`, and
 `n_timesteps + 1` when it is `false`, so that no timestep is checked. Used by
 `SessionInfo`.
 """
@@ -53,9 +53,9 @@ end
 
 Return `column` with the types it holds as its element type, when its element type is `Any`
 or another abstract type that isn't a `Union`, and `column` itself otherwise. A vector
-written as `[true, MissingValue(), true]` has the element type `Any`, since only `missing`
-is promoted to a `Union`, and an `Any` in the data makes every timestep run with its types
-unknown. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
+written as `[true, ImputedMissingValue(), true]` has the element type `Any`, since only
+`missing` is promoted to a `Union`, and an `Any` in the data makes every timestep run with
+its types unknown. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
 """
 function narrow_element_type(column::AbstractVector)
     T = eltype(column)
@@ -97,20 +97,22 @@ matches_missing_value(missing_value::Function, value) = missing_value(value) ===
     missing_value_marker(impute)
 
 Return the marker which the missing values in the data of a session become:
-[`MissingValue`](@ref) when they are imputed, and [`UnimputedMissingValue`](@ref) when
-`impute` is `false`. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
+[`ImputedMissingValue`](@ref) when they are imputed, and [`UnimputedMissingValue`](@ref)
+when `impute` is `false`. Used by [`mark_missing_values`](@ref) and [`build_column`](@ref).
 """
-missing_value_marker(impute::Bool) = impute ? MissingValue() : UnimputedMissingValue()
+function missing_value_marker(impute::Bool)
+    return impute ? ImputedMissingValue() : UnimputedMissingValue()
+end
 
 """
     is_missing_data_value(value, missing_values)
 
-Return whether `value` is missing in the data: [`MissingValue`](@ref) itself, or matched by
-one of `missing_values`, as [`matches_missing_value`](@ref) says. Used by
+Return whether `value` is missing in the data: [`ImputedMissingValue`](@ref) itself, or
+matched by one of `missing_values`, as [`matches_missing_value`](@ref) says. Used by
 [`build_column`](@ref), for a value which is built from several columns.
 """
 function is_missing_data_value(value, missing_values::Tuple)
-    return value isa MissingValue ||
+    return value isa ImputedMissingValue ||
            any(missing_value -> matches_missing_value(missing_value, value), missing_values)
 end
 
@@ -163,10 +165,10 @@ end
 
 Return `columns`, a `NamedTuple` with one vector per name, or a single vector, with every
 value which is matched by one of `missing_values`, as [`matches_missing_value`](@ref) says,
-replaced by the marker for a missing value: [`MissingValue`](@ref) when `impute` is `true`.
-When it is `false`, the marker is [`UnimputedMissingValue`](@ref), which every
-`MissingValue()` that is in the data already becomes too. The arrays in the values that are
-kept are narrowed to the types they hold, by [`narrow_arrays_in_values`](@ref).
+replaced by the marker for a missing value: [`ImputedMissingValue`](@ref) when `impute` is
+`true`. When it is `false`, the marker is [`UnimputedMissingValue`](@ref), which every
+`ImputedMissingValue()` that is in the data already becomes too. The arrays in the values
+that are kept are narrowed to the types they hold, by [`narrow_arrays_in_values`](@ref).
 
 A column gets the type of the marker in its element type when its element type allows one
 of the values, whether it holds one or not, so that sessions whose columns have the same
@@ -186,7 +188,7 @@ function mark_missing_values(column::AbstractVector, missing_values::Tuple, impu
     marker = missing_value_marker(impute)
 
     #Without imputation, a value which is marked as missing in the data already isn't imputed either
-    values = impute ? missing_values : (missing_values..., MissingValue())
+    values = impute ? missing_values : (missing_values..., ImputedMissingValue())
 
     #Only the values that the column can hold are replaced in it
     replaced_values = filter(value -> column_can_hold(column, value), values)
@@ -265,8 +267,8 @@ end
     check_environment_fits(cognitive_model, environment, observations)
 
 Throw an informative error if a session can't run with `environment`: without one, the
-observations in the data can't have a [`MissingValue`](@ref), since nothing imputes it, and
-with one, its attributes must have the same observations and actions as those of
+observations in the data can't have an [`ImputedMissingValue`](@ref), since nothing imputes
+it, and with one, its attributes must have the same observations and actions as those of
 `cognitive_model`. Used by [`SessionInfo`](@ref).
 """
 function check_environment_fits(
@@ -286,7 +288,7 @@ function check_environment_fits(
     if has_missing_entries(observations)
         throw(
             ArgumentError(
-                "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false.",
+                "The observations have entries that are ImputedMissingValue() or SimulatedMissingValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false.",
             ),
         )
     end
@@ -338,15 +340,17 @@ end
     marker_of_unmapped_outputs(observations, actions)
 
 Return the marker of the outputs of the environment that the observation map doesn't pass
-on, on every timestep of a session: [`SimulatedValue`](@ref) when a column of `observations`
-or `actions` can hold one, so that they are simulated, and [`MissingValue`](@ref) otherwise,
-so that they are imputed. Used by [`SessionInfo`](@ref), with
-[`map_to_environment_outputs`](@ref).
+on, on every timestep of a session: [`SimulatedMissingValue`](@ref) when a column of
+`observations` or `actions` can hold one, so that they are simulated, and
+[`ImputedMissingValue`](@ref) otherwise, so that they are imputed. Used by
+[`SessionInfo`](@ref), with [`map_to_environment_outputs`](@ref).
 """
 function marker_of_unmapped_outputs(observations::NamedTuple, actions::NamedTuple)
     columns = (values(observations)..., values(actions)...)
-    can_hold_simulated_value = any(column -> SimulatedValue <: eltype(column), columns)
-    return can_hold_simulated_value ? SimulatedValue() : MissingValue()
+    can_hold_simulated_value = any(
+        column -> SimulatedMissingValue <: eltype(column), columns
+    )
+    return can_hold_simulated_value ? SimulatedMissingValue() : ImputedMissingValue()
 end
 
 """
@@ -371,9 +375,9 @@ end
 
 Throw an `ArgumentError` if a value in `observations` or in `actions`, each a `NamedTuple`
 of vectors under the names of `cognitive_model`, is outside its domain: an observation
-outside the domain of its input in [`input_domains`](@ref), and an action outside the
-domain of its output in [`output_domains`](@ref), as [`check_value_in_domain`](@ref) checks
-them. Markers, such as [`MissingValue`](@ref) and [`NoValue`](@ref), aren't checked. The
+outside the domain of its input in [`input_domains`](@ref), and an action outside the domain
+of its output in [`output_domains`](@ref), as [`check_value_in_domain`](@ref) checks them.
+Markers, such as [`ImputedMissingValue`](@ref) and [`NoValue`](@ref), aren't checked. The
 error names the row of the table when `in_table` is `true`, and the timestep of the session
 otherwise. Used by [`SessionInfo`](@ref), and by [`MultipleSessionsInfo`](@ref) for a whole
 table.
@@ -401,9 +405,9 @@ end
 
 Check each value of each column in `columns` that has a domain in `domains` with
 [`check_value_in_domain`](@ref), as a [`DataValue`](@ref) of `kind`, `:observation` or
-`:action`, at its index in the column. A column without a domain, a domain without a
-column, and a marker such as [`MissingValue`](@ref) or [`NoValue`](@ref) aren't checked.
-Used by [`check_data_in_domains`](@ref).
+`:action`, at its index in the column. A column without a domain, a domain without a column,
+and a marker such as [`ImputedMissingValue`](@ref) or [`NoValue`](@ref) aren't checked. Used
+by [`check_data_in_domains`](@ref).
 """
 function check_columns_in_domains(
     kind::Symbol, columns::NamedTuple, domains::NamedTuple, in_table::Bool

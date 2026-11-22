@@ -18,7 +18,7 @@ function CognitiveModeling.predict_session_trajectories(
         "predict_session_trajectories",
     )
     #Everything within the timesteps is simulated again, with the parameters of each sample
-    returned_values = returned_with_simulation(
+    returned_values = returned_with_prior_fallback(
         rng, predictive_model, without_timestep_variables(chain)
     )
     numbering = sample_numbering(chain)
@@ -68,14 +68,14 @@ is_within_timestep(name) = occursin(r"^(session\[[^\]]*\]\.)?timestep\[", string
 
 #Turing.jl's predict gives a chain of the simulated variables, not what the model returns, which has the trajectories of the sessions. Reading those from that chain with returned would run the model a second time, and fails when the sessions have simulated actions at different timesteps, as sessions of different lengths always do in a predictive check, for the reason above. So the model runs once for every sample, as predict runs it, and what it returns is kept
 """
-    returned_with_simulation(rng, model, chain)
+    returned_with_prior_fallback(rng, model, chain)
 
 Return a matrix with what `model` returns for every sample of `chain`, iterations down and
 chains across, with the values of the sample for the variables in the chain, and every other
 variable drawn from its prior, as Turing.jl's `predict` draws them. Used by
 `predict_session_trajectories`.
 """
-function returned_with_simulation(
+function returned_with_prior_fallback(
     rng::AbstractRNG, model::DynamicPPL.Model, chain::Turing.FlexiChains.FlexiChain
 )
     n_iterations, n_chains = size(chain)

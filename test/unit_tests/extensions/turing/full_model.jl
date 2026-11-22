@@ -111,7 +111,8 @@ function sessions_by_hand(table, learning_rates, inverse_temperatures)
     for (i, id) in enumerate(unique(table.id))
         rows = findall(==(id), table.id)
         choices = [
-            choice === missing ? MissingValue() : choice for choice in table.choice[rows]
+            choice === missing ? ImputedMissingValue() : choice for
+            choice in table.choice[rows]
         ]
         log_density += session_by_hand(
             table.reward[rows],
@@ -1023,7 +1024,7 @@ end
             0.5 + learning_rates[1] * (1.0 - 0.5)
     end
 
-    @testset "Evaluating the sessions only allocates the distributions they keep, also with a column that can hold a MissingValue" begin
+    @testset "Evaluating the sessions only allocates the distributions they keep, also with a column that can hold an ImputedMissingValue" begin
         function table_with(n_timesteps)
             return (;
                 id=repeat([1, 2], inner=n_timesteps),

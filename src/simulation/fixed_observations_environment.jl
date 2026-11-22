@@ -39,7 +39,7 @@ end
 #The rewards of three timesteps
 environment = FixedObservationsEnvironment((; reward = [1.0, 0.0, 1.0]))
 
-#The simulation stops after the three rewards, before it has run all of n_steps. The environment takes no actions, so the map passes none on
+#The simulation stops after the three rewards, before it has simulated all of n_steps. The environment takes no actions, so the map passes none on
 simulation = simulate_session(
     LearnsRewards(),
     environment;

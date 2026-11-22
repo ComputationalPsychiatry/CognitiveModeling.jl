@@ -71,9 +71,9 @@ end
     last_timestep_with_data(columns)
 
 Return the last timestep on which any column in `columns`, a `NamedTuple` of vectors, has a
-value that isn't [`MissingValue`](@ref) or [`SimulatedValue`](@ref), and 0 when none has.
-Any other marker counts as data, since it says that the timestep happened. Used by
-[`first_timestep_to_check_stopping`](@ref).
+value that isn't [`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), and 0
+when none has. Any other marker counts as data, since it says that the timestep happened.
+Used by [`first_timestep_to_check_stopping`](@ref).
 """
 function last_timestep_with_data(columns::NamedTuple)
     last_timestep = 0

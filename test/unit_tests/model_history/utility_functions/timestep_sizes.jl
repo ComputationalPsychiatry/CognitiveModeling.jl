@@ -43,7 +43,7 @@
         @test CognitiveModeling.each_timestep_size(0.5, 3) == [0.5, 0.5, 0.5]
     end
 
-    @testset "The sizes that are returned are cut to the timesteps that ran, after timestep 0 when it is saved" begin
+    @testset "The sizes that are returned are cut to the timesteps that were simulated, after timestep 0 when it is saved" begin
         sizes = [0.5, 2.0, 0.25]
         @test CognitiveModeling.returned_timestep_sizes(sizes, 2, Val(false)) == [0.5, 2.0]
         @test isequal(

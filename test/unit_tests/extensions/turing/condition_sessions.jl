@@ -73,12 +73,12 @@
         )
         conditioned = condition_sessions(deconditioned, values_of_second_session)
         sessions = conditioned.args.sessions_info.sessions
-        @test all(==(SimulatedValue()), sessions[1].actions.choice)
-        @test all(==(SimulatedValue()), sessions[3].actions.choice)
+        @test all(==(SimulatedMissingValue()), sessions[1].actions.choice)
+        @test all(==(SimulatedMissingValue()), sessions[3].actions.choice)
         @test sessions[2].actions.choice ==
             [draw[@varname(session[2].timestep[t].choice.simulated)] for t in 1:2]
         @test all(
-            session -> eltype(session.actions.choice) == Union{SimulatedValue,Bool},
+            session -> eltype(session.actions.choice) == Union{SimulatedMissingValue,Bool},
             sessions,
         )
         draws = @test_logs match_mode = :any sample(
@@ -101,7 +101,7 @@
         )
         sessions = conditioned.args.sessions_info.sessions
         @test sessions[3].actions.choice[5] === true
-        @test sessions[2].actions.choice[2] === MissingValue()
+        @test sessions[2].actions.choice[2] === ImputedMissingValue()
     end
 
     @testset "With an environment, the simulated observations are data too, and the scores of the environment are what differs from Turing.jl's condition" begin
@@ -131,6 +131,79 @@
             parameters in (some_parameters, other_parameters)
         ]
         @test !(differences[1] ≈ 0) && differences[1] ≈ differences[2]
+    end
+
+    @testset "Each session ends after its last timestep with data, as a simulation that a model stopped" begin
+        deconditioned_with_environment = decondition_sessions(
+            some_sessions_running_environment()
+        )
+        draw_with_environment = @test_logs match_mode = :any rand(
+            Xoshiro(4), deconditioned_with_environment
+        )
+        #The values of a draw in which S3 stopped after two of its four timesteps
+        simulated_data = Turing.DynamicPPL.subset(
+            draw_with_environment, [@varname(session)]
+        )
+        stopped_early = Dict(
+            name => simulated_data[name] for name in keys(simulated_data) if
+            !any(t -> startswith(string(name), "session[3].timestep[$t]."), 3:4)
+        )
+        conditioned = condition_sessions(deconditioned_with_environment, stopped_early)
+        cut_sessions = conditioned.args.sessions_info
+        #S3 has the two timesteps with values, and the others every timestep
+        @test map(session -> session.n_timesteps, cut_sessions.sessions) == [3, 2, 2]
+        @test cut_sessions.sessions[3].actions.choice == [
+            draw_with_environment[@varname(session[3].timestep[t].choice.simulated)] for
+            t in 1:2
+        ]
+        @test cut_sessions.sessions[3].observations.reward == [
+            draw_with_environment[@varname(
+                session[3].timestep[t].environment.reward.simulated
+            )] for t in 1:2
+        ]
+        #Its rows in the table are those of the timesteps it has left
+        deconditioned_rows = deconditioned_with_environment.args.sessions_info.session_rows
+        @test cut_sessions.session_rows ==
+            [deconditioned_rows[1], deconditioned_rows[2], deconditioned_rows[3][1:2]]
+        #So nothing within the sessions is left to sample, and the criterion is checked after the last timestep, which is never
+        @test issetequal(keys(rand(Xoshiro(5), conditioned)), parameter_names)
+        @test cut_sessions.sessions[3].first_timestep_to_check_stopping == 3
+        #A value on a later timestep keeps the timesteps before it, whose other values stay simulated
+        only_a_late_choice = Dict(
+            @varname(session[3].timestep[3].choice.simulated) =>
+                draw_with_environment[@varname(session[3].timestep[3].choice.simulated)],
+        )
+        with_late_choice = condition_sessions(
+            deconditioned_with_environment, only_a_late_choice
+        ).args.sessions_info.sessions[3]
+        @test with_late_choice.n_timesteps == 3
+        @test with_late_choice.actions.choice[1:2] == fill(SimulatedMissingValue(), 2)
+        #The sizes of the timesteps are cut with the data
+        session_info = SessionInfo(
+            WithDefaultParameters(DistributionsJl()),
+            (; reward=[1.0, 0.0, 1.0]),
+            (; choice=[true, false, true]);
+            who_starts=EnvironmentStarts(),
+            environment=RewardsAroundMean(),
+            timestep_sizes=[0.5, 1.0, 2.0],
+        )
+        deconditioned_session = decondition_sessions(
+            session_model(
+                TuringBackend(),
+                session_info,
+                (; learning_rate=0.3, inverse_temperature=2.0),
+                (; mean_reward=0.6),
+            ),
+        )
+        first_timestep = Dict(
+            @varname(timestep[1].choice.simulated) => true,
+            @varname(timestep[1].environment.reward.simulated) => 0.4,
+        )
+        cut_session =
+            condition_sessions(deconditioned_session, first_timestep).args.session_info
+        @test cut_session.n_timesteps == 1 && cut_session.timestep_sizes == [0.5]
+        @test cut_session.actions.choice == [true] &&
+            cut_session.observations.reward == [0.4]
     end
 
     @testset "An output of the environment that the map doesn't pass on has no place in the data" begin

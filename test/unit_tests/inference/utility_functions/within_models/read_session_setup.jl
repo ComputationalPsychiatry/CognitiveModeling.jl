@@ -60,15 +60,15 @@
 
     @testset "The last timestep with data is the last one where any column has a value that isn't missing" begin
         @test CognitiveModeling.last_timestep_with_data((;
-            reward=[1.0, MissingValue(), MissingValue()],
-            choice=[true, false, MissingValue()],
+            reward=[1.0, ImputedMissingValue(), ImputedMissingValue()],
+            choice=[true, false, ImputedMissingValue()],
         )) == 2
         #A marker for nothing happening counts as data
         @test CognitiveModeling.last_timestep_with_data((;
-            choice=[true, MissingValue(), NoValue()]
+            choice=[true, ImputedMissingValue(), NoValue()]
         )) == 3
         @test CognitiveModeling.last_timestep_with_data((;
-            choice=[MissingValue(), MissingValue()]
+            choice=[ImputedMissingValue(), ImputedMissingValue()]
         )) == 0
     end
 end

@@ -55,9 +55,9 @@ end
 Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions have
 the values in `values_by_name` in their data, as `condition_sessions` describes, and add the
 names of the values that went in to `used_names`. The variables of session `i` of several
-sessions are under `session[i]`, and those of a single session have no prefix. The columns
-of a name get the same element type in every session, so that the sessions keep one type.
-Used by `condition_sessions`.
+sessions are under `session[i]`, and those of a single session have no prefix. Each session
+ends after its last timestep with data, and the columns of a name get the same element type
+in every session, so that the sessions keep one type. Used by `condition_sessions`.
 """
 function with_values_in_data(
     session_info::SessionInfo,
@@ -68,11 +68,17 @@ function with_values_in_data(
     observations, actions = columns_with_values(
         session_info, "", values_by_name, used_names
     )
+
+    #The session ends after its last timestep with data
+    data = cut_after_last_timestep_with_data(
+        observations, actions, session_info.timestep_sizes
+    )
     return with_data(
         session_info,
-        only(with_common_element_types([observations])),
-        only(with_common_element_types([actions]));
+        only(with_common_element_types([data.observations])),
+        only(with_common_element_types([data.actions]));
         check_stopping_criterion,
+        timestep_sizes=data.timestep_sizes,
     )
 end
 
@@ -82,24 +88,42 @@ function with_values_in_data(
     used_names::Set{String};
     check_stopping_criterion::Union{Nothing,Bool},
 )
-    #The data of every session with the values in it, and the columns of a name with the same element type in every session
-    columns = [
-        columns_with_values(session, "session[$i].", values_by_name, used_names) for
-        (i, session) in enumerate(sessions_info.sessions)
-    ]
-    observations = with_common_element_types(map(first, columns))
-    actions = with_common_element_types(map(last, columns))
+    #The data of every session with the values in it, where each session ends after its last timestep with data
+    data = map(enumerate(sessions_info.sessions)) do (i, session)
+        observations, actions = columns_with_values(
+            session, "session[$i].", values_by_name, used_names
+        )
+        return cut_after_last_timestep_with_data(
+            observations, actions, session.timestep_sizes
+        )
+    end
 
-    #Each session is prepared again with its new data, and the sessions keep their data identifiers and their rows in the table
+    #The columns of a name get the same element type in every session
+    observations = with_common_element_types(map(session -> session.observations, data))
+    actions = with_common_element_types(map(session -> session.actions, data))
+
+    #Each session is prepared again with its new data
     sessions = [
-        with_data(session, observations[i], actions[i]; check_stopping_criterion) for
-        (i, session) in enumerate(sessions_info.sessions)
+        with_data(
+            session,
+            observations[i],
+            actions[i];
+            check_stopping_criterion,
+            timestep_sizes=data[i].timestep_sizes,
+        ) for (i, session) in enumerate(sessions_info.sessions)
     ]
+
+    #The sessions keep their data identifiers, and the rows in the table of the timesteps they have left
+    session_rows = if sessions_info.session_rows === nothing
+        nothing
+    else
+        [
+            rows[1:(session.n_timesteps)] for
+            (rows, session) in zip(sessions_info.session_rows, sessions)
+        ]
+    end
     return MultipleSessionsInfo(
-        sessions,
-        sessions_info.session_ids;
-        table=sessions_info.table,
-        session_rows=sessions_info.session_rows,
+        sessions, sessions_info.session_ids; table=sessions_info.table, session_rows
     )
 end
 
@@ -108,9 +132,9 @@ end
 
 Return the observations and the actions in the data of `session_info`, a `SessionInfo`, each
 a `NamedTuple` with a `Vector{Any}` for each name, in which every entry that is
-`MissingValue()` or `SimulatedValue()` is the value in `values_by_name` of its variable,
-when there is one, with [`value_of_entry`](@ref). The variable of an action is named after
-`prefix`, such as `session[2].`, and its timestep, as in
+`ImputedMissingValue()` or `SimulatedMissingValue()` is the value in `values_by_name` of its
+variable, when there is one, with [`value_of_entry`](@ref). The variable of an action is
+named after `prefix`, such as `session[2].`, and its timestep, as in
 `session[2].timestep[3].choice.simulated`, and that of an observation after the name of the
 environment's output that the observation map passes on as it, as in
 `session[2].timestep[3].environment.payoff.simulated`. An output of the environment that the
@@ -160,10 +184,10 @@ end
     value_of_entry(entry, name_of_value, values_by_name, used_names)
 
 Return the value in `values_by_name` of the variable of `entry`, an action or an observation
-in the data, when it is `MissingValue()` or `SimulatedValue()` and has one, and add the
-variable's name to `used_names`. The variable is named `name_of_value` followed by `imputed`
-or `simulated`. Any other entry, and one whose variable has no value, is returned as it is.
-Used by `columns_with_values`.
+in the data, when it is `ImputedMissingValue()` or `SimulatedMissingValue()` and has one,
+and add the variable's name to `used_names`. The variable is named `name_of_value` followed
+by `imputed` or `simulated`. Any other entry, and one whose variable has no value, is
+returned as it is. Used by `columns_with_values`.
 """
 value_of_entry(entry, name_of_value::String, values_by_name, used_names) = entry
 function value_of_entry(
@@ -172,7 +196,7 @@ function value_of_entry(
     values_by_name::Dict{String,Any},
     used_names::Set{String},
 )
-    variable_name = "$name_of_value.$(entry isa SimulatedValue ? "simulated" : "imputed")"
+    variable_name = "$name_of_value.$(entry isa SimulatedMissingValue ? "simulated" : "imputed")"
     haskey(values_by_name, variable_name) || return entry
     push!(used_names, variable_name)
     return values_by_name[variable_name]

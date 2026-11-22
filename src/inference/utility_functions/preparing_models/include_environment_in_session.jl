@@ -4,9 +4,9 @@
     has_missing_entries(columns)
 
 Return whether any entry of `columns`, the observations or the actions in the data of a
-session with one vector for each name, is [`MissingValue`](@ref) or
-[`SimulatedValue`](@ref). Used by [`SessionInfo`](@ref), to decide whether the environment
-runs, and by [`check_environment_fits`](@ref).
+session with one vector for each name, is [`ImputedMissingValue`](@ref) or
+[`SimulatedMissingValue`](@ref). Used by [`SessionInfo`](@ref), to decide whether the
+environment runs, and by [`check_environment_fits`](@ref).
 """
 function has_missing_entries(columns::NamedTuple)
     return any(column -> any(value -> value isa LatentValueMarker, column), values(columns))
@@ -19,12 +19,12 @@ end
 
 Return whether a session includes its environment, as the `include_environment` of
 [`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
-`false`, and with `nothing` only when an observation or an action is [`MissingValue`](@ref)
-or [`SimulatedValue`](@ref), the environment's history is saved, or its stopping criterion
-is checked on every timestep.
-A session without an environment never includes one. With `false`, it is an error when an
-observation is `MissingValue()`, the environment's history is saved, or its stopping
-criterion is checked on every timestep, since those need the environment. Used by
+`false`, and with `nothing` only when an observation or an action is
+[`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), the environment's history
+is saved, or its stopping criterion is checked on every timestep. A session without an
+environment never includes one. With `false`, it is an error when an observation is
+`ImputedMissingValue()`, the environment's history is saved, or its stopping criterion is
+checked on every timestep, since those need the environment. Used by
 [`prepare_session`](@ref).
 """
 function decide_whether_environment_is_included(
@@ -48,7 +48,7 @@ function decide_whether_environment_is_included(
 
     #What can't be done without the environment
     needs_environment = if has_missing_entries(observations)
-        "the data has observations that are MissingValue() or SimulatedValue(), which only the environment can impute or simulate"
+        "the data has observations that are ImputedMissingValue() or SimulatedMissingValue(), which only the environment can impute or simulate"
     elseif !saves_nothing(environment_save_history)
         "environment_save_history saves its history"
     elseif check_stopping_criterion === true

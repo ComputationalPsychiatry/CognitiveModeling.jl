@@ -258,7 +258,7 @@ the outputs in the same way.
 The data of a fitted session is checked against the domains of its cognitive model once,
 when it is read: the observations against the input domains, and the actions against the
 output domains. A value outside its domain throws an `ArgumentError` that names its row in
-the table, or its timestep in the session, and markers such as [`MissingValue`](@ref)
+the table, or its timestep in the session, and markers such as [`ImputedMissingValue`](@ref)
 aren't checked. The display of a model shows each domain after the name of its input or
 output.
 
@@ -314,23 +314,24 @@ end
 
 Return whether `model`, a cognitive model or an environment model, with `state` as its state
 after a timestep and its `parameters`, has signaled for a simulation to stop there instead
-of running all of `n_steps`.
+of simulating all of `n_steps`.
 
 [`simulate_session`](@ref) and [`simulate_session!`](@ref) check it for both models before
 each timestep, with the states that the timestep before left, unless they are given
 `check_stopping_criterion = false`. When it returns `true` for either, no further timestep
-runs, and what is returned and added to the histories has the timesteps that ran. When the
-environment starts, the cognitive model has then made its last observation and acted on it,
-and the environment doesn't receive that action. When the cognitive model starts, the
-environment has then responded to the last action with an observation, and the cognitive
-model doesn't receive that observation. A model whose criterion is already met before the
-first timestep can't be simulated, and throws an error: a new simulation starts from the
-initial state, and [`reset!`](@ref) puts an [`InstantiatedModel`](@ref) back there. A fitted
-session checks it as [`SessionInfo`](@ref) describes.
+is simulated, and what is returned and added to the histories has the timesteps that were
+simulated. When the environment starts, the cognitive model has then made its last
+observation and acted on it, and the environment doesn't receive that action. When the
+cognitive model starts, the environment has then responded to the last action with an
+observation, and the cognitive model doesn't receive that observation. A model whose
+criterion is already met before the first timestep can't be simulated, and throws an error:
+a new simulation starts from the initial state, and [`reset!`](@ref) puts an
+[`InstantiatedModel`](@ref) back there. A fitted session checks it as [`SessionInfo`](@ref)
+describes.
 
 # Implementation
-A model can add a method of this function. The default returns `false`, so a simulation runs
-all of its timesteps.
+A model can add a method of this function. The default returns `false`, so a simulation
+never stops early.
 
 # Examples
 ```jldoctest

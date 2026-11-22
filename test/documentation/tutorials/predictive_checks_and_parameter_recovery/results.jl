@@ -5,7 +5,8 @@
 
 @testset "The deconditioned model simulates every choice, as a variable named apart from an imputed one" begin
     @test all(
-        ==(SimulatedValue()), decondition_sessions(sessions_info).sessions[1].actions.choice
+        ==(SimulatedMissingValue()),
+        decondition_sessions(sessions_info).sessions[1].actions.choice,
     )
     @test @varname(session[3].timestep[40].choice.simulated) in
         Turing.FlexiChains.parameters(prior_predictions)

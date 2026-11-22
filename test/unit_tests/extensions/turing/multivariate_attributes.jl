@@ -254,9 +254,9 @@ const OPTIONS_VALUES = Dict(
         #The vectors of the other rows hold only their numbers
         sessions_info = sessions_with_a_column_of_ratings()
         @test sessions_info.sessions[2].actions.ratings ==
-            [[0.4, 1.4, 0.3], MissingValue(), [0.9, 1.5, 0.9]]
+            [[0.4, 1.4, 0.3], ImputedMissingValue(), [0.9, 1.5, 0.9]]
         @test eltype(sessions_info.sessions[1].actions.ratings) ==
-            Union{MissingValue,Vector{Float64}}
+            Union{ImputedMissingValue,Vector{Float64}}
         imputed = full_model(
             TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
         )

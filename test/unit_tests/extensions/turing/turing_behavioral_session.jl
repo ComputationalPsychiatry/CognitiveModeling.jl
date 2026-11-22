@@ -331,7 +331,7 @@ function session_by_hand(rewards, choices, learning_rate, inverse_temperature, w
         elseif who_starts isa EnvironmentStarts
             V = V + learning_rate * (rewards[t] - V)
         end
-        choices[t] isa MissingValue || (
+        choices[t] isa ImputedMissingValue || (
             log_density += logpdf(
                 BernoulliLogit(inverse_temperature * (V - 0.5)), choices[t]
             )
@@ -521,7 +521,7 @@ end
               logpdf(Normal(V₂, 1.0), 0.4)
     end
 
-    @testset "A missing in the data becomes MissingValue, or the marker for one that isn't imputed, and a column keeps one type" begin
+    @testset "A missing in the data becomes ImputedMissingValue, or the marker for one that isn't imputed, and a column keeps one type" begin
         session_info = SessionInfo(
             WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing, 0.0]),
@@ -532,8 +532,8 @@ end
         @test session_info.observations.reward == [1.0, UnimputedMissingValue(), 0.0] &&
             session_info.observations.reward isa
               Vector{Union{UnimputedMissingValue,Float64}}
-        @test session_info.actions.choice == [true, MissingValue(), false] &&
-            session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
+        @test session_info.actions.choice == [true, ImputedMissingValue(), false] &&
+            session_info.actions.choice isa Vector{Union{ImputedMissingValue,Bool}}
         @test session_info.actions_to_condition_on == (; choice=[true, false])
         #The model doesn't learn from the observation that isn't there, and the missing choice is imputed
         model = turing_behavioral_session(session_info, SESSION_PARAMETERS)
@@ -545,7 +545,7 @@ end
             SESSION_REWARDS,
             (; choice=Vector{Union{Missing,Bool}}(SESSION_CHOICES.choice));
             who_starts=EnvironmentStarts(),
-        ).actions.choice isa Vector{Union{MissingValue,Bool}}
+        ).actions.choice isa Vector{Union{ImputedMissingValue,Bool}}
         @test SessionInfo(
             WithDefaultParameters(DistributionsJl()),
             SESSION_REWARDS,
@@ -553,8 +553,8 @@ end
             who_starts=EnvironmentStarts(),
             impute_missing_actions=false,
         ).actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
-        #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
-        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
+        #Without an environment, a missing observation can't be ImputedMissingValue, since nothing imputes it
+        @test_throws "The observations have entries that are ImputedMissingValue() or SimulatedMissingValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
@@ -691,8 +691,8 @@ end
 
     @testset "Missing actions are latents named after their timestep, with the model's distributions" begin
         actions = (;
-            choice=[0.2, MissingValue(), 0.4, MissingValue()],
-            bet=[1.0, 1.5, MissingValue(), 0.8],
+            choice=[0.2, ImputedMissingValue(), 0.4, ImputedMissingValue()],
+            bet=[1.0, 1.5, ImputedMissingValue(), 0.8],
         )
         model = session_for_test(
             TwoContinuousActions(),
@@ -720,19 +720,19 @@ end
         filled = []
         for t in 1:4
             V = V + 0.3 * ([1.0, 0.0, 1.0, 1.0][t] - V)
-            choice = if actions.choice[t] isa MissingValue
+            choice = if actions.choice[t] isa ImputedMissingValue
                 (t == 2 ? imputed[1] : imputed[3])
             else
                 actions.choice[t]
             end
-            bet = actions.bet[t] isa MissingValue ? imputed[2] : actions.bet[t]
+            bet = actions.bet[t] isa ImputedMissingValue ? imputed[2] : actions.bet[t]
             #An imputed action is a latent, so its density is prior, and one in the data is likelihood
-            if actions.choice[t] isa MissingValue
+            if actions.choice[t] isa ImputedMissingValue
                 expected_prior += logpdf(Normal(V, 1.0), choice)
             else
                 expected_likelihood += logpdf(Normal(V, 1.0), choice)
             end
-            if actions.bet[t] isa MissingValue
+            if actions.bet[t] isa ImputedMissingValue
                 expected_prior += logpdf(Normal(2V, 0.5), bet)
             else
                 expected_likelihood += logpdf(Normal(2V, 0.5), bet)
@@ -752,7 +752,7 @@ end
             TwoContinuousActions(),
             (; learning_rate=0.3),
             (; reward=[1.0, 0.0]),
-            (; choice=[0.2, MissingValue()], bet=[1.0, 1.5]),
+            (; choice=[0.2, ImputedMissingValue()], bet=[1.0, 1.5]),
         )
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), single))) ==
             [@varname(timestep[2].choice.imputed)]
@@ -761,8 +761,8 @@ end
     @testset "Missing actions that aren't imputed are passed on as UnimputedMissingValue, with nothing sampled" begin
         rewards = (; reward=[1.0, 0.0, 1.0, 1.0])
         actions = (;
-            choice=[0.2, MissingValue(), 0.4, MissingValue()],
-            bet=[1.0, 1.5, MissingValue(), 0.8],
+            choice=[0.2, ImputedMissingValue(), 0.4, ImputedMissingValue()],
+            bet=[1.0, 1.5, ImputedMissingValue(), 0.8],
         )
         model = session_for_test(
             TwoContinuousActions(),
@@ -778,9 +778,9 @@ end
         expected = 0.0
         for t in 1:4
             V = V + 0.3 * (rewards.reward[t] - V)
-            actions.choice[t] isa MissingValue ||
+            actions.choice[t] isa ImputedMissingValue ||
                 (expected += logpdf(Normal(V, 1.0), actions.choice[t]))
-            actions.bet[t] isa MissingValue ||
+            actions.bet[t] isa ImputedMissingValue ||
                 (expected += logpdf(Normal(2V, 0.5), actions.bet[t]))
         end
         @test logjoint(model, (;)) ≈ expected
@@ -804,7 +804,7 @@ end
         ]
 
         #The model receives the marker as its previous action after a missing one, so here it chooses at random again
-        choices = (; choice=[true, MissingValue(), true])
+        choices = (; choice=[true, ImputedMissingValue(), true])
         @test logjoint(
             session_for_test(
                 RepeatsPreviousChoice(), (;), (;), choices; impute_missing_actions=false
@@ -821,7 +821,7 @@ end
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
-            (; reward=fill(MissingValue(), 3)),
+            (; reward=fill(ImputedMissingValue(), 3)),
             choices;
             impute_missing_actions=false,
             environment=RewardsPreviousChoice(),
@@ -834,7 +834,9 @@ end
     @testset "A missing observation is filled in by the environment, which runs on every timestep" begin
         #RewardsPreviousChoice gives 0.5 before the first choice and then the previous choice
         full = (; reward=[0.5, 1.0, 0.0, 1.0, 1.0])
-        with_missing = (; reward=[0.5, MissingValue(), 0.0, MissingValue(), 1.0])
+        with_missing = (;
+            reward=[0.5, ImputedMissingValue(), 0.0, ImputedMissingValue(), 1.0]
+        )
         reference = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -888,7 +890,7 @@ end
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
-            (; reward=fill(MissingValue(), 5)),
+            (; reward=fill(ImputedMissingValue(), 5)),
             SESSION_CHOICES;
             who_starts=AgentStarts(),
             environment=RewardsPreviousChoice(),
@@ -897,7 +899,7 @@ end
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
-        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
+        @test_throws "The observations have entries that are ImputedMissingValue() or SimulatedMissingValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             with_missing,
@@ -907,7 +909,7 @@ end
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
-            (; reward=fill(MissingValue(), 3)),
+            (; reward=fill(ImputedMissingValue(), 3)),
             (; choice=[true, false, true]);
             environment=RewardsAfterFirstChoice(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
@@ -918,7 +920,7 @@ end
 
     @testset "With maps of names, a session is the same, with the environment's variables and history in its own names" begin
         choices = (; choice=[true, false, true])
-        rewards = (; reward=[MissingValue(), 1.0, MissingValue()])
+        rewards = (; reward=[ImputedMissingValue(), 1.0, ImputedMissingValue()])
         saves_everything = (;
             cognitive_save_history=SaveHistory(SaveEverything()),
             environment_save_history=SaveHistory(SaveEverything()),
@@ -979,7 +981,7 @@ end
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
-            (; reward=[MissingValue(), 1.0, MissingValue()]),
+            (; reward=[ImputedMissingValue(), 1.0, ImputedMissingValue()]),
             choices;
             environment=NoisyRewards(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
@@ -1030,7 +1032,7 @@ end
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             rewards,
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=AgentStarts(),
             environment=PaysForChoice(),
         )
@@ -1055,7 +1057,7 @@ end
     @testset "A Deterministic observation in the data is scored as a point mass, so it must match, and must be a number" begin
         #RewardsPreviousChoice gives the previous choice as the reward, and 0.5 before the first, so these rewards match
         matching = (; reward=[0.5, 1.0, 0.0])
-        choices = (; choice=[true, false, MissingValue()])
+        choices = (; choice=[true, false, ImputedMissingValue()])
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -1083,7 +1085,7 @@ end
             session_for_test(
                 WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
-                (; reward=[1.0, MissingValue()]),
+                (; reward=[1.0, ImputedMissingValue()]),
                 (; choice=[true, false]);
                 environment=GivesSymbol(),
             ),
@@ -1093,7 +1095,7 @@ end
             session_for_test(
                 WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
-                (; reward=[1.0, MissingValue()]),
+                (; reward=[1.0, ImputedMissingValue()]),
                 (; choice=[true, false]);
                 environment=RewardsAfterFirstChoice(),
             ),
@@ -1179,8 +1181,8 @@ end
     end
 
     @testset "The stopping criterion ends a session only after the last timestep with data, unless told otherwise" begin
-        rewards = (; reward=fill(MissingValue(), 5))
-        choices = (; choice=fill(MissingValue(), 5))
+        rewards = (; reward=fill(ImputedMissingValue(), 5))
+        choices = (; choice=fill(ImputedMissingValue(), 5))
         #A predictive session, where nothing is data, ends when the environment has ended, with what it saved until then
         predictive = session_for_test(
             WithDefaultParameters(DistributionsJl()),
@@ -1281,7 +1283,7 @@ end
         model = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
-            (; reward=fill(MissingValue(), 2)),
+            (; reward=fill(ImputedMissingValue(), 2)),
             (; choice=[true, false]);
             environment=DriftingRewards(),
             cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
@@ -1457,7 +1459,7 @@ end
             RejectsHighExpectedReward(),
             (; learning_rate=0.95),
             SESSION_REWARDS,
-            (; choice=[0.2, MissingValue(), 0.6, 0.8, MissingValue()]),
+            (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
         )
         @test keys(rand(Xoshiro(1), imputing)) == [@varname(timestep[2].choice.imputed)]
         #Other errors get through
@@ -1486,7 +1488,7 @@ end
             @allocated(logjoint(long_session, (;))) -
             @allocated(logjoint(short_session, (;)))
         @test extra_bytes <= 40 * 10_000
-        #The same holds for a column which can hold a MissingValue, since the rows and the imputed values have the type of their column
+        #The same holds for a column which can hold an ImputedMissingValue, since the rows and the imputed values have the type of their column
         union_session_with(n_timesteps) = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,

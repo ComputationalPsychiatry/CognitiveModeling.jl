@@ -331,7 +331,7 @@ function timesteps_of(inputs, outputs, timestep_sizes)
     ]
 end
 
-#The size of each timestep that ran, from the keywords of a simulation
+#The size of each timestep that was simulated, from the keywords of a simulation
 function sizes_of_timesteps(keywords, n_timesteps)
     sizes = get(keywords, :timestep_sizes, 1)
     return sizes isa AbstractVector ? sizes[1:n_timesteps] : fill(sizes, n_timesteps)

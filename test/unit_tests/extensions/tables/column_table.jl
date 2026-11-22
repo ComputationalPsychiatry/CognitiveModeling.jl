@@ -34,7 +34,9 @@ end
                 isequal(row_session.actions, column_session.actions) for
             (row_session, column_session) in zip(from_rows.sessions, from_columns.sessions)
         )
-        @test isequal(from_rows.sessions[2].actions, (; choice=[MissingValue(), true]))
+        @test isequal(
+            from_rows.sessions[2].actions, (; choice=[ImputedMissingValue(), true])
+        )
     end
 
     @testset "A NamedTuple of columns is used as it is" begin

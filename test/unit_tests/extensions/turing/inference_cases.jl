@@ -95,7 +95,7 @@ function test_reading_the_fit(case, model, chain)
             @test length(saved) == session.n_timesteps + 1
             @test all(
                 t ->
-                    session.actions[name][t] isa MissingValue ||
+                    session.actions[name][t] isa ImputedMissingValue ||
                     isequal(saved[t + 1], session.actions[name][t]),
                 1:(session.n_timesteps),
             )

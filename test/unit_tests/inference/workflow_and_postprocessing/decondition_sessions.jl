@@ -10,7 +10,7 @@
             impute_missing_actions=false,
         )
         predictive = decondition_sessions(session_info)
-        @test predictive.actions == (; choice=fill(SimulatedValue(), 3))
+        @test predictive.actions == (; choice=fill(SimulatedMissingValue(), 3))
         @test predictive.observations === session_info.observations
         @test isempty(predictive.actions_to_condition_on) &&
             !predictive.includes_environment
@@ -42,7 +42,7 @@
             environment=GivesReward(),
         )
         predictive = decondition_sessions(session_info)
-        @test predictive.observations == (; reward=fill(SimulatedValue(), 3))
+        @test predictive.observations == (; reward=fill(SimulatedMissingValue(), 3))
         @test predictive.includes_environment && predictive.environment === GivesReward()
         #With no values in the data, the stopping criterion is checked from the first timestep
         @test predictive.first_timestep_to_check_stopping == 1
@@ -79,7 +79,7 @@
         @test predictive.session_ids == sessions_info.session_ids
         @test [session.n_timesteps for session in predictive.sessions] == [2, 3]
         @test all(
-            session -> all(==(SimulatedValue()), session.actions.choice),
+            session -> all(==(SimulatedMissingValue()), session.actions.choice),
             predictive.sessions,
         )
         #A keyword is passed on to every session

@@ -65,34 +65,34 @@ CognitiveModeling.output_domains(::OutputDomainsNotDomains) = (; choice=(1, 2))
 
 @testset "Types for data" begin
     @testset "The marker for a missing value is its own type, apart from the one for nothing happening" begin
-        @test MissingValue() === MissingValue()
-        @test MissingValue() !== NoValue()
-        @test !(MissingValue() isa AbstractNoValue)
-        @test isbitstype(MissingValue)
+        @test ImputedMissingValue() === ImputedMissingValue()
+        @test ImputedMissingValue() !== NoValue()
+        @test !(ImputedMissingValue() isa AbstractNoValue)
+        @test isbitstype(ImputedMissingValue)
     end
 
     @testset "The marker for a missing value that isn't imputed is passed on like those for nothing happening" begin
         @test UnimputedMissingValue() === UnimputedMissingValue()
         @test UnimputedMissingValue() isa AbstractNoValue
-        @test UnimputedMissingValue() !== MissingValue()
+        @test UnimputedMissingValue() !== ImputedMissingValue()
         @test isbitstype(UnimputedMissingValue)
         @test_throws MethodError UnimputedMissingValue() + 1
     end
 
     @testset "The marker for a value to simulate is its own type, apart from the one for a missing value" begin
-        @test SimulatedValue() === SimulatedValue()
-        @test SimulatedValue() !== MissingValue()
-        @test !(SimulatedValue() isa AbstractNoValue)
-        @test isbitstype(SimulatedValue)
-        @test_throws MethodError SimulatedValue() + 1
+        @test SimulatedMissingValue() === SimulatedMissingValue()
+        @test SimulatedMissingValue() !== ImputedMissingValue()
+        @test !(SimulatedMissingValue() isa AbstractNoValue)
+        @test isbitstype(SimulatedMissingValue)
+        @test_throws MethodError SimulatedMissingValue() + 1
     end
 
     @testset "It can stand in for one entry of the actions and observations" begin
-        action = (; choice=MissingValue(), bet=1.0)
-        @test action.choice isa MissingValue && action.bet == 1.0
+        action = (; choice=ImputedMissingValue(), bet=1.0)
+        @test action.choice isa ImputedMissingValue && action.bet == 1.0
         #Unlike missing, it doesn't pass through arithmetic without an error
-        @test_throws MethodError MissingValue() + 1
-        @test_throws MethodError MissingValue() * 2.0
+        @test_throws MethodError ImputedMissingValue() + 1
+        @test_throws MethodError ImputedMissingValue() * 2.0
     end
 end
 
@@ -141,7 +141,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
         @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type GivesReward" SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=AgentStarts(),
             environment=GivesReward(),
@@ -152,7 +152,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     @testset "With maps of names, the environment's data and start are in its own names" begin
         session_info = SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 0.0]),
+            (; reward=[1.0, ImputedMissingValue(), 0.0]),
             COUNTER_CHOICES;
             who_starts=AgentStarts(),
             environment=GivesPayoffAndCue(),
@@ -165,9 +165,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test keys(session_info.observations) == (:reward,)
         #The environment's data has its own names, and the cue, which isn't passed on, is imputed on every timestep
         @test isequal(
-            session_info.environment_observations.payoff, [1.0, MissingValue(), 0.0]
+            session_info.environment_observations.payoff, [1.0, ImputedMissingValue(), 0.0]
         )
-        @test session_info.environment_observations.cue == fill(MissingValue(), 3)
+        @test session_info.environment_observations.cue == fill(ImputedMissingValue(), 3)
         @test session_info.previous_environment_observation ===
             (; payoff=BeforeFirstTimestep(), cue=BeforeFirstTimestep())
         #The observations to condition on are in the environment's names
@@ -181,10 +181,10 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         #In the deconditioned copy, the cue is simulated like the observations, also in a copy of the copy, which is
         #prepared again
         deconditioned = decondition_sessions(session_info)
-        @test deconditioned.environment_observations.cue == fill(SimulatedValue(), 3)
+        @test deconditioned.environment_observations.cue == fill(SimulatedMissingValue(), 3)
         @test SessionInfo(
             deconditioned; cognitive_save_history=SaveHistory(; states=:n_timesteps)
-        ).environment_observations.cue == fill(SimulatedValue(), 3)
+        ).environment_observations.cue == fill(SimulatedMissingValue(), 3)
     end
 
     @testset "Maps of names must fit the models, and need an environment" begin
@@ -216,7 +216,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     @testset "The settings are kept as given" begin
         session_info = SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=AgentStarts(),
             environment=GivesReward(),
@@ -319,21 +319,22 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test counter_session(COUNTER_REWARDS, COUNTER_CHOICES).first_timestep_to_check_stopping ==
             4
         @test counter_session(
-            (; reward=fill(MissingValue(), 3)), (; choice=fill(MissingValue(), 3))
+            (; reward=fill(ImputedMissingValue(), 3)),
+            (; choice=fill(ImputedMissingValue(), 3)),
         ).first_timestep_to_check_stopping == 1
         #The last timestep with data in either kind counts, and a marker for nothing happening is data
         @test counter_session(
-            (; reward=[1.0, MissingValue(), MissingValue()]),
-            (; choice=[true, false, MissingValue()]),
+            (; reward=[1.0, ImputedMissingValue(), ImputedMissingValue()]),
+            (; choice=[true, false, ImputedMissingValue()]),
         ).first_timestep_to_check_stopping == 3
         @test counter_session(
-            (; reward=[1.0, MissingValue(), NoValue()]),
-            (; choice=[true, MissingValue(), MissingValue()]),
+            (; reward=[1.0, ImputedMissingValue(), NoValue()]),
+            (; choice=[true, ImputedMissingValue(), ImputedMissingValue()]),
         ).first_timestep_to_check_stopping == 4
         #A value to simulate isn't data either
         @test counter_session(
-            (; reward=[1.0, SimulatedValue(), SimulatedValue()]),
-            (; choice=[true, false, SimulatedValue()]),
+            (; reward=[1.0, SimulatedMissingValue(), SimulatedMissingValue()]),
+            (; choice=[true, false, SimulatedMissingValue()]),
         ).first_timestep_to_check_stopping == 3
         #true checks from the first timestep, and false never
         @test counter_session(
@@ -348,8 +349,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     @testset "A value to simulate is sampled as a missing one is: it isn't conditioned on, and the environment runs for it" begin
         session_info = SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, SimulatedValue(), 1.0]),
-            (; choice=[true, SimulatedValue(), true]);
+            (; reward=[1.0, SimulatedMissingValue(), 1.0]),
+            (; choice=[true, SimulatedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         )
@@ -357,15 +358,15 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.actions_to_condition_on.choice == [true, true]
         @test session_info.observations_to_condition_on.reward == [1.0, 1.0]
         #Without an environment, a value to simulate among the observations is an error, as a missing one is
-        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them." SessionInfo(
+        @test_throws "The observations have entries that are ImputedMissingValue() or SimulatedMissingValue(), but no environment was given to impute or simulate them." SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, SimulatedValue(), 1.0]),
+            (; reward=[1.0, SimulatedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
         )
     end
 
-    @testset "A missing in the data becomes MissingValue by default" begin
+    @testset "A missing in the data becomes ImputedMissingValue by default" begin
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
@@ -373,10 +374,11 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         )
-        @test session_info.observations.reward == [1.0, MissingValue(), 1.0] &&
-            session_info.observations.reward isa Vector{Union{MissingValue,Float64}}
-        @test session_info.actions.choice == [true, MissingValue(), true] &&
-            session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
+        @test session_info.observations.reward == [1.0, ImputedMissingValue(), 1.0] &&
+            session_info.observations.reward isa
+              Vector{Union{ImputedMissingValue,Float64}}
+        @test session_info.actions.choice == [true, ImputedMissingValue(), true] &&
+            session_info.actions.choice isa Vector{Union{ImputedMissingValue,Bool}}
         @test session_info.actions_to_condition_on == (; choice=[true, true])
         #The markers can also be in the data already, and the original columns aren't changed
         rewards = (; reward=[1.0, missing, 1.0])
@@ -394,7 +396,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
             impute_missing_observations=false,
             impute_missing_actions=false,
@@ -424,14 +426,14 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     end
 
     @testset "A column written with a marker in it has the element type Any, and is narrowed to the types it holds" begin
-        @test [true, MissingValue(), true] isa Vector{Any}
+        @test [true, ImputedMissingValue(), true] isa Vector{Any}
         session_info = SessionInfo(
             SessionCounter(),
             (; reward=Any[1.0, 0.0, 1.0]),
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
         )
-        @test session_info.actions.choice isa Vector{Union{MissingValue,Bool}}
+        @test session_info.actions.choice isa Vector{Union{ImputedMissingValue,Bool}}
         @test session_info.observations.reward isa Vector{Float64}
         @test SessionInfo(
             SessionCounter(),
@@ -444,7 +446,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
     @testset "The environment runs only when an observation or an action is missing, and is kept either way" begin
         with_missing_reward = SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
@@ -454,7 +456,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         ).includes_environment
@@ -462,7 +464,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test !SessionInfo(
             SessionCounter(),
             (; reward=[1.0, UnimputedMissingValue(), 1.0]),
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
             impute_missing_actions=false,
@@ -517,7 +519,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         left_out = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
             include_environment=false,
@@ -529,9 +531,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test predictive.observations === left_out.observations &&
             !predictive.includes_environment
         #What needs the environment is an error without it
-        @test_throws "include_environment = false leaves the environment out of the session, but the data has observations that are MissingValue() or SimulatedValue(), which only the environment can impute or simulate." SessionInfo(
+        @test_throws "include_environment = false leaves the environment out of the session, but the data has observations that are ImputedMissingValue() or SimulatedMissingValue(), which only the environment can impute or simulate." SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
@@ -586,7 +588,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
                 [true, missing, true];
                 who_starts=EnvironmentStarts(),
             ).actions.choice,
-            [true, MissingValue(), true],
+            [true, ImputedMissingValue(), true],
         )
         #NamedTuples with the model's names are the data written as a row for each timestep, which is still an error
         @test_throws "must each be a NamedTuple with one vector for each name" SessionInfo(
@@ -622,7 +624,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test SessionInfo(
             ChoosesWithinDomains(),
             [0.5, missing],
-            [NoValue(), MissingValue()];
+            [NoValue(), ImputedMissingValue()];
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
         ) isa SessionInfo
@@ -670,16 +672,16 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             timestep_sizes=[1.0, 2.0],
         )
         #Without an environment, no observation can be missing
-        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
+        @test_throws "The observations have entries that are ImputedMissingValue() or SimulatedMissingValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
         )
         #The environment must have the same names in its attributes as the model
         @test_throws "The attributes of a cognitive model of type SessionCounter have the observations (:reward,) as inputs, but an environment model of type GivesNoReward gives (). Without a map, the two must have the same observations in their attributes." SessionInfo(
             SessionCounter(),
-            (; reward=[1.0, MissingValue(), 1.0]),
+            (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             environment=GivesNoReward(),
@@ -718,10 +720,11 @@ const COUNTER_TABLE = (;
             sessions_info.sessions[1].actions == (; choice=[true, false])
         @test sessions_info.sessions[2].observations == (; reward=[1.0, 1.0, 0.0])
         @test isequal(
-            sessions_info.sessions[2].actions.choice, [true, MissingValue(), false]
+            sessions_info.sessions[2].actions.choice, [true, ImputedMissingValue(), false]
         )
         #Every session has the same type, since a column which can hold missing gets the marker in its type in every session
-        @test sessions_info.sessions[1].actions.choice isa Vector{Union{MissingValue,Bool}}
+        @test sessions_info.sessions[1].actions.choice isa
+            Vector{Union{ImputedMissingValue,Bool}}
         @test isconcretetype(eltype(sessions_info.sessions))
         @test !CognitiveModeling.has_environment(sessions_info)
         #Several session columns give a NamedTuple as the data identifier
@@ -790,9 +793,9 @@ const COUNTER_TABLE = (;
         )
         @test sessions_info.sessions[1].actions.choice ==
             [(; choice=true, rt=0.5), (; choice=false, rt=0.7)]
-        @test sessions_info.sessions[2].actions.choice == [MissingValue()] &&
+        @test sessions_info.sessions[2].actions.choice == [ImputedMissingValue()] &&
             sessions_info.sessions[2].actions.choice isa
-              Vector{Union{MissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
+              Vector{Union{ImputedMissingValue,@NamedTuple{choice::Bool,rt::Float64}}}
         @test sessions_info.sessions[1].actions_to_condition_on ==
             (; choice=[(; choice=true, rt=0.5), (; choice=false, rt=0.7)])
         #A session without a value to condition on has an empty vector of the same type, so that the sessions share a type
@@ -842,7 +845,8 @@ const COUNTER_TABLE = (;
         #A missing value in any column that an attribute is built from makes the whole value missing
         @test sessions_info.sessions[1].actions.choice ==
             [(; choice=1, rt=0.5), (; choice=0, rt=0.7)]
-        @test sessions_info.sessions[2].actions.choice == [MissingValue(), MissingValue()]
+        @test sessions_info.sessions[2].actions.choice ==
+            [ImputedMissingValue(), ImputedMissingValue()]
         @test isconcretetype(eltype(sessions_info.sessions))
         #A value which is equal to one of them without having its type is marked too, and every session then has the marker in its type
         with_code = MultipleSessionsInfo(
@@ -1078,7 +1082,7 @@ const COUNTER_TABLE = (;
         other_type = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
-            (; choice=[true, MissingValue(), true]);
+            (; choice=[true, ImputedMissingValue(), true]);
             who_starts=EnvironmentStarts(),
         )
         @test_throws "The sessions must all have the same type" MultipleSessionsInfo(

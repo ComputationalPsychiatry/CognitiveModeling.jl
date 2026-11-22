@@ -6,13 +6,13 @@
             (; reward=1.0)
         @test CognitiveModeling.select_row((;), 1) === (;)
         #A column that holds two types gives a NamedTuple with a concrete field, of one of two types, which a call is split over
-        column = Vector{Union{MissingValue,Float64}}([1.0, MissingValue()])
+        column = Vector{Union{ImputedMissingValue,Float64}}([1.0, ImputedMissingValue()])
         @test CognitiveModeling.select_row((; choice=column), 1) === (; choice=1.0)
         @test CognitiveModeling.select_row((; choice=column), 2) ===
-            (; choice=MissingValue())
+            (; choice=ImputedMissingValue())
         row_of(t) = CognitiveModeling.select_row((; choice=column, cue=[1, 2]), t)
         @test Base.return_types(row_of, Tuple{Int})[1] === Union{
-            NamedTuple{(:choice, :cue),Tuple{MissingValue,Int}},
+            NamedTuple{(:choice, :cue),Tuple{ImputedMissingValue,Int}},
             NamedTuple{(:choice, :cue),Tuple{Float64,Int}},
         }
         #Written out, such a NamedTuple has no definite type
@@ -29,11 +29,13 @@
         third_of_four(t) = CognitiveModeling.select_row(four_columns, t)
         @test Base.return_types(third_of_four, Tuple{Int})[1] === Union{
             NamedTuple{
-                (:reward, :cue, :choice, :bet),Tuple{Float64,Int,MissingValue,Float64}
+                (:reward, :cue, :choice, :bet),
+                Tuple{Float64,Int,ImputedMissingValue,Float64},
             },
             NamedTuple{(:reward, :cue, :choice, :bet),Tuple{Float64,Int,Float64,Float64}},
         }
-        @test third_of_four(2) === (; reward=0.0, cue=2, choice=MissingValue(), bet=0.25)
+        @test third_of_four(2) ===
+            (; reward=0.0, cue=2, choice=ImputedMissingValue(), bet=0.25)
         @test (@allocated third_of_four(2)) == 0
         #Arguments of types that aren't known give a NamedTuple
         @test all(
@@ -46,7 +48,8 @@
         @test CognitiveModeling.read_row_values(([1.0, 0.0], [1, 2]), 2) === (0.0, 2)
         @test CognitiveModeling.read_row_values((), 1) === ()
         @test CognitiveModeling.prepend_value(1.0, (2, true)) === (1.0, 2, true)
-        @test CognitiveModeling.prepend_value(MissingValue(), ()) === (MissingValue(),)
+        @test CognitiveModeling.prepend_value(ImputedMissingValue(), ()) ===
+            (ImputedMissingValue(),)
     end
 
     @testset "An entry is one of two NamedTuples when its value can have two types" begin
@@ -62,13 +65,20 @@
     end
 
     @testset "has_missing_value is decided at compile time when no entry can be missing" begin
-        @test CognitiveModeling.has_missing_value((; choice=MissingValue(), bet=1.0))
-        @test CognitiveModeling.has_missing_value((; choice=SimulatedValue(), bet=1.0))
+        @test CognitiveModeling.has_missing_value((; choice=ImputedMissingValue(), bet=1.0))
+        @test CognitiveModeling.has_missing_value((;
+            choice=SimulatedMissingValue(), bet=1.0
+        ))
         @test !CognitiveModeling.has_missing_value((; choice=true, bet=1.0)) &&
             !CognitiveModeling.has_missing_value((;))
         @test CognitiveModeling.has_missing_value(
             CognitiveModeling.select_row(
-                (; choice=Vector{Union{MissingValue,Float64}}([1.0, MissingValue()])), 2
+                (;
+                    choice=Vector{Union{ImputedMissingValue,Float64}}([
+                        1.0, ImputedMissingValue()
+                    ])
+                ),
+                2,
             ),
         )
         folds(f, types...) = all(

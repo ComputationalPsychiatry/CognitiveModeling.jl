@@ -181,14 +181,14 @@ Turing.@model function turing_behavioral_timestep(
     )
 end
 
-#The row is taken here, since it can have one of two types when a column holds a MissingValue, which the compiler splits within a function but not across a model's arguments
+#The row is taken here, since it can have one of two types when a column holds an ImputedMissingValue, which the compiler splits within a function but not across a model's arguments
 """
     turing_timestep_one_perspective(model, context, data_columns, t)
 
 Turing.jl model for one model's part of timestep `t`, the same for a cognitive model and an
 environment model: `model` runs on `context` with [`turing_timestep_model`](@ref), and its
 outputs are then taken from row `t` of `data_columns`, the data for them, where it has
-values, imputed from what the model gave where they are [`MissingValue`](@ref), as
+values, imputed from what the model gave where they are [`ImputedMissingValue`](@ref), as
 [`turing_impute_missing_values`](@ref) does, and are the marker that the data has for them
 otherwise, such as `UnimputedMissingValue()` or `NoValue()`. It returns the output, the
 model's new state, the distribution it gave for the output and which outputs to condition on

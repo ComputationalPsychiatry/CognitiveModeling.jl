@@ -19,12 +19,13 @@ end
 """
     returned_timestep_sizes(timestep_sizes, n_timesteps, save_initial_timestep_values::Val)
 
-Return the sizes of the `n_timesteps` timesteps that ran, as a simulation returns them. A
-vector of sizes is cut to those timesteps, since a model can stop a simulation early, and
-starts with [`BeforeFirstTimestep`](@ref) for timestep 0 when `save_initial_timestep_values`
-is `Val(true)`, so that it has an element for each element of what is saved. Anything else
-is returned as it is, since it is the size of every timestep. Used by
-[`simulate_session`](@ref), [`simulate_session!`](@ref) and [`saved_timestep_sizes`](@ref).
+Return the sizes of the `n_timesteps` timesteps that were simulated, as a simulation returns
+them. A vector of sizes is cut to those timesteps, since a model can stop a simulation
+early, and starts with [`BeforeFirstTimestep`](@ref) for timestep 0 when
+`save_initial_timestep_values` is `Val(true)`, so that it has an element for each element of
+what is saved. Anything else is returned as it is, since it is the size of every timestep.
+Used by [`simulate_session`](@ref), [`simulate_session!`](@ref) and
+[`saved_timestep_sizes`](@ref).
 """
 function returned_timestep_sizes(timestep_sizes::AbstractVector, n_timesteps, ::Val{false})
     return timestep_sizes[1:n_timesteps]

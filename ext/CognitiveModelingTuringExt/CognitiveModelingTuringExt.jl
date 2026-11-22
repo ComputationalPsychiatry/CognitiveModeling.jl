@@ -12,6 +12,7 @@ using CognitiveModeling:
     with_save_history,
     with_data,
     with_common_element_types,
+    cut_after_last_timestep_with_data,
     value_passed_on,
     LatentValueMarker
 using CognitiveModeling:

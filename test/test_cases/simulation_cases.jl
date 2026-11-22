@@ -185,8 +185,8 @@ function instantiated_case(
     )
 end
 
-#A case of a cognitive model run on one input at a time with simulate_timestep, which passes its output and its state on
-#to the next, and returns the outputs and the states
+#A case of a cognitive model simulated on one input at a time with simulate_timestep, which passes its output and its
+#state on to the next, and returns the outputs and the states
 function single_inputs_case(
     name, distributions; model, parameters, inputs, reactant=true, keywords...
 )
@@ -224,10 +224,10 @@ function single_inputs_case(
     )
 end
 
-#A case of an agent run on one input at a time with simulate_timestep!, which returns its outputs, in a tuple, and the
-#states of its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode gives a
-#wrong gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is then only
-#known when it runs
+#A case of an agent simulated on one input at a time with simulate_timestep!, which returns its outputs, in a tuple, and
+#the states of its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode
+#gives a wrong gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is
+#then only known when it runs
 function instantiated_single_inputs_case(
     name,
     distributions;
@@ -567,7 +567,7 @@ function simulation_cases(distributions)
         )
     end
 
-    #The models run on one observation at a time
+    #The models simulated on one observation at a time
     append!(
         cases,
         [

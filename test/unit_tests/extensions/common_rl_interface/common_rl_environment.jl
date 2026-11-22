@@ -71,7 +71,7 @@ function CognitiveModeling.attribute_names(model::PullsTwoArms)
 end
 
 #Shortens the calls below, saving everything but timestep 0, so that element t is timestep t
-function run_bandit(
+function simulate_bandit(
     rl_env,
     model=PullsArm();
     action_name=:arm,
@@ -127,7 +127,7 @@ end
     end
 
     @testset "The reward and the end of the episode are in the observation" begin
-        simulation = run_bandit(CountingBandit(0, 0))
+        simulation = simulate_bandit(CountingBandit(0, 0))
         observations = simulation.observations
         #The first observation has no reward, since nothing has been done yet
         @test observations[1] === (; observation=0, reward=NoValue(), terminated=false)
@@ -146,7 +146,7 @@ end
         )
         #The second arm doesn't pay
         observations =
-            run_bandit(CountingBandit(0, 0); cognitive_parameters=(; arm_to_pull=2)).observations
+            simulate_bandit(CountingBandit(0, 0); cognitive_parameters=(; arm_to_pull=2)).observations
         @test observations[2] == (; observation=1, reward=0.0, terminated=false)
     end
 
@@ -155,7 +155,7 @@ end
         environment = CommonRLEnvironment(rl_env; action_name=:arm)
         #The stopping criterion is whether the episode has ended
         @test CognitiveModeling.stopping_criterion(environment, (; rl_env), (;)) === false
-        simulation = run_bandit(rl_env; n_steps=10)
+        simulation = simulate_bandit(rl_env; n_steps=10)
         @test length(simulation.observations) ==
             length(simulation.actions) ==
             length(simulation.states) ==
@@ -164,8 +164,8 @@ end
         @test simulation.observations[end].terminated
         @test rl_env.pulls == 3
         @test CognitiveModeling.stopping_criterion(environment, (; rl_env), (;)) === true
-        #A new simulation resets the environment, and runs the episode again
-        observations = run_bandit(rl_env).observations
+        #A new simulation resets the environment, and simulates the episode again
+        observations = simulate_bandit(rl_env).observations
         @test [observation.observation for observation in observations] == [0, 1, 2, 3]
         #An episode that has ended isn't started again by an action given to it by hand
         @test_throws "The episode of the environment of type CountingBandit from CommonRLInterface.jl has ended, so it can't take the action arm. A simulation stops by itself when the episode ends. A new call of simulate_session starts a new episode, and so does reset! of an InstantiatedModel." CognitiveModeling.timestep_model(
@@ -226,7 +226,7 @@ end
 
     @testset "An observation that the environment changes in place is copied, so that what was saved stays as it was" begin
         rl_env = TallyBandit([0, 0])
-        simulation = run_bandit(rl_env)
+        simulation = simulate_bandit(rl_env)
         received = [observations.observation for observations in simulation.observations]
         given = [
             observations.observation for observations in simulation.environment.observations
@@ -237,7 +237,7 @@ end
 
     @testset "The saved states are copies, with clone when the environment has it and deepcopy otherwise" begin
         rl_env = CountingBandit(0, 0)
-        environment_states = run_bandit(rl_env).environment.states
+        environment_states = simulate_bandit(rl_env).environment.states
         @test all(state -> state.rl_env isa CountingBandit, environment_states)
         @test allunique(objectid(state.rl_env) for state in environment_states)
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
@@ -245,10 +245,10 @@ end
         #The state can be selected by its name
         selected = SaveHistory(; states=:rl_env, save_initial_timestep_values=false)
         environment_states =
-            run_bandit(CountingBandit(0, 0); environment_save_history=selected).environment.states
+            simulate_bandit(CountingBandit(0, 0); environment_save_history=selected).environment.states
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
         rl_env = PlainBandit(0)
-        environment_states = run_bandit(rl_env).environment.states
+        environment_states = simulate_bandit(rl_env).environment.states
         @test allunique(objectid(state.rl_env) for state in environment_states)
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
     end
@@ -256,7 +256,7 @@ end
     @testset "Timestep 0 has the environment where the episode starts, copied like the rest" begin
         rl_env = CountingBandit(0, 0)
         everything = SaveHistory(SaveEverything())
-        simulation = run_bandit(
+        simulation = simulate_bandit(
             rl_env; cognitive_save_history=everything, environment_save_history=everything
         )
         @test simulation.observations[1] === (;
@@ -271,7 +271,7 @@ end
 
     @testset "Nothing is copied when the environment's states aren't saved" begin
         rl_env = CountingBandit(0, 0)
-        simulation = run_bandit(rl_env; environment_save_history=SaveHistory())
+        simulation = simulate_bandit(rl_env; environment_save_history=SaveHistory())
         @test rl_env.clones == 0
         @test simulation.environment.states == fill((;), 4)
     end
@@ -329,7 +329,7 @@ end
 
     @testset "Maps of names pass on what a model with other names has in its attributes" begin
         #PullsTwoArms has only the reward as an input, and two actions, of which a map passes one on as the arm
-        simulation = run_bandit(
+        simulation = simulate_bandit(
             CountingBandit(0, 0),
             PullsTwoArms();
             cognitive_parameters=(;),
@@ -341,7 +341,7 @@ end
         @test simulation.environment.observations[2] ==
             (; observation=1, reward=0.0, terminated=false)
         @test simulation.environment.actions[1] === (; arm=2)
-        observations = run_bandit(
+        observations = simulate_bandit(
             CountingBandit(0, 0),
             PullsTwoArms();
             cognitive_parameters=(;),
@@ -350,10 +350,10 @@ end
         ).observations
         @test observations[2] == (; reward=1.0)
         #Without the maps, the two don't fit
-        @test_throws "The attributes of a cognitive model of type PullsTwoArms have the observations (:reward,) as inputs, but an environment model of type CommonRLEnvironment{CountingBandit, :arm} gives (:observation, :reward, :terminated). Without a map, the two must have the same observations in their attributes." run_bandit(
+        @test_throws "The attributes of a cognitive model of type PullsTwoArms have the observations (:reward,) as inputs, but an environment model of type CommonRLEnvironment{CountingBandit, :arm} gives (:observation, :reward, :terminated). Without a map, the two must have the same observations in their attributes." simulate_bandit(
             CountingBandit(0, 0), PullsTwoArms(); cognitive_parameters=(;)
         )
-        @test_throws "A cognitive model of type PullsTwoArms gives the actions (:first, :second), but the attributes of an environment model of type CommonRLEnvironment{CountingBandit, :arm} have (:arm,) as inputs. Without a map, the two must have the same actions in their attributes." run_bandit(
+        @test_throws "A cognitive model of type PullsTwoArms gives the actions (:first, :second), but the attributes of an environment model of type CommonRLEnvironment{CountingBandit, :arm} have (:arm,) as inputs. Without a map, the two must have the same actions in their attributes." simulate_bandit(
             CountingBandit(0, 0),
             PullsTwoArms();
             cognitive_parameters=(;),

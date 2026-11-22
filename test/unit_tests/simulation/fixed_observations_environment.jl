@@ -34,7 +34,7 @@ function CognitiveModeling.attribute_names(model::ObservesRewards)
     return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=())
 end
 
-#Runs a model with an environment of fixed observations, saving everything but timestep 0. The environment takes no actions, so the map passes none on
+#Simulates a model with an environment of fixed observations, saving everything but timestep 0. The environment takes no actions, so the map passes none on
 function simulate_fixed_observations(environment; model=Baseline(ByHand()), keywords...)
     return simulate_session(
         model,
@@ -92,7 +92,7 @@ end
         )
     end
 
-    @testset "A simulation runs through the observations and stops after the last, whoever starts" begin
+    @testset "A simulation goes through the observations and stops after the last, whoever starts" begin
         environment = FixedObservationsEnvironment(rewards)
         simulation = simulate_fixed_observations(environment)
         @test simulation.observations == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]

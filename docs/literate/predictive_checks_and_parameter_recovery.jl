@@ -118,9 +118,9 @@ model = full_model(
 
 # ## Prior predictive checks
 #
-# The sessions of [`decondition_sessions`](@ref) have [`SimulatedValue`](@ref) in place of
-# every choice, so that the model simulates each choice as a variable. They have the rewards
-# of the data, since they have no environment that could simulate the rewards:
+# The sessions of [`decondition_sessions`](@ref) have [`SimulatedMissingValue`](@ref) in
+# place of every choice, so that the model simulates each choice as a variable. They have
+# the rewards of the data, since they have no environment that could simulate the rewards:
 
 decondition_sessions(sessions_info).sessions[1].actions.choice[1:3]
 
@@ -268,10 +268,13 @@ recovered_parameters = get_session_parameters(package_recovery_model, recovered)
 #   as one with a misspelled name, while [`condition_sessions`](@ref) throws an error for
 #   it, and for a value of any variable that isn't an action or an observation of the
 #   sessions, such as a parameter.
-# - With a [`CognitiveModeling.stopping_criterion`](@ref), the deconditioned sessions check
-#   it from the first timestep, also with Turing.jl's `condition`, while
-#   [`condition_sessions`](@ref) checks it after the last timestep with a value, as a fit to
-#   data does.
+# - With a [`CognitiveModeling.stopping_criterion`](@ref), a deconditioned session with an
+#   environment checks it before every timestep, also with Turing.jl's `condition`. Such a
+#   session then ends where the criterion is met at the parameters of each evaluation:
+#   before its last value, which leaves out the values after it with no error, or after it,
+#   with a variable for every action and observation that follows.
+#   [`condition_sessions`](@ref) ends each session after its last timestep with a value, and
+#   doesn't check the criterion, as a fit to a table of that data doesn't.
 #
 # How fast they are differs more. With 20 sessions of 100 timesteps, and the values given
 # with a concrete type each, as `rand` and `DynamicPPL.subset` give them:

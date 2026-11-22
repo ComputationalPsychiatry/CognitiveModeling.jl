@@ -13,8 +13,9 @@ model which samples within a timestep needs to add a method, however; or if any 
 changes are desired within Turing. It must sample with `~` instead of from `context.rng`.
 Otherwise the model has a different log density each time it is evaluated, with no error.
 The same holds for an environment model, which fitting uses to fill in observations that are
-[`MissingValue`](@ref) in the data: what it samples itself, such as a change of its state,
-must be sampled with `~`, while fitting samples the observations from what it returns.
+[`ImputedMissingValue`](@ref) in the data: what it samples itself, such as a change of its
+state, must be sampled with `~`, while fitting samples the observations from what it
+returns.
 
 # Examples
 ```julia

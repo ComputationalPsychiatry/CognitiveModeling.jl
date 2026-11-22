@@ -6,8 +6,8 @@ Sample an output from what a model returned, using `rand`. Each output in a `Nam
 sampled on its own, so a `NamedTuple` inside it gives a `NamedTuple` of samples, and an
 entry that is [`NoValue`](@ref) is kept. A number, a string or a symbol is a value and not
 something to sample from, and throws an `ArgumentError` which names [`Deterministic`](@ref).
-Used on each timestep of a simulation, by [`simulate_session_timestep`](@ref) and
-[`simulate_model_on_input`](@ref).
+Used on each timestep of a simulation, by [`simulate_both_models`](@ref) and
+[`simulate_one_model`](@ref).
 """
 function sample_output(rng, output_distribution)
     return rand(rng, output_distribution)
@@ -53,7 +53,7 @@ end
 
 Return what the receiver gets of the outputs `x`: all of `x` without a map, and with a
 [`NameMap`](@ref) the outputs it takes, under the names it gives them. Used on each timestep
-of a simulation, by [`simulate_session_timestep`](@ref), and for timestep 0 by
+of a simulation, by [`simulate_both_models`](@ref), and for timestep 0 by
 [`collect_initial_timestep_values`](@ref).
 """
 map_names(x, ::Nothing) = x
@@ -229,7 +229,7 @@ model receives it and `environment_observation` as the environment gave it, and 
 the action as the cognitive model gave it and `environment_action` as the environment
 receives it. The two of a pair differ when a [`NameMap`](@ref) selects or renames them.
 `previous` holds the values of the timestep before. Used by
-[`simulate_session_timestep`](@ref).
+[`simulate_both_models`](@ref).
 """
 function collect_timestep_values(
     environment_output,
@@ -563,16 +563,16 @@ end
 ## Simulating timesteps ##
 #Always inlined, because a call here makes the loop several times slower
 """
-    simulate_session_timestep(::EnvironmentStarts, cognitive_model, environment,
-                              cognitive_parameters, environment_parameters,
-                              cognitive_save_history, environment_save_history,
-                              observation_map, action_map, rng, timestep_size, previous)
+    simulate_both_models(::EnvironmentStarts, cognitive_model, environment,
+                         cognitive_parameters, environment_parameters,
+                         cognitive_save_history, environment_save_history,
+                         observation_map, action_map, rng, timestep_size, previous)
 
 Simulate a timestep where the environment moves first, starting from `previous`, the values
 of the timestep before, and return its values, from [`collect_timestep_values`](@ref). Used
 by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
 """
-@inline function simulate_session_timestep(
+@inline function simulate_both_models(
     ::EnvironmentStarts,
     cognitive_model,
     environment,
@@ -657,16 +657,16 @@ end
 
 #Always inlined, because a call here makes the loop several times slower
 """
-    simulate_session_timestep(::AgentStarts, cognitive_model, environment,
-                              cognitive_parameters, environment_parameters,
-                              cognitive_save_history, environment_save_history,
-                              observation_map, action_map, rng, timestep_size, previous)
+    simulate_both_models(::AgentStarts, cognitive_model, environment,
+                         cognitive_parameters, environment_parameters,
+                         cognitive_save_history, environment_save_history,
+                         observation_map, action_map, rng, timestep_size, previous)
 
 Simulate a timestep where the agent moves first, starting from `previous`, the values of the
 timestep before, and return its values, from [`collect_timestep_values`](@ref). Used by
 [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
 """
-@inline function simulate_session_timestep(
+@inline function simulate_both_models(
     ::AgentStarts,
     cognitive_model,
     environment,
@@ -828,7 +828,7 @@ function simulate_remaining_timesteps(
         values_before = kept_values(keeps_last_values, timestep_values)
 
         #Simulate the timestep, starting from the values of the one before
-        timestep_values = simulate_session_timestep(
+        timestep_values = simulate_both_models(
             who_starts,
             cognitive_model,
             environment,
@@ -955,7 +955,7 @@ function simulate_all_timesteps(
     )
 
     #Simulate the first timestep outside the loop, since its inputs can have other types than all the rest
-    timestep_values = simulate_session_timestep(
+    timestep_values = simulate_both_models(
         who_starts,
         cognitive_model,
         environment,
@@ -1042,7 +1042,8 @@ everything, and `SaveHistory(SaveEverything(); save_initial_timestep_values = fa
 leave out timestep 0, so that element `t` is timestep `t`. The vectors of both models have
 the same length, which `cognitive_save_history` decides. The sizes of the timesteps are
 returned as they were given: a single size as it is, and a vector of sizes with the sizes of
-the timesteps that ran, after `BeforeFirstTimestep()` for timestep 0 when it is there.
+the timesteps that were simulated, after `BeforeFirstTimestep()` for timestep 0 when it is
+there.
 
 Parameters that aren't given take the values in [`default_parameters`](@ref), if
 `cognitive_model` or `environment` provides defaults for them. The names of the parameters,
@@ -1054,7 +1055,7 @@ and `action_map` say which outputs of one the other receives, and under which na
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
 model is met, unless `check_stopping_criterion` is `false`, and everything returned then has
-the timesteps that ran.
+the timesteps that were simulated.
 
 The simulation also stops when either model sets `parameters_valid` to `false` in its
 [`ModelOutput`](@ref), and that timestep is left out of the trajectories. `parameters_valid`
@@ -1103,7 +1104,8 @@ says so, unless `warn_on_invalid_parameters` is `false`.
   the two must have the same actions in their attributes, which `environment` receives
   under the same names.
 - `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
-  models is checked before each timestep. With `false`, all of `n_steps` timesteps run.
+  models is checked before each timestep. With `false`, all of `n_steps` timesteps are
+  simulated.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) before the simulation, where a value
   outside its domain throws a [`ParameterDomainError`](@ref).
@@ -1494,8 +1496,8 @@ end
 ## Simulating a model on a single input ##
 #Its own function, so that it is compiled for the types in an instantiated model's untyped fields, which makes simulate_timestep! several times faster
 """
-    simulate_model_on_input(model, input, previous_state, previous_output, parameters,
-                            timestep_size, rng, save_history)
+    simulate_one_model(model, input, previous_state, previous_output, parameters,
+                       timestep_size, rng, save_history)
 
 Simulate a timestep of `model` on `input`, without the other side of a simulation, and
 return the output sampled from what it gave, its new state, whether its parameters are
@@ -1504,7 +1506,7 @@ selects of its `states`, `inputs`, `outputs` and `output_distributions`, in a `N
 The input must have the names in the attributes of `model`. [`simulate_timestep`](@ref) and
 [`simulate_timestep!`](@ref) both use this.
 """
-function simulate_model_on_input(
+function simulate_one_model(
     model,
     input,
     previous_state,
@@ -1581,8 +1583,8 @@ unless the model sets `parameters_valid` to `false` in its [`ModelOutput`](@ref)
 then says so.
 
 Nothing is kept between calls, so pass the returned state and output on as `previous_state`
-and `previous_output` to run the next timestep. [`simulate_timestep!`](@ref) does the same
-for an [`InstantiatedModel`](@ref), which keeps them. This is type stable, which an
+and `previous_output` to simulate the next timestep. [`simulate_timestep!`](@ref) does the
+same for an [`InstantiatedModel`](@ref), which keeps them. This is type stable, which an
 instantiated model isn't, so it is the faster of the two.
 
 The output is in a `NamedTuple` with the names the model gave it, as in `output.choice`. The
@@ -1672,7 +1674,7 @@ function simulate_timestep(
     check_parameter_domains && check_parameters_in_domains(model, parameters)
 
     #Simulate the timestep, where nothing is selected for saving, since everything is returned
-    timestep_values = simulate_model_on_input(
+    timestep_values = simulate_one_model(
         model,
         input,
         previous_state,
@@ -1764,7 +1766,7 @@ function simulate_timestep!(
 )
 
     #Simulate the timestep
-    timestep_values = simulate_model_on_input(
+    timestep_values = simulate_one_model(
         instantiated_model.model,
         input,
         instantiated_model.state,
