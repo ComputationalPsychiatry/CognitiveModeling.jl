@@ -134,6 +134,9 @@ function, which can ignore any of the arguments. A regression of some measuremen
 of the cognitive model, for instance, reads the state from `saved_trajectories`, a vector
 with the [`SessionTrajectories`](@ref) of each session, as
 [`turing_behavioral_session`](@ref) returns them, so the `cognitive_save_history` of the
-sessions must select that state.
+sessions must select that state. It also runs when the parameters of a session turned
+invalid, whose trajectories then end before that timestep, so it must not rely on every
+session having all of its timesteps, as in reading the last state with `states[end]` rather
+than at a fixed index.
 """
 function turing_downstream_model end

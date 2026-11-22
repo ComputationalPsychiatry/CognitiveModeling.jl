@@ -48,18 +48,8 @@ Turing.@model function CognitiveModeling.turing_full_model(
         false,
     )
 
-    #The sessions return the parameters they were given too, which are those above
+    #The sessions return the parameters they were given too, which are those above. The downstream model runs on every draw, also one whose parameters turned invalid in a session, whose trajectories end early, so that every draw has its variables, which a sampler needs
     saved_trajectories = sessions_result.saved_trajectories
-
-    #A draw whose parameters turned invalid in a session has a log density of -Inf already, so the downstream model doesn't run on the trajectories that ended early. Its variables then don't exist for that draw, and a sampler takes the variables of the model from one draw from the prior, so sampling can fail to start when the downstream model has variables of its own, as the docstring describes
-    if !parameters_valid_in_every_session(saved_trajectories)
-        return (;
-            cognitive_parameters,
-            environment_parameters,
-            saved_trajectories,
-            downstream_values=nothing,
-        )
-    end
 
     #Do the optional downstream model, with its variables under downstream_model when the prefixes are included
     if include_submodel_prefixes

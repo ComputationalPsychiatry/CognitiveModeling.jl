@@ -65,8 +65,7 @@ using CognitiveModeling:
     timestep_sizes_until
 using CognitiveModeling:
     stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data
-using CognitiveModeling:
-    parameters_are_valid, combine_parameters_valid, parameters_valid_in_every_session
+using CognitiveModeling: parameters_are_valid, combine_parameters_valid
 using CognitiveModeling:
     select_names,
     saves_initial_timestep_values,

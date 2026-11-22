@@ -1455,14 +1455,33 @@ end
         #A model that never sets it gives the default, as its type says
         @test returned(session_for_test(), (;)).saved_trajectories.parameters_valid ===
             ValidByDefault()
-        #An action imputed before the timestep that turned invalid is a variable, and one after it isn't
-        imputing = session_for_test(
+        #The timesteps after the one that turned invalid still run, from the values before it, so that an action imputed after it is a variable too, as it is when the parameters stay valid
+        imputing(learning_rate) = session_for_test(
             RejectsHighExpectedReward(),
-            (; learning_rate=0.95),
+            (; learning_rate),
             SESSION_REWARDS,
             (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
         )
-        @test keys(rand(Xoshiro(1), imputing)) == [@varname(timesteps[2].choice.imputed)]
+        both_imputed = [
+            @varname(timesteps[2].choice.imputed), @varname(timesteps[5].choice.imputed)
+        ]
+        @test issetequal(keys(rand(Xoshiro(1), imputing(0.95))), both_imputed)
+        @test issetequal(keys(rand(Xoshiro(1), imputing(0.3))), both_imputed)
+        #Nothing of them is kept, and nothing after the invalid timestep is scored
+        invalid_values = Dict(
+            @varname(timesteps[2].choice.imputed) => 0.5,
+            @varname(timesteps[5].choice.imputed) => 0.5,
+        )
+        @test logjoint(imputing(0.95), invalid_values) == -Inf
+        @test returned(imputing(0.95), invalid_values).saved_trajectories.n_timesteps == 3
+        #Also when the first timestep turns invalid
+        first_invalid_imputing = session_for_test(
+            RejectsHighExpectedReward(),
+            (; learning_rate=1.5),
+            SESSION_REWARDS,
+            (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
+        )
+        @test issetequal(keys(rand(Xoshiro(1), first_invalid_imputing)), both_imputed)
         #Other errors get through
         @test_throws "gave no output" logjoint(
             session_for_test(

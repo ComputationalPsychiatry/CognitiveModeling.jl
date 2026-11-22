@@ -108,10 +108,11 @@ These aren't failures of the package's own code, but a model can run into them.
   DynamicPPL's warning about growable arrays, and a `@warn` holds a `try`. Samplers go through
   a `LogDensityFunction`, where the variables exist already, and that is fine.
 - **Parameters that turn invalid:** a session whose model sets `parameters_valid` to `false`
-  in its [`ModelOutput`](@ref) ends there with a log density of `-Inf`, whose gradient is
-  zero with every backend. A compiled ReverseDiff tape follows the timesteps that ran at the
-  point where it was compiled, so at parameters that turn invalid on another timestep it
-  gives a finite log density with no error. A model should keep its values finite on the
+  in its [`ModelOutput`](@ref) gets a log density of `-Inf` and scores none of its data, so
+  its gradient is zero with every backend, apart from that of any value it imputes or
+  samples. A compiled ReverseDiff tape follows the branches taken at the point where it was
+  compiled, so at parameters that turn invalid on another timestep it gives a finite log
+  density with no error. A model should keep its values finite on the
   timestep that turns invalid, as with `ifelse(parameters_valid, new_value, previous_value)`,
   since a `NaN` there makes the gradients of the reverse modes `NaN`, which an optimizer can't
   use.

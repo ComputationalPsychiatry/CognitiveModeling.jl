@@ -203,17 +203,3 @@ nothing, is kept. Used by fitted sessions.
 function timestep_sizes_until(timestep_sizes::AbstractVector, n_saved)
     return isempty(timestep_sizes) ? timestep_sizes : timestep_sizes[1:n_saved]
 end
-
-#The flags of the sessions have one type, decided by the models, so that for ValidByDefault the check is decided when the model is compiled
-"""
-    parameters_valid_in_every_session(saved_trajectories)
-
-Return whether the parameters stayed valid in every session, from `saved_trajectories`, a
-vector with the [`SessionTrajectories`](@ref) of each fitted session, which have whether its
-parameters stayed valid, as the models gave it. Used by the full model, which runs its
-downstream model only when they did.
-"""
-function parameters_valid_in_every_session(saved_trajectories::AbstractVector)
-    first(saved_trajectories).parameters_valid isa ValidByDefault && return true
-    return all(saved -> parameters_are_valid(saved.parameters_valid), saved_trajectories)
-end

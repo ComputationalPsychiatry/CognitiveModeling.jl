@@ -17,8 +17,9 @@ again, as data is in a predictive check: an action imputed in the fit is simulat
 others, and so is what a model samples of its own, at its start or within a timestep. The
 trajectories the sessions return are kept. The sessions have at most the number of
 timesteps of their data, and fewer when a [`stopping_criterion`](@ref) of a model is met,
-since no timestep of a predictive session has data. For a prior predictive check, give a
-chain sampled from the prior.
+since no timestep of a predictive session has data, or when the parameters of a model turn
+invalid on the simulated data, which ends the trajectories before that timestep. For a prior
+predictive check, give a chain sampled from the prior.
 
 Each inference backend has methods for its own models and chains, which need its package to
 be loaded. Which models they take, and the form of the chain they return, are described in

@@ -115,10 +115,10 @@ when it is there, when anything is selected, and is empty otherwise. `n_timestep
 number of timesteps that ran, and `last_timestep` is `nothing`. `parameters_valid` is as the
 models give it in their [`ModelOutput`](@ref): [`ValidByDefault`](@ref) when neither can set
 it, and otherwise whether the parameters stayed valid. When a model sets it to `false`, the
-session gives the parameters a log density of `-Inf`, ends before that timestep and scores
-nothing, so the trajectories end before it, and the variables of the later timesteps don't
-exist for that sample, which can keep a sampler from starting, as
-[`turing_full_model`](@ref) describes. Any latent variable in a session, imputed or from a
+session gives the parameters a log density of `-Inf`, keeps nothing of that timestep and
+scores nothing after it, so the trajectories end before it. It still runs its remaining
+timesteps, each from the values before that timestep, so that the sample has every variable
+that a valid one has. Any latent variable in a session, imputed or from a
 model which samples within a timestep, greatly increases the amount of estimated variables,
 which will generally make fitting the model much slower.
 
@@ -299,23 +299,13 @@ state is read from the chain without simulating again.
 
 When a cognitive model or an environment model sets `parameters_valid` to `false` in its
 [`ModelOutput`](@ref), its session gives the parameters a log density of `-Inf`, so that a
-sampler rejects them, and ends before that timestep without scoring the data. The
-trajectories of that session then end before the timestep, its `saved_trajectories` has
-`parameters_valid = false`, and the downstream model doesn't run, so `downstream_values` is
-`nothing`.
-
-Such a sample doesn't have the variables that come after that timestep: the values that the
-later timesteps impute, simulate or sample, and the variables of the downstream model. A fit
-of a model with such variables can then fail when sampling starts, in two ways. A sampler of
-Turing.jl takes the variables of the model from one draw from the prior, which each chain
-makes with Julia's default random number generator, whatever `initial_params` it is given.
-When the parameters of that draw turn invalid, sampling throws a `KeyError` which names a
-variable that the draw doesn't have, such as `KeyError: key slope not found`. When they
-don't, but the parameters that the sampler starts from do, it throws an `ArgumentError`
-which says that some indices in the output vector were not set, and valid `initial_params`
-prevent that one. Both happen less often the more seldom the parameters turn invalid under
-the priors, and a model without such variables has neither. A chain sampled from the prior,
-and the predictions of `predict`, have `missing` for those variables in such samples.
+sampler rejects them, keeps nothing of that timestep and scores nothing after it. It still
+runs its remaining timesteps, each from the values before that timestep, and the downstream
+model runs too, so that the sample has every variable that a valid one has, as a sampler
+needs. The trajectories of that session end before the timestep, and its
+`saved_trajectories` has `parameters_valid = false`. A downstream model therefore gets
+trajectories that end early on such samples, and must not rely on every session having all
+of its timesteps.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read

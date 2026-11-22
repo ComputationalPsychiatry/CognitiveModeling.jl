@@ -164,8 +164,9 @@ once at the end, as observed values. Before each timestep from
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
 what it saved up to it, which is an error when the data continues. When either model sets
 `parameters_valid` to `false` on a timestep, the session gives the parameters a log density
-of `-Inf` and ends before that timestep, without scoring the data. It returns the
-trajectories the session saved, in a [`SessionTrajectories`](@ref), as
+of `-Inf`, keeps nothing of that timestep and scores nothing, and runs its remaining
+timesteps from the values before it, so that every sample has the same variables. It returns
+the trajectories the session saved, in a [`SessionTrajectories`](@ref), as
 [`turing_behavioral_session`](@ref) describes them, which returns them under
 `saved_trajectories`. Both methods of that model call this one, after setting up the
 parameters and the initial states with or without an environment. Used by
@@ -213,10 +214,25 @@ Turing.@model function turing_run_all_timesteps(
     )
     offset = initial_saved === nothing ? 0 : 1
 
-    #A session whose parameters turned invalid on the first timestep gives them a log density of -Inf, keeps nothing of that timestep, and scores nothing
+    #A session whose parameters turned invalid on the first timestep gives them a log density of -Inf, keeps nothing of that timestep, and scores nothing. It runs its remaining timesteps from where it started, so that the sample has every variable that a valid one has, which a sampler needs, and nothing of them is kept
     if !parameters_are_valid(timestep_values.parameters_valid)
         Turing.@addlogprob! -Inf
         map_saved(vector -> resize!(vector, offset), storage)
+        for t_held in 2:n_timesteps
+            held_timestep_values ~ to_submodel(
+                prefix(
+                    turing_behavioral_timestep(
+                        session_info,
+                        t_held,
+                        cognitive_parameters,
+                        environment_parameters,
+                        previous,
+                    ),
+                    @varname(timesteps[t_held]),
+                ),
+                false,
+            )
+        end
         return saved_trajectories(
             storage,
             timestep_sizes_until(session_info.saved_timestep_sizes, offset),
@@ -270,10 +286,25 @@ Turing.@model function turing_run_all_timesteps(
             false,
         )
 
-        #A session whose parameters turned invalid on this timestep gives them a log density of -Inf, ends before the timestep, and scores nothing
+        #A session whose parameters turned invalid on this timestep gives them a log density of -Inf, keeps nothing of the timestep, and scores nothing. It runs its remaining timesteps from the values before it, so that the sample has every variable that a valid one has, and nothing of them is kept. Neither their flags nor a stopping criterion is checked
         if !parameters_are_valid(next_timestep_values.parameters_valid)
             Turing.@addlogprob! -Inf
             map_saved(vector -> resize!(vector, t - 1 + offset), storage)
+            for t_held in (t + 1):n_timesteps
+                held_timestep_values ~ to_submodel(
+                    prefix(
+                        turing_behavioral_timestep(
+                            session_info,
+                            t_held,
+                            cognitive_parameters,
+                            environment_parameters,
+                            timestep_values,
+                        ),
+                        @varname(timesteps[t_held]),
+                    ),
+                    false,
+                )
+            end
             return saved_trajectories(
                 storage,
                 timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),

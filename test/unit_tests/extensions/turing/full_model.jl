@@ -877,7 +877,7 @@ end
             Turing.FlexiChains.parameters(chain)
     end
 
-    @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model doesn't run" begin
+    @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model still runs, so that every sample has every variable" begin
         table = (; FULL_TABLE..., choice=[0.2, 0.4, 0.6, 0.8, 1.0, 0.2, 0.4, 0.6, 0.8])
         saving_states = SaveHistory(; states=:expected_reward)
         sessions_info = sessions_for_test(
@@ -900,7 +900,7 @@ end
                 (;),
             ),
         )
-        #The full model doesn't run its downstream model for such a sample, and returns the rest
+        #The full model still runs its downstream model on such a sample, on the trajectories that end early, and returns everything
         model = full_model(
             TuringBackend(),
             IndependentParameters((; learning_rate=Uniform(0, 2))),
@@ -912,14 +912,20 @@ end
         )
         @test logjoint(model, rejected) == -Inf
         rejected_value = returned(model, rejected)
-        @test rejected_value.downstream_values === nothing &&
+        @test rejected_value.downstream_values == 0.8 &&
             rejected_value.saved_trajectories[2].parameters_valid === false
         accepted = Dict(
             @varname(learning_rate.sessions) => fill(0.3, 3), @varname(slope) => 0.8
         )
         @test isfinite(logjoint(model, accepted)) &&
             returned(model, accepted).downstream_values == 0.8
-        #A sampler starts when most first draws are rejected
+        #A sampler starts when most first draws are rejected, also with a downstream model that has variables of its own, whatever the draw that a sampler takes the variables from, which Julia's default random number generator makes
+        for seed in 1:4
+            Random.seed!(seed)
+            chain = sample(Xoshiro(seed), model, NUTS(), 10; progress=false)
+            @test size(chain, 1) == 10 &&
+                @varname(slope) in Turing.FlexiChains.parameters(chain)
+        end
         without_downstream = saving_full_model(
             IndependentParameters((; learning_rate=Uniform(0, 2))), sessions_info
         )
