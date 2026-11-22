@@ -3,7 +3,7 @@
 #sketch which takes very few samples, so its fits aren't checked
 
 @testset "The values of the sessions are discrete, and the coefficients continuous" begin
-    @test discrete == [@varname(uses_rewards.session)]
+    @test discrete == [@varname(uses_rewards.sessions)]
     @test Set(continuous) ==
         Set([@varname(learning_rate.coef), @varname(uses_rewards.coef)])
 end

@@ -538,7 +538,7 @@ end
         #The model doesn't learn from the observation that isn't there, and the missing choice is imputed
         model = turing_behavioral_session(session_info, SESSION_PARAMETERS)
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), model))) ==
-            [@varname(timestep[2].choice.imputed)]
+            [@varname(timesteps[2].choice.imputed)]
         #A column whose element type allows missing gets the marker in its type even without a missing, so that sessions of one table have one type
         @test SessionInfo(
             WithDefaultParameters(DistributionsJl()),
@@ -704,15 +704,15 @@ end
         #One latent for each missing action
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
-            @varname(timestep[2].choice.imputed),
-            @varname(timestep[3].bet.imputed),
-            @varname(timestep[4].choice.imputed),
+            @varname(timesteps[2].choice.imputed),
+            @varname(timesteps[3].bet.imputed),
+            @varname(timesteps[4].choice.imputed),
         ])
         imputed = [0.1, -0.2, 0.3]
         given = Dict(
-            @varname(timestep[2].choice.imputed) => imputed[1],
-            @varname(timestep[3].bet.imputed) => imputed[2],
-            @varname(timestep[4].choice.imputed) => imputed[3],
+            @varname(timesteps[2].choice.imputed) => imputed[1],
+            @varname(timesteps[3].bet.imputed) => imputed[2],
+            @varname(timesteps[4].choice.imputed) => imputed[3],
         )
         V = 0.5
         expected_prior = 0.0
@@ -755,7 +755,7 @@ end
             (; choice=[0.2, ImputedMissingValue()], bet=[1.0, 1.5]),
         )
         @test collect(keys(@test_logs match_mode = :any rand(Xoshiro(1), single))) ==
-            [@varname(timestep[2].choice.imputed)]
+            [@varname(timesteps[2].choice.imputed)]
     end
 
     @testset "Missing actions that aren't imputed are passed on as UnimputedMissingValue, with nothing sampled" begin
@@ -812,7 +812,7 @@ end
             (;),
         ) ≈ 2 * log(0.5)
         #When it is imputed, the model receives the imputed action
-        imputed = Dict(@varname(timestep[2].choice.imputed) => true)
+        imputed = Dict(@varname(timesteps[2].choice.imputed) => true)
         @test (@test_logs match_mode = :any logjoint(
             session_for_test(RepeatsPreviousChoice(), (;), (;), choices), imputed
         )) ≈ log(0.5) + 2 * log(0.9)
@@ -949,17 +949,17 @@ end
             #The missing rewards are latents named after the environment's output, and the cue, which isn't random, adds none
             @test Set(keys(@test_logs match_mode = :any rand(Xoshiro(1), with_maps))) ==
                 Set([
-                @varname(timestep[1].environment.payoff.imputed),
-                @varname(timestep[3].environment.payoff.imputed),
+                @varname(timesteps[1].environment.payoff.imputed),
+                @varname(timesteps[3].environment.payoff.imputed),
             ])
             #The log density is the same as without maps
             mapped_values = Dict(
-                @varname(timestep[1].environment.payoff.imputed) => 0.7,
-                @varname(timestep[3].environment.payoff.imputed) => -0.4,
+                @varname(timesteps[1].environment.payoff.imputed) => 0.7,
+                @varname(timesteps[3].environment.payoff.imputed) => -0.4,
             )
             unmapped_values = Dict(
-                @varname(timestep[1].environment.reward.imputed) => 0.7,
-                @varname(timestep[3].environment.reward.imputed) => -0.4,
+                @varname(timesteps[1].environment.reward.imputed) => 0.7,
+                @varname(timesteps[3].environment.reward.imputed) => -0.4,
             )
             @test logjoint(with_maps, mapped_values) ≈
                 logjoint(without_maps, unmapped_values)
@@ -988,13 +988,13 @@ end
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
-            @varname(timestep[1].environment.reward.imputed),
-            @varname(timestep[3].environment.reward.imputed),
+            @varname(timesteps[1].environment.reward.imputed),
+            @varname(timesteps[3].environment.reward.imputed),
         ])
         #The model observes their values
         rewards = Dict(
-            @varname(timestep[1].environment.reward.imputed) => 0.7,
-            @varname(timestep[3].environment.reward.imputed) => -0.4,
+            @varname(timesteps[1].environment.reward.imputed) => 0.7,
+            @varname(timesteps[3].environment.reward.imputed) => -0.4,
         )
         @test (@test_logs match_mode = :any returned(model, rewards)).saved_trajectories.observations[2:end] ==
             [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
@@ -1049,7 +1049,7 @@ end
                 logpdf(Bernoulli(imputed_choice ? 0.8 : 0.2), 0.0) +
                 logpdf(Bernoulli(0.8), 1.0)
             @test (@test_logs match_mode = :any logjoint(
-                model, Dict(@varname(timestep[2].choice.imputed) => imputed_choice)
+                model, Dict(@varname(timesteps[2].choice.imputed) => imputed_choice)
             )) ≈ logjoint(nothing_imputed, (;)) + reward_scores
         end
     end
@@ -1068,7 +1068,7 @@ end
         remake_session_without_environment = session_for_test(
             WithDefaultParameters(DistributionsJl()), SESSION_PARAMETERS, matching, choices
         )
-        imputed = Dict(@varname(timestep[3].choice.imputed) => true)
+        imputed = Dict(@varname(timesteps[3].choice.imputed) => true)
         @test (@test_logs match_mode = :any loglikelihood(model, imputed)) ≈
             loglikelihood(remake_session_without_environment, imputed)
         #A reward the environment couldn't have given makes the log density -Inf
@@ -1195,7 +1195,7 @@ end
             environment_save_history=SaveHistory(; states=:pulls),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), predictive)
-        @test Set(keys(values)) == Set([@varname(timestep[t].choice.imputed) for t in 1:3])
+        @test Set(keys(values)) == Set([@varname(timesteps[t].choice.imputed) for t in 1:3])
         saved = @test_logs match_mode = :any returned(predictive, values).saved_trajectories
         @test length(saved.states) == 4 && length(saved.actions) == 4
         @test saved.environment.states == [(; pulls=t) for t in 0:3]
@@ -1290,12 +1290,13 @@ end
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
-            @varname(timestep[1].environment.drift), @varname(timestep[2].environment.drift)
+            @varname(timesteps[1].environment.drift),
+            @varname(timesteps[2].environment.drift),
         ])
         #What it gives from them is what the model observes
         drifts = Dict(
-            @varname(timestep[1].environment.drift) => 0.25,
-            @varname(timestep[2].environment.drift) => -0.5,
+            @varname(timesteps[1].environment.drift) => 0.25,
+            @varname(timesteps[2].environment.drift) => -0.5,
         )
         @test (@test_logs match_mode = :any returned(model, drifts)).saved_trajectories.observations[2:end] ==
             [(; reward=0.75), (; reward=0.25)]
@@ -1329,11 +1330,11 @@ end
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
-            @varname(timestep[1].noise),
-            @varname(timestep[2].noise),
-            @varname(timestep[3].noise),
+            @varname(timesteps[1].noise),
+            @varname(timesteps[2].noise),
+            @varname(timesteps[3].noise),
         ])
-        noises = Dict(@varname(timestep[t].noise) => 0.1 * t for t in 1:3)
+        noises = Dict(@varname(timesteps[t].noise) => 0.1 * t for t in 1:3)
         V = 0.5
         expected = 0.0
         for t in 1:3
@@ -1461,7 +1462,7 @@ end
             SESSION_REWARDS,
             (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
         )
-        @test keys(rand(Xoshiro(1), imputing)) == [@varname(timestep[2].choice.imputed)]
+        @test keys(rand(Xoshiro(1), imputing)) == [@varname(timesteps[2].choice.imputed)]
         #Other errors get through
         @test_throws "gave no output" logjoint(
             session_for_test(

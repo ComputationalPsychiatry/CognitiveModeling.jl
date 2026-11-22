@@ -858,10 +858,10 @@ struct RegressionParameter{
         #A distribution on its own is the family whose only parameter is the one that the regression gives
         regression_family = as_regression_family(family)
 
-        #With a family, the values of the sessions are named session under the parameter's name, and the other parameters of its distribution family, so varying effects can't take those names
+        #With a family, the values of the sessions are named sessions under the parameter's name, and the other parameters of its distribution family, so varying effects can't take those names
         if regression_family !== nothing
             check_no_varying_effects_named(
-                terms_by_name, :session, "the values of the sessions"
+                terms_by_name, :sessions, "the values of the sessions"
             )
             check_no_varying_effects_named(
                 terms_by_name, :family, "the other parameters of the family"

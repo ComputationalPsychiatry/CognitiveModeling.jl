@@ -8,9 +8,9 @@
         ==(SimulatedMissingValue()),
         decondition_sessions(sessions_info).sessions[1].actions.choice,
     )
-    @test @varname(session[3].timestep[40].choice.simulated) in
+    @test @varname(simulated_sessions[3].timesteps[40].choice.simulated) in
         Turing.FlexiChains.parameters(prior_predictions)
-    @test @varname(session[3].timestep[40].choice.simulated) in
+    @test @varname(simulated_sessions[3].timesteps[40].choice.simulated) in
         Turing.FlexiChains.parameters(posterior_predictions)
 end
 

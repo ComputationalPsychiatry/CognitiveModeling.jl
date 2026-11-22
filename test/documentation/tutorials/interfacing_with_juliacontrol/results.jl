@@ -12,9 +12,9 @@ end
 
 @testset "NUTS recovers the gains of each session" begin
     for (name, variable, tolerance) in (
-        (:K, @varname(K.session), 0.3),
-        (:Ti, @varname(Ti.session), 0.3),
-        (:Td, @varname(Td.session), 0.05),
+        (:K, @varname(K.sessions), 0.3),
+        (:Ti, @varname(Ti.sessions), 0.3),
+        (:Td, @varname(Td.sessions), 0.05),
     )
         draws = vec(chain[variable])
         estimates = [mean(draw[session] for draw in draws) for session in 1:3]

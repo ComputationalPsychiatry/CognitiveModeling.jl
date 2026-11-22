@@ -108,7 +108,7 @@ sessions_info = MultipleSessionsInfo(
 ## The Turing model ##
 
 #Each participant has their own parameters, all from the same priors. The initial value isn't fitted, so it takes its default.
-#The parameters are named after the parameters model's names, so the learning rate of the third participant is learning_rate.session[3]
+#The parameters are named after the parameters model's names, so the learning rate of the third participant is learning_rate.sessions[3]
 cognitive_parameters_model = IndependentParameters((;
     learning_rate=Beta(2, 2), noise=LogNormal(-2, 1)
 ))
@@ -151,10 +151,10 @@ end
 Makie.plot(chain)
 
 #The learning rates of the participants side by side, with their medians and intervals
-FM.forestplot(chain, @varname(learning_rate.session))
+FM.forestplot(chain, @varname(learning_rate.sessions))
 
 #The same as densities
-FM.ridgeline(chain, @varname(learning_rate.session))
+FM.ridgeline(chain, @varname(learning_rate.sessions))
 
 #The learning rates again, named after the participants
 FM.forestplot(

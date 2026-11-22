@@ -50,6 +50,51 @@ function check_environment_parameters(
     )
 end
 
+#Decided by the element types of the columns, which are in the type of the session, so that it is known when the code is compiled, and the sessions of a model have names of one type
+"""
+    simulates_values(session_info)
+    simulates_values(sessions_info)
+
+Return whether the data of a [`SessionInfo`](@ref), or of every session of a
+[`MultipleSessionsInfo`](@ref), can hold [`SimulatedMissingValue`](@ref), as that of a
+session from [`decondition_sessions`](@ref) does, so that its model simulates the values
+instead of being fitted to them. Used by the inference backends' models of several sessions,
+which name the variables of such sessions apart from those of fitted ones, and by
+[`condition_sessions`](@ref).
+"""
+function simulates_values(session_info::SessionInfo)
+    return can_hold_simulated_value(session_info.observations, session_info.actions)
+end
+function simulates_values(sessions_info::MultipleSessionsInfo)
+    return simulates_values(first(sessions_info.sessions))
+end
+
+"""
+    can_hold_simulated_value(observations, actions)
+
+Return whether a column of `observations` or `actions`, the data of a session, can hold
+[`SimulatedMissingValue`](@ref), which the element types of the columns say. Used by
+[`simulates_values`](@ref) and [`marker_of_unmapped_outputs`](@ref).
+"""
+function can_hold_simulated_value(observations::NamedTuple, actions::NamedTuple)
+    return any_column_can_hold_simulated_value((
+        values(observations)..., values(actions)...
+    ))
+end
+
+#The columns are taken one at a time, which the compiler follows through the types
+"""
+    any_column_can_hold_simulated_value(columns)
+
+Return whether any of `columns`, a tuple of vectors, has an element type which
+[`SimulatedMissingValue`](@ref) belongs to. Used by [`can_hold_simulated_value`](@ref).
+"""
+any_column_can_hold_simulated_value(::Tuple{}) = false
+function any_column_can_hold_simulated_value(columns::Tuple)
+    return SimulatedMissingValue <: eltype(first(columns)) ||
+           any_column_can_hold_simulated_value(Base.tail(columns))
+end
+
 """
     sessions_save_anything(sessions_info)
 

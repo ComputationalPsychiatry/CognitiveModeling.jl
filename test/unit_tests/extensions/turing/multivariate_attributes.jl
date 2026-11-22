@@ -125,8 +125,8 @@ end
 const OPTIONS_LEARNING_RATES = [0.2 0.5 0.8; 0.6 0.3 0.4; 0.9 0.7 0.1]
 const OPTIONS_RATING_NOISES = [0.3, 0.5, 0.4]
 const OPTIONS_VALUES = Dict(
-    @varname(learning_rates.session) => OPTIONS_LEARNING_RATES,
-    @varname(rating_noise.session) => OPTIONS_RATING_NOISES,
+    @varname(learning_rates.sessions) => OPTIONS_LEARNING_RATES,
+    @varname(rating_noise.sessions) => OPTIONS_RATING_NOISES,
 )
 
 @testset "Observations, actions, states and parameters that are vectors, beside ones that are numbers" begin
@@ -141,8 +141,8 @@ const OPTIONS_VALUES = Dict(
             TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
         )
         sampled = rand(Xoshiro(1), model)
-        @test size(sampled[@varname(learning_rates.session)]) == (3, 3)
-        @test size(sampled[@varname(rating_noise.session)]) == (3,)
+        @test size(sampled[@varname(learning_rates.sessions)]) == (3, 3)
+        @test size(sampled[@varname(rating_noise.sessions)]) == (3,)
         @test logjoint(model, OPTIONS_VALUES) ≈
             options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
               options_by_hand(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES)
@@ -200,7 +200,7 @@ const OPTIONS_VALUES = Dict(
         imputed = full_model(
             TuringBackend(), IndependentParameters(OPTIONS_PRIORS), options_sessions(table)
         )
-        imputed_name = @varname(session[2].timestep[2].ratings.imputed)
+        imputed_name = @varname(sessions[2].timesteps[2].ratings.imputed)
         @test Set(keys(rand(Xoshiro(1), imputed))) ==
             Set([keys(OPTIONS_VALUES)..., imputed_name])
         @test size(rand(Xoshiro(1), imputed)[imputed_name]) == (3,)
@@ -260,7 +260,7 @@ const OPTIONS_VALUES = Dict(
         imputed = full_model(
             TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
         )
-        imputed_name = @varname(session[2].timestep[2].ratings.imputed)
+        imputed_name = @varname(sessions[2].timesteps[2].ratings.imputed)
         values_with_imputed = merge(OPTIONS_VALUES, Dict(imputed_name => [0.1, 0.2, 0.3]))
         @test logjoint(imputed, values_with_imputed) ≈
             options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
@@ -307,7 +307,7 @@ const OPTIONS_VALUES = Dict(
         session_parameters = get_session_parameters(model, chain)
         for draw in (1, 30)
             #The expected payoffs of S2 follow from the payoffs of its three rows and the learning rates of the draw, from timestep 0 on
-            learning_rates = chain[@varname(learning_rates.session)][draw][:, 2]
+            learning_rates = chain[@varname(learning_rates.sessions)][draw][:, 2]
             @test session_parameters[@varname(S2.learning_rates)][draw] == learning_rates
             expected_payoffs = trajectories[@varname(S2.expected_payoffs)][draw]
             @test expected_payoffs[1] == [0.5, 0.5, 0.5]

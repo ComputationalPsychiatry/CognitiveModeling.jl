@@ -81,7 +81,7 @@ function ExampleModels.reward_and_cue(::DistributionsJl, probability, cue_mean, 
 end
 
 ## The models which sample something of their own ##
-#The noise of each timestep, named timestep[t].noise in a session
+#The noise of each timestep, named timesteps[t].noise in a session
 Turing.@model function CognitiveModeling.turing_timestep_model(
     model::Union{SamplingWithinTimestep,EveryFeature}, context::ModelContext
 )
@@ -99,7 +99,7 @@ Turing.@model function CognitiveModeling.turing_initialize_state(
     return merge(state, (; expected_reward=state.expected_reward + initial_offset))
 end
 
-#The drift of each timestep, named timestep[t].environment.drift in a session
+#The drift of each timestep, named timesteps[t].environment.drift in a session
 Turing.@model function CognitiveModeling.turing_timestep_model(
     environment::Union{SamplingWithinTimestepEnvironment,EveryFeatureEnvironment},
     context::ModelContext,
@@ -115,7 +115,7 @@ end
 #models sample nothing of their own
 latents_from_variables(model, variable, n_timesteps) = (;)
 function latents_from_variables(model::SamplingWithinTimestep, variable, n_timesteps)
-    return (; noise=[variable("timestep[$t].noise") for t in 1:n_timesteps])
+    return (; noise=[variable("timesteps[$t].noise") for t in 1:n_timesteps])
 end
 function latents_from_variables(model::SampledInitialState, variable, n_timesteps)
     return (; initial_offset=variable("initial_cognitive_state.initial_offset"))
@@ -123,7 +123,7 @@ end
 function latents_from_variables(model::EveryFeature, variable, n_timesteps)
     return (;
         initial_offset=variable("initial_cognitive_state.initial_offset"),
-        noise=[variable("timestep[$t].noise") for t in 1:n_timesteps],
+        noise=[variable("timesteps[$t].noise") for t in 1:n_timesteps],
     )
 end
 function latents_from_variables(model::EveryFeatureWithoutSampling, variable, n_timesteps)
@@ -134,11 +134,11 @@ function latents_from_variables(
     variable,
     n_timesteps,
 )
-    return (; drift=[variable("timestep[$t].environment.drift") for t in 1:n_timesteps])
+    return (; drift=[variable("timesteps[$t].environment.drift") for t in 1:n_timesteps])
 end
 
 #A function which gives the value of a variable of a model by the name of the variable, from values drawn from the model,
-#with a prefix, such as "session[2].", for the variables of a session among several
+#with a prefix, such as "sessions[2].", for the variables of a session among several
 function variables_of(values; prefix="")
     by_name = Dict(string(name) => values[name] for name in keys(values))
     return name -> by_name[prefix * name]

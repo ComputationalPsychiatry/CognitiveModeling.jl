@@ -126,7 +126,7 @@ function sessions_by_hand(table, learning_rates, inverse_temperatures)
 end
 
 @testset "turing_multiple_behavioral_sessions" begin
-    @testset "Each session runs with its own parameters under session[i], and the log density is the sum over the sessions" begin
+    @testset "Each session runs with its own parameters under sessions[i], and the log density is the sum over the sessions" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
@@ -157,8 +157,8 @@ end
             (; learning_rate=[0.3, 0.3, 0.3], inverse_temperature=[2.0, 2.0, 2.0]),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
-        @test collect(keys(values)) == [@varname(session[3].timestep[3].choice.imputed)]
-        imputed = Dict(@varname(session[3].timestep[3].choice.imputed) => false)
+        @test collect(keys(values)) == [@varname(sessions[3].timesteps[3].choice.imputed)]
+        imputed = Dict(@varname(sessions[3].timesteps[3].choice.imputed) => false)
         with_false = (;
             FULL_TABLE..., choice=[true, false, true, false, true, true, true, false, true]
         )
@@ -180,7 +180,7 @@ end
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) ==
-            Set([@varname(session[1].timestep[t].environment.drift) for t in 1:3])
+            Set([@varname(sessions[1].timesteps[t].environment.drift) for t in 1:3])
     end
 
     @testset "Sessions whose saved trajectories have different types are returned in one vector which holds them all" begin
@@ -267,15 +267,16 @@ end
             TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info
         )
         values = rand(Xoshiro(1), model)
-        @test Set(keys(values)) ==
-            Set([@varname(learning_rate.session), @varname(inverse_temperature.session)])
-        @test length(values[@varname(learning_rate.session)]) == 3
+        @test Set(keys(values)) == Set([
+            @varname(learning_rate.sessions), @varname(inverse_temperature.sessions)
+        ])
+        @test length(values[@varname(learning_rate.sessions)]) == 3
         #The log density is the priors and the sessions with those parameters
         learning_rates = [0.2, 0.3, 0.4]
         inverse_temperatures = [1.0, 2.0, 3.0]
         given = Dict(
-            @varname(learning_rate.session) => learning_rates,
-            @varname(inverse_temperature.session) => inverse_temperatures,
+            @varname(learning_rate.sessions) => learning_rates,
+            @varname(inverse_temperature.sessions) => inverse_temperatures,
         )
         expected_prior =
             sum(logpdf.(Beta(2, 2), learning_rates)) +
@@ -298,8 +299,8 @@ end
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
         learning_rates = [0.2, 0.3, 0.4]
-        given = Dict(@varname(learning_rate.session) => learning_rates)
-        @test collect(keys(rand(Xoshiro(1), model))) == [@varname(learning_rate.session)]
+        given = Dict(@varname(learning_rate.sessions) => learning_rates)
+        @test collect(keys(rand(Xoshiro(1), model))) == [@varname(learning_rate.sessions)]
         @test logjoint(model, given) ≈
             sum(logpdf.(Beta(2, 2), learning_rates)) +
               sessions_by_hand(FULL_TABLE, learning_rates, fill(3.0, 3))
@@ -323,9 +324,9 @@ end
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
         @test collect(keys(rand(Xoshiro(1), named_model))) ==
-            [@varname(learning.learning_rate.session)]
+            [@varname(learning.learning_rate.sessions)]
         @test logjoint(
-            named_model, Dict(@varname(learning.learning_rate.session) => learning_rates)
+            named_model, Dict(@varname(learning.learning_rate.sessions) => learning_rates)
         ) ≈ logjoint(model, given)
         #A parameter model of one's own takes them too, and a parameter can't be both fixed and given
         with_own_model = full_model(
@@ -351,8 +352,8 @@ end
         )
         model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
         )
         returned_value = returned(model, given)
         @test keys(returned_value) == (
@@ -383,8 +384,8 @@ end
             include_submodel_prefixes=true,
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
-            @varname(cognitive_parameters_model.learning_rate.session),
-            @varname(cognitive_parameters_model.inverse_temperature.session),
+            @varname(cognitive_parameters_model.learning_rate.sessions),
+            @varname(cognitive_parameters_model.inverse_temperature.sessions),
             @varname(downstream_model.slope),
         ])
         without = full_model(
@@ -394,20 +395,20 @@ end
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         @test Set(keys(rand(Xoshiro(1), without))) == Set([
-            @varname(learning_rate.session),
-            @varname(inverse_temperature.session),
+            @varname(learning_rate.sessions),
+            @varname(inverse_temperature.sessions),
             @varname(slope),
         ])
         #The log densities are the same with the names changed
         given = Dict(
-            @varname(cognitive_parameters_model.learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(cognitive_parameters_model.inverse_temperature.session) =>
+            @varname(cognitive_parameters_model.learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(cognitive_parameters_model.inverse_temperature.sessions) =>
                 [1.0, 2.0, 3.0],
             @varname(downstream_model.slope) => 0.8,
         )
         given_without = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
             @varname(slope) => 0.8,
         )
         @test logjoint(model, given) ≈ logjoint(without, given_without)
@@ -440,8 +441,8 @@ end
         )
         @test @varname(slope) in keys(rand(Xoshiro(1), model))
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
             @varname(slope) => 0.8,
         )
         returned_value = returned(model, given)
@@ -466,7 +467,7 @@ end
             TuringBackend(), CompositeParameters(learning, temperature), sessions_info
         )
         values = Dict(
-            @varname(learning_rate.session) => [0.2, 0.5, 0.8],
+            @varname(learning_rate.sessions) => [0.2, 0.5, 0.8],
             @varname(inverse_temperature.shared) => 2.0,
         )
         @test Set(keys(rand(Xoshiro(1), from_tuple))) == Set(keys(values))
@@ -475,7 +476,7 @@ end
             TuringBackend(), (; learning, temperature), sessions_info
         )
         named_values = Dict(
-            @varname(learning.learning_rate.session) => [0.2, 0.5, 0.8],
+            @varname(learning.learning_rate.sessions) => [0.2, 0.5, 0.8],
             @varname(temperature.inverse_temperature.shared) => 2.0,
         )
         @test Set(keys(rand(Xoshiro(1), from_named_tuple))) == Set(keys(named_values))
@@ -520,15 +521,15 @@ end
             environment_parameters_model=shared,
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
-            @varname(learning_rate.session),
-            @varname(inverse_temperature.session),
+            @varname(learning_rate.sessions),
+            @varname(inverse_temperature.sessions),
             @varname(mean_reward.shared),
         ])
         learning_rates = [0.2, 0.3, 0.4]
         inverse_temperatures = [1.0, 2.0, 3.0]
         given = Dict(
-            @varname(learning_rate.session) => learning_rates,
-            @varname(inverse_temperature.session) => inverse_temperatures,
+            @varname(learning_rate.sessions) => learning_rates,
+            @varname(inverse_temperature.sessions) => inverse_temperatures,
             @varname(mean_reward.shared) => 0.6,
         )
         #Every reward in the data counts with the environment's distribution, though no session misses one
@@ -549,8 +550,8 @@ end
         @test loglikelihood(
             fixed,
             Dict(
-                @varname(learning_rate.session) => learning_rates,
-                @varname(inverse_temperature.session) => inverse_temperatures,
+                @varname(learning_rate.sessions) => learning_rates,
+                @varname(inverse_temperature.sessions) => inverse_temperatures,
             ),
         ) ≈ sessions_by_hand(FULL_TABLE, learning_rates, inverse_temperatures)
         #With the prefixes, its variables are under environment_parameters_model
@@ -648,8 +649,8 @@ end
             environment_parameters_model=IdenticalParameters((; mean_reward=Normal(0, 1))),
         )
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
             @varname(mean_reward.shared) => 0.6,
         )
         @test returned(shared, given).environment_parameters == (; mean_reward=fill(0.6, 3))
@@ -709,15 +710,15 @@ end
         )
         values = rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
-            @varname(learning_rate.session),
-            @varname(inverse_temperature.session),
-            @varname(session[1].timestep[2].environment.reward.imputed),
+            @varname(learning_rate.sessions),
+            @varname(inverse_temperature.sessions),
+            @varname(sessions[1].timesteps[2].environment.reward.imputed),
         ])
         #S1's rewards, the imputed one and the two in the data, are scored against its own mean, since its environment runs, and the rewards of the other sessions aren't
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
-            @varname(session[1].timestep[2].environment.reward.imputed) => 0.8,
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
+            @varname(sessions[1].timesteps[2].environment.reward.imputed) => 0.8,
         )
         with_imputed = (; table..., reward=[1.0, 0.8, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0])
         @test logjoint(model, given) ≈
@@ -743,10 +744,10 @@ end
             fixed_environment_parameters=(; mean_reward=0.6),
         )
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
-            @varname(session[1].timestep[2].environment.reward.imputed) => 0.8,
-            @varname(session[3].timestep[2].environment.reward.imputed) => 0.1,
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
+            @varname(sessions[1].timesteps[2].environment.reward.imputed) => 0.8,
+            @varname(sessions[3].timesteps[2].environment.reward.imputed) => 0.1,
         )
 
         #The rewards of S1 and S3, imputed and recorded, are scored against the environment, and those of S2 aren't
@@ -849,8 +850,9 @@ end
         model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
         @test size(chain, 1) == 50
-        @test Set(Turing.FlexiChains.parameters(chain)) ==
-            Set([@varname(learning_rate.session), @varname(inverse_temperature.session)])
+        @test Set(Turing.FlexiChains.parameters(chain)) == Set([
+            @varname(learning_rate.sessions), @varname(inverse_temperature.sessions)
+        ])
         returned_values = returned(model, chain)
         @test length(returned_values) == 50
         @test length(returned_values[1].cognitive_parameters.learning_rate) == 3
@@ -866,12 +868,12 @@ end
             with_imputed,
             Gibbs(
                 (@varname(learning_rate), @varname(inverse_temperature)) => NUTS(),
-                @varname(session) => PG(5),
+                @varname(sessions) => PG(5),
             ),
             20;
             progress=false,
         )
-        @test @varname(session[3].timestep[3].choice.imputed) in
+        @test @varname(sessions[3].timesteps[3].choice.imputed) in
             Turing.FlexiChains.parameters(chain)
     end
 
@@ -906,14 +908,14 @@ end
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         rejected = Dict(
-            @varname(learning_rate.session) => [0.3, 1.5, 0.3], @varname(slope) => 0.8
+            @varname(learning_rate.sessions) => [0.3, 1.5, 0.3], @varname(slope) => 0.8
         )
         @test logjoint(model, rejected) == -Inf
         rejected_value = returned(model, rejected)
         @test rejected_value.downstream_values === nothing &&
             rejected_value.saved_trajectories[2].parameters_valid === false
         accepted = Dict(
-            @varname(learning_rate.session) => fill(0.3, 3), @varname(slope) => 0.8
+            @varname(learning_rate.sessions) => fill(0.3, 3), @varname(slope) => 0.8
         )
         @test isfinite(logjoint(model, accepted)) &&
             returned(model, accepted).downstream_values == 0.8
@@ -995,8 +997,8 @@ end
             true,
         )
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
         )
         @test loglikelihood(full, given) ≈
             sessions_by_hand(FULL_TABLE, [0.2, 0.3, 0.4], [1.0, 2.0, 3.0])
@@ -1040,8 +1042,8 @@ end
             ),
         )
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3],
-            @varname(inverse_temperature.session) => [1.0, 2.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0],
         )
         short_model = model_with(5_000)
         long_model = model_with(10_000)
@@ -1090,15 +1092,15 @@ end
             logjoint(
                 model,
                 Dict(
-                    @varname(learning_rate.session) => fill(0.3, 3),
-                    @varname(inverse_temperature.session) => fill(2.0, 3),
+                    @varname(learning_rate.sessions) => fill(0.3, 3),
+                    @varname(inverse_temperature.sessions) => fill(2.0, 3),
                 ),
             ),
         )
         #A value that a sampler proposes is checked when the sessions run
         proposed_outside = Dict(
-            @varname(learning_rate.session) => [0.3, 0.3, 1.5],
-            @varname(inverse_temperature.session) => fill(2.0, 3),
+            @varname(learning_rate.sessions) => [0.3, 0.3, 1.5],
+            @varname(inverse_temperature.sessions) => fill(2.0, 3),
         )
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
@@ -1130,7 +1132,7 @@ end
                 sessions_info;
                 fixed_cognitive_parameters=(; learning_rate=1.5),
             ),
-            Dict(@varname(inverse_temperature.session) => fill(2.0, 3)),
+            Dict(@varname(inverse_temperature.sessions) => fill(2.0, 3)),
         )
     end
 
@@ -1195,8 +1197,8 @@ end
         ) logjoint(
             sampled,
             Dict(
-                @varname(learning_rate.session) => fill(0.3, 3),
-                @varname(inverse_temperature.session) => fill(2.0, 3),
+                @varname(learning_rate.sessions) => fill(0.3, 3),
+                @varname(inverse_temperature.sessions) => fill(2.0, 3),
                 @varname(mean_reward.shared) => 2.0,
             ),
         )
@@ -1205,8 +1207,8 @@ end
         ) logjoint(
             sampled,
             Dict(
-                @varname(learning_rate.session) => [0.3, 0.3, 1.5],
-                @varname(inverse_temperature.session) => fill(2.0, 3),
+                @varname(learning_rate.sessions) => [0.3, 0.3, 1.5],
+                @varname(inverse_temperature.sessions) => fill(2.0, 3),
                 @varname(mean_reward.shared) => 0.5,
             ),
         )
@@ -1237,8 +1239,8 @@ end
             logjoint(
                 model,
                 Dict(
-                    @varname(learning_rate.session) => fill(0.3, 3),
-                    @varname(inverse_temperature.session) => fill(2.0, 3),
+                    @varname(learning_rate.sessions) => fill(0.3, 3),
+                    @varname(inverse_temperature.sessions) => fill(2.0, 3),
                 ),
             ),
         )
@@ -1247,8 +1249,8 @@ end
         ) logjoint(
             model,
             Dict(
-                @varname(learning_rate.session) => [0.3, 0.3, -0.5],
-                @varname(inverse_temperature.session) => fill(2.0, 3),
+                @varname(learning_rate.sessions) => [0.3, 0.3, -0.5],
+                @varname(inverse_temperature.sessions) => fill(2.0, 3),
             ),
         )
     end

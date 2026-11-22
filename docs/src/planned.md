@@ -58,7 +58,7 @@ This page lists what is planned and not written yet. The list will grow.
   observations are the other's actions. When they aren't, the other agent is the environment
   that fills them in.
 - Session identifiers in the names of the variables of a fitted session, instead of
-  `session[i]`, if a way is found that doesn't compile the session once per identifier.
+  `sessions[i]`, if a way is found that doesn't compile the session once per identifier.
 - A convenient way to fit a single session, with the full model or a variant of it.
 - Choosing a sampler for each parameter from whether it is discrete or continuous.
 - Summing out a discrete parameter with few values instead of sampling it, so that a sampler

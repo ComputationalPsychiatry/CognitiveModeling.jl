@@ -104,8 +104,8 @@ const RATES = [2.0, 3.0, 1.5]
             TuringBackend(), IndependentParameters(RESPONSE_PRIORS), sessions_info
         )
         values = Dict(
-            @varname(choice_probability.session) => PROBABILITIES,
-            @varname(rate.session) => RATES,
+            @varname(choice_probability.sessions) => PROBABILITIES,
+            @varname(rate.sessions) => RATES,
         )
         @test logjoint(model, values) ≈
             sum(p -> logpdf(Beta(2, 2), p), PROBABILITIES) +
@@ -122,8 +122,8 @@ const RATES = [2.0, 3.0, 1.5]
             response_sessions(table; impute_missing_actions=false),
         )
         values = Dict(
-            @varname(choice_probability.session) => PROBABILITIES,
-            @varname(rate.session) => RATES,
+            @varname(choice_probability.sessions) => PROBABILITIES,
+            @varname(rate.sessions) => RATES,
         )
         #The confidence of that row still counts
         @test logjoint(model, values) ≈
@@ -140,7 +140,7 @@ const RATES = [2.0, 3.0, 1.5]
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
         @test all(isfinite, vec(chain[:logjoint]))
         @test all(
-            draw -> all(0 .< draw .< 1), vec(chain[@varname(choice_probability.session)])
+            draw -> all(0 .< draw .< 1), vec(chain[@varname(choice_probability.sessions)])
         )
     end
 
@@ -163,7 +163,7 @@ const RATES = [2.0, 3.0, 1.5]
         model = full_model(
             TuringBackend(), IndependentParameters((; mean=Normal(0, 1))), sessions_info
         )
-        values = Dict(@varname(mean.session) => [0.2, -0.1])
+        values = Dict(@varname(mean.sessions) => [0.2, -0.1])
         @test logjoint(model, values) ≈
             logpdf(Normal(0, 1), 0.2) +
               logpdf(Normal(0, 1), -0.1) +

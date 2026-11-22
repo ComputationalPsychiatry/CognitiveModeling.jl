@@ -541,8 +541,8 @@ const REGRESSION_TABLE = merge(
             VaryingEffects(:coef, Intercept(1))
         )
         #With a family, the values of the sessions and its other parameters have names that varying effects can't take, while a predictor can, whose coefficient is under coef
-        @test_throws "VaryingEffects of a RegressionParameter with a family can't be named session, which is the name of the values of the sessions. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session)." RegressionParameter(
-            Intercept(1), VaryingEffects(:id, Intercept(2); name=:session); family=Pair
+        @test_throws "VaryingEffects of a RegressionParameter with a family can't be named sessions, which is the name of the values of the sessions. Give them another name, as in VaryingEffects(:id, Intercept(Exponential(1)); name = :by_session)." RegressionParameter(
+            Intercept(1), VaryingEffects(:id, Intercept(2); name=:sessions); family=Pair
         )
         @test_throws "VaryingEffects of a RegressionParameter with a family can't be named family, which is the name of the other parameters of the family." RegressionParameter(
             VaryingEffects(:family, Intercept(2)); family=Pair

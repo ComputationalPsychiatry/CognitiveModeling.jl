@@ -42,12 +42,6 @@ const CASES_FITTED_WITH_NUTS = (
 #check, and the check is marked broken, so that a fix shows up as an unexpected pass
 const CASES_WITH_SYMBOL_ACTIONS = ("Every feature with a regression",)
 
-#The cases of a full model whose predictions can't be made, since a later session has variables at timesteps that an
-#earlier one doesn't have, which DynamicPPL's skeleton of a PartialArray rebuilds from the first session's, in
-#FlexiChains' parameters_at, when predict_session_trajectories evaluates the model on each draw. DynamicPPL.jl#1542
-#fixes it. The predictions are marked broken, so that the fix shows up as an unexpected pass
-const CASES_WITH_SESSIONS_OF_DIFFERENT_TIMESTEPS = ("Every feature with a regression",)
-
 #The name of the variable of a chain that is written as `name`, such as "S1.learning_rate", or nothing
 function chain_variable(chain, name)
     names = Turing.FlexiChains.get_name.(keys(chain))
@@ -65,22 +59,9 @@ function test_reading_the_fit(case, model, chain)
     trajectories = get_session_trajectories(
         model, chain; cognitive_save_history=save_everything
     )
-    predicts = !(case.name in CASES_WITH_SESSIONS_OF_DIFFERENT_TIMESTEPS)
-    if predicts
-        predicted = predict_session_trajectories(
-            model, chain; cognitive_save_history=save_everything
-        )
-    else
-        @test_broken try
-            predict_session_trajectories(
-                model, chain; cognitive_save_history=save_everything
-            )
-            true
-        catch error
-            error isa UndefRefError || rethrow()
-            false
-        end
-    end
+    predicted = predict_session_trajectories(
+        model, chain; cognitive_save_history=save_everything
+    )
     for (i, session_id) in enumerate(case.session_ids)
         session = case.sessions[i]
         for name in keys(case.cognitive_parameters)
@@ -99,7 +80,7 @@ function test_reading_the_fit(case, model, chain)
                     isequal(saved[t + 1], session.actions[name][t]),
                 1:(session.n_timesteps),
             )
-            predicts && @test length(predicted[variable][1]) == session.n_timesteps + 1
+            @test length(predicted[variable][1]) == session.n_timesteps + 1
         end
     end
 end

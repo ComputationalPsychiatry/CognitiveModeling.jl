@@ -42,11 +42,11 @@ end
 
 Turing.jl model which samples the values of one parameter for every session from
 `distribution`, a distribution over an array with the value of each session along its last
-dimension, as the variable `session`, so that under the parameter's prefix it is named like
-`learning_rate.session`, and returns the value of each session with
+dimension, as the variable `sessions`, so that under the parameter's prefix it is named like
+`learning_rate.sessions`, and returns the value of each session with
 [`values_of_sessions`](@ref). Used by [`turing_independent_parameters`](@ref).
 """
 Turing.@model function turing_independent_parameter(distribution)
-    session ~ distribution
-    return values_of_sessions(session)
+    sessions ~ distribution
+    return values_of_sessions(sessions)
 end

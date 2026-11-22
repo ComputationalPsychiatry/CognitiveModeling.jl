@@ -212,7 +212,7 @@ model = full_model(
 )
 chain = sample(Xoshiro(11), model, NUTS(300, 0.65), 300; progress=false)
 
-# The chain has the gains of each session under `K.session`, `Ti.session` and `Td.session`.
+# The chain has the gains of each session under `K.sessions`, `Ti.sessions` and `Td.sessions`.
 #
 # NUTS needs the gradient of the log density. ForwardDiff.jl, which is Turing.jl's default,
 # ReverseDiff.jl and Mooncake.jl 0.5 gave the right gradient for this model, when checked

@@ -66,7 +66,9 @@ end
             @varname(S3.inverse_temperature),
         ]
         @test vec(parameters[@varname(S2.learning_rate)]) == vec(
-            map(learning_rates -> learning_rates[2], chain[@varname(learning_rate.session)])
+            map(
+                learning_rates -> learning_rates[2], chain[@varname(learning_rate.sessions)]
+            ),
         )
         #The saved states are those of each sample's parameters, from timestep 0
         rows = findall(==("S1"), FULL_TABLE.id)
@@ -286,7 +288,7 @@ end
         #The parameters of the sessions are read in the same way
         parameters = get_session_parameters(different_lengths, prior_chain)
         @test vec(parameters[@varname(S3.learning_rate)]) ==
-            map(rates -> rates[3], vec(prior_chain[@varname(learning_rate.session)]))
+            map(rates -> rates[3], vec(prior_chain[@varname(learning_rate.sessions)]))
     end
 
     @testset "A fit where only some sessions run their environment can be read, also with the record of every session's environment" begin
@@ -301,9 +303,13 @@ end
 
         #On their second timestep, S1 and S3 observed the rewards imputed in the fit, and S2 observed those in the data
         @test map(rewards -> rewards[3], vec(session_trajectories[@varname(S1.reward)])) ==
-            vec(prior_chain[@varname(session[1].timestep[2].environment.reward.imputed)])
+            vec(
+            prior_chain[@varname(sessions[1].timesteps[2].environment.reward.imputed)]
+        )
         @test map(rewards -> rewards[3], vec(session_trajectories[@varname(S3.reward)])) ==
-            vec(prior_chain[@varname(session[3].timestep[2].environment.reward.imputed)])
+            vec(
+            prior_chain[@varname(sessions[3].timesteps[2].environment.reward.imputed)]
+        )
         @test all(
             rewards -> rewards[2:end] == [0.0, 1.0],
             vec(session_trajectories[@varname(S2.reward)]),
@@ -323,7 +329,7 @@ end
         parameters = get_session_parameters(some_running, prior_chain)
         @test vec(parameters[@varname(S2.inverse_temperature)]) == map(
             temperatures -> temperatures[2],
-            vec(prior_chain[@varname(inverse_temperature.session)]),
+            vec(prior_chain[@varname(inverse_temperature.sessions)]),
         )
     end
 

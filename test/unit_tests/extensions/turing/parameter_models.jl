@@ -74,17 +74,18 @@ end
             logpdf(Beta(2, 2), 0.3) + logpdf(LogNormal(0, 0.5), 2.0)
     end
 
-    @testset "IndependentParameters samples each parameter for every session, as the vector name.session" begin
+    @testset "IndependentParameters samples each parameter for every session, as the vector name.sessions" begin
         model = CognitiveModeling.turing_parameters_model(
             IndependentParameters(FULL_PRIORS), sessions_info
         )
         values = rand(Xoshiro(1), model)
-        @test Set(keys(values)) ==
-            Set([@varname(learning_rate.session), @varname(inverse_temperature.session)])
-        @test length(values[@varname(learning_rate.session)]) == 3
+        @test Set(keys(values)) == Set([
+            @varname(learning_rate.sessions), @varname(inverse_temperature.sessions)
+        ])
+        @test length(values[@varname(learning_rate.sessions)]) == 3
         given = Dict(
-            @varname(learning_rate.session) => [0.2, 0.3, 0.4],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
         )
         @test returned(model, given) ==
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
@@ -157,7 +158,7 @@ end
         )
     end
 
-    @testset "A centered parameter is sampled from the distribution of its group, as name.session" begin
+    @testset "A centered parameter is sampled from the distribution of its group, as name.sessions" begin
         centered = HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 GROUP_PRIORS;
@@ -173,12 +174,12 @@ end
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
             @varname(learning_rate.mean.group),
             @varname(learning_rate.sd.group),
-            @varname(learning_rate.session),
+            @varname(learning_rate.sessions),
         ])
         values = Dict(
             @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
             @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
-            @varname(learning_rate.session) => [0.6, -0.6, 0.2],
+            @varname(learning_rate.sessions) => [0.6, -0.6, 0.2],
         )
         @test returned(model, values).learning_rate ≈ to_unit_interval.([0.6, -0.6, 0.2])
         @test logjoint(model, values) ≈
@@ -204,7 +205,7 @@ end
         values = Dict(
             @varname(learning_rate.location.group) => 0.5,
             @varname(learning_rate.spread.group) => 2.0,
-            @varname(learning_rate.session) => [0.6, -0.6, 0.2],
+            @varname(learning_rate.sessions) => [0.6, -0.6, 0.2],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
         @test logjoint(model, values) ≈
@@ -230,7 +231,7 @@ end
             @varname(learning_rate.mean.group) => 0.5,
             @varname(learning_rate.sd.group) => 1.0,
             @varname(learning_rate.session_z) => [0.1, 0.2, -0.3],
-            @varname(inverse_temperature.session) => [1.0, 2.0, 3.0],
+            @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(values))
         parameters = returned(model, values)
@@ -488,7 +489,7 @@ end
                 @varname(learning_rate.mean.group) => 0.5,
                 @varname(learning_rate.sd.group) => 2.0,
                 if centered
-                    @varname(learning_rate.session) => [0.7, 0.9, -0.1]
+                    @varname(learning_rate.sessions) => [0.7, 0.9, -0.1]
                 else
                     @varname(learning_rate.session_z) => [0.1, 0.2, -0.3]
                 end,
@@ -584,7 +585,7 @@ end
         @test returned(model, given).environment_parameters.mean_reward ≈ [0.6, 0.4, 0.6]
     end
 
-    @testset "With a family, the value of every session is sampled from its distribution, as name.session" begin
+    @testset "With a family, the value of every session is sampled from its distribution, as name.sessions" begin
         with_family = HierarchicalRegressionParameters((;
             #A distribution on its own, whose only parameter is the sum of the regression
             uses_rewards=RegressionParameter(
@@ -614,13 +615,13 @@ end
         )
         given = Dict(
             @varname(uses_rewards.coef) => (; intercept=0.5, age=-0.01),
-            @varname(uses_rewards.session) => [true, false, true],
+            @varname(uses_rewards.sessions) => [true, false, true],
             @varname(inverse_temperature.coef) => (; intercept=0.7),
             @varname(inverse_temperature.family) => (; sd=0.4),
-            @varname(inverse_temperature.session) => [1.5, 2.0, 2.5],
+            @varname(inverse_temperature.sessions) => [1.5, 2.0, 2.5],
             @varname(bias.coef) => (; intercept=0.1),
             @varname(bias.family) => (; mean=-0.3),
-            @varname(bias.session) => [0.2, -0.5, 0.9],
+            @varname(bias.sessions) => [0.2, -0.5, 0.9],
         )
         #The values of the sessions are a variable of their own, and the other parameters of the distribution are one variable, under family
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
@@ -631,7 +632,7 @@ end
             inverse_temperature=[1.5, 2.0, 2.5],
             bias=[0.2, -0.5, 0.9],
         )
-        @test rand(Xoshiro(1), model)[@varname(uses_rewards.session)] isa Vector{Bool}
+        @test rand(Xoshiro(1), model)[@varname(uses_rewards.sessions)] isa Vector{Bool}
         #Each is scored against the distribution of its transformed sum, which is in the place of RegressionOutcome: the ages of the sessions are 20, 30 and 40
         log_odds = 0.5 .- 0.01 .* [20, 30, 40]
         @test logjoint(model, given) ≈
@@ -666,7 +667,7 @@ end
         given = Dict(
             @varname(planning_steps.coef) => (; age=0.02),
             @varname(planning_steps.family) => (; cutpoints=[-1.0, 0.5, 1.5]),
-            @varname(planning_steps.session) => [1, 3, 4],
+            @varname(planning_steps.sessions) => [1, 3, 4],
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set(keys(given))
         @test returned(model, given) == (; planning_steps=[1, 3, 4])
@@ -703,7 +704,7 @@ end
         given = Dict(
             @varname(learning_rate.coef) => (; intercept=0.2),
             @varname(uses_rewards.coef) => (; intercept=0.5, age=-0.01),
-            @varname(uses_rewards.session) => [true, false, true],
+            @varname(uses_rewards.sessions) => [true, false, true],
         )
         @test returned(model, given).cognitive_parameters.uses_rewards ==
             [true, false, true]
@@ -721,7 +722,7 @@ end
         #The coefficients are sampled with gradients, and the values of the sessions without. Inside Gibbs, NUTS only adapts when sample is given the number of adaptation steps
         sampler = Gibbs(
             (@varname(learning_rate.coef), @varname(uses_rewards.coef)) => NUTS(),
-            @varname(uses_rewards.session) => MH(),
+            @varname(uses_rewards.sessions) => MH(),
         )
         chain = sample(
             Xoshiro(1), model, sampler, 20; nadapts=20, discard_initial=20, progress=false

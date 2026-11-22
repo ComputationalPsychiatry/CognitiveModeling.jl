@@ -10,18 +10,19 @@ Return a copy of a [`SessionInfo`](@ref), or of every session in a
 every observation too when the session has an environment model that it can include, so that
 an inference backend's model of the copy simulates them instead of fitting to them. Given an
 inference backend's model of fitted sessions, return a copy of the model whose sessions are
-deconditioned, which is otherwise the same. This can be used for predictive checks:
-evaluating the model of the copy with the samples of a fit to the sessions, or sampling it
-from its prior, simulates each session again, with the same number of timesteps at most, the
-same settings and the same environment, and [`condition_sessions`](@ref) puts simulated
-values back in the data. The observations of a session without an environment stay those in
-the data, as for an experiment whose observations are fixed in advance. Every action is
-simulated, whatever it was in the data, also one that was [`UnimputedMissingValue`](@ref) or
-[`NoValue`](@ref). The copy checks the [`stopping_criterion`](@ref) of the models as
-`check_stopping_criterion` says, as for [`SessionInfo`](@ref), whatever the session was
-prepared with: by default after the last timestep with data, which in a session with an
-environment is before every timestep, so that the copy can end before the data did, as a
-simulation does.
+deconditioned, which is otherwise the same. An inference backend names the variables of such
+sessions apart from those of fitted ones, so that everything within them is drawn again.
+This can be used for predictive checks: evaluating the model of the copy with the samples of
+a fit to the sessions, or sampling it from its prior, simulates each session again, with the
+same number of timesteps at most, the same settings and the same environment, and
+[`condition_sessions`](@ref) puts simulated values back in the data. The observations of a
+session without an environment stay those in the data, as for an experiment whose
+observations are fixed in advance. Every action is simulated, whatever it was in the data,
+also one that was [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). The copy checks the
+[`stopping_criterion`](@ref) of the models as `check_stopping_criterion` says, as for
+[`SessionInfo`](@ref), whatever the session was prepared with: by default after the last
+timestep with data, which in a session with an environment is before every timestep, so that
+the copy can end before the data did, as a simulation does.
 
 # Examples
 ```jldoctest

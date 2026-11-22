@@ -12,11 +12,32 @@ function CognitiveModeling.decondition_sessions(
             ),
         )
     end
-    return with_session_info(
+    return with_sessions_simulated(
         model,
         info -> decondition_sessions(info; check_stopping_criterion),
         "decondition_sessions",
     )
+end
+
+#Several sessions are named after whether their data is simulated, with name_of_session, while a single session has no name of its own in the model. It is given one with DynamicPPL.jl's prefix, so that Turing.jl's predict draws every variable within it again, whatever a chain of a fit to it holds
+"""
+    with_sessions_simulated(model, change, function_name)
+
+Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, whose session info is
+what `change` makes of its own, with [`with_session_info`](@ref), when `change` makes its
+sessions simulate their data. A single session whose data wasn't simulated before has its
+variables under the prefix `simulated_session` in the copy, as several sessions have under
+`simulated_sessions[i]`. Any other model is an error, which names `function_name`, the
+function that was called. Used by `decondition_sessions` and `predict_session_trajectories`.
+"""
+function with_sessions_simulated(model::DynamicPPL.Model, change, function_name)
+    deconditioned = with_session_info(model, change, function_name)
+    if model.f === CognitiveModeling.turing_behavioral_session &&
+        !simulates_values(info_of(model))
+        return DynamicPPL.prefix(deconditioned, @varname(simulated_session))
+    end
+    return deconditioned
 end
 
 #The values go in the data of the sessions, which the models take as arguments, so that the copy is fitted to them as to any data. Turing.jl's condition on the variables gives the same posterior, but looks up every value by its name on each evaluation, which is slower
@@ -34,39 +55,57 @@ function CognitiveModeling.condition_sessions(
         )
     end
 
-    #The values under the names of their variables, written out as in session[2].timestep[3].choice.simulated, and the names of those that go in the data
+    #The values under the names of their variables, written out as in simulated_sessions[2].timesteps[3].choice.simulated, and the names of those that go in the data
     values_by_name = Dict{String,Any}(string(name) => values[name] for name in keys(values))
     used_names = Set{String}()
+    model_prefix = prefix_of_model(model)
     conditioned_model = with_session_info(
         model,
-        info ->
-            with_values_in_data(info, values_by_name, used_names; check_stopping_criterion),
+        info -> with_values_in_data(
+            info, model_prefix, values_by_name, used_names; check_stopping_criterion
+        ),
         "condition_sessions",
     )
 
     #A value that has no place in the data is an error, such as that of a parameter, or of a variable that is misspelled
-    check_every_value_used(values_by_name, used_names, info_of(model))
+    check_every_value_used(values_by_name, used_names, info_of(model), model_prefix)
     return conditioned_model
 end
 
 """
-    with_values_in_data(info, values_by_name, used_names; check_stopping_criterion)
+    prefix_of_model(model)
+
+Return the prefixes that the variables of `model`, a Turing.jl model, have from its context,
+as text followed by a dot, such as `simulated_session.` for a single session that
+`decondition_sessions` gave, or an empty string when it has none. Used by
+`condition_sessions`.
+"""
+function prefix_of_model(model::DynamicPPL.Model)
+    prefixes = last(DynamicPPL.extract_prefixes(model.context))
+    return prefixes === nothing ? "" : string(prefixes, ".")
+end
+
+"""
+    with_values_in_data(info, model_prefix, values_by_name, used_names;
+                        check_stopping_criterion)
 
 Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions have
 the values in `values_by_name` in their data, as `condition_sessions` describes, and add the
-names of the values that went in to `used_names`. The variables of session `i` of several
-sessions are under `session[i]`, and those of a single session have no prefix. Each session
-ends after its last timestep with data, and the columns of a name get the same element type
-in every session, so that the sessions keep one type. Used by `condition_sessions`.
+names of the values that went in to `used_names`. The variables of a single session are
+under `model_prefix`, the prefixes of its model, and those of session `i` of several under
+[`name_of_session`](@ref) after them. Each session ends after its last timestep with data,
+and the columns of a name get the same element type in every session, so that the sessions
+keep one type. Used by `condition_sessions`.
 """
 function with_values_in_data(
     session_info::SessionInfo,
+    model_prefix::String,
     values_by_name::Dict{String,Any},
     used_names::Set{String};
     check_stopping_criterion::Union{Nothing,Bool},
 )
     observations, actions = columns_with_values(
-        session_info, "", values_by_name, used_names
+        session_info, model_prefix, values_by_name, used_names
     )
 
     #The session ends after its last timestep with data
@@ -84,14 +123,16 @@ end
 
 function with_values_in_data(
     sessions_info::MultipleSessionsInfo,
+    model_prefix::String,
     values_by_name::Dict{String,Any},
     used_names::Set{String};
     check_stopping_criterion::Union{Nothing,Bool},
 )
     #The data of every session with the values in it, where each session ends after its last timestep with data
     data = map(enumerate(sessions_info.sessions)) do (i, session)
+        session_prefix = "$(model_prefix)$(name_of_session(sessions_info, i))."
         observations, actions = columns_with_values(
-            session, "session[$i].", values_by_name, used_names
+            session, session_prefix, values_by_name, used_names
         )
         return cut_after_last_timestep_with_data(
             observations, actions, session.timestep_sizes
@@ -134,11 +175,12 @@ Return the observations and the actions in the data of `session_info`, a `Sessio
 a `NamedTuple` with a `Vector{Any}` for each name, in which every entry that is
 `ImputedMissingValue()` or `SimulatedMissingValue()` is the value in `values_by_name` of its
 variable, when there is one, with [`value_of_entry`](@ref). The variable of an action is
-named after `prefix`, such as `session[2].`, and its timestep, as in
-`session[2].timestep[3].choice.simulated`, and that of an observation after the name of the
-environment's output that the observation map passes on as it, as in
-`session[2].timestep[3].environment.payoff.simulated`. An output of the environment that the
-map doesn't pass on has no place in the data. Used by `with_values_in_data`.
+named after `prefix`, such as `simulated_sessions[2].`, and its timestep, as in
+`simulated_sessions[2].timesteps[3].choice.simulated`, and that of an observation after the
+name of the environment's output that the observation map passes on as it, as in
+`simulated_sessions[2].timesteps[3].environment.payoff.simulated`. An output of the
+environment that the map doesn't pass on has no place in the data. Used by
+`with_values_in_data`.
 """
 function columns_with_values(
     session_info::SessionInfo,
@@ -152,7 +194,7 @@ function columns_with_values(
         map(action_names) do name
             return Any[
                 value_of_entry(
-                    entry, "$(prefix)timestep[$t].$name", values_by_name, used_names
+                    entry, "$(prefix)timesteps[$t].$name", values_by_name, used_names
                 ) for (t, entry) in enumerate(getproperty(session_info.actions, name))
             ]
         end,
@@ -169,7 +211,7 @@ function columns_with_values(
             for (t, entry) in enumerate(column)
                 observation_column[t] = value_of_entry(
                     entry,
-                    "$(prefix)timestep[$t].environment.$environment_name",
+                    "$(prefix)timesteps[$t].environment.$environment_name",
                     values_by_name,
                     used_names,
                 )
@@ -203,15 +245,16 @@ function value_of_entry(
 end
 
 """
-    check_every_value_used(values_by_name, used_names, info)
+    check_every_value_used(values_by_name, used_names, info, model_prefix)
 
 Throw an `ArgumentError` when a value in `values_by_name` didn't go in the data of the
 sessions of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, because its name isn't in
 `used_names`. The error names the first five of them, and how the variable of an action of
-the sessions is named. Used by `condition_sessions`.
+the sessions is named, after `model_prefix`, the prefixes of their model. Used by
+`condition_sessions`.
 """
 function check_every_value_used(
-    values_by_name::Dict{String,Any}, used_names::Set{String}, info
+    values_by_name::Dict{String,Any}, used_names::Set{String}, info, model_prefix::String
 )
     unused_names = sort!(collect(setdiff(keys(values_by_name), used_names)))
     isempty(unused_names) && return nothing
@@ -221,8 +264,12 @@ function check_every_value_used(
     n_more = length(unused_names) - 5
     more = n_more > 0 ? ", and $n_more more" : ""
     first_session = info isa SessionInfo ? info : first(info.sessions)
-    session_prefix = info isa SessionInfo ? "" : "session[1]."
-    example = "$(session_prefix)timestep[1].$(first(keys(first_session.actions))).simulated"
+    session_prefix = if info isa SessionInfo
+        model_prefix
+    else
+        "$(model_prefix)$(name_of_session(info, 1))."
+    end
+    example = "$(session_prefix)timesteps[1].$(first(keys(first_session.actions))).simulated"
     return throw(
         ArgumentError(
             "condition_sessions(model, values) puts each value in the data of the sessions, in place of an action or an observation that they simulate or impute, but the sessions have none for $named$more. Such variables are named as in $example, and others can be conditioned with Turing.jl's condition.",

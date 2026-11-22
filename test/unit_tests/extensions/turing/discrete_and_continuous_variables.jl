@@ -42,9 +42,10 @@ end
         discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
         continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
         @test discrete == [
-            @varname(uses_rewards.session), @varname(session[3].timestep[3].choice.imputed)
+            @varname(uses_rewards.sessions),
+            @varname(sessions[3].timesteps[3].choice.imputed),
         ]
-        @test continuous == [@varname(learning_rate.session)]
+        @test continuous == [@varname(learning_rate.sessions)]
 
         #A sampler which uses gradients can't sample the model
         @test_throws ArgumentError sample(Xoshiro(1), model, NUTS(), 20; progress=false)
@@ -86,7 +87,7 @@ end
         names = collect(keys(priors))
         discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
         continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
-        @test discrete == [@varname(uses_rewards.session)]
+        @test discrete == [@varname(uses_rewards.sessions)]
         @test continuous == [
             @varname(learning_rate.coef),
             @varname(learning_rate.id.intercept.sd),
@@ -107,6 +108,6 @@ end
         continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
         @test isempty(discrete)
         @test continuous ==
-            [@varname(learning_rate.session), @varname(inverse_temperature.session)]
+            [@varname(learning_rate.sessions), @varname(inverse_temperature.sessions)]
     end
 end

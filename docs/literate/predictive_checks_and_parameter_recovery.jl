@@ -127,7 +127,8 @@ decondition_sessions(sessions_info).sessions[1].actions.choice[1:3]
 # Given the full model, it returns a copy whose sessions are deconditioned. Turing.jl's
 # `sample` with `Prior()` then simulates a data set for each draw of the parameters from
 # their priors. The chain has the parameters and the simulated choices, as variables named
-# such as `session[1].timestep[3].choice.simulated`:
+# such as `simulated_sessions[1].timesteps[3].choice.simulated`, since the deconditioned
+# sessions are named apart from the fitted ones, `sessions[1]` and the others:
 
 deconditioned_model = decondition_sessions(model)
 prior_predictions = sample(Xoshiro(1), deconditioned_model, Prior(), 200; progress=false)
@@ -140,8 +141,9 @@ share_in_data = [mean(table.choice[(40 * (i - 1) + 1):(40 * i)]) for i in 1:3]
 prior_shares = [
     vec(
         mean(
-            prior_predictions[@varname(session[i].timestep[t].choice.simulated)] for
-            t in 1:40
+            prior_predictions[@varname(
+                simulated_sessions[i].timesteps[t].choice.simulated
+            )] for t in 1:40
         ),
     ) for i in 1:3
 ]
@@ -189,8 +191,11 @@ posterior_trajectories = predict_session_trajectories(
         participant,
         data=share_in_data[i],
         with_predict=mean(
-            mean(posterior_predictions[@varname(session[i].timestep[t].choice.simulated)])
-            for t in 1:40
+            mean(
+                posterior_predictions[@varname(
+                    simulated_sessions[i].timesteps[t].choice.simulated
+                )],
+            ) for t in 1:40
         ),
         with_predict_session_trajectories=mean(
             mean.(posterior_trajectories[@varname($participant.choice)])
@@ -205,7 +210,7 @@ posterior_trajectories = predict_session_trajectories(
 # choices, and leaves out the parameters, which the fit is to find:
 
 simulated = rand(Xoshiro(7), deconditioned_model)
-simulated_choices = DynamicPPL.subset(simulated, [@varname(session)])
+simulated_choices = DynamicPPL.subset(simulated, [@varname(simulated_sessions)])
 simulated_parameters = DynamicPPL.subset(
     simulated, [@varname(learning_rate), @varname(inverse_temperature)]
 )
@@ -230,7 +235,7 @@ recovered_parameters = get_session_parameters(package_recovery_model, recovered)
 [
     (;
         participant,
-        simulated=simulated[@varname(learning_rate.session)][i],
+        simulated=simulated[@varname(learning_rate.sessions)][i],
         recovered=mean(recovered_parameters[@varname($participant.learning_rate)]),
     ) for (i, participant) in enumerate(participants)
 ]
@@ -245,8 +250,8 @@ recovered_parameters = get_session_parameters(package_recovery_model, recovered)
 #
 # They give the same results in most cases:
 # - The predictive checks simulate every action and observation of the sessions again, also
-#   those that a fit imputed, with the same distributions, so only the random numbers
-#   differ, unless the model samples something of its own within a timestep.
+#   those that a fit imputed, and what a model samples of its own, at its start or within a
+#   timestep, with the same distributions, so only the random numbers differ.
 # - The two models of a parameter recovery have the same log joint, and so the same
 #   posterior, when the sessions have no environment, or one whose parameters are fitted.
 #
@@ -254,11 +259,6 @@ recovered_parameters = get_session_parameters(package_recovery_model, recovered)
 # - Turing.jl's functions return the simulated actions and observations as variables of a
 #   chain, and [`predict_session_trajectories`](@ref) returns what the sessions save, such
 #   as the states of the models, as [`get_session_trajectories`](@ref) does.
-# - Turing.jl's `predict` keeps the values of the chain for what a model samples within a
-#   timestep, such as `session[1].timestep[3].noise`, since the deconditioned model has the
-#   same variable, while [`predict_session_trajectories`](@ref) samples those again too.
-# - Turing.jl's `predict` fails for a fit that imputed values at different timesteps in
-#   different sessions, where [`predict_session_trajectories`](@ref) works.
 # - A session with an environment whose parameters are fixed scores the conditioned
 #   observations against the environment's distributions with Turing.jl's `condition`, and
 #   leaves its environment out with [`condition_sessions`](@ref), since nothing in it is

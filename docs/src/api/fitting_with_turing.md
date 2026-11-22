@@ -57,14 +57,14 @@ deconditioned, since the models take the data of their sessions as arguments, wh
 Turing.jl's `decondition` leaves as they are. Turing.jl's own functions then simulate the
 data: `sample` with `Prior()` from the prior, and `predict` with the parameters of each
 sample of a chain. They return the simulated actions and observations as variables, such as
-`session[1].timestep[3].choice.simulated`, where [`predict_session_trajectories`](@ref)
-returns the trajectories that the sessions save. These variables are named apart from those
-that a fit imputes, such as `session[1].timestep[3].choice.imputed`, so `predict` simulates
-every action and observation again, also those that the fit imputed. It fails when the fit
-imputed values at different timesteps in different sessions, where
-[`predict_session_trajectories`](@ref) works. Turing.jl's `condition` and `decondition` work
-on these models as on any other, also for a variable within the sessions, such as a
-simulated action.
+`simulated_sessions[1].timesteps[3].choice.simulated`, where
+[`predict_session_trajectories`](@ref) returns the trajectories that the sessions save. The
+deconditioned sessions are named `simulated_sessions[i]`, apart from the fitted sessions,
+`sessions[i]`, and a single session has the prefix `simulated_session`, so that `predict`
+draws every variable within them again: every action and observation, also those that the
+fit imputed, and what a model samples of its own, at its start or within a timestep.
+Turing.jl's `condition` and `decondition` work on these models as on any other, also for a
+variable within the sessions, such as a simulated action.
 
 ```julia
 prior_predictions = sample(decondition_sessions(model), Prior(), 1000)
@@ -77,16 +77,17 @@ predictions = predict(decondition_sessions(model), chain)
 collections that Turing.jl's `condition` takes them in: a `Dict` from `VarName`s to values,
 or the `VarNamedTuple` that `rand(model)` gives. It returns a copy whose sessions have the
 values of their actions and observations as data, such as that of
-`session[1].timestep[3].choice.simulated`, and a value of any other variable is an error.
-`DynamicPPL.subset` leaves out the parameters of a draw from the prior of the deconditioned
-model, under `@varname(session)` for several sessions and `@varname(timestep)` for a single
-one, so that the copy is fitted to the simulated data, as in a parameter recovery. Each
-session of the copy ends after its last timestep with a value, so a simulation that a
+`simulated_sessions[1].timesteps[3].choice.simulated`, and a value of any other variable is
+an error. `DynamicPPL.subset` with `@varname(simulated_sessions)`, or with
+`@varname(simulated_session)` for a single session, leaves out the parameters of a draw from
+the prior of the deconditioned model, so that the copy is fitted to the simulated data, as
+in a parameter recovery. The sessions of the copy are named `sessions[i]` again once no
+value of theirs is simulated, and a single session keeps its prefix. Each session of the
+copy ends after its last timestep with a value, so a simulation that a
 [`CognitiveModeling.stopping_criterion`](@ref) ended is fitted with the timesteps it had.
 Turing.jl's `condition` on the same values gives the same posterior for models without a
 stopping criterion of their own, as the tutorial
-[Predictive checks and parameter
-recovery](../generated/predictive_checks_and_parameter_recovery.md)
+[Predictive checks and parameter recovery](../generated/predictive_checks_and_parameter_recovery.md)
 shows, which also compares the two ways. With one, it keeps the timesteps after the last
 value, and the session ends where the criterion is met at the parameters of each evaluation:
 before its last value, which leaves out the values after it with no error, or after it, with
@@ -95,7 +96,7 @@ a variable for every action and observation that follows.
 ```julia
 deconditioned_model = decondition_sessions(model)
 simulated = rand(deconditioned_model)
-recovery_model = condition_sessions(deconditioned_model, DynamicPPL.subset(simulated, [@varname(session)]))
+recovery_model = condition_sessions(deconditioned_model, DynamicPPL.subset(simulated, [@varname(simulated_sessions)]))
 recovered = sample(recovery_model, NUTS(), 1000)
 ```
 
@@ -116,7 +117,7 @@ These are what the parts of [`CognitiveModeling.turing_full_model`](@ref) are wr
 beside the types and functions on the pages [Fitting](fitting.md) and
 [Parameter models](parameter_models.md). They are public, but not exported.
 In a Turing.jl model of several sessions, session `i` of
-[`CognitiveModeling.session_index`](@ref) has its variables under `session[i]`.
+[`CognitiveModeling.session_index`](@ref) has its variables under `sessions[i]`.
 
 ```@docs
 CognitiveModeling.turing_parameters_model

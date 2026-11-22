@@ -71,8 +71,8 @@ samples the deviations of the varying coefficients and adds up their effects wit
 [`turing_regression_varying_effects`](@ref). It returns the sum of the effects on every
 session, with the transformation applied to each. With a family, the other parameters of the
 family's distribution are sampled once as one variable `family`, named like
-`learning_rate.family.sd`, and the value of every session as the variable `session`, named
-like `learning_rate.session`, from the distribution that
+`learning_rate.family.sd`, and the value of every session as the variable `sessions`, named
+like `learning_rate.sessions`, from the distribution that
 [`CognitiveModeling.build_family_distribution`](@ref) makes of the session's transformed sum
 and the other parameters, and those values are returned instead. `design` has the design
 columns and the levels of the regression, for each of `n_sessions` sessions. Used by
@@ -109,7 +109,7 @@ Turing.@model function turing_hierarchical_regression_parameter(
     #With one, sample the other parameters of its distribution once, as one variable named family, and the value of every session from the distribution of its transformed sum
     family_priors = regression_family.priors
     if isempty(family_priors)
-        session ~ arraydist(
+        sessions ~ arraydist(
             map(
                 regression_outcome ->
                     build_family_distribution(regression_family, regression_outcome, ()),
@@ -118,7 +118,7 @@ Turing.@model function turing_hierarchical_regression_parameter(
         )
     else
         family ~ product_distribution(family_priors)
-        session ~ arraydist(
+        sessions ~ arraydist(
             map(
                 regression_outcome -> build_family_distribution(
                     regression_family, regression_outcome, family
@@ -127,7 +127,7 @@ Turing.@model function turing_hierarchical_regression_parameter(
             ),
         )
     end
-    return session
+    return sessions
 end
 
 """

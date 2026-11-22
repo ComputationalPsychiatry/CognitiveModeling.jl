@@ -235,7 +235,7 @@ merge(get_session_parameters(single_results), get_session_trajectories(single_re
 # - The parameters of several sessions are a `NamedTuple` with one vector for each
 #   parameter, with a value for every session in the order of `sessions_info.session_ids`.
 #   [`CognitiveModeling.session_index`](@ref) gives the place of a session's data identifier.
-# - The variables of the sessions are under `session[i]`, or under the prefix of a single
+# - The variables of the sessions are under `sessions[i]`, or under the prefix of a single
 #   session, so the model's own variables need other names.
 # - The forms of the two functions which take a model and a chain only take the package's
 #   own models, which know their sessions, so a model of one's own gives them its returned values.

@@ -108,9 +108,9 @@ model = full_model(TuringBackend(), parameters_model, sessions_info)
 
 priors = DynamicPPL.extract_priors(model)
 names = collect(keys(priors))
-#The names of the discrete variables, such as uses_rewards.session
+#The names of the discrete variables, such as uses_rewards.sessions
 discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
-#The names of the continuous variables, such as learning_rate.session
+#The names of the continuous variables, such as learning_rate.sessions
 continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)
 
 # This finds every discrete variable of the model, also a choice that wasn't recorded and
@@ -158,7 +158,7 @@ model = full_model(TuringBackend(), parameters_model, sessions_info)
 
 priors = DynamicPPL.extract_priors(model)
 names = collect(keys(priors))
-#The names of the discrete variables, such as uses_rewards.session
+#The names of the discrete variables, such as uses_rewards.sessions
 discrete = filter(name -> priors[name] isa DiscreteDistribution, names)
 #The names of the continuous variables, such as learning_rate.coef and uses_rewards.coef
 continuous = filter(name -> !(priors[name] isa DiscreteDistribution), names)

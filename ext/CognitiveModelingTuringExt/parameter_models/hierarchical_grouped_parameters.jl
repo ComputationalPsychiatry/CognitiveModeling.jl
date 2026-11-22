@@ -60,15 +60,14 @@ end
 
 Turing.jl model which samples one parameter for every session, as `hierarchical_parameter`,
 a [`HierarchicalParameter`](@ref), says: the parameters of its group-level distribution for
-each group, with [`turing_group_level_parameters`](@ref) from the priors in
-`groups`, and then the value of every session. Centered, the value of every session is
-sampled from the distribution of its group, which [`group_level_distribution`](@ref) makes,
-as the variable `session`, named like `learning_rate.session` under the parameter's prefix.
-Non-centered, a standard normal value is sampled for every session, as the variable
-`session_z`, named like `learning_rate.session_z`, and the value of the session is the mean
-of its group plus that value times the standard deviation of its group. It returns the
-value of each session, with [`values_of_sessions`](@ref), with the transformation applied to
-each. Used by
+each group, with [`turing_group_level_parameters`](@ref) from the priors in `groups`, and
+then the value of every session. Centered, the value of every session is sampled from the
+distribution of its group, which [`group_level_distribution`](@ref) makes, as the variable
+`sessions`, named like `learning_rate.sessions` under the parameter's prefix. Non-centered,
+a standard normal value is sampled for every session, as the variable `session_z`, named
+like `learning_rate.session_z`, and the value of the session is the mean of its group plus
+that value times the standard deviation of its group. It returns the value of each session,
+with [`values_of_sessions`](@ref), with the transformation applied to each. Used by
 [`turing_hierarchical_grouped_parameters`](@ref).
 """
 Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parameter, groups)
@@ -80,7 +79,7 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
     #Sample the value of every session from the distribution of its group, or non-centered, as a standard normal value which the group's mean shifts and its standard deviation scales
     group_of_each_session = groups.group_of_each_session
     if hierarchical_parameter.centered
-        session ~ arraydist(
+        sessions ~ arraydist(
             map(
                 group -> group_level_distribution(
                     hierarchical_parameter.distribution,
@@ -91,7 +90,7 @@ Turing.@model function turing_hierarchical_grouped_parameter(hierarchical_parame
                 group_of_each_session,
             ),
         )
-        session_values = session
+        session_values = sessions
     else
         session_z ~ filldist(Normal(), length(group_of_each_session))
         means, standard_deviations = values(group_parameters)

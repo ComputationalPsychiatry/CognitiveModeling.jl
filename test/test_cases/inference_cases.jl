@@ -82,7 +82,7 @@ function session_log_density_by_hand(
             actions,
             t,
             case.impute_missing_actions,
-            name -> "timestep[$t].$name.imputed",
+            name -> "timesteps[$t].$name.imputed",
             variable,
         ) for t in 1:n_timesteps
     ]
@@ -92,7 +92,7 @@ function session_log_density_by_hand(
             t,
             case.impute_missing_observations,
             name ->
-                "timestep[$t].environment.$(environment_name(observation_names, name)).imputed",
+                "timesteps[$t].environment.$(environment_name(observation_names, name)).imputed",
             variable,
         ) for t in 1:n_timesteps
     ]
@@ -458,7 +458,7 @@ function sessions_case(
 end
 
 #The log density of several sessions by hand, the sum of each session's, at the values of the variables of the model of
-#them, where those of session i have the prefix session[i]. Whether a session includes its environment is read from
+#them, where those of session i have the prefix sessions[i]. Whether a session includes its environment is read from
 #`sessions_info`, which a full model prepares from the sessions of the case
 function sessions_log_density_by_hand(
     case,
@@ -472,7 +472,7 @@ function sessions_log_density_by_hand(
             merge(case.sessions[i], (; session_info=sessions_info.sessions[i])),
             parameters_of_session(cognitive_parameters, i),
             parameters_of_session(environment_parameters, i),
-            variables_of(values; prefix="session[$i]."),
+            variables_of(values; prefix="sessions[$i]."),
         )
     end
 end

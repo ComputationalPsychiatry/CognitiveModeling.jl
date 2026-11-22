@@ -45,7 +45,7 @@ state ~ to_submodel(turing_initialize_state(cognitive_model, cognitive_parameter
 
 for t in 1:n_timesteps
 
-    #The cognitive model gives a distribution for each action, under the prefix timestep[t]
+    #The cognitive model gives a distribution for each action, under the prefix timesteps[t]
     output ~ to_submodel(turing_timestep_model(cognitive_model, context))
 
     #An action that is missing in the data is a latent variable with that distribution
@@ -67,17 +67,17 @@ The states where the session starts come from [`turing_initialize_state`](@ref) 
 model with the parameters, so that a starting state which is a parameter is fitted like any
 other, and a model can sample its start. Both models are treated the same way on each
 timestep: [`turing_timestep_model`](@ref) of the cognitive model runs as a submodel with the
-prefix `timestep[t]`, so a model which samples within a timestep has its own variables for
-each timestep, such as `timestep[3].noise`, and an environment model runs with the prefix
-`timestep[t].environment`. The outputs of each, the actions and the observations, are then
+prefix `timesteps[t]`, so a model which samples within a timestep has its own variables for
+each timestep, such as `timesteps[3].noise`, and an environment model runs with the prefix
+`timesteps[t].environment`. The outputs of each, the actions and the observations, are then
 taken from the data where they are recorded, and where the data has
 [`ImputedMissingValue`](@ref) they are imputed from what the model gave: as a latent
-variable with that distribution, named `timestep[3].choice.imputed` or
-`timestep[3].environment.reward.imputed`, or as the value itself if it is a
+variable with that distribution, named `timesteps[3].choice.imputed` or
+`timesteps[3].environment.reward.imputed`, or as the value itself if it is a
 [`Deterministic`](@ref). Where the data has [`SimulatedMissingValue`](@ref), as in a session
 from [`decondition_sessions`](@ref), they are simulated in the same way, as latent variables
-named `timestep[3].choice.simulated`. Where the data has [`UnimputedMissingValue`](@ref), or
-a marker for nothing happening, the models receive the marker as it is, and nothing is
+named `timesteps[3].choice.simulated`. Where the data has [`UnimputedMissingValue`](@ref),
+or a marker for nothing happening, the models receive the marker as it is, and nothing is
 sampled or scored for it. The actions in the data are scored at the end as observed values,
 in one `product_distribution` over every action and timestep, against the distributions the
 cognitive model gave for them. The observations in the data are scored the same way against
@@ -198,17 +198,19 @@ function turing_behavioral_session end
 
 Create a Turing.jl model which runs [`turing_behavioral_session`](@ref) for every session in
 `sessions_info`, each with its own cognitive parameters, as a submodel with the prefix
-`session[i]`, so that a latent variable of the third session is named like
-`session[3].timestep[2].choice.imputed`. Which session `i` is stands in
-`sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for a data identifier.
-Environment parameters can only be given when the sessions have an environment model. With
-[`ParallelSessions`](@ref)`()` as `parallelization`, after the environment parameters, which
-are `(;)` for sessions without an environment, the sessions run over the threads Julia was
-started with. **The model that is evaluated, which is the outermost one, must then be marked
-with `setthreadsafe(model, true)` from DynamicPPL**, since the log density of a threaded
-model that isn't is wrong with no error; the sessions throw an error when it isn't marked.
-See `parallelization` in [`full_model`](@ref) with `TuringBackend()`. This needs Turing.jl
-to be loaded.
+`sessions[i]`, so that a latent variable of the third session is named like
+`sessions[3].timesteps[2].choice.imputed`. Sessions whose data the model simulates, such as
+those that [`decondition_sessions`](@ref) gives, have the prefix `simulated_sessions[i]`
+instead, as in `simulated_sessions[3].timesteps[2].choice.simulated`. Which session `i` is
+stands in `sessions_info.session_ids[i]`, and [`session_index`](@ref) gives `i` for a data
+identifier. Environment parameters can only be given when the sessions have an environment
+model. With [`ParallelSessions`](@ref)`()` as `parallelization`, after the environment
+parameters, which are `(;)` for sessions without an environment, the sessions run over the
+threads Julia was started with. **The model that is evaluated, which is the outermost one,
+must then be marked with `setthreadsafe(model, true)` from DynamicPPL**, since the log
+density of a threaded model that isn't is wrong with no error; the sessions throw an error
+when it isn't marked. See `parallelization` in [`full_model`](@ref) with `TuringBackend()`.
+This needs Turing.jl to be loaded.
 
 `cognitive_parameters` is a `NamedTuple` with one vector for each parameter, with one value
 for every session in the order of `sessions_info`, which is what a parameter model returns,
@@ -281,11 +283,11 @@ loaded.
   have a parameter of the same name and both parameter models sample.
 
 The variables of a parameter model are named after the parameters, such as
-`learning_rate.session` with `IndependentParameters`, where `learning_rate.session[3]` is
+`learning_rate.sessions` with `IndependentParameters`, where `learning_rate.sessions[3]` is
 the learning rate of the third session, or under the parameter model's name with
 `include_submodel_prefixes = true`. A part of a [`CompositeParameters`](@ref) that is given
 with a name has its variables under that name. The variables of the sessions are under
-`session[i]`, and those of the downstream model as it names them, or under
+`sessions[i]`, and those of the downstream model as it names them, or under
 `downstream_model` with the prefixes. `rand(model)` shows every variable's name.
 
 The model returns a `NamedTuple` with `cognitive_parameters`, `environment_parameters`,

@@ -156,7 +156,7 @@ end
                          previous)
 
 Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
-as [`turing_behavioral_timestep`](@ref) with the prefix `timestep[t]`, saves what the save
+as [`turing_behavioral_timestep`](@ref) with the prefix `timesteps[t]`, saves what the save
 histories of `session_info` select, and scores the actions in the data, and the observations
 in the data when the environment runs, against the distributions of their timesteps all at
 once at the end, as observed values. Before each timestep from
@@ -200,7 +200,7 @@ Turing.@model function turing_run_all_timesteps(
             turing_behavioral_timestep(
                 session_info, 1, cognitive_parameters, environment_parameters, previous
             ),
-            @varname(timestep[1]),
+            @varname(timesteps[1]),
         ),
         false,
     )
@@ -265,7 +265,7 @@ Turing.@model function turing_run_all_timesteps(
                     environment_parameters,
                     timestep_values,
                 ),
-                @varname(timestep[t]),
+                @varname(timesteps[t]),
             ),
             false,
         )

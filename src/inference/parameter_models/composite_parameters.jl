@@ -8,7 +8,7 @@ parts, which are parameter models, such as a [`HierarchicalGroupedParameters`](@
 learning rate, an [`IndependentParameters`](@ref) for the inverse temperature and a
 [`FixedParameters`](@ref) for a bias. What the parts give is merged. The variables of a part
 in `parts` are named as that part names them, and those of a part given by keyword in
-`named_parts` are named under its keyword, such as `noise.learning_rate.session` for a part
+`named_parts` are named under its keyword, such as `noise.learning_rate.sessions` for a part
 given as `noise`. No two parts can give the same parameter: this is checked when it is made,
 for the parts whose [`CognitiveModeling.parameter_names`](@ref) are known, and when it runs,
 for the others. It samples when any part does. The parts are kept in the field `parts`, as a
@@ -23,7 +23,7 @@ parameters_model = CompositeParameters(
     FixedParameters((; inverse_temperature = 2.0)),
 )
 
-#The variables of the part given as noise are named under noise, as noise.bias.session
+#The variables of the part given as noise are named under noise, as noise.bias.sessions
 parameters_model = CompositeParameters(
     IndependentParameters((; learning_rate = Beta(2, 2)));
     noise = IndependentParameters((; bias = Normal(0, 1))),

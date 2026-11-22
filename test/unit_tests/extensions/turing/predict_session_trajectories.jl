@@ -79,14 +79,28 @@
             choices -> all(choice -> choice isa Bool, choices[2:end]),
             vec(simulated[@varname(S3.choice)]),
         )
-        #The variables it leaves out of the chain are those within the timesteps
-        extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
-        @test extension.is_within_timestep(@varname(session[3].timestep[4].choice.imputed))
-        @test extension.is_within_timestep(@varname(timestep[2].environment.reward.imputed))
-        @test !extension.is_within_timestep(@varname(learning_rate.session))
-        @test !extension.is_within_timestep(
-            @varname(session[1].initial_cognitive_state.offset)
+    end
+
+    @testset "A start that a model samples is drawn again too, as the sessions are named apart from the fit's" begin
+        #SampledInitialState samples an offset of the expected reward it starts from, which the chain of a fit holds
+        pair = pair_named("SampledInitialState")
+        sampling = full_model(
+            TuringBackend(),
+            FixedParameters(pair.cognitive_parameters),
+            sessions_for_test(pair.model(DistributionsJl()), FULL_TABLE),
         )
+        prior_chain = sample(Xoshiro(13), sampling, Prior(), 5; progress=false)
+        simulated = @test_logs match_mode = :any predict_session_trajectories(
+            Xoshiro(14),
+            sampling,
+            prior_chain;
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
+        )
+        starts_of_fit =
+            pair.cognitive_parameters.initial_value .+
+            vec(prior_chain[@varname(sessions[2].initial_cognitive_state.initial_offset)])
+        predicted_starts = map(first, vec(simulated[@varname(S2.expected_reward)]))
+        @test !(predicted_starts ≈ starts_of_fit)
     end
 
     @testset "Sessions of different lengths are simulated with their own timesteps, with an environment too" begin

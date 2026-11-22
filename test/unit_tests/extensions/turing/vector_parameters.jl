@@ -90,10 +90,10 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
         )
         #The vectors of the sessions are the columns of one variable
         sampled = rand(Xoshiro(1), model)
-        @test Set(keys(sampled)) == Set([@varname(choice_probabilities.session)])
-        @test size(sampled[@varname(choice_probabilities.session)]) == (3, 3)
+        @test Set(keys(sampled)) == Set([@varname(choice_probabilities.sessions)])
+        @test size(sampled[@varname(choice_probabilities.sessions)]) == (3, 3)
         values = Dict(
-            @varname(choice_probabilities.session) => reduce(hcat, CHOICE_PROBABILITIES)
+            @varname(choice_probabilities.sessions) => reduce(hcat, CHOICE_PROBABILITIES)
         )
         parameters = returned(model, values).cognitive_parameters
         @test parameters.choice_probabilities == CHOICE_PROBABILITIES
@@ -132,7 +132,7 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
             values = merge(
                 concentration_values,
                 Dict(
-                    @varname(choice_probabilities.session) =>
+                    @varname(choice_probabilities.sessions) =>
                         reduce(hcat, CHOICE_PROBABILITIES),
                 ),
             )
@@ -156,7 +156,7 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
         )
         model = full_model(TuringBackend(), parameters_model, choice_sessions())
         values = Dict(
-            @varname(choice_probabilities.session) => reduce(hcat, CHOICE_PROBABILITIES),
+            @varname(choice_probabilities.sessions) => reduce(hcat, CHOICE_PROBABILITIES),
             @varname(lapse_rate.shared) => 0.1,
         )
         parameters = returned(model, values).cognitive_parameters

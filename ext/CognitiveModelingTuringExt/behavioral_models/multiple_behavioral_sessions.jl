@@ -1,6 +1,6 @@
 ### MODEL FOR MULTIPLE SESSIONS ###
 
-#Turing model for running several behavioral sessions, each with its own cognitive parameters, as a submodel with the prefix session[i], and collecting the trajectories each saved. The sessions run one after the other. The first session runs outside the loop, so that the vector of what the sessions saved has its type, and a session whose trajectories have another type widens it
+#Turing model for running several behavioral sessions, each with its own cognitive parameters, as a submodel with the prefix sessions[i], or simulated_sessions[i] when their data is simulated, and collecting the trajectories each saved. The sessions run one after the other. The first session runs outside the loop, so that the vector of what the sessions saved has its type, and a session whose trajectories have another type widens it
 #The environment parameters are given in the same form, one vector for each parameter with a value for each session, and only when the sessions have an environment
 Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
     sessions_info::MultipleSessionsInfo,
@@ -17,7 +17,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
                 select_row(cognitive_parameters, 1),
                 select_row(environment_parameters, 1),
             ),
-            @varname(session[1]),
+            name_of_session(sessions_info, 1),
         ),
         false,
     )
@@ -32,7 +32,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
                     select_row(cognitive_parameters, i),
                     select_row(environment_parameters, i),
                 ),
-                @varname(session[i]),
+                name_of_session(sessions_info, i),
             ),
             false,
         )
@@ -67,7 +67,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
                 select_row(cognitive_parameters, 1),
                 select_row(environment_parameters, 1),
             ),
-            @varname(session[1]),
+            name_of_session(sessions_info, 1),
         ),
         false,
     )
@@ -85,7 +85,7 @@ Turing.@model function CognitiveModeling.turing_multiple_behavioral_sessions(
                     select_row(cognitive_parameters, i),
                     select_row(environment_parameters, i),
                 ),
-                @varname(session[i]),
+                name_of_session(sessions_info, i),
             ),
             false,
         )

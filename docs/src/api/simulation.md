@@ -1,7 +1,8 @@
 # Simulation
 
-Simulating a cognitive model, an environment model or the two together. What a simulation saves
-is chosen with a [`SaveHistory`](@ref), on the page [Saving histories](saving_histories.md).
+Simulating a cognitive model, an environment model or the two together. What a simulation
+saves is chosen with a [`SaveHistory`](@ref), on the page
+[Saving histories](saving_histories.md).
 
 ```@index
 Pages = ["simulation.md"]

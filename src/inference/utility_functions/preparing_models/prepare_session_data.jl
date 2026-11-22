@@ -346,11 +346,11 @@ on, on every timestep of a session: [`SimulatedMissingValue`](@ref) when a colum
 [`SessionInfo`](@ref), with [`map_to_environment_outputs`](@ref).
 """
 function marker_of_unmapped_outputs(observations::NamedTuple, actions::NamedTuple)
-    columns = (values(observations)..., values(actions)...)
-    can_hold_simulated_value = any(
-        column -> SimulatedMissingValue <: eltype(column), columns
-    )
-    return can_hold_simulated_value ? SimulatedMissingValue() : ImputedMissingValue()
+    if can_hold_simulated_value(observations, actions)
+        return SimulatedMissingValue()
+    else
+        return ImputedMissingValue()
+    end
 end
 
 """

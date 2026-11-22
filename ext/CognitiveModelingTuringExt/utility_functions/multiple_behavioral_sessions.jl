@@ -1,3 +1,21 @@
+### NAMING THE SESSIONS ###
+
+#Chosen by the types of the sessions' data, so that the name has one type. Sessions whose data is simulated are named apart from fitted ones, so that Turing.jl's predict draws every variable within them again, whatever a chain of a fit to the sessions holds
+"""
+    name_of_session(sessions_info, i)
+
+Return the prefix of the variables of session `i` of `sessions_info`, a
+`MultipleSessionsInfo`: `simulated_sessions[i]` when the model simulates the data of the
+sessions, as [`simulates_values`](@ref) says, as for the sessions that
+`decondition_sessions` gives, and `sessions[i]` otherwise. Used by
+[`turing_multiple_behavioral_sessions`](@ref) and `condition_sessions`.
+"""
+function name_of_session(sessions_info::MultipleSessionsInfo, i::Integer)
+    return name_of_session(Val(simulates_values(sessions_info)), i)
+end
+name_of_session(::Val{true}, i::Integer) = @varname(simulated_sessions[i])
+name_of_session(::Val{false}, i::Integer) = @varname(sessions[i])
+
 ### COLLECTING WHAT SESSIONS THAT RUN IN PARALLEL SAVED ###
 
 """

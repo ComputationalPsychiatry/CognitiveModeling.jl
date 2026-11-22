@@ -30,7 +30,7 @@ Turing.@model function timestep_models_as_submodels(model, rewards)
     for t in eachindex(rewards)
         context = ModelContext((; reward=rewards[t]), state, (; choice=NoValue()), (;))
         output ~ to_submodel(
-            prefix(turing_timestep_model(model, context), @varname(timestep[t])), false
+            prefix(turing_timestep_model(model, context), @varname(timesteps[t])), false
         )
         state = output.new_state
     end
@@ -173,9 +173,9 @@ end
         #Turing warns about the array of timesteps when it handles the values, which @test_logs hides
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) ==
-            Set([@varname(timestep[1].noise), @varname(timestep[2].noise)])
+            Set([@varname(timesteps[1].noise), @varname(timesteps[2].noise)])
         noises = Dict(
-            @varname(timestep[1].noise) => 0.25, @varname(timestep[2].noise) => -0.5
+            @varname(timesteps[1].noise) => 0.25, @varname(timesteps[2].noise) => -0.5
         )
         log_density = @test_logs match_mode = :any logjoint(model, noises)
         @test log_density ≈ logpdf(Normal(0, 1), 0.25) + logpdf(Normal(0, 1), -0.5)
