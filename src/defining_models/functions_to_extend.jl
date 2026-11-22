@@ -327,6 +327,8 @@ observation, and the cognitive model doesn't receive that observation. A model w
 criterion is already met before the first timestep can't be simulated, and throws an error:
 a new simulation starts from the initial state, and [`reset!`](@ref) puts an
 [`InstantiatedModel`](@ref) back there. A fitted session checks it as [`SessionInfo`](@ref)
+describes. Under a compiler like Reactant.jl, a criterion on traced values returns a traced
+Bool, and the simulation is then masked instead of stopped, as `simulate_session`
 describes.
 
 # Implementation

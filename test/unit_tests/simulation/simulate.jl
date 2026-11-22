@@ -340,6 +340,110 @@ function CognitiveModeling.attribute_names(environment::InvalidOnThirdTimestep)
     )
 end
 
+#A stand-in for the traced Bool of a compiler like Reactant.jl: ifelse takes it as a condition, and !, & and | combine it
+#with others and with Bools, but nothing branches on it, so a simulation that gets one is masked
+struct TracedBoolStandIn
+    value::Bool
+end
+function Base.ifelse(condition::TracedBoolStandIn, value_if_true, value_if_false)
+    return ifelse(condition.value, value_if_true, value_if_false)
+end
+Base.:!(flag::TracedBoolStandIn) = TracedBoolStandIn(!flag.value)
+function Base.:&(first::TracedBoolStandIn, second::TracedBoolStandIn)
+    return TracedBoolStandIn(first.value & second.value)
+end
+Base.:&(first::TracedBoolStandIn, second::Bool) = TracedBoolStandIn(first.value & second)
+Base.:&(first::Bool, second::TracedBoolStandIn) = TracedBoolStandIn(first & second.value)
+function Base.:|(first::TracedBoolStandIn, second::TracedBoolStandIn)
+    return TracedBoolStandIn(first.value | second.value)
+end
+Base.:|(first::TracedBoolStandIn, second::Bool) = TracedBoolStandIn(first.value | second)
+Base.:|(first::Bool, second::TracedBoolStandIn) = TracedBoolStandIn(first | second.value)
+
+#A cognitive model and an environment model which give the flags of the model they wrap as stand-ins: what it gives as
+#parameters_valid, unless it is ValidByDefault, and what its stopping criterion returns
+struct MaskedFlagsModel{Tmodel} <: AbstractCognitiveModel
+    model::Tmodel
+end
+struct MaskedFlagsEnvironment{Tenvironment} <: AbstractEnvironmentModel
+    environment::Tenvironment
+end
+wrapped_model(model::MaskedFlagsModel) = model.model
+wrapped_model(environment::MaskedFlagsEnvironment) = environment.environment
+function CognitiveModeling.initialize_state(
+    model::Union{MaskedFlagsModel,MaskedFlagsEnvironment}, parameters
+)
+    return CognitiveModeling.initialize_state(wrapped_model(model), parameters)
+end
+function CognitiveModeling.attribute_names(
+    model::Union{MaskedFlagsModel,MaskedFlagsEnvironment}
+)
+    return CognitiveModeling.attribute_names(wrapped_model(model))
+end
+function CognitiveModeling.parameter_domains(
+    model::Union{MaskedFlagsModel,MaskedFlagsEnvironment}
+)
+    return CognitiveModeling.parameter_domains(wrapped_model(model))
+end
+function CognitiveModeling.timestep_model(
+    model::Union{MaskedFlagsModel,MaskedFlagsEnvironment}, context::ModelContext
+)
+    output = CognitiveModeling.timestep_model(wrapped_model(model), context)
+    return ModelOutput(
+        output.output_distribution,
+        output.new_state;
+        parameters_valid=stand_in_for(output.parameters_valid),
+    )
+end
+function CognitiveModeling.stopping_criterion(
+    model::Union{MaskedFlagsModel,MaskedFlagsEnvironment}, state, parameters
+)
+    return TracedBoolStandIn(
+        CognitiveModeling.stopping_criterion(wrapped_model(model), state, parameters)
+    )
+end
+stand_in_for(flag::Bool) = TracedBoolStandIn(flag)
+stand_in_for(flag::ValidByDefault) = flag
+
+#Counts its timesteps, gives a reward of 1 on each, and sets parameters_valid to false on timestep invalid_on and the
+#stopping criterion true after timestep stops_after. With masks = true, its flags are Bools until its count reaches 2,
+#and stand-ins after it, so that a simulation is masked from the timestep where one first is: the second, when it turns
+#invalid there, or the third, when its stopping criterion is checked before it
+struct MaskedFromSecondTimestep <: AbstractEnvironmentModel
+    masks::Bool
+    invalid_on::Int
+    stops_after::Int
+end
+function CognitiveModeling.initialize_state(
+    environment::MaskedFromSecondTimestep, parameters
+)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.timestep_model(
+    environment::MaskedFromSecondTimestep, context::ModelContext
+)
+    n_timesteps = context.previous_state.n_timesteps + 1
+    parameters_valid = flag_from_count(
+        environment, n_timesteps, n_timesteps != environment.invalid_on
+    )
+    return ModelOutput((; reward=Deterministic(1.0)), (; n_timesteps); parameters_valid)
+end
+function CognitiveModeling.stopping_criterion(
+    environment::MaskedFromSecondTimestep, state, parameters
+)
+    return flag_from_count(
+        environment, state.n_timesteps, state.n_timesteps >= environment.stops_after
+    )
+end
+function CognitiveModeling.attribute_names(environment::MaskedFromSecondTimestep)
+    return ModelAttributes(;
+        parameters=(), states=:n_timesteps, inputs=:choice, outputs=:reward
+    )
+end
+function flag_from_count(environment::MaskedFromSecondTimestep, n_timesteps, value)
+    return environment.masks && n_timesteps >= 2 ? TracedBoolStandIn(value) : value
+end
+
 #Give a value itself where something to sample from is needed
 struct GivesUnwrapped{T} <: AbstractEnvironmentModel
     reward::T
@@ -3784,5 +3888,199 @@ end
         #A reward of 0 keeps the parameters valid, and the model is updated
         simulate_timestep!(agent, (; reward=0.0))
         @test agent.state == (; expected_reward=0.0) && agent.n_timesteps == 1
+    end
+end
+
+@testset "A flag that must be masked, as a traced Bool is, masks the simulation instead of stopping it" begin
+    #What a simulation kept, with the stand-ins as the values they stand for: the timesteps of its vectors up to
+    #n_timesteps, after timestep 0 when it is saved, and how it ended
+    value_of(flag::TracedBoolStandIn) = flag.value
+    value_of(value) = value
+    value_of(record::NamedTuple) = map(value_of, record)
+    function kept_trajectories(trajectories, offset)
+        n_kept = trajectories.n_timesteps + offset
+        kept(vector) = vector[1:n_kept]
+        return (;
+            states=kept(trajectories.states),
+            observations=kept(trajectories.observations),
+            actions=kept(trajectories.actions),
+            action_distributions=kept(trajectories.action_distributions),
+            environment=map(kept, trajectories.environment),
+            parameters_valid=value_of(trajectories.parameters_valid),
+            trajectories.n_timesteps,
+            last_timestep=value_of(trajectories.last_timestep),
+        )
+    end
+
+    @testset "masks_flag and masks_bool tell a Bool, and ValidByDefault for a model's flag, from a flag that ifelse takes, and anything else is an error" begin
+        @test CognitiveModeling.masks_flag(true) === false
+        @test CognitiveModeling.masks_flag(ValidByDefault()) === false
+        @test CognitiveModeling.masks_flag(TracedBoolStandIn(true)) === true
+        @test CognitiveModeling.masks_bool(false) === false
+        @test CognitiveModeling.masks_bool(TracedBoolStandIn(false)) === true
+        @test_throws ArgumentError CognitiveModeling.masks_bool(ValidByDefault())
+        @test_throws "must give a Bool, or a Bool that a compiler like Reactant.jl traces" CognitiveModeling.masks_flag(
+            1
+        )
+        @test_throws ArgumentError CognitiveModeling.masks_flag(missing)
+    end
+
+    @testset "select_values selects through NamedTuples, tuples and arrays, and keeps markers" begin
+        values_if_true = (;
+            state=(; expected_reward=0.9),
+            action=(; choice=true),
+            counts=[1, 2],
+            pair=(1.0, NoValue()),
+        )
+        values_if_false = (;
+            state=(; expected_reward=0.5),
+            action=(; choice=false),
+            counts=[3, 4],
+            pair=(2.0, NoValue()),
+        )
+        @test CognitiveModeling.select_values(
+            TracedBoolStandIn(true), values_if_true, values_if_false
+        ) == values_if_true
+        @test CognitiveModeling.select_values(
+            TracedBoolStandIn(false), values_if_true, values_if_false
+        ) == values_if_false
+    end
+
+    @testset "It keeps what the stopping simulation keeps, has every timestep in its vectors, and says where it ended" begin
+        #Sessions that stay valid, that turn invalid on the first timestep or on a later one, and that a stopping
+        #criterion of either model ends, with a reward of 1 with the probability 0.95, so that they end at different
+        #timesteps with each seed
+        sessions = (
+            (
+                WithInvalidParameters(ByHand()),
+                BaselineEnvironment(ByHand()),
+                (; learning_rate=0.3, inverse_temperature=2.0),
+                (; reward_probability=0.95),
+            ),
+            (
+                WithInvalidParameters(ByHand()),
+                BaselineEnvironment(ByHand()),
+                (; learning_rate=0.9, inverse_temperature=2.0),
+                (; reward_probability=0.95),
+            ),
+            (
+                WithInvalidParameters(ByHand()),
+                BaselineEnvironment(ByHand()),
+                (; learning_rate=1.0, inverse_temperature=2.0),
+                (; reward_probability=0.95),
+            ),
+            (
+                WithStoppingCriterion(ByHand()),
+                BaselineEnvironment(ByHand()),
+                (; learning_rate=0.6, inverse_temperature=2.0),
+                (; reward_probability=0.95),
+            ),
+            (
+                Baseline(ByHand()),
+                WithStoppingCriterionEnvironment(ByHand()),
+                BASELINE_PARAMETERS,
+                (; reward_probability=0.8, last_timestep=6),
+            ),
+            (Baseline(ByHand()), InvalidOnThirdTimestep(), BASELINE_PARAMETERS, (;)),
+        )
+        ends = Set{Int}()
+        for (model, environment, cognitive_parameters, environment_parameters) in sessions,
+            who_starts in (EnvironmentStarts(), AgentStarts()),
+            save_initial_timestep_values in (true, false),
+            seed in 1:3
+
+            simulate_with(model, environment) = simulate_for_test(
+                model,
+                environment;
+                who_starts,
+                n_steps=10,
+                cognitive_parameters,
+                environment_parameters,
+                rng=Xoshiro(seed),
+                cognitive_save_history=SaveHistory(
+                    SaveEverything(); save_initial_timestep_values
+                ),
+                timestep_sizes=collect(1.0:10.0),
+                warn_on_invalid_parameters=false,
+            )
+            stopping = simulate_with(model, environment)
+            masked = simulate_with(
+                MaskedFlagsModel(model), MaskedFlagsEnvironment(environment)
+            )
+            offset = save_initial_timestep_values ? 1 : 0
+            @test length(masked.states) ==
+                length(masked.environment.observations) ==
+                10 + offset
+            @test kept_trajectories(masked, offset) == kept_trajectories(stopping, offset)
+            @test masked.timestep_sizes[(1 + offset):end] == 1.0:10.0
+            push!(ends, stopping.n_timesteps)
+        end
+        #The sessions ended on the first timestep, on later ones and after the last
+        @test 0 in ends && 10 in ends && length(ends) > 4
+    end
+
+    @testset "A simulation is masked from the timestep where a flag first must be, before it for a stopping criterion and from it for parameters_valid" begin
+        for (invalid_on, stops_after) in ((2, 10), (3, 10), (10, 2), (10, 4), (10, 10)),
+            who_starts in (EnvironmentStarts(), AgentStarts())
+
+            simulate_with(masks) = simulate_for_test(
+                Baseline(ByHand()),
+                MaskedFromSecondTimestep(masks, invalid_on, stops_after);
+                who_starts,
+                n_steps=8,
+                environment_parameters=(;),
+                warn_on_invalid_parameters=false,
+            )
+            stopping = simulate_with(false)
+            masked = simulate_with(true)
+            @test length(masked.states) == 8
+            @test kept_trajectories(masked, 0) == kept_trajectories(stopping, 0)
+        end
+    end
+
+    @testset "A stopping criterion that is met before the first timestep leaves no timestep kept, instead of an error" begin
+        stopped = simulate_for_test(
+            Baseline(ByHand()),
+            MaskedFlagsEnvironment(WithStoppingCriterionEnvironment(ByHand()));
+            n_steps=4,
+            environment_parameters=(; reward_probability=0.8, last_timestep=1),
+            previous_environment_state=(; n_timesteps=1),
+        )
+        @test stopped.n_timesteps == 0 && value_of(stopped.parameters_valid) === true
+        @test length(stopped.states) == 4
+    end
+
+    @testset "There is no warning, simulate_session! and simulate_timestep! are errors, and simulate_timestep returns the flag" begin
+        invalid_parameters = (; learning_rate=1.0, inverse_temperature=2.0)
+        always_rewarded = FixedObservationsEnvironment((; reward=fill(1.0, 5)))
+        masked = @test_logs simulate_for_test(
+            MaskedFlagsModel(WithInvalidParameters(ByHand())),
+            always_rewarded;
+            n_steps=5,
+            cognitive_parameters=invalid_parameters,
+            environment_parameters=(;),
+            action_map=NameMap(),
+        )
+        @test masked.n_timesteps == 0 && value_of(masked.parameters_valid) === false
+        agent = InstantiatedModel(
+            MaskedFlagsModel(WithInvalidParameters(ByHand())), invalid_parameters
+        )
+        @test_throws "simulate_session! can't simulate models whose parameters_valid or stopping criterion must be masked" simulate_session!(
+            agent,
+            InstantiatedModel(always_rewarded, (;));
+            who_starts=EnvironmentStarts(),
+            n_steps=5,
+            action_map=NameMap(),
+        )
+        @test agent.n_timesteps == 0
+        output, state, parameters_valid = @test_logs simulate_timestep(
+            MaskedFlagsModel(WithInvalidParameters(ByHand())),
+            (; reward=1.0);
+            parameters=invalid_parameters,
+        )
+        @test parameters_valid === TracedBoolStandIn(false)
+        @test_throws "simulate_timestep! can't simulate a model whose parameters_valid must be masked" simulate_timestep!(
+            agent, (; reward=1.0)
+        )
     end
 end

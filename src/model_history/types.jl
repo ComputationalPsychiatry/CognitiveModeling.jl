@@ -213,7 +213,10 @@ parameters stayed valid. On one line, as inside a vector, they show the number o
   With `false`, the trajectories end before the timestep on which a model set
   `parameters_valid` to `false` in its [`ModelOutput`](@ref). A fitted session whose models
   can't set it has [`ValidByDefault`](@ref) instead.
-- `n_timesteps`: the number of timesteps in the trajectories, without timestep 0.
+- `n_timesteps`: the number of timesteps in the trajectories, without timestep 0. A
+  simulation that was masked, under a compiler like Reactant.jl, has every timestep in the
+  vectors, of which the first `n_timesteps` were kept, as [`simulate_session`](@ref)
+  describes.
 - `last_timestep`: the last timestep that was simulated, from a simulation of models that
   can set `parameters_valid`, which is the timestep that turned invalid when
   `parameters_valid` is `false`: its number, under `timestep`, and for each model whether

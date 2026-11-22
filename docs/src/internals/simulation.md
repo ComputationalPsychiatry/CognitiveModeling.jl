@@ -12,6 +12,14 @@ Public = false
 Pages = ["simulation/simulate.jl"]
 ```
 
+## Masking, for flags that a compiler traces
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["simulation/mask_timesteps.jl"]
+```
+
 ## Instantiated models and name maps
 
 ```@autodocs

@@ -67,6 +67,38 @@ end
 sum_of_reals(deterministic::Deterministic) = sum_of_reals(deterministic.value)
 sum_of_reals(value) = 0.0
 
+#The sum of every number in what a simulation kept, which offset says whether it starts with timestep 0: the elements of
+#its vectors up to its last timestep kept, with its other fields. A simulation that Reactant masks instead of stopping it
+#has every timestep in its vectors, and the elements after the last one kept add nothing, through ifelse, since the
+#number kept is traced too. The vectors, which have different types, are gone through one at a time, as sum_of_reals
+#goes through a tuple, so that the type of the sum is inferred
+function sum_of_kept_reals(trajectories::SessionTrajectories, offset)
+    vectors = (
+        trajectories.states,
+        trajectories.observations,
+        trajectories.actions,
+        trajectories.action_distributions,
+        values(trajectories.environment)...,
+    )
+    how_it_ended = (
+        trajectories.parameters_valid, trajectories.n_timesteps, trajectories.last_timestep
+    )
+    return sum_of_reals(how_it_ended) +
+           sum_of_kept_elements(vectors, trajectories.n_timesteps + offset)
+end
+sum_of_kept_elements(::Tuple{}, n_kept) = 0.0
+function sum_of_kept_elements(vectors::Tuple, n_kept)
+    return sum_of_kept_elements(first(vectors), n_kept) +
+           sum_of_kept_elements(Base.tail(vectors), n_kept)
+end
+function sum_of_kept_elements(vector::AbstractVector, n_kept)
+    total = 0.0
+    for (index, element) in enumerate(vector)
+        total += ifelse(index <= n_kept, sum_of_reals(element), 0.0)
+    end
+    return total
+end
+
 ## The kinds of cases ##
 #Every case is a NamedTuple with its name, the function that runs it at x, x itself, whether Reactant compiles it,
 #whether the type of what it returns is inferred, whether a second run gives the same, and whether it has a gradient to
@@ -117,6 +149,21 @@ function simulate_case(
         deterministic=true,
         differentiated=differentiated && !isempty(x),
     )
+end
+
+#A case of simulate_session whose simulation ends before its last timestep, by a stopping criterion or by parameters
+#that turn invalid, at a timestep that depends on the parameters, which returns the sum of what it kept
+function ending_case(name, distributions; keywords...)
+    case = simulate_case(name, distributions; keywords...)
+    offset =
+        if CognitiveModeling.saves_initial_timestep_values(
+            keywords[:cognitive_save_history]
+        )
+            1
+        else
+            0
+        end
+    return merge(case, (; run=x -> sum_of_kept_reals(case.run(x), offset)))
 end
 
 #A case of an agent and an environment, instantiated with the real numbers of their parameters, and simulated with
@@ -302,15 +349,10 @@ const SAVE_BOTH = (;
     environment_save_history=SaveHistory(SaveEverything()),
 )
 
-#The models that Reactant can't compile, which branch on a value that the gradient goes through, in their
-#timestep_model, in a stopping criterion that every timestep checks, or in the parameters_valid that the package checks
-#after every timestep
-const NOT_COMPILED_BY_REACTANT = (
-    "WithStoppingCriterion",
-    "WithInvalidParameters",
-    "EveryFeature",
-    "EveryFeatureWithoutSampling",
-)
+#The models that Reactant can't compile, whose values change type between timesteps, as for NOT_INFERRED below: Reactant
+#throws a FieldError from within its tracing. A stopping criterion or a parameters_valid on a traced value is masked, so
+#models with them are compiled
+const NOT_COMPILED_BY_REACTANT = ("EveryFeature", "EveryFeatureWithoutSampling")
 
 #The pairs whose simulation the compiler can't infer the type of, because an output is NoValue on some timesteps, or a
 #state changes type, which widens the vectors of saved values within the loop
@@ -364,6 +406,44 @@ function simulation_cases(distributions)
             ),
         )
     end
+
+    #Simulations that end before their last timestep, at a timestep that depends on the parameters, by a stopping
+    #criterion, which a learning rate of 0.9 meets after a few rewards, or by parameters that turn invalid, from an
+    #expected reward above the highest valid one. Reactant masks them instead of stopping them. When the agent starts
+    #from such an expected reward, its first timestep, without a reward, leaves it as it is, so nothing kept depends on
+    #the parameters
+    for (who_starts, starts) in WHO_STARTS
+        push!(
+            cases,
+            ending_case(
+                "WithStoppingCriterion until its criterion is met, $starts",
+                distributions;
+                model=WithStoppingCriterion(distributions),
+                environment=BaselineEnvironment(distributions),
+                cognitive_parameters=(; learning_rate=0.9, inverse_temperature=2.0),
+                environment_parameters=(; reward_probability=1.0),
+                who_starts,
+                n_steps=10,
+                SAVE_BOTH...,
+            ),
+        )
+    end
+    push!(
+        cases,
+        ending_case(
+            "WithInvalidParameters from an expected reward above the highest valid one, environment starts",
+            distributions;
+            model=WithInvalidParameters(distributions),
+            environment=BaselineEnvironment(distributions),
+            cognitive_parameters=(; learning_rate=0.001, inverse_temperature=2.0),
+            environment_parameters=(; reward_probability=0.8),
+            who_starts=EnvironmentStarts(),
+            n_steps=10,
+            previous_cognitive_state=(; expected_reward=0.995),
+            warn_on_invalid_parameters=false,
+            SAVE_BOTH...,
+        ),
+    )
 
     #The baseline with each setting of a simulation
     for (who_starts, starts) in WHO_STARTS

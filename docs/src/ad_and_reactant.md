@@ -7,12 +7,15 @@ example model of `test/example_models` simulated with its environment, with eith
 the baseline model with each setting of a simulation, such as timestep sizes and gradients
 of the sizes themselves, a selection of what is saved, an environment of fixed observations,
 given previous states, actions and observations, and a stopping criterion that isn't
-checked, agents instantiated and simulated with `simulate_session!`, also twice and after
-`reset!`, and models simulated on single observations with `simulate_timestep` and
-`simulate_timestep!`. The models give the means of their distributions, so that a simulation
-is deterministic and the gradient goes all the way round its loop, and a few cases also
-sample from a seeded `Xoshiro`. The gradient is that of the sum of every real number that
-the simulation saved.
+checked, simulations that end before their last timestep, at a timestep that depends on the
+parameters, by a stopping criterion or by parameters that turn invalid, agents instantiated
+and simulated with `simulate_session!`, also twice and after `reset!`, and models simulated
+on single observations with `simulate_timestep` and `simulate_timestep!`. The models give
+the means of their distributions, so that a simulation is deterministic and the gradient
+goes all the way round its loop, and a few cases also sample from a seeded `Xoshiro`. The
+gradient is that of the sum of every real number that the simulation saved, and for a
+simulation that ends early, of those of the timesteps it kept, since Reactant masks it
+instead of stopping it.
 Code in the package's extensions is differentiated in suites of its own, each with its own
 environment, in `test/ad_and_reactant`. The one for Turing.jl, in
 `test/ad_and_reactant/turing`, differentiates the log density of the inference cases that
@@ -65,7 +68,7 @@ theirs must be checked by hand. Last checked with Julia 1.13.4, ReverseDiff
 | Enzyme reverse, with and without runtime activity | `simulate_session` where an output of either model, an action or an observation, is `NoValue` on some timesteps, so that it has two types in the loop over the timesteps | throws a `TypeError`, that a `RefValue` was given where a value was expected, or an `EnzymeNoTypeError` | reported as Enzyme.jl issues 4044 and 4032; forward mode is right, but for the row below |
 | Enzyme forward, with and without runtime activity | `simulate_session` where the cognitive model's action is `NoValue` on some timesteps and the environment starts | wrong gradient, no error | to be reported; right when the agent starts |
 | Enzyme, every form | `simulate_session` where a state changes type, such as an integer before the first timestep and a number after it, and a model with every feature, whose choice is `NoValue` on some timesteps among outputs of other kinds | throws an `IllegalTypeAnalysisException` | related to Enzyme.jl issue 4031; a state that keeps its type is right |
-| ReverseDiff with a compiled tape | `simulate_session` where the model stops once a value passes a threshold, or samples its choices and rewards from a seeded `Xoshiro` | wrong gradient, no error, at points where the other branch is taken | a limitation of compiled tapes, see the pitfalls below |
+| ReverseDiff with a compiled tape | `simulate_session` where the model stops once a value passes a threshold, or its parameters turn invalid on a timestep that depends on them, or it samples its choices and rewards from a seeded `Xoshiro` | wrong gradient, no error, at points where the other branch is taken | a limitation of compiled tapes, see the pitfalls below |
 | Enzyme forward and reverse without runtime activity | the log density of a Turing.jl full model, and of many sessions: with imputed values, of models whose outputs are numbers from a normal distribution, vectors or `NamedTuple`s, of a model which uses the sizes of the timesteps, and with an environment which samples within a timestep or has names of its own | throws an `EnzymeRuntimeActivityError` | a limitation of Enzyme: use runtime activity, which Turing.jl's own tests run Enzyme with. The sessions of the baseline and of most models whose outputs are choices pass |
 | Enzyme, every form | a Turing.jl session whose observation is a vector, missing on one timestep and imputed: the imputed vector is a view of the parameters, which meets the recorded vectors in the loop over the timesteps | throws an `IllegalTypeAnalysisException` | reported as Enzyme.jl issue 4106 |
 | Enzyme, every form | a Turing.jl session or full model of the model with every feature, whose choice is `NoValue` on some timesteps among outputs of other kinds, and sessions where the agent starts and an observation is imputed, so that a value of one of two types goes from one timestep to the next | throws an `IllegalTypeAnalysisException` | related to Enzyme.jl issue 4031 |
@@ -129,6 +132,10 @@ These aren't failures of the package's own code, but a model can run into them.
   and the default generator repeats its numbers on every run, so pass a
   `Reactant.ReactantRNG()` as a positional argument. Compile times grow with the number of
   timesteps, because the loop is unrolled, so a few hundred timesteps is the practical limit.
+  A `parameters_valid` or a stopping criterion that depends on traced values is a traced
+  Bool, which nothing can branch on, so a simulation is masked from the first timestep where
+  one is, as [`simulate_session`](@ref) describes: every timestep is simulated, and
+  `n_timesteps` says how many were kept.
   A function can't be compiled when it is given, or holds, an object with a field declared
   as `NamedTuple` without its names and types, such as a model with `settings::NamedTuple`:
   give the field a type parameter instead.

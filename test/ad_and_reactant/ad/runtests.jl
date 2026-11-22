@@ -154,12 +154,15 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
-        bug="ReverseDiff's compiled tape records the path through the code at the point where it is compiled, and the tests compile it at another point too, where a simulation that stops once a value passes a threshold, or that samples its choices and rewards, takes another path, so the tape gives the gradient of that path, with no error. This is a limitation of compiled tapes, which the page on automatic differentiation describes among its pitfalls",
+        bug="ReverseDiff's compiled tape records the path through the code at the point where it is compiled, and the tests compile it at another point too, where a simulation that stops once a value passes a threshold, whose parameters turn invalid on another timestep, or that samples its choices and rewards, takes another path, so the tape gives the gradient of that path, with no error. This is a limitation of compiled tapes, which the page on automatic differentiation describes among its pitfalls",
         backends=["ReverseDiff, compiled tape"],
         only_when_prepared_elsewhere=true,
         cases=[
             "WithStoppingCriterion, environment starts",
             "WithStoppingCriterion, agent starts",
+            "WithStoppingCriterion until its criterion is met, environment starts",
+            "WithStoppingCriterion until its criterion is met, agent starts",
+            "WithInvalidParameters from an expected reward above the highest valid one, environment starts",
             "Baseline, environment starts, sampled",
             "Baseline, agent starts, sampled",
             "SamplingWithinTimestep, environment starts, sampled",

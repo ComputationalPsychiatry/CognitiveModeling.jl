@@ -365,8 +365,10 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   precision that becomes negative. Such a model gives a `Bool` on every timestep, as in
   `parameters_valid = precision > 0`. When it is `false`, a simulation stops and leaves the
   timestep out, and a fit gives the parameters a probability of zero. The distributions of
-  that timestep must still be ones that outputs can be sampled from. The default,
-  [`ValidByDefault`](@ref), is for a model whose parameters are always valid.
+  that timestep must still be ones that outputs can be sampled from. Under a compiler like
+  Reactant.jl, the flag can be a traced Bool, and the simulation is then masked instead of
+  stopped, as [`simulate_session`](@ref) describes. The default, [`ValidByDefault`](@ref),
+  is for a model whose parameters are always valid.
 
 # Examples
 ```jldoctest
