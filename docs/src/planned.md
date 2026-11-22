@@ -81,6 +81,8 @@ This page lists what is planned and not written yet. The list will grow.
   backends and packages, such as Stan.
 - Extended benchmarks with full data sets, beside the small ones in the `benchmark` folder,
   which run on every push.
+- Compatibility with KernelAbstractions.jl, and with GPUs in general, through the packages
+  of JuliaGPU, such as CUDA.jl, AMDGPU.jl, Metal.jl and oneAPI.jl.
 
 ## Plots
 
