@@ -35,6 +35,45 @@ parameters = get_session_parameters(model, chain)
 parameters = get_session_parameters(returned(own_model, chain), sessions_info)
 ```
 
+### Why the package has its own decondition and condition
+
+Turing.jl's `decondition` and `condition` work on the variables of a model: `condition`
+gives a variable a value, so that the model scores the value instead of sampling it, and
+`decondition` takes the value away again. The models of the package don't have the data of
+their sessions as variables. They take it as arguments, in a [`SessionInfo`](@ref) or a
+[`MultipleSessionsInfo`](@ref), because the data does more than give values to score:
+
+- The models receive it on each timestep, as observations and previous actions.
+- It decides how each session runs: its number of timesteps, which values are imputed,
+  whether the environment runs, and where the stopping criterion is checked.
+- It is checked before a fit, against the names and the domains of the models.
+- The observations of a session without an environment have no distribution, so they can
+  only be data.
+- Data in arguments is scored all at once, which makes each evaluation several times faster
+  than values that are looked up by name.
+
+Turing.jl's `decondition` therefore leaves the data as it is: it can only free variables,
+and the data aren't variables. [`decondition_sessions`](@ref) turns the data into variables:
+it puts [`SimulatedMissingValue`](@ref) in place of every action, and of every observation
+when the sessions have an environment, so that the model samples each of them. Turing.jl's
+`sample` with `Prior()` and its `predict` then simulate the data, as for any model. The
+deconditioned sessions are named apart from the fitted ones, so that `predict` draws every
+variable within them again.
+
+[`condition_sessions`](@ref) goes the other way: it puts values of those variables back in
+the data. Turing.jl's `condition` works on the same variables too, and gives the same
+posterior for most models, but the values then stay variables. Each is looked up by name on
+every evaluation, which is slower; a value with a misspelled name is left out without an
+error; and with a stopping criterion, a session ends where the criterion is met at the
+parameters of each evaluation, before its last value or after it. With `condition_sessions`
+the model is the one that the same data in a table gives: as fast, checked in the same way,
+with an error for a value that has no place in the data, and with each session ending after
+its last value.
+
+Together they allow prior and posterior predictive checks and parameter recoveries with
+Turing.jl's own functions, on the models that the package makes, without writing the
+simulated data to a table first.
+
 ### Predictive checks
 
 With Turing.jl loaded, [`predict_session_trajectories`](@ref) takes a model made by

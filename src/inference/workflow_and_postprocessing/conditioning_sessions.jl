@@ -24,6 +24,14 @@ also one that was [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). The copy
 timestep with data, which in a session with an environment is before every timestep, so that
 the copy can end before the data did, as a simulation does.
 
+The models of the sessions take their data as arguments, and not as observed variables,
+since the data does more than give values to score: the models receive it on each timestep,
+it decides how many timesteps a session has, what is imputed and whether the environment
+runs, and it is checked against the models before a fit. An inference backend's own way of
+deconditioning, which frees observed variables, therefore leaves the data as it is, and
+this function turns the data into variables that the model samples, so that the backend's
+own functions can simulate it.
+
 # Examples
 ```jldoctest
 julia> struct Counter <: AbstractCognitiveModel end
@@ -84,6 +92,12 @@ a model stopped is fitted from a table with the timesteps it had. A session that
 value at all keeps its timesteps. The copy checks the [`stopping_criterion`](@ref) of the
 models as `check_stopping_criterion` says, as for [`SessionInfo`](@ref), from the data it
 has, which by default is after its last timestep, so never.
+
+An inference backend's own way of conditioning gives the variables values while they stay
+variables, which the model looks up by name on every evaluation. This function puts the
+values in the data instead, so that the copy is the model that the same data in a table
+gives: as fast to evaluate, checked in the same way, with an error for a value that has no
+place in the data, and with each session ending after its last value.
 
 Each inference backend has a method for its own models, which needs its package to be
 loaded. Its documentation describes how the variables of the sessions are named, and in
