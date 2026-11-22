@@ -43,24 +43,34 @@ function chain_sessions(session_columns=:participant)
 end
 
 ## Results made by hand, so that no PPL is needed ##
-#What a session saved, in the shape turing_behavioral_session returns it under saved_trajectories: for each kind,
-#a vector over the timesteps from timestep 0, with an empty NamedTuple on every timestep when nothing of that kind is
-#saved, and the environment's record under environment when the session has one
+#What a session saved, as turing_behavioral_session returns it under saved_trajectories, in a SessionTrajectories: for
+#each kind, a vector over the timesteps from timestep 0, with an empty NamedTuple on every timestep when nothing of that
+#kind is saved, the environment's record under environment when the session has one, and whether the parameters stayed
+#valid, which is the default for models that can't set it
 function saved_by_session(
     n_timesteps;
     observations=fill((;), n_timesteps + 1),
     actions=fill((;), n_timesteps + 1),
     action_distributions=fill((;), n_timesteps + 1),
     states=fill((;), n_timesteps + 1),
-    environment=nothing,
+    environment=NoEnvironment(),
+    parameters_valid=ValidByDefault(),
 )
     timestep_sizes = Union{BeforeFirstTimestep,Int}[
         BeforeFirstTimestep();
         fill(1, n_timesteps)
     ]
-    saved = (; states, observations, actions, action_distributions)
-    environment === nothing || (saved = merge(saved, (; environment)))
-    return merge(saved, (; timestep_sizes))
+    return SessionTrajectories(
+        states,
+        observations,
+        actions,
+        action_distributions,
+        environment,
+        timestep_sizes,
+        parameters_valid,
+        n_timesteps,
+        nothing,
+    )
 end
 
 #What an environment's record looks like when it saves its level and the rewards it gave, from timestep 0
@@ -330,6 +340,37 @@ end
             get_session_trajectories(
                 reshape(
                     [single_session_result((; learning_rate=0.5), empty_environment)], 1, 1
+                ),
+            ),
+        ) == ["expected_value"]
+    end
+
+    @testset "Whether the parameters stayed valid has an entry for sessions whose models can set it" begin
+        #A Bool is what such models give, for each sample
+        saved_of_samples = [
+            saved_by_session(
+                1; states=[(; expected_value=0.0), (; expected_value=0.5)], parameters_valid
+            ) for parameters_valid in (true, false)
+        ]
+        chain = get_session_trajectories(
+            two_samples(
+                single_session_result((; learning_rate=0.5), saved_of_samples[1]),
+                single_session_result((; learning_rate=0.9), saved_of_samples[2]),
+            ),
+        )
+        @test entry_names(chain) == ["expected_value", "parameters_valid"]
+        @test vec(entry(chain, "parameters_valid")) == [true, false]
+        #Models that can't set it give the default, and have no entry
+        @test entry_names(
+            get_session_trajectories(
+                reshape(
+                    [
+                        single_session_result(
+                            (; learning_rate=0.5), saves_expected_values([0.0, 0.5])
+                        ),
+                    ],
+                    1,
+                    1,
                 ),
             ),
         ) == ["expected_value"]

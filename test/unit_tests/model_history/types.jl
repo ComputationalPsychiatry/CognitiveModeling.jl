@@ -97,3 +97,86 @@ end
             (:states, :inputs, :outputs, :output_distributions, :timestep_sizes)
     end
 end
+
+@testset "SessionTrajectories" begin
+    #The trajectories of a session of two timesteps, from timestep 0, with the given states of the cognitive model
+    function trajectories_for_test(
+        states=[(; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.6)]
+    )
+        return SessionTrajectories(
+            states,
+            [(; reward=BeforeFirstTimestep()), (; reward=1.0), (; reward=0.0)],
+            fill((;), 3),
+            fill((;), 3),
+            (;
+                states=fill((;), 3),
+                observations=fill((;), 3),
+                actions=fill((;), 3),
+                observation_distributions=fill((;), 3),
+            ),
+            1,
+            true,
+            2,
+            nothing,
+        )
+    end
+
+    @testset "It keeps each argument in a field of the same name" begin
+        trajectories = trajectories_for_test()
+        @test fieldnames(SessionTrajectories) == (
+            :states,
+            :observations,
+            :actions,
+            :action_distributions,
+            :environment,
+            :timestep_sizes,
+            :parameters_valid,
+            :n_timesteps,
+            :last_timestep,
+        )
+        @test trajectories.states[2] === (; expected_reward=0.75)
+        @test trajectories.observations[1] === (; reward=BeforeFirstTimestep())
+        @test trajectories.environment.states == fill((;), 3)
+        @test trajectories.timestep_sizes === 1 &&
+            trajectories.parameters_valid === true &&
+            trajectories.n_timesteps === 2 &&
+            trajectories.last_timestep === nothing
+        #The names can be destructured
+        (; states, n_timesteps) = trajectories
+        @test states === trajectories.states && n_timesteps === 2
+        #The types of the fields are in the type, so constructing it is inferred
+        @test @inferred(trajectories_for_test()) isa SessionTrajectories
+        @test isconcretetype(typeof(trajectories))
+    end
+
+    @testset "NamedTuple gives the fields in a NamedTuple" begin
+        trajectories = trajectories_for_test()
+        fields = @inferred NamedTuple(trajectories)
+        @test keys(fields) == fieldnames(SessionTrajectories)
+        @test fields.states === trajectories.states &&
+            fields.environment === trajectories.environment &&
+            fields.n_timesteps === 2
+        @test merge(fields, (; n_timesteps=3)).n_timesteps == 3
+    end
+
+    @testset "Two are equal when their fields are" begin
+        trajectories = trajectories_for_test()
+        same = trajectories_for_test()
+        @test trajectories == same && isequal(trajectories, same)
+        @test hash(trajectories) == hash(same)
+        @test length(unique([trajectories, same])) == 1
+        #The types of the vectors don't matter, as for vectors
+        widened = trajectories_for_test(
+            Any[(; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.6)]
+        )
+        @test typeof(widened) != typeof(trajectories)
+        @test trajectories == widened && hash(trajectories) == hash(widened)
+        #A different value in any field makes them different
+        other_states = trajectories_for_test([
+            (; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.1)
+        ])
+        @test trajectories != other_states && !isequal(trajectories, other_states)
+        #They aren't equal to the NamedTuple of their fields
+        @test trajectories != NamedTuple(trajectories)
+    end
+end

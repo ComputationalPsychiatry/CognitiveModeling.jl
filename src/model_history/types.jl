@@ -175,3 +175,148 @@ struct ModelHistory
     output_distributions::Vector{Any}
     timestep_sizes::Vector{Any}
 end
+
+## What was saved of a session ##
+
+"""
+    SessionTrajectories(states, observations, actions, action_distributions, environment,
+                        timestep_sizes, parameters_valid, n_timesteps, last_timestep)
+
+The trajectories of one session, which are what changed over its timesteps, and how the
+session ended. [`simulate_session`](@ref) and [`simulate_session!`](@ref) return one, and a
+fitted session returns one for each sample.
+
+Each argument is kept in a field of the same name, such as `trajectories.states`. The
+trajectories of each kind are a vector with one element for each timestep, after one for
+timestep 0, before the first timestep, when it is saved. Each element is a `NamedTuple` with
+what the [`SaveHistory`](@ref) of its model selects of that kind, which is empty when it
+selects nothing. `NamedTuple(trajectories)` gives the fields in a `NamedTuple`.
+
+In the REPL, the trajectories of a session show the number of timesteps, the names of what
+was saved of each kind, for the cognitive model and for the environment, and whether the
+parameters stayed valid. On one line, as inside a vector, they show the number of timesteps.
+
+# Arguments
+- `states`: the states of the cognitive model after each timestep, as returned by
+  [`prepare_state_for_saving`](@ref).
+- `observations`: the observations the cognitive model received.
+- `actions`: the actions the cognitive model gave.
+- `action_distributions`: what the cognitive model gave its actions to be sampled from.
+- `environment`: the trajectories of the environment model in a `NamedTuple`, each in the
+  environment's own names: its `states`, the `observations` it gave, the `actions` it
+  received, and the `observation_distributions` it gave its observations to be sampled
+  from. A fitted session without an environment has [`NoEnvironment`](@ref) instead.
+- `timestep_sizes`: how much time each timestep covered: a single size for all of them, or a
+  vector with the size of each, after [`BeforeFirstTimestep`](@ref) for timestep 0 when it
+  is saved.
+- `parameters_valid`: whether the parameters of both models stayed valid on every timestep.
+  With `false`, the trajectories end before the timestep on which a model set
+  `parameters_valid` to `false` in its [`ModelOutput`](@ref). A fitted session whose models
+  can't set it has [`ValidByDefault`](@ref) instead.
+- `n_timesteps`: the number of timesteps in the trajectories, without timestep 0.
+- `last_timestep`: the last timestep that was simulated, from a simulation of models that
+  can set `parameters_valid`, which is the timestep that turned invalid when
+  `parameters_valid` is `false`: its number, under `timestep`, and for each model whether
+  its parameters stayed valid on it and its state before and after it, with the cognitive
+  model's at the top and the environment's under `environment`. Otherwise `nothing`.
+
+# Examples
+```jldoctest
+julia> struct LearnsRewards <: AbstractCognitiveModel end
+
+julia> CognitiveModeling.initialize_state(::LearnsRewards, parameters) = (; expected_reward = 0.5);
+
+julia> function CognitiveModeling.timestep_model(::LearnsRewards, context::ModelContext)
+           V = context.previous_state.expected_reward
+           V = V + context.parameters.learning_rate * (context.input.reward - V)
+           return ModelOutput((; choice = Deterministic(V > 0.5)), (; expected_reward = V))
+       end;
+
+julia> CognitiveModeling.attribute_names(::LearnsRewards) = ModelAttributes(; parameters = :learning_rate, states = :expected_reward, inputs = :reward, outputs = :choice);
+
+julia> trajectories = simulate_session(
+           LearnsRewards(),
+           FixedObservationsEnvironment((; reward = [1.0, 1.0, 0.0]));
+           who_starts = EnvironmentStarts(),
+           n_steps = 3,
+           cognitive_parameters = (; learning_rate = 0.5),
+           environment_parameters = (;),
+           action_map = NameMap(),
+           cognitive_save_history = SaveHistory(; states = :expected_reward, outputs = :choice),
+       )
+SessionTrajectories
+Timesteps: 3, after timestep 0
+States: expected_reward
+Observations: none
+Actions: choice
+Action distributions: none
+Environment states: none
+Environment observations: none
+Environment actions: none
+Environment observation distributions: none
+Parameters valid: true
+
+julia> trajectories.states
+4-element Vector{@NamedTuple{expected_reward::Float64}}:
+ (expected_reward = 0.5,)
+ (expected_reward = 0.75,)
+ (expected_reward = 0.875,)
+ (expected_reward = 0.4375,)
+
+julia> print(trajectories)
+SessionTrajectories (3 timesteps)
+```
+"""
+struct SessionTrajectories{
+    Tstates,
+    Tobservations,
+    Tactions,
+    Taction_distributions,
+    Tenvironment,
+    Ttimestep_sizes,
+    Tparameters_valid,
+    Tn_timesteps,
+    Tlast_timestep,
+}
+    states::Tstates
+    observations::Tobservations
+    actions::Tactions
+    action_distributions::Taction_distributions
+    environment::Tenvironment
+    timestep_sizes::Ttimestep_sizes
+    parameters_valid::Tparameters_valid
+    n_timesteps::Tn_timesteps
+    last_timestep::Tlast_timestep
+end
+
+#The fields in a NamedTuple, for what a NamedTuple offers and the type doesn't, such as keys and merge
+function Base.NamedTuple(trajectories::SessionTrajectories)
+    return (;
+        trajectories.states,
+        trajectories.observations,
+        trajectories.actions,
+        trajectories.action_distributions,
+        trajectories.environment,
+        trajectories.timestep_sizes,
+        trajectories.parameters_valid,
+        trajectories.n_timesteps,
+        trajectories.last_timestep,
+    )
+end
+
+#Two are equal when their fields are, as for a NamedTuple, since a type with vectors in its fields is otherwise only equal to itself
+function Base.:(==)(
+    first_trajectories::SessionTrajectories, second_trajectories::SessionTrajectories
+)
+    return NamedTuple(first_trajectories) == NamedTuple(second_trajectories)
+end
+function Base.isequal(
+    first_trajectories::SessionTrajectories, second_trajectories::SessionTrajectories
+)
+    return isequal(NamedTuple(first_trajectories), NamedTuple(second_trajectories))
+end
+
+#Equal trajectories have the same hash, as isequal requires
+function Base.hash(trajectories::SessionTrajectories, seed::UInt)
+    return hash(NamedTuple(trajectories), hash(SessionTrajectories, seed))
+end

@@ -58,7 +58,7 @@ using CognitiveModeling:
     initialize_all_storage,
     store_timestep_values!,
     saved_trajectories,
-    with_empty_environment_entry,
+    with_empty_environment_trajectories,
     timestep_sizes_until
 using CognitiveModeling:
     stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data

@@ -49,9 +49,11 @@ end
 #automatic differentiation package and a traced number of Reactant included. Markers and Symbols add nothing, a
 #Deterministic adds its value, and other distributions add nothing. The elements of a tuple are added one by one, those
 #of an array of numbers in one sum, which Reactant compiles as one reduction, and those of other arrays in a loop, which
-#every backend differentiates and Reactant compiles
+#every backend differentiates and Reactant compiles. The trajectories of a session add every one of their fields, which
+#needs a method of its own, since anything without one adds nothing
 sum_of_reals(value::Number) = value
 sum_of_reals(values::NamedTuple) = sum_of_reals(Tuple(values))
+sum_of_reals(trajectories::SessionTrajectories) = sum_of_reals(NamedTuple(trajectories))
 sum_of_reals(::Tuple{}) = 0.0
 sum_of_reals(values::Tuple) = sum_of_reals(first(values)) + sum_of_reals(Base.tail(values))
 sum_of_reals(values::AbstractArray{<:Number}) = isempty(values) ? 0.0 : sum(values)

@@ -70,7 +70,8 @@ struct UnimputedMissingValue <: AbstractNoValue end
 
 The environment of a session that has none, which is the default of [`SessionInfo`](@ref).
 Every observation then comes from the data, and none can be [`MissingValue`](@ref), since
-nothing imputes it.
+nothing imputes it. The [`SessionTrajectories`](@ref) of such a session have it in place of
+the trajectories of an environment.
 """
 struct NoEnvironment end
 

@@ -22,6 +22,7 @@ include("model_history/utility_functions/check_selection_names.jl")
 include("model_history/utility_functions/timestep_sizes.jl")
 include("model_history/utility_functions/storage.jl")
 include("model_history/utility_functions/display_save_histories.jl")
+include("model_history/utility_functions/display_session_trajectories.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
 include("simulation/fixed_observations_environment.jl")
@@ -68,7 +69,7 @@ export ModelContext, ModelOutput, ModelAttributes, Deterministic, ValidByDefault
 export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
-export SaveHistory, SaveEverything, NameMap
+export SaveHistory, SaveEverything, SessionTrajectories, NameMap
 export simulate_session, simulate_session!, simulate_timestep, simulate_timestep!, reset!
 export SessionInfo, MultipleSessionsInfo, NoEnvironment
 export decondition_sessions, condition_sessions

@@ -5,4 +5,5 @@
     include("timestep_sizes.jl")
     include("storage.jl")
     include("display_save_histories.jl")
+    include("display_session_trajectories.jl")
 end

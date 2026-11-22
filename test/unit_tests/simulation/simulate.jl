@@ -891,12 +891,12 @@ end
         end
     end
 
-    @testset "It returns one NamedTuple, with the environment's values under environment" begin
+    @testset "It returns the trajectories in a SessionTrajectories, with the environment's under environment" begin
         simulation = simulate_for_test(
             Baseline(ByHand()), BaselineEnvironment(ByHand()); n_steps=3
         )
-        @test simulation isa NamedTuple
-        @test keys(simulation) == (
+        @test simulation isa SessionTrajectories
+        @test propertynames(simulation) == (
             :states,
             :observations,
             :actions,
@@ -937,7 +937,7 @@ end
             environment_save_history=SaveHistory(SaveEverything()),
         )
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            @test @inferred(run_simulation(who_starts, 10)) isa NamedTuple
+            @test @inferred(run_simulation(who_starts, 10)) isa SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(
                 who_starts, 10
             )
@@ -1669,7 +1669,8 @@ end
             SaveHistory(; inputs=:reward, states=(:expected_reward, :n_timesteps)),
             SaveHistory(),
         )
-            @test @inferred(run_simulation(cognitive_save_history, 10)) isa NamedTuple
+            @test @inferred(run_simulation(cognitive_save_history, 10)) isa
+                SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(
                 cognitive_save_history, 10
             )
@@ -1840,7 +1841,7 @@ end
             environment_save_history=SaveHistory(SaveEverything()),
         )
         for timestep_sizes in (1, 0.5, [0.5, 2.0, 0.25], 1:3)
-            @test @inferred(run_simulation(timestep_sizes)) isa NamedTuple
+            @test @inferred(run_simulation(timestep_sizes)) isa SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(
                 timestep_sizes
             )
@@ -1933,7 +1934,7 @@ end
                 cognitive_save_history=SaveHistory(SaveEverything()),
                 environment_save_history=SaveHistory(SaveEverything()),
             )
-            @test @inferred(typed_run(20)) isa NamedTuple
+            @test @inferred(typed_run(20)) isa SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) typed_run(20)
         end
         #When the environment starts, the model has observed and acted on the last timestep, after which a
@@ -2347,7 +2348,7 @@ end
             Baseline(ByHand()),
             BaselineEnvironment(ByHand());
             cognitive_parameters=(; inverse_temperature=2.0, learning_rate=0.5),
-        ) isa NamedTuple
+        ) isa SessionTrajectories
         #A state must be a NamedTuple, also when it is a single object
         @test_throws "The state has type Vector{Float64}, but it must be a NamedTuple with the states in the attributes of a cognitive model of type NeedsGivenState, (:value,), also when it is a single object." run_with(
             NeedsGivenState(),
@@ -2437,7 +2438,7 @@ end
             n_steps=2,
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-        ) isa NamedTuple
+        ) isa SessionTrajectories
     end
 
     @testset "Maps of names let a model and an environment with other names be used together" begin
@@ -2574,7 +2575,7 @@ end
             action_map=CHOICE_AS_LEVER,
         )
         for who_starts in (EnvironmentStarts(), AgentStarts())
-            @test @inferred(run_simulation(who_starts, 10)) isa NamedTuple
+            @test @inferred(run_simulation(who_starts, 10)) isa SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) run_simulation(
                 who_starts, 10
             )
@@ -2652,7 +2653,7 @@ end
             n_steps=2,
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-        ) isa NamedTuple
+        ) isa SessionTrajectories
         #simulate_session! checks the maps too
         @test_throws "A map must give exactly the observations in the cognitive model's attributes." simulate_session!(
             agent,

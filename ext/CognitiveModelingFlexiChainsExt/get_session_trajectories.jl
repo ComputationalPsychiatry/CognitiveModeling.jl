@@ -126,7 +126,7 @@ end
     add_session_entries!(entries, returned_values, session_prefix, saved_trajectories_of)
 
 Add an entry to `entries` for everything one session saved, where `saved_trajectories_of`
-gives the session's saved trajectories from the returned value of one sample, and
+gives the session's [`SessionTrajectories`](@ref) from the returned value of one sample, and
 `session_prefix` holds the session's symbol name, or nothing for a single session. The
 cognitive model's values are named under the session alone, and the environment's under
 `environment` after it, as [`add_model_entries!`](@ref) names them. When the models of the
@@ -145,7 +145,7 @@ function add_session_entries!(
         :action_distributions,
     )
     first_saved = saved_trajectories_of(first(returned_values))
-    if hasproperty(first_saved, :environment)
+    if !(first_saved.environment isa NoEnvironment)
         add_model_entries!(
             entries,
             returned_values,
@@ -156,7 +156,7 @@ function add_session_entries!(
     end
 
     #Whether the parameters stayed valid, for models that can set it
-    if hasproperty(first_saved, :parameters_valid) && first_saved.parameters_valid isa Bool
+    if first_saved.parameters_valid isa Bool
         add_entry!(
             entries,
             entry_name(session_prefix..., :parameters_valid),
@@ -174,8 +174,9 @@ end
 
 Add an entry under `prefix` to `entries` for everything one model of a session saved, where
 `saved_trajectories_of` gives its saved trajectories from the returned value of one sample,
-with `states`, `observations`, `actions` and `distribution_kind`, which is
-`action_distributions` for a cognitive model and `observation_distributions` for an
+the [`SessionTrajectories`](@ref) for a cognitive model and their `environment` for an
+environment model, with `states`, `observations`, `actions` and `distribution_kind`, which
+is `action_distributions` for a cognitive model and `observation_distributions` for an
 environment model. There is one entry for each observation and action that was saved, named
 after it alone, one for each distribution, under its kind, and one for each state. Each
 entry holds, for every sample, a vector over the timesteps. Used by
@@ -328,9 +329,9 @@ end
 
 Throw an informative error if `returned_value`, the returned value of the first sample,
 isn't what the models of several sessions return, [`turing_full_model`](@ref) and
-[`turing_multiple_behavioral_sessions`](@ref), with what each session saved in a vector
-under `saved_trajectories`, for as many sessions as `sessions_info` has, or what
-[`turing_behavioral_session`](@ref) returns, with what the session saved under
+[`turing_multiple_behavioral_sessions`](@ref), with the [`SessionTrajectories`](@ref) of
+each session in a vector under `saved_trajectories`, for as many sessions as `sessions_info`
+has, or what [`turing_behavioral_session`](@ref) returns, with those of the session under
 `saved_trajectories`. Used by [`get_session_trajectories`](@ref) and
 [`get_session_parameters`](@ref).
 """
@@ -340,7 +341,7 @@ function check_returned_values_of_multiple_sessions(
     if !(
         returned_value isa NamedTuple &&
         hasproperty(returned_value, :saved_trajectories) &&
-        returned_value.saved_trajectories isa AbstractVector
+        returned_value.saved_trajectories isa AbstractVector{<:SessionTrajectories}
     )
         throw(
             ArgumentError(
@@ -355,7 +356,7 @@ function check_returned_values_of_single_session(returned_value)
     if !(
         returned_value isa NamedTuple &&
         hasproperty(returned_value, :saved_trajectories) &&
-        returned_value.saved_trajectories isa NamedTuple
+        returned_value.saved_trajectories isa SessionTrajectories
     )
         throw(
             ArgumentError(

@@ -74,6 +74,11 @@ This page lists what is planned and not written yet. The list will grow.
   timestep uses the value. Leaving a missing part out already works: a distribution of one's
   own, which splits the distribution of the value into its parts, scores the parts that are
   known, as the tutorial on SequentialSamplingModels.jl shows.
+- One format for the trajectories and the parameters of fitted sessions, which
+  [`get_session_trajectories`](@ref) and [`get_session_parameters`](@ref) return whatever
+  inference backend fitted them, so that the package's own plots take what any backend
+  gives: the `FlexiChain` of FlexiChains.jl that they return now, or a type of the package's
+  own.
 
 ## Performance
 
@@ -83,6 +88,8 @@ This page lists what is planned and not written yet. The list will grow.
   which run on every push.
 - Compatibility with KernelAbstractions.jl, and with GPUs in general, through the packages
   of JuliaGPU, such as CUDA.jl, AMDGPU.jl, Metal.jl and oneAPI.jl.
+- A version of the simulation for GPUs, which stores what it saves without vectors that
+  grow, and samples with a random number generator of the device.
 
 ## Plots
 

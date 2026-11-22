@@ -60,7 +60,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         return (;
             cognitive_parameters,
             environment_parameters,
-            saved_trajectories=with_empty_environment_entry(
+            saved_trajectories=with_empty_environment_trajectories(
                 session_without_environment.saved_trajectories
             ),
         )
@@ -165,11 +165,11 @@ once at the end, as observed values. Before each timestep from
 what it saved up to it, which is an error when the data continues. When either model sets
 `parameters_valid` to `false` on a timestep, the session gives the parameters a log density
 of `-Inf` and ends before that timestep, without scoring the data. It returns the
-trajectories the session saved, as [`turing_behavioral_session`](@ref) describes them, which
-returns them under `saved_trajectories`, followed by `parameters_valid`, whether the
-parameters of both models stayed valid, as the models gave it. Both methods of that model
-call this one, after setting up the parameters and the initial states with or without an
-environment. Used by [`turing_behavioral_session`](@ref).
+trajectories the session saved, in a [`SessionTrajectories`](@ref), as
+[`turing_behavioral_session`](@ref) describes them, which returns them under
+`saved_trajectories`. Both methods of that model call this one, after setting up the
+parameters and the initial states with or without an environment. Used by
+[`turing_behavioral_session`](@ref).
 """
 Turing.@model function turing_run_all_timesteps(
     session_info, cognitive_parameters, environment_parameters, previous
@@ -217,11 +217,12 @@ Turing.@model function turing_run_all_timesteps(
     if !parameters_are_valid(timestep_values.parameters_valid)
         Turing.@addlogprob! -Inf
         map_saved(vector -> resize!(vector, offset), storage)
-        return merge(
-            saved_trajectories(
-                storage, timestep_sizes_until(session_info.saved_timestep_sizes, offset)
-            ),
-            (; parameters_valid=timestep_values.parameters_valid),
+        return saved_trajectories(
+            storage,
+            timestep_sizes_until(session_info.saved_timestep_sizes, offset),
+            timestep_values.parameters_valid,
+            0,
+            nothing,
         )
     end
 
@@ -273,12 +274,12 @@ Turing.@model function turing_run_all_timesteps(
         if !parameters_are_valid(next_timestep_values.parameters_valid)
             Turing.@addlogprob! -Inf
             map_saved(vector -> resize!(vector, t - 1 + offset), storage)
-            return merge(
-                saved_trajectories(
-                    storage,
-                    timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
-                ),
-                (; parameters_valid=next_timestep_values.parameters_valid),
+            return saved_trajectories(
+                storage,
+                timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
+                next_timestep_values.parameters_valid,
+                t - 1,
+                nothing,
             )
         end
 
@@ -313,13 +314,13 @@ Turing.@model function turing_run_all_timesteps(
         )
     end
 
-    return merge(
-        saved_trajectories(
-            storage,
-            timestep_sizes_until(
-                session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
-            ),
+    return saved_trajectories(
+        storage,
+        timestep_sizes_until(
+            session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
         ),
-        (; parameters_valid=timestep_values.parameters_valid),
+        timestep_values.parameters_valid,
+        n_timesteps_that_ran,
+        nothing,
     )
 end

@@ -56,11 +56,17 @@
             storage.states[3] === (; expected_reward=0.5)
         @test length(CognitiveModeling.initialize_all_storage(nothing, saved, 2).states) ==
             2
-        #What is returned has the vectors as they are stored, with the timestep sizes
-        returned_trajectories = CognitiveModeling.saved_trajectories(storage, [1, 1, 1])
-        @test keys(returned_trajectories) ==
-            (:states, :observations, :actions, :action_distributions, :timestep_sizes)
+        #What is returned has the vectors as they are stored, with the timestep sizes and how the session ended, and no environment
+        returned_trajectories = CognitiveModeling.saved_trajectories(
+            storage, [1, 1, 1], ValidByDefault(), 2, nothing
+        )
+        @test returned_trajectories isa SessionTrajectories
         @test returned_trajectories.action_distributions === storage.action_distributions
+        @test returned_trajectories.environment === NoEnvironment()
+        @test returned_trajectories.timestep_sizes == [1, 1, 1] &&
+            returned_trajectories.parameters_valid === ValidByDefault() &&
+            returned_trajectories.n_timesteps == 2 &&
+            returned_trajectories.last_timestep === nothing
         #With an environment, its record is saved too, as its save history selects it, under environment
         with_environment = SessionInfo(
             ScoringModel(),
@@ -119,29 +125,35 @@
             initial_both.environment.states === (; level=0.0)
         storage_both = CognitiveModeling.initialize_all_storage(initial_both, saved_both, 2)
         storage_both = CognitiveModeling.store_timestep_values!(storage_both, saved_both, 3)
-        returned_both = CognitiveModeling.saved_trajectories(storage_both, [1, 1, 1])
-        @test keys(returned_both) == (
-            :states,
-            :observations,
-            :actions,
-            :action_distributions,
-            :environment,
-            :timestep_sizes,
+        returned_both = CognitiveModeling.saved_trajectories(
+            storage_both, [1, 1, 1], false, 2, nothing
         )
+        @test returned_both isa SessionTrajectories
         @test keys(returned_both.environment) ==
             (:states, :observations, :actions, :observation_distributions)
         @test returned_both.environment.states ==
             [(; level=0.0), (; level=0.3), (; level=0.3)]
-        #A session whose environment isn't included gets an empty record of it, with the entries in the same order
-        with_empty = CognitiveModeling.with_empty_environment_entry(returned_trajectories)
-        @test keys(with_empty) == keys(returned_both)
+        @test returned_both.parameters_valid === false
+        #A session whose environment isn't included gets empty trajectories of it, with an empty NamedTuple for each saved timestep
+        with_empty = CognitiveModeling.with_empty_environment_trajectories(
+            returned_trajectories
+        )
+        @test with_empty isa SessionTrajectories
+        @test keys(with_empty.environment) == keys(returned_both.environment)
         @test with_empty.environment.states == fill((;), 3) &&
             with_empty.environment.observation_distributions == fill((;), 3)
-        #What comes after the cognitive model's entries stays after the environment's, as whether the parameters stayed valid
-        with_flag = merge(returned_trajectories, (; parameters_valid=false))
-        @test keys(CognitiveModeling.with_empty_environment_entry(with_flag)) ==
-            (keys(returned_both)..., :parameters_valid)
-        @test CognitiveModeling.with_empty_environment_entry(with_flag).parameters_valid ===
+        #Everything else stays as it was, as whether the parameters stayed valid
+        @test with_empty.states === returned_trajectories.states &&
+            with_empty.action_distributions ===
+            returned_trajectories.action_distributions &&
+            with_empty.timestep_sizes === returned_trajectories.timestep_sizes &&
+            with_empty.parameters_valid === ValidByDefault() &&
+            with_empty.n_timesteps == 2 &&
+            with_empty.last_timestep === nothing
+        with_flag = CognitiveModeling.saved_trajectories(
+            storage, [1, 1, 1], false, 2, nothing
+        )
+        @test CognitiveModeling.with_empty_environment_trajectories(with_flag).parameters_valid ===
             false
         #A session that ends early has its vectors shortened in place, with or without an environment, and its timestep sizes cut
         CognitiveModeling.map_saved(vector -> resize!(vector, 2), storage)

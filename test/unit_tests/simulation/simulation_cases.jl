@@ -17,6 +17,9 @@ end
 function without_distributions(values::Union{Tuple,AbstractVector})
     return map(without_distributions, values)
 end
+function without_distributions(trajectories::SessionTrajectories)
+    return without_distributions(NamedTuple(trajectories))
+end
 without_distributions(value) = value
 
 #The lengths of the vectors that a call of simulate_session saved, of both models, leaving out the empty ones, which a
@@ -24,7 +27,8 @@ without_distributions(value) = value
 function saved_lengths(trajectories)
     lengths = Int[]
     for name in (:states, :observations, :actions, :action_distributions)
-        isempty(trajectories[name]) || push!(lengths, length(trajectories[name]))
+        cognitive_values = getproperty(trajectories, name)
+        isempty(cognitive_values) || push!(lengths, length(cognitive_values))
     end
     for name in (:states, :observations, :actions, :observation_distributions)
         environment_values = trajectories.environment[name]
@@ -41,7 +45,7 @@ end
         @test isequal(
             without_distributions(result), without_distributions(case.run(case.x))
         )
-        if result isa NamedTuple && haskey(result, :environment)
+        if result isa SessionTrajectories
             @test allequal(saved_lengths(result))
         end
         if case.inferred && distributions isa ExampleModels.ByHand

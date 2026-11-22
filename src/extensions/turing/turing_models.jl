@@ -97,26 +97,29 @@ every timestep and a session from [`decondition_sessions`](@ref) can end early.
 A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as
 they were given, without the default values of the models, and `saved_trajectories`, the
 trajectories that the save histories of `session_info` select, which
-`returned(model, chain)` gives for each sample. The trajectories are a `NamedTuple` with the
-same entries as [`simulate_session`](@ref) returns: `states`, `observations`, `actions` and
-`action_distributions` of the cognitive model, `environment` with the `states`,
-`observations`, `actions` and `observation_distributions` of the environment when the
-session has one, which are empty when it didn't run, and `timestep_sizes`. Each is a vector
-with one element for timestep 0, before the first timestep, and one for each timestep that
-ran. Timestep 0 has the previous observation and action, which are
-[`BeforeFirstTimestep`](@ref) unless others are given, `BeforeFirstTimestep()` for every
-distribution, and the initial states, which can depend on the parameters. Element `t + 1` is
-then timestep `t`, and a [`SaveHistory`](@ref) with `save_initial_timestep_values = false`
-leaves timestep 0 out. The returned actions and observations are those the models received,
-with the imputed values. `timestep_sizes` has the size of each timestep, after
-`BeforeFirstTimestep()` for timestep 0 when it is there, when anything is selected, and is
-empty otherwise. Last comes `parameters_valid`, as the models give it in their
-[`ModelOutput`](@ref): [`ValidByDefault`](@ref) when neither can set it, and otherwise
-whether the parameters stayed valid. When a model sets it to `false`, the session gives the
-parameters a log density of `-Inf`, ends before that timestep and scores nothing, so the
-trajectories end before it. Any latent variable in a session, imputed or from a model which
-samples within a timestep, greatly increases the amount of estimated variables, which will
-generally make fitting the model much slower.
+`returned(model, chain)` gives for each sample. The trajectories are a
+[`SessionTrajectories`](@ref), as [`simulate_session`](@ref) returns: `states`,
+`observations`, `actions` and `action_distributions` of the cognitive model, `environment`
+with the `states`, `observations`, `actions` and `observation_distributions` of the
+environment when the session has one, which are empty when it didn't run, and
+[`NoEnvironment`](@ref) when it has none, and `timestep_sizes`. Each is a vector with one
+element for timestep 0, before the first timestep, and one for each timestep that ran.
+Timestep 0 has the previous observation and action, which are [`BeforeFirstTimestep`](@ref)
+unless others are given, `BeforeFirstTimestep()` for every distribution, and the initial
+states, which can depend on the parameters. Element `t + 1` is then timestep `t`, and a
+[`SaveHistory`](@ref) with `save_initial_timestep_values = false` leaves timestep 0 out. The
+returned actions and observations are those the models received, with the imputed values.
+`timestep_sizes` has the size of each timestep, after `BeforeFirstTimestep()` for timestep 0
+when it is there, when anything is selected, and is empty otherwise. `n_timesteps` is the
+number of timesteps that ran, and `last_timestep` is `nothing`. `parameters_valid` is as the
+models give it in their [`ModelOutput`](@ref): [`ValidByDefault`](@ref) when neither can set
+it, and otherwise whether the parameters stayed valid. When a model sets it to `false`, the
+session gives the parameters a log density of `-Inf`, ends before that timestep and scores
+nothing, so the trajectories end before it, and the variables of the later timesteps don't
+exist for that sample, which can keep a sampler from starting, as
+[`turing_full_model`](@ref) describes. Any latent variable in a session, imputed or from a
+model which samples within a timestep, greatly increases the amount of estimated variables,
+which will generally make fitting the model much slower.
 
 # Examples
 ```julia
@@ -296,8 +299,20 @@ When a cognitive model or an environment model sets `parameters_valid` to `false
 sampler rejects them, and ends before that timestep without scoring the data. The
 trajectories of that session then end before the timestep, its `saved_trajectories` has
 `parameters_valid = false`, and the downstream model doesn't run, so `downstream_values` is
-`nothing`. If the first draw is rejected and the downstream model has variables of its own,
-give the sampler valid `initial_params`.
+`nothing`.
+
+Such a sample doesn't have the variables that come after that timestep: the values that the
+later timesteps impute, simulate or sample, and the variables of the downstream model. A fit
+of a model with such variables can then fail when sampling starts, in two ways. A sampler of
+Turing.jl takes the variables of the model from one draw from the prior, which each chain
+makes with Julia's default random number generator, whatever `initial_params` it is given.
+When the parameters of that draw turn invalid, sampling throws a `KeyError` which names a
+variable that the draw doesn't have, such as `KeyError: key slope not found`. When they
+don't, but the parameters that the sampler starts from do, it throws an `ArgumentError`
+which says that some indices in the output vector were not set, and valid `initial_params`
+prevent that one. Both happen less often the more seldom the parameters turn invalid under
+the priors, and a model without such variables has neither. A chain sampled from the prior,
+and the predictions of `predict`, have `missing` for those variables in such samples.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read

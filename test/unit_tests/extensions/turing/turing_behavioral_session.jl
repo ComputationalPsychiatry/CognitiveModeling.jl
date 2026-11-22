@@ -669,14 +669,12 @@ end
         @test returned(session_for_test(), (;)).saved_trajectories.timestep_sizes == Int[]
         @test returned(session_for_test(; timestep_sizes=sizes), (;)).saved_trajectories.timestep_sizes ==
             Float64[]
-        @test keys(returned(session_for_test(), (;)).saved_trajectories) == (
-            :states,
-            :observations,
-            :actions,
-            :action_distributions,
-            :timestep_sizes,
-            :parameters_valid,
-        )
+        #The trajectories are a SessionTrajectories, without an environment, with the number of timesteps that ran
+        without_environment = returned(session_for_test(), (;)).saved_trajectories
+        @test without_environment isa SessionTrajectories
+        @test without_environment.environment === NoEnvironment() &&
+            without_environment.n_timesteps == length(SESSION_REWARDS.reward) &&
+            without_environment.last_timestep === nothing
         #The action distributions are saved when the model's output distributions are selected, with BeforeFirstTimestep at timestep 0
         distributions = returned(
             session_for_test(;
@@ -1119,15 +1117,7 @@ end
             ),
         )
         saved = returned(model, (;)).saved_trajectories
-        @test keys(saved) == (
-            :states,
-            :observations,
-            :actions,
-            :action_distributions,
-            :environment,
-            :timestep_sizes,
-            :parameters_valid,
-        )
+        @test saved isa SessionTrajectories
         @test keys(saved.environment) ==
             (:states, :observations, :actions, :observation_distributions)
         @test saved.environment.states == [(; n_timesteps=t) for t in 0:3]
@@ -1163,18 +1153,15 @@ end
             actions=fill((;), 4),
             observation_distributions=fill((;), 4),
         )
-        @test !haskey(
-            returned(
-                session_for_test(
-                    WithDefaultParameters(DistributionsJl()),
-                    SESSION_PARAMETERS,
-                    rewards,
-                    choices,
-                ),
-                (;),
-            ).saved_trajectories,
-            :environment,
-        )
+        @test returned(
+            session_for_test(
+                WithDefaultParameters(DistributionsJl()),
+                SESSION_PARAMETERS,
+                rewards,
+                choices,
+            ),
+            (;),
+        ).saved_trajectories.environment === NoEnvironment()
         #With timestep 0 left out, the environment's record has one element per timestep too
         from_first = session_for_test(
             WithDefaultParameters(DistributionsJl()),
@@ -1445,16 +1432,18 @@ end
         turning_invalid = rejecting(0.95)
         @test logjoint(turning_invalid, (;)) == -Inf
         saved = returned(turning_invalid, (;)).saved_trajectories
-        @test saved.parameters_valid === false
+        @test saved.parameters_valid === false && saved.n_timesteps == 3
         @test [state.expected_reward for state in saved.states] ≈ [0.5, 0.975, 0.04875, 0.9524375]
         #With a learning rate of 1.5, on the first timestep, which leaves only timestep 0
         first_invalid = rejecting(1.5)
         @test logjoint(first_invalid, (;)) == -Inf
         @test returned(first_invalid, (;)).saved_trajectories.states ==
             [(; expected_reward=0.5)]
+        @test returned(first_invalid, (;)).saved_trajectories.n_timesteps == 0
         #Valid parameters score every action
         valid = rejecting(0.3)
         @test returned(valid, (;)).saved_trajectories.parameters_valid === true
+        @test returned(valid, (;)).saved_trajectories.n_timesteps == 5
         expected_rewards = accumulate(
             (V, reward) -> V + 0.3 * (reward - V), SESSION_REWARDS.reward; init=0.5
         )

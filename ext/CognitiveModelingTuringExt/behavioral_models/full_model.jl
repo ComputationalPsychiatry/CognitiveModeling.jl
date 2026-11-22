@@ -51,7 +51,7 @@ Turing.@model function CognitiveModeling.turing_full_model(
     #The sessions return the parameters they were given too, which are those above
     saved_trajectories = sessions_result.saved_trajectories
 
-    #A draw whose parameters turned invalid in a session has a log density of -Inf already, so the downstream model doesn't run on the trajectories that ended early. Its variables then don't exist for that draw, so a sampler whose first draw is rejected can't start when the downstream model has variables of its own, and needs valid initial parameters
+    #A draw whose parameters turned invalid in a session has a log density of -Inf already, so the downstream model doesn't run on the trajectories that ended early. Its variables then don't exist for that draw, and a sampler takes the variables of the model from one draw from the prior, so sampling can fail to start when the downstream model has variables of its own, as the docstring describes
     if !parameters_valid_in_every_session(saved_trajectories)
         return (;
             cognitive_parameters,

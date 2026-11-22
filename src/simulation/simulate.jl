@@ -503,36 +503,43 @@ function store_timestep_values!(storage, saved, t)
 end
 
 """
-    saved_trajectories(storage, timestep_sizes)
+    saved_trajectories(storage, timestep_sizes, parameters_valid, n_timesteps,
+                       last_timestep)
 
-Return the saved trajectories of a simulation as [`simulate_session`](@ref) returns them:
-the vectors in `storage`, with the cognitive model's under `states`, `observations`,
-`actions` and `action_distributions` and the environment's under `environment`, and then
-`timestep_sizes` as given. Used by [`simulate_session`](@ref), [`simulate_session!`](@ref)
-and fitted sessions.
+Return the [`SessionTrajectories`](@ref) of a simulation or of a fitted session: the vectors
+in `storage`, with the cognitive model's under `states`, `observations`, `actions` and
+`action_distributions` and the environment's under `environment`, and then the other
+arguments as given. The `storage` of a fitted session without an environment has no
+`environment`, and its trajectories have [`NoEnvironment`](@ref) there. Used by
+[`simulate_session`](@ref), [`simulate_session!`](@ref) and fitted sessions.
 """
-function saved_trajectories(storage, timestep_sizes)
-    return merge(storage, (; timestep_sizes))
+function saved_trajectories(
+    storage::NamedTuple, timestep_sizes, parameters_valid, n_timesteps, last_timestep
+)
+    return SessionTrajectories(
+        storage.states,
+        storage.observations,
+        storage.actions,
+        storage.action_distributions,
+        environment_trajectories(storage),
+        timestep_sizes,
+        parameters_valid,
+        n_timesteps,
+        last_timestep,
+    )
 end
 
 """
-    simulation_result(simulation, timestep_sizes)
+    environment_trajectories(storage)
 
-Return what [`simulate_session`](@ref) and [`simulate_session!`](@ref) return, from
-`simulation`, what [`simulate_all_timesteps`](@ref) returned: the saved trajectories with
-`timestep_sizes`, as [`saved_trajectories`](@ref) gives them, then whether the parameters of
-both models stayed valid, the number of timesteps in the trajectories, and the record of the
-last timestep that was simulated, or `nothing` for models that can't set `parameters_valid`.
+Return the trajectories of the environment in `storage`, the vectors with what a session
+saved, as [`map_saved`](@ref) arranges them, and [`NoEnvironment`](@ref) when it has none,
+as that of a fitted session without an environment. Used by [`saved_trajectories`](@ref).
 """
-function simulation_result(simulation, timestep_sizes)
-    return merge(
-        saved_trajectories(simulation.storage, timestep_sizes),
-        (;
-            simulation.parameters_valid,
-            simulation.n_timesteps,
-            last_timestep=simulation.last_record,
-        ),
-    )
+function environment_trajectories(storage::NamedTuple)
+
+    #Whether there is an environment is read from the names, which are in the type
+    return haskey(storage, :environment) ? storage.environment : NoEnvironment()
 end
 
 #A function of its own, called only when a simulation stops for invalid parameters, since a warning holds a try block, which Mooncake.jl can't differentiate
@@ -1008,14 +1015,15 @@ end
     simulate_session(cognitive_model, environment; <keyword arguments>)
 
 Simulate `cognitive_model` interacting with `environment`, and return the trajectories that
-were saved, which are what changed over the timesteps, in a `NamedTuple`: `states`,
-`observations`, `actions` and `action_distributions` of the cognitive model, `environment`
-with the `states`, `observations`, `actions` and `observation_distributions` of the
-environment, and `timestep_sizes`. Each is a vector with one element for timestep 0, before
-the first timestep, and one for each timestep after it. After them come `parameters_valid`,
-whether the parameters of both models stayed valid, `n_timesteps`, the number of timesteps
-in the trajectories, and `last_timestep`, the states of the last timestep that was
-simulated, for models that can set `parameters_valid`, and `nothing` for others.
+were saved, which are what changed over the timesteps, in a [`SessionTrajectories`](@ref):
+`states`, `observations`, `actions` and `action_distributions` of the cognitive model,
+`environment` with the `states`, `observations`, `actions` and `observation_distributions`
+of the environment, and `timestep_sizes`. Each is a vector with one element for timestep 0,
+before the first timestep, and one for each timestep after it. After them come
+`parameters_valid`, whether the parameters of both models stayed valid, `n_timesteps`, the
+number of timesteps in the trajectories, and `last_timestep`, the states of the last
+timestep that was simulated, for models that can set `parameters_valid`, and `nothing` for
+others.
 
 Each element is what happened on that timestep, and the states are those after it. The
 observations are those the cognitive model received, and the actions those it gave, and
@@ -1279,8 +1287,14 @@ function simulate_session(
         timestep_sizes, simulation.n_timesteps, save_initial_timestep_values
     )
 
-    #Return what was saved, and whether the parameters stayed valid
-    return simulation_result(simulation, timestep_sizes_simulated)
+    #Return the trajectories that were saved, with how the simulation ended
+    return saved_trajectories(
+        simulation.storage,
+        timestep_sizes_simulated,
+        simulation.parameters_valid,
+        simulation.n_timesteps,
+        simulation.last_record,
+    )
 end
 
 """
@@ -1288,13 +1302,14 @@ end
                       <keyword arguments>)
 
 Simulate `agent` interacting with `environment` from where they are, update them both, and
-return the trajectories of this call in the same `NamedTuple` as [`simulate_session`](@ref),
-without timestep 0: what `agent.save_history` selects of the states, observations, actions
-and action distributions on each timestep, what `environment.save_history` selects of the
-environment's under `environment`, and the sizes of the timesteps. What the two select is
-also added to `agent.history` and `environment.history`, in each model's own names, together
-with the sizes of the timesteps, unless a selection is empty. A history has timestep 0 from
-where the model started, when its [`SaveHistory`](@ref) saves the initial timestep values.
+return the trajectories of this call in a [`SessionTrajectories`](@ref), as
+[`simulate_session`](@ref) does, without timestep 0: what `agent.save_history` selects of
+the states, observations, actions and action distributions on each timestep, what
+`environment.save_history` selects of the environment's under `environment`, and the sizes
+of the timesteps. What the two select is also added to `agent.history` and
+`environment.history`, in each model's own names, together with the sizes of the timesteps,
+unless a selection is empty. A history has timestep 0 from where the model started, when its
+[`SaveHistory`](@ref) saves the initial timestep values.
 
 The two models must fit together, as for `simulate_session`, directly or through
 `observation_map` and `action_map`. The agent's history holds the observations as its model
@@ -1466,8 +1481,14 @@ function simulate_session!(
         append!(environment.history.timestep_sizes, sizes_for_histories)
     end
 
-    #Return what was saved, and whether the parameters stayed valid
-    return simulation_result(simulation, timestep_sizes_simulated)
+    #Return the trajectories that were saved, with how the simulation ended
+    return saved_trajectories(
+        storage,
+        timestep_sizes_simulated,
+        simulation.parameters_valid,
+        simulation.n_timesteps,
+        simulation.last_record,
+    )
 end
 
 ## Simulating a model on a single input ##

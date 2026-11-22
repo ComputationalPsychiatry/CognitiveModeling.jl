@@ -34,7 +34,7 @@ using CognitiveModeling:
     store_output_distributions_for_conditioning,
     select_timestep_values_to_save,
     select_initial_timestep_values_to_save,
-    with_empty_environment_entry,
+    with_empty_environment_trajectories,
     timestep_sizes_until
 using CognitiveModeling:
     select_names,
@@ -237,7 +237,7 @@ function session_by_hand(
 )
     #A session with nothing missing runs without its environment, and has an empty record of it
     if !session_info.includes_environment
-        return with_empty_environment_entry(
+        return with_empty_environment_trajectories(
             session_by_hand(
                 remake_session_without_environment(session_info),
                 cognitive_parameters,
@@ -395,6 +395,9 @@ function timesteps_by_hand(
         timestep_sizes_until(
             session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
         ),
+        ValidByDefault(),
+        n_timesteps_that_ran,
+        nothing,
     )
 end
 
@@ -757,7 +760,7 @@ function log_density_by_hand(
     saved = run_by_hand(sessions, cognitive_parameters, environment_parameters, evaluation)
     return evaluation.log_density + total_of_saved_states(saved)
 end
-function total_of_saved_states(saved::NamedTuple)
+function total_of_saved_states(saved::SessionTrajectories)
     total = 0.0
     for state in saved.states
         total += sum(Tuple(state); init=0.0)
