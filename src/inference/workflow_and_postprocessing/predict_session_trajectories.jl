@@ -33,7 +33,7 @@ function predict_session_trajectories end
     decondition_sessions(model; check_stopping_criterion=nothing)
 
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
-[`MultipleSessionsInfo`](@ref), where every action is [`MissingValue`](@ref), and every
+[`MultipleSessionsInfo`](@ref), where every action is [`SimulatedValue`](@ref), and every
 observation too when the session has an environment model that it can include, so that an
 inference backend's model of the copy simulates them instead of fitting to them. Given an
 inference backend's model of fitted sessions, return a copy of the model whose sessions are
@@ -58,18 +58,18 @@ julia> CognitiveModeling.attribute_names(::Counter) = ModelAttributes(; paramete
 julia> session_info = SessionInfo(Counter(), [1.0, 0.0, 1.0], [true, false, true]; who_starts = EnvironmentStarts());
 
 julia> decondition_sessions(session_info).actions
-(choice = [MissingValue(), MissingValue(), MissingValue()],)
+(choice = [SimulatedValue(), SimulatedValue(), SimulatedValue()],)
 ```
 """
 function decondition_sessions(
     session_info::SessionInfo; check_stopping_criterion::Union{Nothing,Bool}=nothing
 )
 
-    #Every action is missing, and every observation too when there is an environment to give them
-    actions = map(column -> fill(MissingValue(), length(column)), session_info.actions)
+    #Every action is simulated, and every observation too when there is an environment to give them
+    actions = map(column -> fill(SimulatedValue(), length(column)), session_info.actions)
     observations =
         if has_environment(session_info) && session_info.include_environment !== false
-            map(column -> fill(MissingValue(), length(column)), session_info.observations)
+            map(column -> fill(SimulatedValue(), length(column)), session_info.observations)
         else
             session_info.observations
         end

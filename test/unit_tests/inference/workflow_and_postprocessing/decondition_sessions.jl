@@ -1,5 +1,5 @@
 @testset "decondition_sessions" begin
-    @testset "Every action is missing, and the observations stay those in the data without an environment" begin
+    @testset "Every action is simulated, and the observations stay those in the data without an environment" begin
         session_info = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
@@ -10,7 +10,7 @@
             impute_missing_actions=false,
         )
         predictive = decondition_sessions(session_info)
-        @test predictive.actions == (; choice=fill(MissingValue(), 3))
+        @test predictive.actions == (; choice=fill(SimulatedValue(), 3))
         @test predictive.observations === session_info.observations
         @test isempty(predictive.actions_to_condition_on) &&
             !predictive.includes_environment
@@ -33,7 +33,7 @@
         @test decondition_sessions(unchecked).check_parameter_domains === false
     end
 
-    @testset "With an environment, every observation is missing too, so the environment runs" begin
+    @testset "With an environment, every observation is simulated too, so the environment runs" begin
         session_info = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
@@ -42,7 +42,7 @@
             environment=GivesReward(),
         )
         predictive = decondition_sessions(session_info)
-        @test predictive.observations == (; reward=fill(MissingValue(), 3))
+        @test predictive.observations == (; reward=fill(SimulatedValue(), 3))
         @test predictive.includes_environment && predictive.environment === GivesReward()
         #With no values in the data, the stopping criterion is checked from the first timestep
         @test predictive.first_timestep_to_check_stopping == 1
@@ -79,7 +79,8 @@
         @test predictive.session_ids == sessions_info.session_ids
         @test [session.n_timesteps for session in predictive.sessions] == [2, 3]
         @test all(
-            session -> all(==(MissingValue()), session.actions.choice), predictive.sessions
+            session -> all(==(SimulatedValue()), session.actions.choice),
+            predictive.sessions,
         )
         #A keyword is passed on to every session
         @test all(

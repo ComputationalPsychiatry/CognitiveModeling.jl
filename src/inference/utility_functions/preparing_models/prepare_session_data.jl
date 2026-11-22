@@ -15,13 +15,12 @@ session of a table. Used by [`SessionInfo`](@ref), which keeps the results in it
 `actions_to_condition_on` and `observations_to_condition_on`.
 """
 function collect_values_to_condition_on(columns::NamedTuple{names}) where {names}
-    values_to_condition_on = map(
-        column ->
-            Vector{Base.typesplit(eltype(column), Union{MissingValue,AbstractNoValue})}(
-                filter(is_value_to_condition_on, column)
-            ),
-        columns,
-    )
+    values_to_condition_on = map(columns) do column
+        element_type = Base.typesplit(
+            eltype(column), Union{LatentValueMarker,AbstractNoValue}
+        )
+        return Vector{element_type}(filter(is_value_to_condition_on, column))
+    end
     names_with_a_type = Tuple(
         name for
         name in names if eltype(getproperty(values_to_condition_on, name)) !== Union{}
@@ -36,8 +35,9 @@ end
 Return the first timestep before which a session checks the [`stopping_criterion`](@ref) of
 its models, from the `check_stopping_criterion` of [`SessionInfo`](@ref): the timestep after
 the last one with data when it is `nothing`, which is 1 when every value is
-[`MissingValue`](@ref), 1 when it is `true`, and `n_timesteps + 1` when it is `false`, so
-that no timestep is checked. Used by `SessionInfo`.
+[`MissingValue`](@ref) or [`SimulatedValue`](@ref), 1 when it is `true`, and
+`n_timesteps + 1` when it is `false`, so that no timestep is checked. Used by
+`SessionInfo`.
 """
 function first_timestep_to_check_stopping(
     ::Nothing, observations::NamedTuple, actions::NamedTuple, n_timesteps
@@ -286,7 +286,7 @@ function check_environment_fits(
     if has_missing_entries(observations)
         throw(
             ArgumentError(
-                "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false.",
+                "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false.",
             ),
         )
     end
@@ -312,9 +312,9 @@ observations, as `environment` gives them: under each output name in the environ
 attributes, the value that `observation_map` passes on from it, or `value_if_not_passed_on`
 for an output that the map doesn't pass on. Without a map the names are the same. Without an
 environment `values` is returned as it is. Used by [`SessionInfo`](@ref) for the
-environment's data, with a column of [`MissingValue`](@ref) for each output that isn't
-passed on, so that it is imputed, and for the observation the environment starts from, with
-[`BeforeFirstTimestep`](@ref).
+environment's data, with a column of the marker from [`marker_of_unmapped_outputs`](@ref)
+for each output that isn't passed on, and for the observation the environment starts from,
+with [`BeforeFirstTimestep`](@ref).
 """
 function map_to_environment_outputs(
     values, ::NoEnvironment, observation_map, value_if_not_passed_on
@@ -331,6 +331,22 @@ function map_to_environment_outputs(
             outputs,
         ),
     )
+end
+
+#The marker follows the types of the columns, not their values, so that every session of a table gets the same one, and the sessions keep one type
+"""
+    marker_of_unmapped_outputs(observations, actions)
+
+Return the marker of the outputs of the environment that the observation map doesn't pass
+on, on every timestep of a session: [`SimulatedValue`](@ref) when a column of `observations`
+or `actions` can hold one, so that they are simulated, and [`MissingValue`](@ref) otherwise,
+so that they are imputed. Used by [`SessionInfo`](@ref), with
+[`map_to_environment_outputs`](@ref).
+"""
+function marker_of_unmapped_outputs(observations::NamedTuple, actions::NamedTuple)
+    columns = (values(observations)..., values(actions)...)
+    can_hold_simulated_value = any(column -> SimulatedValue <: eltype(column), columns)
+    return can_hold_simulated_value ? SimulatedValue() : MissingValue()
 end
 
 """
@@ -399,8 +415,8 @@ function check_columns_in_domains(
         domain = getproperty(domains, name)
         for (index, value) in enumerate(getproperty(columns, name))
 
-            #A marker of a missing value or of nothing happening isn't a value of the domain
-            (value isa AbstractNoValue || value isa MissingValue) && continue
+            #A marker of a value to sample or of nothing happening isn't a value of the domain
+            (value isa AbstractNoValue || value isa LatentValueMarker) && continue
             check_value_in_domain(DataValue(kind, index, in_table), name, value, domain)
         end
     end

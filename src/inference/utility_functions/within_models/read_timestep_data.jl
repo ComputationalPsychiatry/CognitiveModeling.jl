@@ -52,7 +52,7 @@ prepend_value(value, values::Tuple) = (value, values...)
     has_missing_value(data)
 
 Return whether any entry of `data`, the `NamedTuple` of the actions or the observations of
-one timestep, is [`MissingValue`](@ref). Used by the timesteps of fitted sessions, to skip
-imputing when nothing is missing.
+one timestep, is [`MissingValue`](@ref) or [`SimulatedValue`](@ref). Used by the timesteps
+of fitted sessions, to skip imputing when nothing is missing.
 """
-has_missing_value(data::NamedTuple) = any(value -> value isa MissingValue, Tuple(data))
+has_missing_value(data::NamedTuple) = any(value -> value isa LatentValueMarker, Tuple(data))

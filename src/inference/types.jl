@@ -12,11 +12,38 @@ Fitting imputes a missing action by sampling it from the model's action distribu
 timestep. It imputes a missing observation from what an environment model gives for the
 observation on that timestep: as a latent variable with that distribution, or as the value
 of a [`Deterministic`](@ref). A value that isn't in the data and isn't to be imputed is
-[`UnimputedMissingValue`](@ref) instead. [`NoValue`](@ref) is different: it says that
-nothing was done or observed on the timestep. Unlike `missing`, arithmetic on it is an
-error. By default, a [`SessionInfo`](@ref) replaces `missing` in the data by it.
+[`UnimputedMissingValue`](@ref) instead, and one that a model simulates instead of being
+fitted to is [`SimulatedValue`](@ref). [`NoValue`](@ref) is different: it says that nothing
+was done or observed on the timestep. Unlike `missing`, arithmetic on it is an error. By
+default, a [`SessionInfo`](@ref) replaces `missing` in the data by it.
 """
 struct MissingValue end
+
+"""
+    SimulatedValue()
+
+Stand-in for an action or an observation that a model simulates instead of being fitted to,
+as one entry of a column or a `NamedTuple`, such as `(; choice = SimulatedValue())`. The
+sessions that [`decondition_sessions`](@ref) gives have it in place of every action, and of
+every observation when the session has an environment model.
+
+Fitting treats it as a [`MissingValue`](@ref): it samples an action from the model's action
+distribution on that timestep, and an observation from what the environment model gives,
+but the inference backend names the variable apart from that of an imputed value. In a
+session whose data can hold it, an output of the environment that the observation map
+doesn't pass on is simulated in the same way, on every timestep.
+"""
+struct SimulatedValue end
+
+#Both are sampled from what a model gives in the same way, and only the names of their variables differ, so that the variables of a simulation are never given the values that a fit imputed
+"""
+    LatentValueMarker
+
+The markers of a value that isn't in the data and that fitting samples from what a model
+gives: [`MissingValue`](@ref), which it imputes, and [`SimulatedValue`](@ref), which it
+simulates. Used wherever the data of a session is read for them.
+"""
+const LatentValueMarker = Union{MissingValue,SimulatedValue}
 
 """
     UnimputedMissingValue()
@@ -95,8 +122,9 @@ table.
   `include_environment`, and it is kept in the session either way.
 - `include_environment::Union{Nothing, Bool}=nothing`: whether the session includes
   `environment`, so that it runs on every timestep. By default, with `nothing`, it is
-  included where an observation or an action is `MissingValue()`, where
-  `environment_save_history` saves anything, or where `check_stopping_criterion` is `true`:
+  included where an observation or an action is `MissingValue()` or
+  [`SimulatedValue`](@ref), where `environment_save_history` saves anything, or where
+  `check_stopping_criterion` is `true`:
   the scored observations then inform what is imputed, such as which arm of a bandit a
   missing choice was, from the reward that followed. It is also included in every session of
   an inference backend's full model that estimates the environment's parameters, so that the
@@ -113,7 +141,8 @@ table.
   [`NameMap`](@ref)s, as for `simulate_session`. The data is in the cognitive model's names,
   and is scored against the environment's distributions as the map passes them on. An output
   of the environment that the map doesn't pass on isn't in the data, so it is imputed on
-  every timestep. Each model's history is in its own names.
+  every timestep, or simulated when the data can hold `SimulatedValue()`. Each model's
+  history is in its own names.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate_session`.
 - `cognitive_save_history::SaveHistory=SaveHistory()`: which states, inputs, outputs and
   output distributions of `cognitive_model` a fitted session returns, by name, and whether
@@ -206,10 +235,10 @@ julia> session_info.actions_to_condition_on
 
 # Extended help
 When the stopping criterion is checked follows from the data. The last timestep with data is
-the last one where an observation or an action isn't `MissingValue()`. With
-`check_stopping_criterion = nothing`, the criterion is only checked after it, so that a fit,
-where every timestep has data, never checks it, and a session from
-[`decondition_sessions`](@ref), whose data is all `MissingValue()`, ends as a simulation
+the last one where an observation or an action isn't `MissingValue()` or
+`SimulatedValue()`. With `check_stopping_criterion = nothing`, the criterion is only checked
+after it, so that a fit, where every timestep has data, never checks it, and a session from
+[`decondition_sessions`](@ref), whose data is all `SimulatedValue()`, ends as a simulation
 does. With `true`, the session includes its environment, whose criterion is checked too. A
 criterion that is met while the data continues is then an error, since the values in the
 data after that timestep couldn't be scored, which checks that the models agree with the
@@ -370,9 +399,12 @@ function prepare_session(
         check_stopping_criterion,
     )
 
-    #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, and it starts from the previous observation in the same way
+    #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, or simulated when the data can hold values to simulate, and it starts from the previous observation in the same way
     environment_observations = map_to_environment_outputs(
-        observations, environment, observation_map, fill(MissingValue(), n_timesteps)
+        observations,
+        environment,
+        observation_map,
+        fill(marker_of_unmapped_outputs(observations, actions), n_timesteps),
     )
     previous_environment_observation = map_to_environment_outputs(
         previous_observation, environment, observation_map, BeforeFirstTimestep()

@@ -9,7 +9,8 @@
         @test CognitiveModeling.is_value_to_condition_on(1.0) &&
             !CognitiveModeling.is_value_to_condition_on(NoValue()) &&
             !CognitiveModeling.is_value_to_condition_on(MissingValue()) &&
-            !CognitiveModeling.is_value_to_condition_on(UnimputedMissingValue())
+            !CognitiveModeling.is_value_to_condition_on(UnimputedMissingValue()) &&
+            !CognitiveModeling.is_value_to_condition_on(SimulatedValue())
     end
 
     @testset "The names to condition on are those with values in the data, and no observation is without an environment" begin

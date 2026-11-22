@@ -60,12 +60,14 @@ deconditioned, since the models take the data of their sessions as arguments, wh
 Turing.jl's `decondition` leaves as they are. Turing.jl's own functions then simulate the
 data: `sample` with `Prior()` from the prior, and `predict` with the parameters of each
 sample of a chain. They return the simulated actions and observations as variables, such as
-`session[1].timestep[3].choice.imputed`, where [`predict_session_trajectories`](@ref)
-returns the trajectories that the sessions save. `predict` keeps the values that the chain
-has for actions and observations imputed in the fit, and fails when the fit imputed them at
-different timesteps in different sessions, where [`predict_session_trajectories`](@ref)
-simulates them again. Turing.jl's `condition` and `decondition` work on these models as on
-any other, also for a variable within the sessions, such as an imputed action.
+`session[1].timestep[3].choice.simulated`, where [`predict_session_trajectories`](@ref)
+returns the trajectories that the sessions save. These variables are named apart from those
+that a fit imputes, such as `session[1].timestep[3].choice.imputed`, so `predict` simulates
+every action and observation again, also those that the fit imputed. It fails when the fit
+imputed values at different timesteps in different sessions, where
+[`predict_session_trajectories`](@ref) works. Turing.jl's `condition` and `decondition` work
+on these models as on any other, also for a variable within the sessions, such as a
+simulated action.
 
 ```julia
 prior_predictions = sample(decondition_sessions(model), Prior(), 1000)

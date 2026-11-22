@@ -79,6 +79,14 @@ CognitiveModeling.output_domains(::OutputDomainsNotDomains) = (; choice=(1, 2))
         @test_throws MethodError UnimputedMissingValue() + 1
     end
 
+    @testset "The marker for a value to simulate is its own type, apart from the one for a missing value" begin
+        @test SimulatedValue() === SimulatedValue()
+        @test SimulatedValue() !== MissingValue()
+        @test !(SimulatedValue() isa AbstractNoValue)
+        @test isbitstype(SimulatedValue)
+        @test_throws MethodError SimulatedValue() + 1
+    end
+
     @testset "It can stand in for one entry of the actions and observations" begin
         action = (; choice=MissingValue(), bet=1.0)
         @test action.choice isa MissingValue && action.bet == 1.0
@@ -170,6 +178,13 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
         ).observation_map === NameMap(:payoff => :reward)
         @test decondition_sessions(session_info).action_map === NameMap(:choice => :pull)
+        #In the deconditioned copy, the cue is simulated like the observations, also in a copy of the copy, which is
+        #prepared again
+        deconditioned = decondition_sessions(session_info)
+        @test deconditioned.environment_observations.cue == fill(SimulatedValue(), 3)
+        @test SessionInfo(
+            deconditioned; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+        ).environment_observations.cue == fill(SimulatedValue(), 3)
     end
 
     @testset "Maps of names must fit the models, and need an environment" begin
@@ -315,6 +330,11 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             (; reward=[1.0, MissingValue(), NoValue()]),
             (; choice=[true, MissingValue(), MissingValue()]),
         ).first_timestep_to_check_stopping == 4
+        #A value to simulate isn't data either
+        @test counter_session(
+            (; reward=[1.0, SimulatedValue(), SimulatedValue()]),
+            (; choice=[true, false, SimulatedValue()]),
+        ).first_timestep_to_check_stopping == 3
         #true checks from the first timestep, and false never
         @test counter_session(
             COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=true
@@ -323,6 +343,26 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=false
         ).first_timestep_to_check_stopping == 4
         @test CognitiveModeling.last_timestep_with_data((;)) == 0
+    end
+
+    @testset "A value to simulate is sampled as a missing one is: it isn't conditioned on, and the environment runs for it" begin
+        session_info = SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, SimulatedValue(), 1.0]),
+            (; choice=[true, SimulatedValue(), true]);
+            who_starts=EnvironmentStarts(),
+            environment=GivesReward(),
+        )
+        @test session_info.includes_environment
+        @test session_info.actions_to_condition_on.choice == [true, true]
+        @test session_info.observations_to_condition_on.reward == [1.0, 1.0]
+        #Without an environment, a value to simulate among the observations is an error, as a missing one is
+        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them." SessionInfo(
+            SessionCounter(),
+            (; reward=[1.0, SimulatedValue(), 1.0]),
+            COUNTER_CHOICES;
+            who_starts=EnvironmentStarts(),
+        )
     end
 
     @testset "A missing in the data becomes MissingValue by default" begin
@@ -489,7 +529,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test predictive.observations === left_out.observations &&
             !predictive.includes_environment
         #What needs the environment is an error without it
-        @test_throws "include_environment = false leaves the environment out of the session, but the data has observations that are MissingValue(), which only the environment can impute." SessionInfo(
+        @test_throws "include_environment = false leaves the environment out of the session, but the data has observations that are MissingValue() or SimulatedValue(), which only the environment can impute or simulate." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;
@@ -630,7 +670,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             timestep_sizes=[1.0, 2.0],
         )
         #Without an environment, no observation can be missing
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
+        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             SessionCounter(),
             (; reward=[1.0, MissingValue(), 1.0]),
             COUNTER_CHOICES;

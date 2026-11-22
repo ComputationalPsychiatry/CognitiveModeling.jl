@@ -556,7 +556,7 @@ end
             impute_missing_actions=false,
         ).actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
         #Without an environment, a missing observation can't be MissingValue, since nothing imputes it
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
+        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." SessionInfo(
             WithDefaultParameters(DistributionsJl()),
             (; reward=[1.0, missing]),
             (; choice=[true, false]);
@@ -895,7 +895,7 @@ end
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
         #Without an environment, the data can't have missing observations
-        @test_throws "The observations have entries that are MissingValue(), but no environment was given to impute them. Give an environment model, or have the model receive them as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
+        @test_throws "The observations have entries that are MissingValue() or SimulatedValue(), but no environment was given to impute or simulate them. Give an environment model, or have the model receive the missing ones as UnimputedMissingValue(), with impute_missing_observations = false." session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
             with_missing,

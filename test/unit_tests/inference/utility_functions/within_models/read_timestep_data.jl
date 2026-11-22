@@ -63,6 +63,7 @@
 
     @testset "has_missing_value is decided at compile time when no entry can be missing" begin
         @test CognitiveModeling.has_missing_value((; choice=MissingValue(), bet=1.0))
+        @test CognitiveModeling.has_missing_value((; choice=SimulatedValue(), bet=1.0))
         @test !CognitiveModeling.has_missing_value((; choice=true, bet=1.0)) &&
             !CognitiveModeling.has_missing_value((;))
         @test CognitiveModeling.has_missing_value(

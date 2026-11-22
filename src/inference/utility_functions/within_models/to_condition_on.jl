@@ -4,11 +4,13 @@
     is_value_to_condition_on(value)
 
 Return whether a single action or observation in the data is a value to condition on:
-neither [`MissingValue`](@ref) nor an [`AbstractNoValue`](@ref), such as
-[`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by
+neither [`MissingValue`](@ref), [`SimulatedValue`](@ref) nor an [`AbstractNoValue`](@ref),
+such as [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). Used by
 [`collect_values_to_condition_on`](@ref) and [`find_outputs_to_condition_on`](@ref).
 """
-is_value_to_condition_on(value) = !(value isa MissingValue || value isa AbstractNoValue)
+function is_value_to_condition_on(value)
+    return !(value isa LatentValueMarker || value isa AbstractNoValue)
+end
 
 """
     action_names_to_condition_on(session_info)
