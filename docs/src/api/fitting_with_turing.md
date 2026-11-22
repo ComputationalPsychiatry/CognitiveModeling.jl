@@ -74,6 +74,28 @@ prior_predictions = sample(decondition_sessions(model), Prior(), 1000)
 predictions = predict(decondition_sessions(model), chain)
 ```
 
+### Parameter recovery
+
+[`condition_sessions`](@ref) takes these models too, with values of their variables in the
+collections that Turing.jl's `condition` takes them in: a `Dict` from `VarName`s to values,
+or the `VarNamedTuple` that `rand(model)` gives. It returns a copy whose sessions have the
+values of their actions and observations as data, such as that of
+`session[1].timestep[3].choice.simulated`, and a value of any other variable is an error.
+`DynamicPPL.subset` leaves out the parameters of a draw from the prior of the deconditioned
+model, under `@varname(session)` for several sessions and `@varname(timestep)` for a single
+one, so that the copy is fitted to the simulated data, as in a parameter recovery.
+Turing.jl's `condition` on the same values gives the same posterior, as the tutorial
+[Predictive checks and parameter
+recovery](../generated/predictive_checks_and_parameter_recovery.md)
+shows, which also compares the two ways.
+
+```julia
+deconditioned_model = decondition_sessions(model)
+simulated = rand(deconditioned_model)
+recovery_model = condition_sessions(deconditioned_model, DynamicPPL.subset(simulated, [@varname(session)]))
+recovered = sample(recovery_model, NUTS(), 1000)
+```
+
 ## Functions that a model can implement for Turing.jl
 
 A model can add methods of these to change how it runs when it is fitted with Turing.jl,

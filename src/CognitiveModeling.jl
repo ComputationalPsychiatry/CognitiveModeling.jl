@@ -50,6 +50,7 @@ include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
 include("inference/workflow_and_postprocessing/get_session_trajectories.jl")
 include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
+include("inference/workflow_and_postprocessing/conditioning_sessions.jl")
 
 #What the package has for each of its extensions, which add the methods: the types and functions users reach through
 #the package, with their docstrings, and the helpers that call an extension
@@ -68,7 +69,8 @@ export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
 export SaveHistory, SaveEverything, NameMap
 export simulate_session, simulate_session!, simulate_timestep, simulate_timestep!, reset!
-export SessionInfo, MultipleSessionsInfo, NoEnvironment, decondition_sessions
+export SessionInfo, MultipleSessionsInfo, NoEnvironment
+export decondition_sessions, condition_sessions
 export AbstractParametersModel,
     NoParameters,
     FixedParameters,

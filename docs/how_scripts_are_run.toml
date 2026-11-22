@@ -27,6 +27,7 @@
 [tutorials]
 "getting_started.jl" = { run_in_build = "always", test_tier = "fast" }
 "custom_turing_models.jl" = { run_in_build = "always", test_tier = "fast" }
+"predictive_checks_and_parameter_recovery.jl" = { run_in_build = "always", test_tier = "fast" }
 "discrete_parameters.jl" = { run_in_build = "always", test_tier = "fast" }
 "cognitive_abm_with_agents.jl" = { run_in_build = "always", test_tier = "fast" }
 "interfacing_with_common_rl.jl" = { run_in_build = "always", test_tier = "fast" }

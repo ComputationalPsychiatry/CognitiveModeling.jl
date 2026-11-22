@@ -64,9 +64,9 @@ CognitiveModeling.session_column_values
 
 What is done with the sessions and with an inference backend's model around a fit.
 [`decondition_sessions`](@ref) takes the sessions alike for every backend. Each backend adds
-methods for its own models to it and to [`get_session_trajectories`](@ref),
-[`get_session_parameters`](@ref) and [`predict_session_trajectories`](@ref), and its page
-describes which models they take.
+methods for its own models to it and to [`condition_sessions`](@ref),
+[`get_session_trajectories`](@ref), [`get_session_parameters`](@ref) and
+[`predict_session_trajectories`](@ref), and its page describes which models they take.
 
 ```@autodocs
 Modules = [CognitiveModeling]
@@ -74,5 +74,6 @@ Private = false
 Pages = [
     "inference/workflow_and_postprocessing/get_session_trajectories.jl",
     "inference/workflow_and_postprocessing/predict_session_trajectories.jl",
+    "inference/workflow_and_postprocessing/conditioning_sessions.jl",
 ]
 ```

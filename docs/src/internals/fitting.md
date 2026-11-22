@@ -22,7 +22,10 @@ Pages = ["inference/types.jl"]
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/workflow_and_postprocessing/get_session_trajectories.jl"]
+Pages = [
+    "inference/workflow_and_postprocessing/get_session_trajectories.jl",
+    "inference/workflow_and_postprocessing/conditioning_sessions.jl",
+]
 ```
 
 ## Reading tables with Tables.jl

@@ -74,8 +74,8 @@ end
 
 Return whether `model` is a Turing.jl model made by `turing_full_model`,
 `turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or one of them inside
-`turing_catch_invalid_parameters`. Used by `get_session_parameters` and
-`decondition_sessions`.
+`turing_catch_invalid_parameters`. Used by `get_session_parameters`, `decondition_sessions`
+and `condition_sessions`.
 """
 function is_session_model(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_catch_invalid_parameters
@@ -97,7 +97,8 @@ Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
 `SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its other
 arguments, its keyword arguments and whether it is marked thread-safe stay as they are. Any
 other model is an error, which names `function_name`, the function that was called. Used by
-`get_session_trajectories`, `predict_session_trajectories` and `decondition_sessions`.
+`get_session_trajectories`, `predict_session_trajectories`, `decondition_sessions` and
+`condition_sessions`.
 """
 function with_session_info(
     model::DynamicPPL.Model{F,argnames,defaultnames,missings,Targs,Tdefaults,Ctx,Threaded},
@@ -141,7 +142,8 @@ end
 Return the session info that `model` runs, a model made by `turing_full_model`,
 `turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or by
 `with_session_info`: the `SessionInfo` of a single session, or the `MultipleSessionsInfo`
-of several. Used by `get_session_trajectories` and `get_session_parameters`.
+of several. Used by `get_session_trajectories`, `get_session_parameters` and
+`condition_sessions`.
 """
 function info_of(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_behavioral_session

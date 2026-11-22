@@ -9,7 +9,11 @@ using CognitiveModeling:
     NoEnvironment,
     get_session_trajectories,
     get_session_parameters,
-    with_save_history
+    with_save_history,
+    with_data,
+    with_common_element_types,
+    value_passed_on,
+    LatentValueMarker
 using CognitiveModeling:
     turing_timestep_model,
     turing_initialize_state,
@@ -96,8 +100,9 @@ include("parameter_models/hierarchical_grouped_parameters.jl")
 include("parameter_models/hierarchical_regression_parameters.jl")
 include("parameter_models/composite_parameters.jl")
 
-#Reading the trajectories and the parameters of fitted sessions from a chain, and simulating the sessions again
+#Reading the trajectories and the parameters of fitted sessions from a chain, simulating the sessions again, and taking their data out of them and putting it back
 include("workflow_and_postprocessing/get_session_trajectories.jl")
 include("workflow_and_postprocessing/predict_session_trajectories.jl")
+include("workflow_and_postprocessing/conditioning_sessions.jl")
 
 end

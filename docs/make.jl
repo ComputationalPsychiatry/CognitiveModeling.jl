@@ -91,6 +91,7 @@ makedocs(;
         "Tutorials" => [
             "generated/getting_started.md",
             "generated/custom_turing_models.md",
+            "generated/predictive_checks_and_parameter_recovery.md",
             "generated/discrete_parameters.md",
             "generated/cognitive_abm_with_agents.md",
             "generated/interfacing_with_common_rl.md",
