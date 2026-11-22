@@ -20,9 +20,6 @@
         (; probability=[0.5]);
         parallelization=SerialSessions(),
     )
-    @test_throws "There is no catch_invalid_parameters method for TuringBackend() with arguments of the types" catch_invalid_parameters(
-        TuringBackend(), session_info
-    )
     @test_throws ArgumentError session_model(
         TuringBackend(), session_info, (; probability=0.5)
     )

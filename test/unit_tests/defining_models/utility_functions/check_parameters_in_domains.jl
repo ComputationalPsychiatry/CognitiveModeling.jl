@@ -242,8 +242,6 @@ end
         @test_throws ParameterDomainError CognitiveModeling.check_parameters_in_domains(
             model, merge(valid_parameters, (; learning_rate=Inf))
         )
-        #The error isn't the one a model throws for parameters to be sampled again
-        @test !(ParameterDomainError("") isa InvalidParametersError)
     end
 
     @testset "A number of automatic differentiation that equals a bound is within it, whatever its derivative" begin

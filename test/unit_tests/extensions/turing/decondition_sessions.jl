@@ -88,7 +88,7 @@ end
         )
     end
 
-    @testset "A single session, several sessions, and a model inside catch_invalid_parameters are deconditioned" begin
+    @testset "A single session and several sessions are deconditioned" begin
         single = session_model(
             TuringBackend(),
             sessions_info.sessions[3],
@@ -106,11 +106,6 @@ end
         @test all(
             session -> all(==(SimulatedValue()), session.actions.choice),
             decondition_sessions(several).args.sessions_info.sessions,
-        )
-        caught = catch_invalid_parameters(TuringBackend(), imputing)
-        @test all(
-            session -> all(==(SimulatedValue()), session.actions.choice),
-            decondition_sessions(caught).args.model.args.sessions_info.sessions,
         )
     end
 

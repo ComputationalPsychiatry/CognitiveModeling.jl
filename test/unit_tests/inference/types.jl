@@ -252,7 +252,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             COUNTER_REWARDS,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
-            catch_invalid_parameters=true,
+            parallelization=SerialSessions(),
         )
     end
 

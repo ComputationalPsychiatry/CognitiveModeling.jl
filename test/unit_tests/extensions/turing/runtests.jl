@@ -4,10 +4,7 @@ using CognitiveModeling:
 #The Turing.jl models of the sessions, which are public but not exported, since session_model and the other functions
 #that every inference backend has make them
 using CognitiveModeling:
-    turing_behavioral_session,
-    turing_multiple_behavioral_sessions,
-    turing_full_model,
-    turing_catch_invalid_parameters
+    turing_behavioral_session, turing_multiple_behavioral_sessions, turing_full_model
 using Test
 using JET: JET
 using Random: Xoshiro

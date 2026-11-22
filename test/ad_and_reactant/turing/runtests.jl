@@ -83,7 +83,7 @@ const KNOWN_FAILURES = [
             "Environment parameters estimated, without missing values",
             "A parameter that is a vector, without missing values",
             "Every feature with a regression, without missing values",
-            "Invalid parameters caught, without missing values",
+            "Parameters that can turn invalid, without missing values",
             "A parameter that is a vector",
             "Every feature with a regression",
         ],
@@ -164,11 +164,6 @@ const KNOWN_FAILURES = [
             "ContinuousOutput, sessions, environment starts",
             "ContinuousOutput, sessions, agent starts",
         ],
-    ),
-    (;
-        bug="Mooncake can't differentiate the model which catches invalid parameters, since it runs the sessions inside a try block: reverse mode doesn't support try and catch, a limitation that its documentation lists, and forward mode throws an ArgumentError, that expressions of type :the_exception aren't supported",
-        backends=["Mooncake reverse", "Mooncake forward"],
-        cases=["Invalid parameters caught, without missing values"],
     ),
 ]
 

@@ -9,6 +9,7 @@ include("defining_models/types.jl")
 include("defining_models/functions_to_extend.jl")
 include("defining_models/functions_to_call.jl")
 include("defining_models/utility_functions/check_model_methods.jl")
+include("defining_models/utility_functions/read_parameters_valid.jl")
 include("defining_models/utility_functions/compare_names.jl")
 include("defining_models/utility_functions/check_attributes_against_names.jl")
 include("defining_models/utility_functions/check_parameters_in_domains.jl")
@@ -63,7 +64,7 @@ include("extensions/turing/turing_models.jl")
 export AbstractCognitiveModel, AbstractEnvironmentModel
 export AbstractNoValue, NoValue, BeforeFirstTimestep
 export MissingValue, UnimputedMissingValue, SimulatedValue
-export ModelContext, ModelOutput, ModelAttributes, Deterministic, InvalidParametersError
+export ModelContext, ModelOutput, ModelAttributes, Deterministic, ValidByDefault
 export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
@@ -94,7 +95,7 @@ export AbstractParametersModel,
 export AbstractDownstreamModel, NoDownstreamModel
 export SerialSessions, ParallelSessions
 export AbstractInferenceBackend, TuringBackend
-export full_model, session_model, multiple_sessions_model, catch_invalid_parameters
+export full_model, session_model, multiple_sessions_model
 export get_session_trajectories, get_session_parameters, predict_session_trajectories
 
 #What users call with the package's name, as in CognitiveModeling.timestep_model
@@ -104,8 +105,7 @@ public parameter_domains, input_domains, output_domains
 public discrete_parameter_names, continuous_parameter_names
 public turing_timestep_model,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
-public turing_behavioral_session,
-    turing_multiple_behavioral_sessions, turing_full_model, turing_catch_invalid_parameters
+public turing_behavioral_session, turing_multiple_behavioral_sessions, turing_full_model
 public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 

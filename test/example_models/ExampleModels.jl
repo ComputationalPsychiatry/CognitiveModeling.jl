@@ -26,7 +26,7 @@ export ManyAttributes,
 export WithSymbolParameter, WithDiscreteParameter, WithDefaultParameters, WithDomains
 export WithStoppingCriterion, DependsOnPreviousOutput, UsesTimestepSize
 export InitialStateFromParameter, SampledInitialState, SamplingWithinTimestep
-export OutputNotEveryTimestep, ThrowsInvalidParameters
+export OutputNotEveryTimestep, WithInvalidParameters
 export StateChangedInPlace, StateChangedInPlaceSavedWithDeepcopy, StateChangesType
 export BaselineFamily, MethodsFromSupertype
 export EveryFeatureFamily, EveryFeature, EveryFeatureWithoutSampling

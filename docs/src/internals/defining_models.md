@@ -22,6 +22,14 @@ Public = false
 Pages = ["defining_models/utility_functions/check_model_methods.jl"]
 ```
 
+### Whether the parameters are valid
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["defining_models/utility_functions/read_parameters_valid.jl"]
+```
+
 ### Comparing names
 
 ```@autodocs

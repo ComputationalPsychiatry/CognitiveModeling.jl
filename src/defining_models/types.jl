@@ -329,7 +329,17 @@ function ModelContext(;
 end
 
 """
-    ModelOutput(output_distribution, new_state=(;))
+    ValidByDefault()
+
+The default of `parameters_valid` in [`ModelOutput`](@ref), for a model whose parameters are
+valid on every timestep. A model whose parameters can turn invalid gives a `Bool` instead.
+Since the type says that the parameters are valid, a simulation or a fit of a model that
+gives this checks nothing.
+"""
+struct ValidByDefault end
+
+"""
+    ModelOutput(output_distribution, new_state=(;); parameters_valid=ValidByDefault())
 
 The outputs of a model for a single timestep, which [`timestep_model`](@ref) returns.
 
@@ -350,6 +360,13 @@ Each argument is kept in a field of the same name, such as `output.new_state`.
   state gives an empty `NamedTuple`, `(;)`. The outputs are sampled after the state is made,
   so it can't depend on them: the model receives them as `context.previous_output` on the
   next timestep.
+- `parameters_valid=ValidByDefault()`: whether the parameters are valid on this timestep,
+  for a model whose parameters can turn invalid with the inputs it receives, such as a
+  precision that becomes negative. Such a model gives a `Bool` on every timestep, as in
+  `parameters_valid = precision > 0`. When it is `false`, a simulation stops and leaves the
+  timestep out, and a fit gives the parameters a probability of zero. The distributions of
+  that timestep must still be ones that outputs can be sampled from. The default,
+  [`ValidByDefault`](@ref), is for a model whose parameters are always valid.
 
 # Examples
 ```jldoctest
@@ -365,14 +382,19 @@ julia> ModelOutput((; choice = NoValue(), bet = Bernoulli(0.2))).output_distribu
 NoValue()
 ```
 """
-struct ModelOutput{Toutput,Tstate}
+struct ModelOutput{Toutput,Tstate,Tparameters_valid}
     output_distribution::Toutput
     new_state::Tstate
+    parameters_valid::Tparameters_valid
 
-    #Only takes named output distributions and a named state, so that the model names every output and state
-    function ModelOutput(output_distribution::NamedTuple, new_state::NamedTuple=(;))
-        return new{typeof(output_distribution),typeof(new_state)}(
-            output_distribution, new_state
+    #Only takes named output distributions and a named state, so that the model names every output and state. The flag is untyped, since a compiler like Reactant.jl gives the comparison that makes it a type of its own
+    function ModelOutput(
+        output_distribution::NamedTuple,
+        new_state::NamedTuple=(;);
+        parameters_valid=ValidByDefault(),
+    )
+        return new{typeof(output_distribution),typeof(new_state),typeof(parameters_valid)}(
+            output_distribution, new_state, parameters_valid
         )
     end
 end
@@ -876,59 +898,14 @@ name_of_constraint(constraint) = repr(constraint)
 ## Errors ##
 
 """
-    InvalidParametersError(message)
-    InvalidParametersError()
-
-An error for a model to throw from [`timestep_model`](@ref) or [`initialize_state`](@ref)
-when its parameters aren't valid, as in `throw(InvalidParametersError())`.
-
-The default message says that the parameters are not valid, possibly dependent on the
-observations, actions and states, and a model can give a more specific one. A simulation
-stops with it as with any other error, and fitting can catch it to give the parameters a
-probability of zero, so a model should throw this rather than an ordinary error when the
-parameters are the problem.
-
-# Examples
-```jldoctest
-julia> try
-           throw(InvalidParametersError())
-       catch error
-           sprint(showerror, error)
-       end
-"InvalidParametersError: Model parameters are not valid, possibly dependent on observations, actions and states."
-
-julia> sprint(showerror, InvalidParametersError("The learning rate must be between 0 and 1."))
-"InvalidParametersError: The learning rate must be between 0 and 1."
-```
-"""
-struct InvalidParametersError <: Exception
-    message::String
-end
-
-#The default message says what the error means
-function InvalidParametersError()
-    return InvalidParametersError(
-        "Model parameters are not valid, possibly dependent on observations, actions and states.",
-    )
-end
-
-#Prints the message when the error isn't caught
-function Base.showerror(io::IO, error::InvalidParametersError)
-    print(io, "InvalidParametersError: ", error.message)
-    return nothing
-end
-
-"""
     ParameterDomainError(message)
 
 The error that is thrown when a parameter of a cognitive model or an environment model has a
 value outside its domain in [`parameter_domains`](@ref): of another type than the domain's,
 or below its lower bound or above its upper bound.
 
-A simulation and a fit stop with it. A fit which catches an
-[`InvalidParametersError`](@ref), to give the parameters of a sample a probability of zero,
-doesn't catch this one. Give the parameters priors or transformations that stay within the
-domains instead, or leave the check out with `check_parameter_domains = false` in
+A simulation and a fit stop with it. Give the parameters priors or transformations that stay
+within the domains, or leave the check out with `check_parameter_domains = false` in
 [`simulate_session`](@ref), [`InstantiatedModel`](@ref) or [`SessionInfo`](@ref).
 
 # Examples

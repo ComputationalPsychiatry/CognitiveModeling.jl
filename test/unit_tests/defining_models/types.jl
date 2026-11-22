@@ -124,6 +124,26 @@ using Random: Xoshiro, default_rng
         @test_throws MethodError ModelOutput((; choice=0.7), nothing)
     end
 
+    @testset "ModelOutput says the parameters are valid by default, and takes whether they are" begin
+        @test ModelOutput((; choice=0.7)).parameters_valid === ValidByDefault()
+        @test ModelOutput((; choice=0.7), state).parameters_valid === ValidByDefault()
+        @test ModelOutput((; choice=0.7), state; parameters_valid=false).parameters_valid ===
+            false
+        #The flag's type is part of the type, so that the default is known when the code is compiled
+        @test typeof(ModelOutput((; choice=0.7))).parameters[3] === ValidByDefault
+        @test typeof(ModelOutput((; choice=0.7); parameters_valid=true)).parameters[3] ===
+            Bool
+        #The flags of two models combine, with the default as the neutral one
+        @test CognitiveModeling.combine_parameters_valid(
+            ValidByDefault(), ValidByDefault()
+        ) === ValidByDefault()
+        @test CognitiveModeling.combine_parameters_valid(ValidByDefault(), false) === false
+        @test CognitiveModeling.combine_parameters_valid(true, ValidByDefault()) === true
+        @test CognitiveModeling.combine_parameters_valid(true, false) === false
+        @test CognitiveModeling.parameters_are_valid(ValidByDefault()) === true
+        @test CognitiveModeling.parameters_are_valid(false) === false
+    end
+
     @testset "ModelOutput for an environment model only takes named observation distributions" begin
         @test ModelOutput((; reward=Deterministic(1.0))).output_distribution ===
             (; reward=Deterministic(1.0))
@@ -299,18 +319,6 @@ using Random: Xoshiro, default_rng
         @test CognitiveModeling.AbstractObservableAttributeKind <:
             CognitiveModeling.AbstractAttributeKind
         @test allunique((observable_kinds..., other_kinds...))
-    end
-
-    @testset "InvalidParametersError has a default message, and takes another" begin
-        @test InvalidParametersError() isa Exception
-        @test sprint(showerror, InvalidParametersError()) ==
-            "InvalidParametersError: Model parameters are not valid, possibly dependent on observations, actions and states."
-        @test sprint(
-            showerror, InvalidParametersError("The learning rate must be between 0 and 1.")
-        ) == "InvalidParametersError: The learning rate must be between 0 and 1."
-        @test InvalidParametersError("The learning rate must be between 0 and 1.").message ==
-            "The learning rate must be between 0 and 1."
-        @test_throws InvalidParametersError throw(InvalidParametersError())
     end
 
     @testset "Domain takes every real number by default, and keeps its type and its bounds" begin

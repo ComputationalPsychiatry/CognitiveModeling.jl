@@ -874,57 +874,51 @@ end
             Turing.FlexiChains.parameters(chain)
     end
 
-    @testset "turing_catch_invalid_parameters wraps the sessions, so one rejected session rejects the whole sample" begin
+    @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model doesn't run" begin
         table = (; FULL_TABLE..., choice=[0.2, 0.4, 0.6, 0.8, 1.0, 0.2, 0.4, 0.6, 0.8])
+        saving_states = SaveHistory(; states=:expected_reward)
         sessions_info = sessions_for_test(
-            RejectsHighLearningRate(),
-            table;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            RejectsHighExpectedReward(), table; cognitive_save_history=saving_states
         )
-        parameters = (; learning_rate=[0.3, 1.5, 0.3])
-        @test_throws "The learning rate must be at most 1." logjoint(
-            turing_multiple_behavioral_sessions(sessions_info, parameters), (;)
+        #A learning rate of 1.5 takes the expected reward of S2, rewarded 0 and then 1, above 0.99 on its second timestep
+        sessions = turing_multiple_behavioral_sessions(
+            sessions_info, (; learning_rate=[0.3, 1.5, 0.3])
         )
-        caught = turing_catch_invalid_parameters(
-            turing_multiple_behavioral_sessions(sessions_info, parameters)
-        )
-        @test logjoint(caught, (;)) == -Inf && returned(caught, (;)) === nothing
-        #Valid parameters are unaffected
-        valid = turing_catch_invalid_parameters(
-            turing_multiple_behavioral_sessions(
-                sessions_info, (; learning_rate=fill(0.3, 3))
+        @test logjoint(sessions, (;)) == -Inf
+        #The other sessions run to their end, and S2 ends before that timestep
+        saved = returned(sessions, (;)).saved_trajectories
+        @test [session.parameters_valid for session in saved] == [true, false, true]
+        @test map(session -> length(session.states), saved) == [4, 2, 5]
+        @test isfinite(
+            logjoint(
+                turing_multiple_behavioral_sessions(
+                    sessions_info, (; learning_rate=fill(0.3, 3))
+                ),
+                (;),
             ),
         )
-        @test logjoint(valid, (;)) ≈ logjoint(
-            turing_multiple_behavioral_sessions(
-                sessions_info, (; learning_rate=fill(0.3, 3))
-            ),
-            (;),
-        )
-        @test length(returned(valid, (;))) == 3
-        #The full model puts it around the sessions with the keyword, and returns nothing for a rejected sample without running the downstream model
+        #The full model doesn't run its downstream model for such a sample, and returns the rest
         model = full_model(
             TuringBackend(),
             IndependentParameters((; learning_rate=Uniform(0, 2))),
             sessions_info;
-            catch_invalid_parameters=true,
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         rejected = Dict(
             @varname(learning_rate.session) => [0.3, 1.5, 0.3], @varname(slope) => 0.8
         )
         @test logjoint(model, rejected) == -Inf
-        @test returned(model, rejected) === nothing
+        rejected_value = returned(model, rejected)
+        @test rejected_value.downstream_values === nothing &&
+            rejected_value.saved_trajectories[2].parameters_valid === false
         accepted = Dict(
             @varname(learning_rate.session) => fill(0.3, 3), @varname(slope) => 0.8
         )
         @test isfinite(logjoint(model, accepted)) &&
             returned(model, accepted).downstream_values == 0.8
-        #A sampler starts when most first draws are rejected, since the parameters are sampled outside the try block
+        #A sampler starts when most first draws are rejected
         without_downstream = saving_full_model(
-            IndependentParameters((; learning_rate=Uniform(0, 2))),
-            sessions_info;
-            catch_invalid_parameters=true,
+            IndependentParameters((; learning_rate=Uniform(0, 2))), sessions_info
         )
         for seed in 1:3
             chain = sample(Xoshiro(seed), without_downstream, NUTS(), 10; progress=false)
@@ -933,6 +927,31 @@ end
                 returned(without_downstream, chain),
             )
         end
+        #The chain of the trajectories says for every sample whether the parameters of each session stayed valid, and
+        #the trajectories of a session end where they turned invalid
+        prior_chain = sample(Xoshiro(4), without_downstream, Prior(), 40; progress=false)
+        trajectories = get_session_trajectories(
+            without_downstream, prior_chain; cognitive_save_history=saving_states
+        )
+        valid_in_S2 = vec(trajectories[@varname(S2.parameters_valid)])
+        @test any(valid_in_S2) && !all(valid_in_S2)
+        lengths_in_S2 = map(length, vec(trajectories[@varname(S2.expected_reward)]))
+        @test all(lengths_in_S2[valid_in_S2] .== 3) &&
+            all(lengths_in_S2[.!valid_in_S2] .< 3)
+        #A model that never sets parameters_valid has no such entry
+        plain = saving_full_model(
+            IndependentParameters(FULL_PRIORS),
+            sessions_for_test(; cognitive_save_history=saving_states),
+        )
+        plain_chain = sample(Xoshiro(5), plain, Prior(), 5; progress=false)
+        plain_names = Turing.FlexiChains.get_name.(
+            keys(
+                get_session_trajectories(
+                    plain, plain_chain; cognitive_save_history=saving_states
+                ),
+            ),
+        )
+        @test !any(name -> occursin("parameters_valid", string(name)), plain_names)
     end
 
     @testset "ParallelSessions runs the sessions over the threads, and needs the model to be marked thread-safe" begin
@@ -1064,7 +1083,7 @@ end
     ))
     outside_domains = FixedParameters((; learning_rate=1.5, inverse_temperature=2.0))
 
-    @testset "A value outside its domain stops the evaluation, also when invalid parameters are caught" begin
+    @testset "A value outside its domain stops the evaluation" begin
         model = @test_logs full_model(TuringBackend(), within_domains, sessions_info)
         @test isfinite(
             logjoint(
@@ -1083,16 +1102,6 @@ end
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(model, proposed_outside)
-        #The error isn't the one that rejects a sample, so it stops the evaluation there too
-        @test_throws ParameterDomainError logjoint(
-            full_model(
-                TuringBackend(),
-                within_domains,
-                sessions_info;
-                catch_invalid_parameters=true,
-            ),
-            proposed_outside,
-        )
     end
 
     @testset "A number of ForwardDiff.jl that equals a bound of its domain is within it" begin
@@ -1202,18 +1211,12 @@ end
         )
     end
 
-    @testset "A single session checks its parameters, and turing_catch_invalid_parameters doesn't catch the error" begin
+    @testset "A single session checks its parameters" begin
         session_info = first(sessions_info.sessions)
         parameters = (; learning_rate=1.5, inverse_temperature=2.0)
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
         ) logjoint(turing_behavioral_session(session_info, parameters), (;))
-        @test_throws ParameterDomainError logjoint(
-            turing_catch_invalid_parameters(
-                turing_behavioral_session(session_info, parameters)
-            ),
-            (;),
-        )
         @test isfinite(
             logjoint(
                 turing_behavioral_session(first(unchecked_sessions.sessions), parameters),
@@ -1273,7 +1276,7 @@ end
     @test all(session -> session.includes_environment, saving.args.sessions_info.sessions)
 end
 
-@testset "session_model, multiple_sessions_model and catch_invalid_parameters make the Turing.jl models with TuringBackend()" begin
+@testset "session_model and multiple_sessions_model make the Turing.jl models with TuringBackend()" begin
     sessions_info = sessions_for_test(; impute_missing_actions=false)
     parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
     session_parameters = (; learning_rate=0.2, inverse_temperature=1.0)
@@ -1307,9 +1310,4 @@ end
     ) === turing_multiple_behavioral_sessions(
         sessions_info, parameters, (;), ParallelSessions()
     )
-
-    #The model which rejects invalid parameters, around any of them
-    session = turing_behavioral_session(session_info, session_parameters)
-    @test catch_invalid_parameters(TuringBackend(), session) ===
-        turing_catch_invalid_parameters(session)
 end

@@ -214,18 +214,22 @@ end
 """
     collect_timestep_values(environment_output, cognitive_output, environment_observation,
                             observation, action, environment_action, cognitive_model,
-                            environment, cognitive_save_history, environment_save_history)
+                            environment, cognitive_save_history, environment_save_history,
+                            previous)
 
 Collect the values of a timestep in a `NamedTuple`: the state and the action of the
 cognitive model, and under `environment` the state and the observation of the environment,
-which the next timestep starts from, and under `saved` what `cognitive_save_history` and
-`environment_save_history` select, as [`map_saved`](@ref) arranges them.
+which the next timestep starts from, whether the parameters of both models are valid, under
+`parameters_valid`, the states of both models before and after the timestep, under
+`record`, from [`record_of_timestep`](@ref), and under `saved` what `cognitive_save_history`
+and `environment_save_history` select, as [`map_saved`](@ref) arranges them.
 
 Each side has the values in its own names: `observation` is the observation as the cognitive
 model receives it and `environment_observation` as the environment gave it, and `action` is
 the action as the cognitive model gave it and `environment_action` as the environment
-receives it. The two of a pair differ when a [`NameMap`](@ref) selects or renames them. Used
-by [`simulate_session_timestep`](@ref).
+receives it. The two of a pair differ when a [`NameMap`](@ref) selects or renames them.
+`previous` holds the values of the timestep before. Used by
+[`simulate_session_timestep`](@ref).
 """
 function collect_timestep_values(
     environment_output,
@@ -238,12 +242,22 @@ function collect_timestep_values(
     environment,
     cognitive_save_history,
     environment_save_history,
+    previous,
 )
+    #Whether the parameters of both models are valid on this timestep
+    parameters_valid = combine_parameters_valid(
+        cognitive_output.parameters_valid, environment_output.parameters_valid
+    )
+
     return (;
         state=cognitive_output.new_state,
         action,
         environment=environment_values(
             environment_output.new_state, environment_observation
+        ),
+        parameters_valid,
+        record=record_of_timestep(
+            parameters_valid, previous, cognitive_output, environment_output
         ),
         saved=(;
             states=select_state_to_save(
@@ -277,6 +291,54 @@ function collect_timestep_values(
         ),
     )
 end
+
+#Only the states are kept, which have the same types on every timestep, unlike outputs that are sometimes NoValue, so
+#that a simulation returns one type, which Enzyme.jl and Mooncake.jl need
+"""
+    record_of_timestep(parameters_valid, previous, cognitive_output, environment_output)
+
+Return what a simulation returns as `last_timestep` for a timestep: for each model, whether
+its parameters stayed valid on it, and its state before the timestep and after it, with the
+cognitive model's at the top and the environment's under `environment`. `parameters_valid`
+is the flag of both models together, and with [`ValidByDefault`](@ref), when no timestep can
+turn invalid, `nothing` is returned instead, so that nothing is collected. Used by
+[`collect_timestep_values`](@ref).
+"""
+record_of_timestep(::ValidByDefault, _, _, _) = nothing
+function record_of_timestep(
+    parameters_valid, previous, cognitive_output, environment_output
+)
+    return (;
+        parameters_valid=parameters_are_valid(cognitive_output.parameters_valid),
+        previous_state=previous.state,
+        state=cognitive_output.new_state,
+        environment=(;
+            parameters_valid=parameters_are_valid(environment_output.parameters_valid),
+            previous_state=previous.environment.state,
+            state=environment_output.new_state,
+        ),
+    )
+end
+
+"""
+    numbered_record(record, t)
+
+Return `record`, from [`record_of_timestep`](@ref), with the number of its timestep, `t`,
+first, and `nothing` when there is no record. Used by the simulation loops.
+"""
+numbered_record(::Nothing, t) = nothing
+numbered_record(record::NamedTuple, t) = merge((; timestep=t), record)
+
+"""
+    kept_values(keeps_last_values::Val, timestep_values)
+
+Return `timestep_values`, the values of the last timestep that was kept, when
+`keeps_last_values` is `Val(true)`, for [`simulate_session!`](@ref), which continues from
+them, and `nothing` otherwise, for [`simulate_session`](@ref), which doesn't. Used by the
+simulation loops.
+"""
+kept_values(::Val{true}, timestep_values) = timestep_values
+kept_values(::Val{false}, timestep_values) = nothing
 
 #A call of its own, so that an observation which can have two types, like one with an entry that is sometimes NoValue, gives one of two NamedTuples with concrete fields, as the call is split by type
 """
@@ -453,6 +515,44 @@ function saved_trajectories(storage, timestep_sizes)
     return merge(storage, (; timestep_sizes))
 end
 
+"""
+    simulation_result(simulation, timestep_sizes)
+
+Return what [`simulate_session`](@ref) and [`simulate_session!`](@ref) return, from
+`simulation`, what [`simulate_all_timesteps`](@ref) returned: the saved trajectories with
+`timestep_sizes`, as [`saved_trajectories`](@ref) gives them, then whether the parameters of
+both models stayed valid, the number of timesteps in the trajectories, and the record of the
+last timestep that was simulated, or `nothing` for models that can't set `parameters_valid`.
+"""
+function simulation_result(simulation, timestep_sizes)
+    return merge(
+        saved_trajectories(simulation.storage, timestep_sizes),
+        (;
+            simulation.parameters_valid,
+            simulation.n_timesteps,
+            last_timestep=simulation.last_record,
+        ),
+    )
+end
+
+#A function of its own, called only when a simulation stops for invalid parameters, since a warning holds a try block, which Mooncake.jl can't differentiate
+"""
+    warn_of_invalid_parameters(last_timestep, cognitive_model, environment)
+
+Warn that the parameters of `cognitive_model`, of `environment` or of both turned invalid on
+the timestep in `last_timestep`, from [`record_of_timestep`](@ref), so that the simulation
+stopped before it. Used by [`simulate_session`](@ref) and
+[`simulate_session!`](@ref), unless they are told not to warn.
+"""
+@noinline function warn_of_invalid_parameters(last_timestep, cognitive_model, environment)
+    models = String[]
+    last_timestep.parameters_valid || push!(models, describe_model(cognitive_model))
+    last_timestep.environment.parameters_valid || push!(models, describe_model(environment))
+    t = last_timestep.timestep
+    @warn "$(uppercasefirst(join(models, " and "))) set parameters_valid to false on timestep $t, so the simulation stopped after timestep $(t - 1). The states of timestep $t are under last_timestep in what the simulation returned."
+    return nothing
+end
+
 ## Simulating timesteps ##
 #Always inlined, because a call here makes the loop several times slower
 """
@@ -544,6 +644,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
         environment,
         cognitive_save_history,
         environment_save_history,
+        previous,
     )
 end
 
@@ -637,6 +738,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
         environment,
         cognitive_save_history,
         environment_save_history,
+        previous,
     )
 end
 
@@ -667,11 +769,12 @@ end
                                  observation_map, action_map, rng, timestep_sizes, n_steps,
                                  offset, check_stopping_criterion)
 
-Simulate the timesteps after the first, and return the vectors with what the simulated
-timesteps saved, followed by the values of the last one. When `check_stopping_criterion` is
-`true`, the simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of
-either model is met. `offset` is 1 when the vectors start with timestep 0, and 0 otherwise,
-so that timestep `t` is element `t + offset`. Used by [`simulate_all_timesteps`](@ref).
+Simulate the timesteps after the first, and return what [`simulate_all_timesteps`](@ref)
+returns. When `check_stopping_criterion` is `true`, the simulation stops before `n_steps`
+timesteps if [`stopping_criterion`](@ref) of either model is met. It also stops when the
+parameters of either model turn invalid on a timestep, which is left out. `offset` is 1 when
+the vectors start with timestep 0, and 0 otherwise, so that timestep `t` is element
+`t + offset`. Used by [`simulate_all_timesteps`](@ref).
 """
 function simulate_remaining_timesteps(
     storage,
@@ -690,6 +793,7 @@ function simulate_remaining_timesteps(
     n_steps,
     offset,
     check_stopping_criterion,
+    keeps_last_values::Val,
 )
 
     #Loop through timesteps
@@ -704,8 +808,17 @@ function simulate_remaining_timesteps(
             )
         )
             map_saved(vector -> resize!(vector, t - 1 + offset), storage)
-            return storage, timestep_values
+            return (;
+                storage,
+                last_kept_values=kept_values(keeps_last_values, timestep_values),
+                n_timesteps=t - 1,
+                parameters_valid=true,
+                last_record=numbered_record(timestep_values.record, t - 1),
+            )
         end
+
+        #The values to continue from if this timestep turns invalid, for a caller that continues
+        values_before = kept_values(keeps_last_values, timestep_values)
 
         #Simulate the timestep, starting from the values of the one before
         timestep_values = simulate_session_timestep(
@@ -723,12 +836,30 @@ function simulate_remaining_timesteps(
             timestep_values,
         )
 
+        #Stop if the parameters of either model turned invalid, and leave this timestep out
+        if !parameters_are_valid(timestep_values.parameters_valid)
+            map_saved(vector -> resize!(vector, t - 1 + offset), storage)
+            return (;
+                storage,
+                last_kept_values=values_before,
+                n_timesteps=t - 1,
+                parameters_valid=false,
+                last_record=numbered_record(timestep_values.record, t),
+            )
+        end
+
         #Store what the timestep saved
         storage = store_timestep_values!(storage, timestep_values.saved, t + offset)
     end
 
     #Return what was stored, and the values of the last timestep for continuing from
-    return storage, timestep_values
+    return (;
+        storage,
+        last_kept_values=kept_values(keeps_last_values, timestep_values),
+        n_timesteps=n_steps,
+        parameters_valid=true,
+        last_record=numbered_record(timestep_values.record, n_steps),
+    )
 end
 
 """
@@ -738,17 +869,25 @@ end
                            observation_map, action_map, rng, timestep_sizes, n_steps,
                            save_initial_timestep_values::Val, check_stopping_criterion)
 
-Simulate up to `n_steps` timesteps starting from `previous_timestep_values`, and return the
-vectors with what the simulated timesteps saved, followed by the values of the last one.
-When `check_stopping_criterion` is `true`, the simulation stops before `n_steps` timesteps
-if [`stopping_criterion`](@ref) of either model is met, and none can be simulated if it is
-met already. When `save_initial_timestep_values` is `Val(true)`, each vector starts with
-what is saved from before the first timestep, as timestep 0.
+Simulate up to `n_steps` timesteps starting from `previous_timestep_values`, and return in a
+`NamedTuple` the vectors with what the simulated timesteps saved, under `storage`, the
+values of the last timestep that was kept, under `last_kept_values`, the number of timesteps
+that were kept, under `n_timesteps`, whether the parameters of both models stayed valid,
+under `parameters_valid`, and under `last_record` the record of the last timestep that was
+simulated, from [`record_of_timestep`](@ref) with the timestep's number. When
+`check_stopping_criterion` is `true`, the simulation stops before `n_steps` timesteps if
+[`stopping_criterion`](@ref) of either model is met, and none can be simulated if it is met
+already. The simulation also stops when the parameters of either model turn invalid, and
+that timestep is left out, so that it is the last one simulated but not the last one kept.
+When `save_initial_timestep_values` is `Val(true)`, each vector starts with what is saved
+from before the first timestep, as timestep 0.
 
-`previous_timestep_values` and the values returned are those of a timestep: the state and
+`previous_timestep_values` and the last values kept are those of a timestep: the state and
 the action of the cognitive model, and under `environment` the state and the observation of
-the environment, each in its own names. The vectors are arranged as [`map_saved`](@ref)
-arranges them, with what `cognitive_save_history` and `environment_save_history` select.
+the environment, each in its own names. When no timestep was kept, the last values kept are
+those of the first timestep, which turned invalid. The vectors are arranged as
+[`map_saved`](@ref) arranges them, with what `cognitive_save_history` and
+`environment_save_history` select.
 
 [`simulate_session!`](@ref) continues from the values of the last timestep instead of from
 what was saved, because what is saved of a state can be a selection or a copy of it, and
@@ -771,6 +910,7 @@ function simulate_all_timesteps(
     n_steps,
     save_initial_timestep_values,
     check_stopping_criterion,
+    keeps_last_values::Val=Val(true),
 )
 
     #The first timestep sets the types of the storage, so there must be at least one
@@ -829,6 +969,18 @@ function simulate_all_timesteps(
     )
     offset = initial_timestep_values === nothing ? 0 : 1
 
+    #Stop if the parameters of either model turned invalid on the first timestep, which is left out. The storage still gets the types of its values
+    if !parameters_are_valid(timestep_values.parameters_valid)
+        map_saved(vector -> resize!(vector, offset), storage)
+        return (;
+            storage,
+            last_kept_values=kept_values(keeps_last_values, timestep_values),
+            n_timesteps=0,
+            parameters_valid=false,
+            last_record=numbered_record(timestep_values.record, 1),
+        )
+    end
+
     #Simulate the remaining timesteps
     return simulate_remaining_timesteps(
         storage,
@@ -847,6 +999,7 @@ function simulate_all_timesteps(
         n_steps,
         offset,
         check_stopping_criterion,
+        keeps_last_values,
     )
 end
 
@@ -859,7 +1012,10 @@ were saved, which are what changed over the timesteps, in a `NamedTuple`: `state
 `observations`, `actions` and `action_distributions` of the cognitive model, `environment`
 with the `states`, `observations`, `actions` and `observation_distributions` of the
 environment, and `timestep_sizes`. Each is a vector with one element for timestep 0, before
-the first timestep, and one for each timestep after it.
+the first timestep, and one for each timestep after it. After them come `parameters_valid`,
+whether the parameters of both models stayed valid, `n_timesteps`, the number of timesteps
+in the trajectories, and `last_timestep`, the states of the last timestep that was
+simulated, for models that can set `parameters_valid`, and `nothing` for others.
 
 Each element is what happened on that timestep, and the states are those after it. The
 observations are those the cognitive model received, and the actions those it gave, and
@@ -891,6 +1047,13 @@ and `action_map` say which outputs of one the other receives, and under which na
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
 model is met, unless `check_stopping_criterion` is `false`, and everything returned then has
 the timesteps that ran.
+
+The simulation also stops when either model sets `parameters_valid` to `false` in its
+[`ModelOutput`](@ref), and that timestep is left out of the trajectories. `parameters_valid`
+is then `false`, and `last_timestep` is that timestep: its number, under `timestep`, and for
+each model whether its parameters stayed valid on it and its state before and after it,
+with the cognitive model's at the top and the environment's under `environment`. A warning
+says so, unless `warn_on_invalid_parameters` is `false`.
 
 # Arguments
 - `cognitive_model::AbstractTimestepModel`: the cognitive model, usually an
@@ -936,6 +1099,8 @@ the timesteps that ran.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) before the simulation, where a value
   outside its domain throws a [`ParameterDomainError`](@ref).
+- `warn_on_invalid_parameters::Bool=true`: whether a warning says when the parameters of
+  either model turn invalid, which stops the simulation.
 - `previous_cognitive_state=initialize_state(cognitive_model, ...)`: the state of
   `cognitive_model` before the first timestep, by default its initial state from the full
   parameters. A state that `cognitive_model` changes in place will be changed.
@@ -1039,6 +1204,7 @@ function simulate_session(
     action_map::Union{Nothing,NameMap}=nothing,
     check_stopping_criterion::Bool=true,
     check_parameter_domains::Bool=true,
+    warn_on_invalid_parameters::Bool=true,
     previous_cognitive_state=initialize_state(
         cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
     ),
@@ -1084,7 +1250,7 @@ function simulate_session(
     save_initial_timestep_values = Val(
         saves_initial_timestep_values(cognitive_save_history)
     )
-    storage, _ = simulate_all_timesteps(
+    simulation = simulate_all_timesteps(
         previous_timestep_values,
         who_starts,
         cognitive_model,
@@ -1100,18 +1266,21 @@ function simulate_session(
         n_steps,
         save_initial_timestep_values,
         check_stopping_criterion,
+        Val(false),
     )
+
+    #Warn when the parameters of either model turned invalid, which stopped the simulation early
+    if warn_on_invalid_parameters && !simulation.parameters_valid
+        warn_of_invalid_parameters(simulation.last_record, cognitive_model, environment)
+    end
 
     #The sizes of the timesteps that were simulated, since a model can stop the simulation early
-    n_timesteps_simulated =
-        length(storage.states) -
-        (saves_initial_timestep_values(cognitive_save_history) ? 1 : 0)
     timestep_sizes_simulated = returned_timestep_sizes(
-        timestep_sizes, n_timesteps_simulated, save_initial_timestep_values
+        timestep_sizes, simulation.n_timesteps, save_initial_timestep_values
     )
 
-    #Return what was saved
-    return saved_trajectories(storage, timestep_sizes_simulated)
+    #Return what was saved, and whether the parameters stayed valid
+    return simulation_result(simulation, timestep_sizes_simulated)
 end
 
 """
@@ -1133,7 +1302,10 @@ received them, and the environment's history the actions as its model did.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
 model is met, unless `check_stopping_criterion` is `false`. A model where it is met already
-can't be simulated further, and throws an error until it is [`reset!`](@ref).
+can't be simulated further, and throws an error until it is [`reset!`](@ref). The simulation
+also stops when either model sets `parameters_valid` to `false`, as for `simulate_session`:
+that timestep is left out, the agent and the environment stay where they were after the
+timestep before, and its states are under `last_timestep` in what is returned.
 
 An instantiated model isn't type stable, as [`InstantiatedModel`](@ref) describes. Use
 `simulate_session` where that matters, or if most calls are for a single timestep.
@@ -1152,6 +1324,8 @@ An instantiated model isn't type stable, as [`InstantiatedModel`](@ref) describe
   receives, and under which names, as for `simulate_session`.
 - `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
   models is checked before each timestep, as for `simulate_session`.
+- `warn_on_invalid_parameters::Bool=true`: whether a warning says when the parameters of
+  either model turn invalid, as for `simulate_session`.
 
 # Examples
 ```jldoctest
@@ -1210,6 +1384,7 @@ function simulate_session!(
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
     check_stopping_criterion::Bool=true,
+    warn_on_invalid_parameters::Bool=true,
 )
 
     #Check that the two models fit together
@@ -1223,7 +1398,7 @@ function simulate_session!(
     )
 
     #Simulate the timesteps, without timestep 0, which the histories have from where the agent and the environment started
-    storage, last_timestep_values = simulate_all_timesteps(
+    simulation = simulate_all_timesteps(
         previous_timestep_values,
         who_starts,
         agent.model,
@@ -1241,14 +1416,24 @@ function simulate_session!(
         check_stopping_criterion,
     )
 
-    #Update agent and environment
-    agent.state = last_timestep_values.state
-    agent.previous_output = last_timestep_values.action
-    environment.state = last_timestep_values.environment.state
-    environment.previous_output = last_timestep_values.environment.observation
+    storage = simulation.storage
+
+    #Warn when the parameters of either model turned invalid, which stopped the simulation early
+    if warn_on_invalid_parameters && !simulation.parameters_valid
+        warn_of_invalid_parameters(simulation.last_record, agent.model, environment.model)
+    end
+
+    #Update agent and environment to the last timestep that was kept, when there is one
+    if simulation.n_timesteps > 0
+        last_kept_values = simulation.last_kept_values
+        agent.state = last_kept_values.state
+        agent.previous_output = last_kept_values.action
+        environment.state = last_kept_values.environment.state
+        environment.previous_output = last_kept_values.environment.observation
+    end
 
     #The sizes of the timesteps that were simulated, since a model can stop the simulation early
-    n_timesteps_simulated = length(storage.states)
+    n_timesteps_simulated = simulation.n_timesteps
     timestep_sizes_simulated = returned_timestep_sizes(
         timestep_sizes, n_timesteps_simulated, Val(false)
     )
@@ -1281,8 +1466,8 @@ function simulate_session!(
         append!(environment.history.timestep_sizes, sizes_for_histories)
     end
 
-    #Return what was saved
-    return saved_trajectories(storage, timestep_sizes_simulated)
+    #Return what was saved, and whether the parameters stayed valid
+    return simulation_result(simulation, timestep_sizes_simulated)
 end
 
 ## Simulating a model on a single input ##
@@ -1292,10 +1477,11 @@ end
                             timestep_size, rng, save_history)
 
 Simulate a timestep of `model` on `input`, without the other side of a simulation, and
-return the output sampled from what it gave, its new state, and under `saved` what
-`save_history` selects of its `states`, `inputs`, `outputs` and `output_distributions`, in a
-`NamedTuple`. The input must have the names in the attributes of `model`.
-[`simulate_timestep`](@ref) and [`simulate_timestep!`](@ref) both use this.
+return the output sampled from what it gave, its new state, whether its parameters are
+valid, as it gave it in its [`ModelOutput`](@ref), and under `saved` what `save_history`
+selects of its `states`, `inputs`, `outputs` and `output_distributions`, in a `NamedTuple`.
+The input must have the names in the attributes of `model`. [`simulate_timestep`](@ref) and
+[`simulate_timestep!`](@ref) both use this.
 """
 function simulate_model_on_input(
     model,
@@ -1336,6 +1522,7 @@ function simulate_model_on_input(
     return (;
         output,
         state=model_output.new_state,
+        parameters_valid=model_output.parameters_valid,
         saved=(;
             states=select_state_to_save(
                 model, model_output.new_state, state_selection(save_history)
@@ -1350,12 +1537,27 @@ function simulate_model_on_input(
     )
 end
 
+#A function of its own, called only when the parameters turn invalid, since a warning holds a try block, which Mooncake.jl can't differentiate
+"""
+    warn_of_invalid_parameters_on_timestep(model, consequence)
+
+Warn that the parameters of `model` turned invalid on a single timestep, followed by
+`consequence`, which says what happened. Used by [`simulate_timestep`](@ref) and
+[`simulate_timestep!`](@ref), unless they are told not to warn.
+"""
+@noinline function warn_of_invalid_parameters_on_timestep(model, consequence::String)
+    @warn "$(uppercasefirst(describe_model(model))) set parameters_valid to false on this timestep$consequence."
+    return nothing
+end
+
 """
     simulate_timestep(model, input; <keyword arguments>)
 
 Simulate a single timestep of `model`, a cognitive model or an environment model, on
-`input`, without the other side of a simulation, and return the sampled output and the new
-state of the model.
+`input`, without the other side of a simulation, and return the sampled output, the new
+state of the model, and whether its parameters are valid, as a `Bool`, which is `true`
+unless the model sets `parameters_valid` to `false` in its [`ModelOutput`](@ref). A warning
+then says so.
 
 Nothing is kept between calls, so pass the returned state and output on as `previous_state`
 and `previous_output` to run the next timestep. [`simulate_timestep!`](@ref) does the same
@@ -1384,6 +1586,8 @@ simulation.
   By default every output is [`BeforeFirstTimestep`](@ref).
 - `check_parameter_domains::Bool=true`: whether the parameters are checked against their
   domains in [`parameter_domains`](@ref), as for a whole simulation.
+- `warn_on_invalid_parameters::Bool=true`: whether a warning says when the parameters turn
+  invalid on the timestep.
 
 # Examples
 ```jldoctest
@@ -1436,6 +1640,7 @@ function simulate_timestep(
     previous_state=initialize_state(model, merge_default_parameters(model, parameters)),
     previous_output=output_before_first_timestep(model),
     check_parameter_domains::Bool=true,
+    warn_on_invalid_parameters::Bool=true,
 )
 
     #Fill in the default parameters
@@ -1457,17 +1662,28 @@ function simulate_timestep(
         SaveHistory(),
     )
 
-    return timestep_values.output, timestep_values.state
+    #Warn when the parameters turned invalid
+    parameters_valid = parameters_are_valid(timestep_values.parameters_valid)
+    if warn_on_invalid_parameters && !parameters_valid
+        warn_of_invalid_parameters_on_timestep(model, "")
+    end
+
+    return timestep_values.output, timestep_values.state, parameters_valid
 end
 
 """
     simulate_timestep!(instantiated_model::InstantiatedModel, input; timestep_size=1,
-                       rng=default_rng())
+                       rng=default_rng(), warn_on_invalid_parameters=true)
 
 Simulate a single timestep of `instantiated_model` on `input`, update it, and return the
 sampled output. What `instantiated_model.save_history` selects of the state, the input, the
 output and the output distribution is added to `instantiated_model.history`, together with
 the size of the timestep.
+
+When the model sets `parameters_valid` to `false` in its [`ModelOutput`](@ref), the
+instantiated model is left as it was before the timestep, nothing is added to its history,
+and a warning says so, unless `warn_on_invalid_parameters` is `false`. The output is still
+returned. [`simulate_timestep`](@ref) gives the new state of such a timestep.
 
 The output is in a `NamedTuple` with the names the model gave it, as in `output.choice`, as
 for [`simulate_timestep`](@ref). The input must be a `NamedTuple` with every input in the
@@ -1479,6 +1695,8 @@ model's attributes, from [`attribute_names`](@ref), or an `ArgumentError` is thr
   for a cognitive model. An entry that isn't there is [`NoValue`](@ref).
 - `timestep_size=1`: how much time this timestep covers.
 - `rng::AbstractRNG=default_rng()`: the random number generator to sample from.
+- `warn_on_invalid_parameters::Bool=true`: whether a warning says when the parameters turn
+  invalid on the timestep.
 
 # Examples
 ```jldoctest
@@ -1521,6 +1739,7 @@ function simulate_timestep!(
     input;
     timestep_size=1,
     rng::AbstractRNG=default_rng(),
+    warn_on_invalid_parameters::Bool=true,
 )
 
     #Simulate the timestep
@@ -1534,6 +1753,17 @@ function simulate_timestep!(
         rng,
         instantiated_model.save_history,
     )
+
+    #When the parameters turned invalid, the instantiated model stays as it was before the timestep
+    if !parameters_are_valid(timestep_values.parameters_valid)
+        if warn_on_invalid_parameters
+            warn_of_invalid_parameters_on_timestep(
+                instantiated_model.model,
+                ", so the instantiated model was left as it was before the timestep",
+            )
+        end
+        return timestep_values.output
+    end
 
     #Update the instantiated model
     instantiated_model.state = timestep_values.state

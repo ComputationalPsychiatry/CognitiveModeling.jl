@@ -129,7 +129,9 @@ Add an entry to `entries` for everything one session saved, where `saved_traject
 gives the session's saved trajectories from the returned value of one sample, and
 `session_prefix` holds the session's symbol name, or nothing for a single session. The
 cognitive model's values are named under the session alone, and the environment's under
-`environment` after it, as [`add_model_entries!`](@ref) names them. Used by
+`environment` after it, as [`add_model_entries!`](@ref) names them. When the models of the
+session can set `parameters_valid`, which a `Bool` shows, an entry `parameters_valid` under
+the session says for each sample whether its parameters stayed valid. Used by
 [`get_session_trajectories`](@ref).
 """
 function add_session_entries!(
@@ -142,13 +144,26 @@ function add_session_entries!(
         saved_trajectories_of,
         :action_distributions,
     )
-    if hasproperty(saved_trajectories_of(first(returned_values)), :environment)
+    first_saved = saved_trajectories_of(first(returned_values))
+    if hasproperty(first_saved, :environment)
         add_model_entries!(
             entries,
             returned_values,
             (session_prefix..., :environment),
             returned_value -> saved_trajectories_of(returned_value).environment,
             :observation_distributions,
+        )
+    end
+
+    #Whether the parameters stayed valid, for models that can set it
+    if hasproperty(first_saved, :parameters_valid) && first_saved.parameters_valid isa Bool
+        add_entry!(
+            entries,
+            entry_name(session_prefix..., :parameters_valid),
+            map(
+                returned_value -> saved_trajectories_of(returned_value).parameters_valid,
+                returned_values,
+            ),
         )
     end
     return entries
@@ -292,8 +307,7 @@ end
     check_returned_values(returned_values)
 
 Throw an informative error if there are no returned values, or if a sample has `nothing` as
-its returned value, which a model that catches invalid parameters gives for a rejected
-sample. Used by [`get_session_trajectories`](@ref).
+its returned value. Used by [`get_session_trajectories`](@ref).
 """
 function check_returned_values(returned_values::AbstractMatrix)
     isempty(returned_values) &&
@@ -301,7 +315,7 @@ function check_returned_values(returned_values::AbstractMatrix)
     if any(isnothing, returned_values)
         throw(
             ArgumentError(
-                "A sample has nothing as its returned value, which a model that catches invalid parameters gives for a rejected sample. A chain only holds accepted samples, so make the returned values with returned(model, chain).",
+                "A sample has nothing as its returned value. The returned values must be what the model of the sessions returns for every sample, as returned(model, chain) gives them.",
             ),
         )
     end

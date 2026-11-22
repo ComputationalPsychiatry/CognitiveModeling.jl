@@ -940,28 +940,42 @@ function log_likelihood_by_hand(
     return log_likelihood_by_hand(Baseline(ByHand()), parameters, timesteps)
 end
 
-#The baseline, which throws an InvalidParametersError with a learning rate above 0.9, as a model does for parameters it
-#can't run with
-struct ThrowsInvalidParameters{Tdistributions} <: AbstractCognitiveModel
+#The baseline, which sets parameters_valid to false once its expected reward is above 0.99, as a model does whose
+#parameters turn invalid with what it has received. With the learning rate of its pair that doesn't happen within ten
+#timesteps, and with one near 1 it happens after the first rewards. Its distributions stay valid on that timestep
+struct WithInvalidParameters{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
-function CognitiveModeling.initialize_state(model::ThrowsInvalidParameters, parameters)
+const HIGHEST_VALID_EXPECTED_REWARD = 0.99
+function CognitiveModeling.initialize_state(model::WithInvalidParameters, parameters)
     return (; expected_reward=0.5)
 end
 function CognitiveModeling.timestep_model(
-    model::ThrowsInvalidParameters, context::ModelContext
+    model::WithInvalidParameters, context::ModelContext
 )
-    if context.parameters.learning_rate > 0.9
-        throw(InvalidParametersError("The learning rate is above 0.9."))
-    end
-    return timestep_model(Baseline(model.distributions), context)
+    output = timestep_model(Baseline(model.distributions), context)
+    return ModelOutput(
+        output.output_distribution,
+        output.new_state;
+        parameters_valid=output.new_state.expected_reward <= HIGHEST_VALID_EXPECTED_REWARD,
+    )
 end
-function CognitiveModeling.attribute_names(model::ThrowsInvalidParameters)
+function CognitiveModeling.attribute_names(model::WithInvalidParameters)
     return attribute_names(Baseline(model.distributions))
 end
+
+#The log likelihood of the baseline up to the timestep on which the parameters turn invalid, where it is -Inf
 function log_likelihood_by_hand(
-    model::ThrowsInvalidParameters, parameters, timesteps, latents=(;)
+    model::WithInvalidParameters, parameters, timesteps, latents=(;)
 )
+    expected_reward = 0.5
+    for timestep in timesteps
+        if !(timestep.input.reward isa AbstractNoValue)
+            expected_reward +=
+                parameters.learning_rate * (timestep.input.reward - expected_reward)
+        end
+        expected_reward <= HIGHEST_VALID_EXPECTED_REWARD || return -Inf
+    end
     return log_likelihood_by_hand(Baseline(ByHand()), parameters, timesteps)
 end
 
@@ -1075,8 +1089,8 @@ end
 #each with its own learning rate, and it remembers the last cue it saw in a NamedTuple. On two of every three timesteps it
 #chooses, with a probability that grows with the expected reward and the last cue, and with the pull of its previous
 #choice, unless its strategy is to guess. It rates the expected reward with noise, and chooses one of the three options
-#in proportion to their expected rewards, on every timestep. It throws an InvalidParametersError with a learning rate
-#above 0.9, has domains, defaults, and a stopping criterion, an expected reward above 0.95
+#in proportion to their expected rewards, on every timestep. It sets parameters_valid to false with a learning rate above
+#0.9, and has domains, defaults, and a stopping criterion, an expected reward above 0.95
 abstract type EveryFeatureFamily <: AbstractCognitiveModel end
 
 #Every feature: it also adds noise to its expected reward on every timestep, samples an offset of where it starts in the
@@ -1108,9 +1122,6 @@ end
 #The state and the outputs of a timestep with the noise of the timestep, which the Turing.jl method shares
 function update_with_noise(model::EveryFeatureFamily, context::ModelContext, noise)
     parameters = context.parameters
-    if parameters.learning_rate > 0.9
-        throw(InvalidParametersError("The learning rate is above 0.9."))
-    end
     previous = context.previous_state
     (; reward, rewards, feedback) = context.input
 
@@ -1152,7 +1163,8 @@ function update_with_noise(model::EveryFeatureFamily, context::ModelContext, noi
     )
     return ModelOutput(
         merge(outputs, outputs_with_sampling(model, probability, parameters)),
-        (; expected_reward, noise, n_timesteps, expected_rewards, beliefs),
+        (; expected_reward, noise, n_timesteps, expected_rewards, beliefs);
+        parameters_valid=parameters.learning_rate <= 0.9,
     )
 end
 #The outputs that only EveryFeature gives

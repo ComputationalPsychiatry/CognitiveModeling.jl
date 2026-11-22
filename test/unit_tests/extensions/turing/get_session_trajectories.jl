@@ -96,7 +96,7 @@ end
         @test all(==(0.3), vec(given[@varname(S2.learning_rate)]))
     end
 
-    @testset "The same works for several sessions and a single session, also inside the wrapper for invalid parameters" begin
+    @testset "The same works for several sessions and a single session" begin
         cognitive_save_history = SaveHistory(; states=:expected_reward)
         sessions = turing_multiple_behavioral_sessions(
             sessions_info,
@@ -110,9 +110,7 @@ end
             @varname(S3.expected_reward),
         ]
         session_trajectories = get_session_trajectories(
-            turing_catch_invalid_parameters(session_for_test()),
-            chain;
-            cognitive_save_history,
+            session_for_test(), chain; cognitive_save_history
         )
         @test Turing.FlexiChains.get_name.(keys(session_trajectories)) ==
             [@varname(expected_reward)]

@@ -137,6 +137,12 @@
         @test keys(with_empty) == keys(returned_both)
         @test with_empty.environment.states == fill((;), 3) &&
             with_empty.environment.observation_distributions == fill((;), 3)
+        #What comes after the cognitive model's entries stays after the environment's, as whether the parameters stayed valid
+        with_flag = merge(returned_trajectories, (; parameters_valid=false))
+        @test keys(CognitiveModeling.with_empty_environment_entry(with_flag)) ==
+            (keys(returned_both)..., :parameters_valid)
+        @test CognitiveModeling.with_empty_environment_entry(with_flag).parameters_valid ===
+            false
         #A session that ends early has its vectors shortened in place, with or without an environment, and its timestep sizes cut
         CognitiveModeling.map_saved(vector -> resize!(vector, 2), storage)
         @test length(storage.states) == 2 && length(storage.action_distributions) == 2

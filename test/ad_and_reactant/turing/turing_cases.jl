@@ -79,8 +79,7 @@ is_continuous(value) = false
 #initialization strategy, on the unconstrained values. The point holds the parameters of the case, or values drawn from
 #the priors of a full model, and latent values drawn from their distributions. Whether every variable is continuous is
 #read from values drawn from `model_with_values`, the model itself or, for one with flat priors, which can't be drawn
-#from, the model of its sessions with the case's parameters. The LogDensityFunction is made from the same point, since
-#a model can throw an InvalidParametersError at parameters drawn from flat priors
+#from, the model of its sessions with the case's parameters. The LogDensityFunction is made from the same point
 function log_density_case(name, model, initialization, model_with_values=model)
     all_continuous(rand(Xoshiro(2), model_with_values)) || return nothing
     varinfo = VarInfo(Xoshiro(2), model, initialization, LinkAll())

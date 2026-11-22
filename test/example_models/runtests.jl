@@ -138,16 +138,21 @@ end
     end
 
     @testset "The features that a simulation shows" begin
-        #ThrowsInvalidParameters throws with a learning rate above 0.9, and WithDomains with one above 1
-        throws = pair_named("ThrowsInvalidParameters")
-        @test_throws InvalidParametersError simulate_pair(
+        #WithInvalidParameters stays valid with the parameters of its pair, and turns invalid with a learning rate of 1 on the
+        #first rewarded timestep, and WithDomains throws with a learning rate above 1
+        with_invalid_parameters = pair_named("WithInvalidParameters")
+        @test simulate_pair(with_invalid_parameters, ByHand(), EnvironmentStarts()).parameters_valid
+        turning_invalid = simulate_pair(
             merge(
-                throws,
-                (; cognitive_parameters=(; learning_rate=0.95, inverse_temperature=2.0)),
+                with_invalid_parameters,
+                (; cognitive_parameters=(; learning_rate=1.0, inverse_temperature=2.0)),
             ),
             ByHand(),
-            EnvironmentStarts(),
+            EnvironmentStarts();
+            warn_on_invalid_parameters=false,
         )
+        @test !turning_invalid.parameters_valid &&
+            turning_invalid.last_timestep.state.expected_reward == 1.0
         with_domains = pair_named("WithDomains")
         @test_throws ParameterDomainError simulate_pair(
             merge(

@@ -21,8 +21,7 @@ using CognitiveModeling:
     turing_downstream_model,
     turing_behavioral_session,
     turing_multiple_behavioral_sessions,
-    turing_full_model,
-    turing_catch_invalid_parameters
+    turing_full_model
 using CognitiveModeling:
     merge_default_parameters,
     check_match_attribute_names,
@@ -64,6 +63,8 @@ using CognitiveModeling:
 using CognitiveModeling:
     stopping_criterion, check_stopping_criterion_not_met, last_timestep_with_data
 using CognitiveModeling:
+    parameters_are_valid, combine_parameters_valid, parameters_valid_in_every_session
+using CognitiveModeling:
     select_names,
     saves_initial_timestep_values,
     get_timestep_size,
@@ -80,7 +81,6 @@ include("full_model.jl")
 include("behavioral_models/full_model.jl")
 include("behavioral_models/multiple_behavioral_sessions.jl")
 include("behavioral_models/behavioral_session.jl")
-include("behavioral_models/catch_invalid_parameters.jl")
 include("behavioral_models/behavioral_timestep.jl")
 include("behavioral_models/impute_missing_values.jl")
 include("utility_functions/multiple_behavioral_sessions.jl")

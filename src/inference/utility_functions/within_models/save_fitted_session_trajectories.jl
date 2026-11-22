@@ -167,25 +167,26 @@ end
     with_empty_environment_entry(saved_trajectories)
 
 Return `saved_trajectories`, what a session without an environment saved, with an
-`environment` entry whose vectors hold an empty `NamedTuple` for each saved timestep, for a
-session which has an environment but didn't include it, so that every session with an
-environment returns the same entries, in the same order, since the model's return otherwise
-has two types. Used by fitted sessions.
+`environment` entry whose vectors hold an empty `NamedTuple` for each saved timestep, after
+the cognitive model's entries and before the rest, for a session which has an environment
+but didn't include it, so that every session with an environment returns the same entries,
+in the same order, since the model's return otherwise has two types. Used by fitted
+sessions.
 """
 function with_empty_environment_entry(saved_trajectories::NamedTuple)
     empty_vector = fill((;), length(saved_trajectories.states))
-    return (;
-        saved_trajectories.states,
-        saved_trajectories.observations,
-        saved_trajectories.actions,
-        saved_trajectories.action_distributions,
-        environment=(;
-            states=empty_vector,
-            observations=empty_vector,
-            actions=empty_vector,
-            observation_distributions=empty_vector,
+    cognitive_names = (:states, :observations, :actions, :action_distributions)
+    return merge(
+        NamedTuple{cognitive_names}(saved_trajectories),
+        (;
+            environment=(;
+                states=empty_vector,
+                observations=empty_vector,
+                actions=empty_vector,
+                observation_distributions=empty_vector,
+            ),
         ),
-        saved_trajectories.timestep_sizes,
+        Base.structdiff(saved_trajectories, NamedTuple{cognitive_names}),
     )
 end
 
@@ -199,4 +200,18 @@ nothing, is kept. Used by fitted sessions.
 """
 function timestep_sizes_until(timestep_sizes::AbstractVector, n_saved)
     return isempty(timestep_sizes) ? timestep_sizes : timestep_sizes[1:n_saved]
+end
+
+#The flags of the sessions have one type, decided by the models, so that for ValidByDefault the check is decided when the model is compiled
+"""
+    parameters_valid_in_every_session(saved_trajectories)
+
+Return whether the parameters stayed valid in every session, from `saved_trajectories`, a
+vector with what each fitted session returned under `saved_trajectories`, which ends with
+whether its parameters stayed valid, as the models gave it. Used by the full model, which
+runs its downstream model only when they did.
+"""
+function parameters_valid_in_every_session(saved_trajectories::AbstractVector)
+    first(saved_trajectories).parameters_valid isa ValidByDefault && return true
+    return all(saved -> parameters_are_valid(saved.parameters_valid), saved_trajectories)
 end

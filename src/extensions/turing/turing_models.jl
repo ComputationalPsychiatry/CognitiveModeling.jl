@@ -4,9 +4,8 @@
     TuringBackend()
 
 Marker of Turing.jl as the inference backend, which [`full_model`](@ref),
-[`session_model`](@ref), [`multiple_sessions_model`](@ref) and
-[`catch_invalid_parameters`](@ref) take to make Turing.jl models. This needs Turing.jl to be
-loaded.
+[`session_model`](@ref) and [`multiple_sessions_model`](@ref) take to make Turing.jl
+models. This needs Turing.jl to be loaded.
 """
 struct TuringBackend <: AbstractInferenceBackend end
 
@@ -111,9 +110,13 @@ then timestep `t`, and a [`SaveHistory`](@ref) with `save_initial_timestep_value
 leaves timestep 0 out. The returned actions and observations are those the models received,
 with the imputed values. `timestep_sizes` has the size of each timestep, after
 `BeforeFirstTimestep()` for timestep 0 when it is there, when anything is selected, and is
-empty otherwise. Any latent variable in a session, imputed or from a model which samples
-within a timestep, greatly increases the amount of estimated variables, which will generally
-make fitting the model much slower.
+empty otherwise. Last comes `parameters_valid`, as the models give it in their
+[`ModelOutput`](@ref): [`ValidByDefault`](@ref) when neither can set it, and otherwise
+whether the parameters stayed valid. When a model sets it to `false`, the session gives the
+parameters a log density of `-Inf`, ends before that timestep and scores nothing, so the
+trajectories end before it. Any latent variable in a session, imputed or from a model which
+samples within a timestep, greatly increases the amount of estimated variables, which will
+generally make fitting the model much slower.
 
 # Examples
 ```julia
@@ -225,8 +228,8 @@ function turing_multiple_behavioral_sessions end
                sessions_info::MultipleSessionsInfo;
                environment_parameters_model=NoParameters(),
                downstream_model=NoDownstreamModel(), fixed_cognitive_parameters=(;),
-               fixed_environment_parameters=(;), catch_invalid_parameters=false,
-               parallelization=SerialSessions(), include_submodel_prefixes=false)
+               fixed_environment_parameters=(;), parallelization=SerialSessions(),
+               include_submodel_prefixes=false)
 
 Create the Turing.jl model which fits a cognitive model to several sessions, in three parts:
 `cognitive_parameters_model` gives or samples the cognitive parameters of every session, and
@@ -260,11 +263,6 @@ loaded.
   parameters they name, such as `(; initial_value = 0.3)`, while the parameter models give
   the others. A parameter is either fixed here or given by its parameter model, and a fixed
   parameter must be one in the model's attributes.
-- `catch_invalid_parameters::Bool=false`: whether an [`InvalidParametersError`](@ref) in a
-  session rejects the sample instead of stopping the sampler, by running the sessions inside
-  [`catch_invalid_parameters`](@ref), which gives the parameters a log density of `-Inf`. If the first draw is rejected and the downstream model has variables of its own,
-  give the sampler valid `initial_params`. A [`ParameterDomainError`](@ref) isn't caught,
-  and stops the sampler.
 - `parallelization=SerialSessions()`: whether the sessions run over the threads Julia was
   started with, with `ParallelSessions()`. **The model must then be marked with
   `setthreadsafe(model, true)` from DynamicPPL before it is sampled**: without the mark, a
@@ -292,6 +290,14 @@ parameters of every session as the parameter models gave them, the trajectories 
 saved, as [`turing_multiple_behavioral_sessions`](@ref) returns them, and what the
 downstream model returned. `returned(model, chain)` gives them for each sample, so a fitted
 state is read from the chain without simulating again.
+
+When a cognitive model or an environment model sets `parameters_valid` to `false` in its
+[`ModelOutput`](@ref), its session gives the parameters a log density of `-Inf`, so that a
+sampler rejects them, and ends before that timestep without scoring the data. The
+trajectories of that session then end before the timestep, its `saved_trajectories` has
+`parameters_valid = false`, and the downstream model doesn't run, so `downstream_values` is
+`nothing`. If the first draw is rejected and the downstream model has variables of its own,
+give the sampler valid `initial_params`.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read
@@ -354,8 +360,7 @@ full_model(::TuringBackend, cognitive_parameters_model, sessions_info::MultipleS
     turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
                       environment_parameters_model=NoParameters(),
                       downstream_model=NoDownstreamModel(),
-                      catch_invalid_parameters=false, parallelization=SerialSessions(),
-                      include_submodel_prefixes=false)
+                      parallelization=SerialSessions(), include_submodel_prefixes=false)
 
 Create the Turing.jl model of a full model from parts that [`prepare_full_model`](@ref)
 prepared: the parameter models give or sample the cognitive and the environment parameters
@@ -365,39 +370,3 @@ of every session, the sessions run with them as
 returns this model. This needs Turing.jl to be loaded.
 """
 function turing_full_model end
-
-"""
-    turing_catch_invalid_parameters(model)
-
-Create a Turing.jl model which runs `model`, any Turing.jl model, inside a `try` block: an
-[`InvalidParametersError`](@ref) thrown by a cognitive model or an environment model then
-gives the parameters a log density of `-Inf`, so that a sampler rejects the sample instead
-of stopping, and the model returns `nothing` for that sample. Otherwise it returns what
-`model` returns. Any other error is thrown as it is, also a [`ParameterDomainError`](@ref)
-for a parameter outside its domain. [`catch_invalid_parameters`](@ref) with
-`TuringBackend()` makes this model. This needs Turing.jl to be loaded.
-
-It goes around the part of a model that can throw, with the parameters sampled outside it,
-as in
-
-```julia
-@model function fit_one_session(session_info)
-    learning_rate ~ Beta(2, 2)
-    session ~ to_submodel(
-        catch_invalid_parameters(
-            TuringBackend(),
-            session_model(TuringBackend(), session_info, (; learning_rate)),
-        ),
-        false,
-    )
-end
-```
-
-and [`full_model`](@ref) does this with `catch_invalid_parameters = true`. The
-variables sampled inside the `try` block are lost when it catches an error, so around a
-whole model a sampler can't start when its first draw is rejected. Nothing in the package
-catches the error unless this is used, so a sampler stops with it otherwise. Not every
-automatic differentiation backend can differentiate a model with it, as the page on
-automatic differentiation says.
-"""
-function turing_catch_invalid_parameters end

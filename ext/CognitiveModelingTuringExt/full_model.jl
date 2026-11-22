@@ -10,7 +10,6 @@ function CognitiveModeling.full_model(
     downstream_model=NoDownstreamModel(),
     fixed_cognitive_parameters::NamedTuple=(;),
     fixed_environment_parameters::NamedTuple=(;),
-    catch_invalid_parameters::Bool=false,
     parallelization=SerialSessions(),
     include_submodel_prefixes::Bool=false,
 )
@@ -39,7 +38,6 @@ function CognitiveModeling.full_model(
         prepared.sessions_info;
         environment_parameters_model=prepared.environment_parameters_model,
         downstream_model=prepared.downstream_model,
-        catch_invalid_parameters,
         parallelization,
         include_submodel_prefixes,
     )

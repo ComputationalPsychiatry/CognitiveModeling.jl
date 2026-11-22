@@ -99,23 +99,23 @@ function CognitiveModeling.attribute_names(model::RecordsWhoStarts)
     )
 end
 
-#Throws the error for invalid parameters when the learning rate is above 1
-struct RejectsHighLearningRate <: AbstractCognitiveModel end
-function CognitiveModeling.initialize_state(model::RejectsHighLearningRate, parameters)
+#Sets parameters_valid to false once its expected reward is above 0.99, which a high learning rate gives after rewards
+struct RejectsHighExpectedReward <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::RejectsHighExpectedReward, parameters)
     return (; expected_reward=0.5)
 end
 function CognitiveModeling.timestep_model(
-    model::RejectsHighLearningRate, context::ModelContext
+    model::RejectsHighExpectedReward, context::ModelContext
 )
-    context.parameters.learning_rate > 1 &&
-        throw(InvalidParametersError("The learning rate must be at most 1."))
     Vₜ =
         context.previous_state.expected_reward +
         context.parameters.learning_rate *
         (context.input.reward - context.previous_state.expected_reward)
-    return ModelOutput((; choice=Normal(Vₜ, 1.0)), (; expected_reward=Vₜ))
+    return ModelOutput(
+        (; choice=Normal(Vₜ, 1.0)), (; expected_reward=Vₜ); parameters_valid=Vₜ <= 0.99
+    )
 end
-function CognitiveModeling.attribute_names(model::RejectsHighLearningRate)
+function CognitiveModeling.attribute_names(model::RejectsHighExpectedReward)
     return ModelAttributes(;
         parameters=:learning_rate, states=:expected_reward, inputs=:reward, outputs=:choice
     )
@@ -353,16 +353,14 @@ function session_for_test(
     actions=SESSION_CHOICES;
     who_starts=EnvironmentStarts(),
     environment_parameters=nothing,
-    catch_invalid_parameters=false,
     keywords...,
 )
     session_info = SessionInfo(model, observations, actions; who_starts, keywords...)
-    session = if environment_parameters === nothing
-        turing_behavioral_session(session_info, parameters)
+    if environment_parameters === nothing
+        return turing_behavioral_session(session_info, parameters)
     else
-        turing_behavioral_session(session_info, parameters, environment_parameters)
+        return turing_behavioral_session(session_info, parameters, environment_parameters)
     end
-    return catch_invalid_parameters ? turing_catch_invalid_parameters(session) : session
 end
 
 @testset "turing_behavioral_session" begin
@@ -671,8 +669,14 @@ end
         @test returned(session_for_test(), (;)).saved_trajectories.timestep_sizes == Int[]
         @test returned(session_for_test(; timestep_sizes=sizes), (;)).saved_trajectories.timestep_sizes ==
             Float64[]
-        @test keys(returned(session_for_test(), (;)).saved_trajectories) ==
-            (:states, :observations, :actions, :action_distributions, :timestep_sizes)
+        @test keys(returned(session_for_test(), (;)).saved_trajectories) == (
+            :states,
+            :observations,
+            :actions,
+            :action_distributions,
+            :timestep_sizes,
+            :parameters_valid,
+        )
         #The action distributions are saved when the model's output distributions are selected, with BeforeFirstTimestep at timestep 0
         distributions = returned(
             session_for_test(;
@@ -1122,6 +1126,7 @@ end
             :action_distributions,
             :environment,
             :timestep_sizes,
+            :parameters_valid,
         )
         @test keys(saved.environment) ==
             (:states, :observations, :actions, :observation_distributions)
@@ -1425,47 +1430,51 @@ end
         ] == fill(0.25, 4)
     end
 
-    @testset "An InvalidParametersError stops the evaluation, unless turing_catch_invalid_parameters makes it give a log density of -Inf" begin
+    @testset "A session whose parameters turn invalid gives a log density of -Inf, ends before that timestep, and scores nothing" begin
         actions = (; choice=[0.2, 0.4, 0.6, 0.8, 1.0])
-        @test_throws "The learning rate must be at most 1." logjoint(
-            session_for_test(
-                RejectsHighLearningRate(), (; learning_rate=1.5), SESSION_REWARDS, actions
-            ),
-            (;),
-        )
-        caught = session_for_test(
-            RejectsHighLearningRate(),
-            (; learning_rate=1.5),
+        saving_states = SaveHistory(; states=:expected_reward)
+        rejecting(learning_rate; keywords...) = session_for_test(
+            RejectsHighExpectedReward(),
+            (; learning_rate),
             SESSION_REWARDS,
             actions;
-            catch_invalid_parameters=true,
+            cognitive_save_history=saving_states,
+            keywords...,
         )
-        @test logjoint(caught, (;)) == -Inf
-        @test returned(caught, (;)) === nothing
-        #Valid parameters are unaffected
-        valid = session_for_test(
-            RejectsHighLearningRate(),
-            (; learning_rate=0.3),
+        #With a learning rate of 0.95 and the rewards 1, 0, 1, 1, the expected reward is above 0.99 on the fourth timestep
+        turning_invalid = rejecting(0.95)
+        @test logjoint(turning_invalid, (;)) == -Inf
+        saved = returned(turning_invalid, (;)).saved_trajectories
+        @test saved.parameters_valid === false
+        @test [state.expected_reward for state in saved.states] ≈ [0.5, 0.975, 0.04875, 0.9524375]
+        #With a learning rate of 1.5, on the first timestep, which leaves only timestep 0
+        first_invalid = rejecting(1.5)
+        @test logjoint(first_invalid, (;)) == -Inf
+        @test returned(first_invalid, (;)).saved_trajectories.states ==
+            [(; expected_reward=0.5)]
+        #Valid parameters score every action
+        valid = rejecting(0.3)
+        @test returned(valid, (;)).saved_trajectories.parameters_valid === true
+        expected_rewards = accumulate(
+            (V, reward) -> V + 0.3 * (reward - V), SESSION_REWARDS.reward; init=0.5
+        )
+        @test logjoint(valid, (;)) ≈
+            sum(logpdf.(Normal.(expected_rewards, 1.0), actions.choice))
+        #A model that never sets it gives the default, as its type says
+        @test returned(session_for_test(), (;)).saved_trajectories.parameters_valid ===
+            ValidByDefault()
+        #An action imputed before the timestep that turned invalid is a variable, and one after it isn't
+        imputing = session_for_test(
+            RejectsHighExpectedReward(),
+            (; learning_rate=0.95),
             SESSION_REWARDS,
-            actions;
-            catch_invalid_parameters=true,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            (; choice=[0.2, MissingValue(), 0.6, 0.8, MissingValue()]),
         )
-        @test logjoint(valid, (;)) ≈ logjoint(
-            session_for_test(
-                RejectsHighLearningRate(), (; learning_rate=0.3), SESSION_REWARDS, actions
-            ),
-            (;),
-        )
-        @test returned(valid, (;)).saved_trajectories.states[2] == (; expected_reward=0.65)
-        #Other errors still get through
+        @test keys(rand(Xoshiro(1), imputing)) == [@varname(timestep[2].choice.imputed)]
+        #Other errors get through
         @test_throws "gave no output" logjoint(
             session_for_test(
-                ActsEverySecondTimestep(),
-                (; probability=0.7),
-                (;),
-                (; choice=[true, true]);
-                catch_invalid_parameters=true,
+                ActsEverySecondTimestep(), (; probability=0.7), (;), (; choice=[true, true])
             ),
             (;),
         )

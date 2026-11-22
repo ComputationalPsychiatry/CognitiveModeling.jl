@@ -84,23 +84,3 @@ function multiple_sessions_model(
         ),
     )
 end
-
-"""
-    catch_invalid_parameters(backend::AbstractInferenceBackend, model)
-
-Create a model of the inference backend that `backend` marks which runs `model`, a model of
-the backend, and rejects the parameters when a cognitive model or an environment model
-throws an [`InvalidParametersError`](@ref), so that a sampler goes on instead of stopping.
-The package of the backend must be loaded, and its page describes how the parameters are
-rejected.
-"""
-function catch_invalid_parameters end
-
-#Without a method for the backend and this argument, the package of the backend isn't loaded, or the model is of another kind
-function catch_invalid_parameters(backend::AbstractInferenceBackend, arguments...)
-    return throw(
-        ArgumentError(
-            "There is no catch_invalid_parameters method for $(nameof(typeof(backend)))() with arguments of the types $(map(typeof, arguments)). Load the package of the inference backend, such as Turing.jl for TuringBackend(), and give a model of the backend.",
-        ),
-    )
-end

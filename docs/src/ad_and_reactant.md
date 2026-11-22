@@ -75,7 +75,6 @@ theirs must be checked by hand. Last checked with Julia 1.13.4, ReverseDiff
 | Enzyme reverse with runtime activity | a Turing.jl session with an imputed value among several outputs, such as a missing confidence beside a choice, or a missing cue among the observations | throws an `EnzymeNoShadowError`: no shadow for the values of the timestep before, which the model of each timestep takes | to be reported |
 | ReverseDiff, also with a compiled tape | Turing.jl sessions of a model whose actions are numbers from a normal distribution, when the agent starts, so that the first action has a constant mean and its distribution another type of tracked numbers than the later ones | throws an `InexactError`, from a `TrackedReal{Real}` that Distributions.jl's `product_distribution` makes | to be reported to ReverseDiff.jl |
 | Mooncake forward | the log density of several Turing.jl sessions where only some have latent variables, such as imputed values, differentiated as a function that holds the model's `LogDensityFunction` | throws an `UndefRefError` | reported as Mooncake.jl issue 1476; Turing.jl's samplers aren't affected, since they differentiate through `LogDensityFunction(model; adtype)`, which is right |
-| Mooncake, forward and reverse | a Turing.jl model with `catch_invalid_parameters = true`, which runs the sessions inside a `try` block | throws a `MooncakeRuleCompilationError` in reverse mode and an `ArgumentError` in forward mode | a limitation of Mooncake, which doesn't support `try` and `catch` |
 
 A state which depends on the parameters from the start isn't affected, and neither is
 `simulate_timestep!`. The other forms of Enzyme, and the other backends, are right on all of
@@ -107,16 +106,15 @@ These aren't failures of the package's own code, but a model can run into them.
   when the model has latent variables under an indexed prefix, such as the imputed actions of
   a session or a model which samples within a timestep, because building the variables runs
   DynamicPPL's warning about growable arrays, and a `@warn` holds a `try`. Samplers go through
-  a `LogDensityFunction`, where the variables exist already, and that is fine. The same `try`
-  is why [`catch_invalid_parameters`](@ref) is only used when asked for, and
-  a compiled ReverseDiff tape doesn't see the error it catches either, so the rejected
-  parameters get a finite log density with no error.
-- **Catching invalid parameters:** [`catch_invalid_parameters`](@ref), and a full
-  model with `catch_invalid_parameters = true`, work with ForwardDiff and with Enzyme.
-  Anything that uses what the model returns after a rejection, which is `nothing`, can't be
-  differentiated with Enzyme, so return or stop at once when it is `nothing`. Mooncake can't
-  differentiate a model with a `try` block at all, and a compiled ReverseDiff tape doesn't
-  see the error, so the rejected parameters get a finite log density with no warning.
+  a `LogDensityFunction`, where the variables exist already, and that is fine.
+- **Parameters that turn invalid:** a session whose model sets `parameters_valid` to `false`
+  in its [`ModelOutput`](@ref) ends there with a log density of `-Inf`, whose gradient is
+  zero with every backend. A compiled ReverseDiff tape follows the timesteps that ran at the
+  point where it was compiled, so at parameters that turn invalid on another timestep it
+  gives a finite log density with no error. A model should keep its values finite on the
+  timestep that turns invalid, as with `ifelse(parameters_valid, new_value, previous_value)`,
+  since a `NaN` there makes the gradients of the reverse modes `NaN`, which an optimizer can't
+  use.
 - **Types known when a session is compiled:** a session costs about 10 ns per timestep to
   evaluate, with or without latent variables, as long as every type is known when it is
   compiled. Earlier versions of the package built a `NamedTuple` from names only known at run

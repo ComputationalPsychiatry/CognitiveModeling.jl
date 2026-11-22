@@ -6,7 +6,6 @@ Turing.@model function CognitiveModeling.turing_full_model(
     sessions_info::MultipleSessionsInfo;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
-    catch_invalid_parameters::Bool=false,
     parallelization=SerialSessions(),
     include_submodel_prefixes::Bool=false,
 )
@@ -41,24 +40,26 @@ Turing.@model function CognitiveModeling.turing_full_model(
         )
     end
 
-    #Run all behavioral sessions, inside a try block when invalid parameters are caught. The parameters are sampled outside it, so that they are kept when a draw is rejected, which a sampler needs to start: it needs every variable to exist after its first draw, also when that draw is rejected
-    sessions_submodel = turing_multiple_behavioral_sessions(
-        sessions_info, cognitive_parameters, environment_parameters, parallelization
+    #Run all behavioral sessions
+    sessions_result ~ to_submodel(
+        turing_multiple_behavioral_sessions(
+            sessions_info, cognitive_parameters, environment_parameters, parallelization
+        ),
+        false,
     )
-    if catch_invalid_parameters
-        sessions_result ~
-        to_submodel(turing_catch_invalid_parameters(sessions_submodel), false)
-
-        #A rejected draw leaves nothing for the downstream model to run on, so the model returns nothing at once, which Enzyme can differentiate where a value of two types can't be. The variables of the downstream model then don't exist for that draw, so a sampler whose first draw is rejected can't start when the downstream model has variables of its own, and needs valid initial parameters
-        if sessions_result === nothing
-            return nothing
-        end
-    else
-        sessions_result ~ to_submodel(sessions_submodel, false)
-    end
 
     #The sessions return the parameters they were given too, which are those above
     saved_trajectories = sessions_result.saved_trajectories
+
+    #A draw whose parameters turned invalid in a session has a log density of -Inf already, so the downstream model doesn't run on the trajectories that ended early. Its variables then don't exist for that draw, so a sampler whose first draw is rejected can't start when the downstream model has variables of its own, and needs valid initial parameters
+    if !parameters_valid_in_every_session(saved_trajectories)
+        return (;
+            cognitive_parameters,
+            environment_parameters,
+            saved_trajectories,
+            downstream_values=nothing,
+        )
+    end
 
     #Do the optional downstream model, with its variables under downstream_model when the prefixes are included
     if include_submodel_prefixes

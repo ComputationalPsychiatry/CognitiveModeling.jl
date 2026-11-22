@@ -301,10 +301,11 @@ const SAVE_BOTH = (;
 )
 
 #The models that Reactant can't compile, which branch on a value that the gradient goes through, in their
-#timestep_model, or in a stopping criterion that every timestep checks
+#timestep_model, in a stopping criterion that every timestep checks, or in the parameters_valid that the package checks
+#after every timestep
 const NOT_COMPILED_BY_REACTANT = (
     "WithStoppingCriterion",
-    "ThrowsInvalidParameters",
+    "WithInvalidParameters",
     "EveryFeature",
     "EveryFeatureWithoutSampling",
 )

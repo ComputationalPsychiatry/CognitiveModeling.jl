@@ -8,11 +8,12 @@ Turing.jl model which runs timestep `t` of a session from `previous`, the values
 timestep before, and returns the values of this one: what the next one starts from, together
 with what the session saves and scores. They are arranged as a simulation arranges them. The
 cognitive model's are at the top: its `state`, the `observation` it received, its `action`,
-the `action_distribution` it gave, and `actions_to_condition_on_at_timestep`. The
-environment's are under `environment`, in its own names: its `state`, its `observation`, the
-`action` it received, the `observation_distribution` it gave, and
-`observations_to_condition_on_at_timestep`. Without an environment, `environment` only has a
-`state`, which is `nothing`.
+the `action_distribution` it gave, and `actions_to_condition_on_at_timestep`, together with
+`parameters_valid`, whether the parameters of both models are valid on this timestep, as
+[`combine_parameters_valid`](@ref) combines them. The environment's are under
+`environment`, in its own names: its `state`, its `observation`, the `action` it received,
+the `observation_distribution` it gave, and `observations_to_condition_on_at_timestep`.
+Without an environment, `environment` only has a `state`, which is `nothing`.
 
 Each model runs as [`turing_timestep_one_perspective`](@ref), the environment's under the
 prefix `environment`. Without an environment, the observation comes from the data: the
@@ -62,6 +63,7 @@ Turing.@model function turing_behavioral_timestep(
         (;
             action_distribution=cognitive.output_distribution,
             actions_to_condition_on_at_timestep=cognitive.outputs_to_condition_on,
+            parameters_valid=cognitive.parameters_valid,
             environment=(; state=nothing),
         ),
     )
@@ -171,6 +173,9 @@ Turing.@model function turing_behavioral_timestep(
         (;
             action_distribution=cognitive.output_distribution,
             actions_to_condition_on_at_timestep=cognitive.outputs_to_condition_on,
+            parameters_valid=combine_parameters_valid(
+                cognitive.parameters_valid, environment.parameters_valid
+            ),
         ),
         build_named_entry(Val(:environment), environment_timestep_values),
     )
@@ -188,7 +193,8 @@ values, imputed from what the model gave where they are [`MissingValue`](@ref), 
 otherwise, such as `UnimputedMissingValue()` or `NoValue()`. It returns the output, the
 model's new state, the distribution it gave for the output and which outputs to condition on
 at the timestep, as [`find_outputs_to_condition_on`](@ref) gives it, so that their values
-can be scored against the distributions at the end of the session. The row is taken here and
+can be scored against the distributions at the end of the session, and whether the model's
+parameters are valid, as it gave it in its [`ModelOutput`](@ref). The row is taken here and
 not given. Used by [`turing_behavioral_timestep`](@ref).
 """
 Turing.@model function turing_timestep_one_perspective(model, context, data_columns, t)
@@ -209,13 +215,14 @@ Turing.@model function turing_timestep_one_perspective(model, context, data_colu
         data_output, model_output.output_distribution, model
     )
 
-    #Return the outputs, the model's new state, the distributions it gave and which outputs to condition on. The outputs can have one of two types, so they go in through build_named_entry
+    #Return the outputs, the model's new state, the distributions it gave, which outputs to condition on and whether the parameters are valid. The outputs can have one of two types, so they go in through build_named_entry
     return merge(
         build_named_entry(Val(:output), output),
         (;
             new_state=model_output.new_state,
             output_distribution=model_output.output_distribution,
             outputs_to_condition_on=outputs_to_condition_on,
+            parameters_valid=model_output.parameters_valid,
         ),
     )
 end

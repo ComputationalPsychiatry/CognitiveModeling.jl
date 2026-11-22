@@ -166,7 +166,7 @@
         @test !conditioned.args.session_info.includes_environment
     end
 
-    @testset "A single session, and a model inside catch_invalid_parameters, take the values of their variables" begin
+    @testset "A single session takes the values of its variables" begin
         single = decondition_sessions(
             session_model(
                 TuringBackend(),
@@ -177,9 +177,6 @@
         single_draw = @test_logs match_mode = :any rand(Xoshiro(6), single)
         @test condition_sessions(single, single_draw).args.session_info.actions.choice ==
             [single_draw[@varname(timestep[t].choice.simulated)] for t in 1:5]
-        caught = decondition_sessions(catch_invalid_parameters(TuringBackend(), imputing))
-        @test condition_sessions(caught, simulated_choices).args.model.args.sessions_info.sessions[3].actions.choice ==
-            [draw[@varname(session[3].timestep[t].choice.simulated)] for t in 1:5]
     end
 
     @testset "check_stopping_criterion is given to the sessions" begin

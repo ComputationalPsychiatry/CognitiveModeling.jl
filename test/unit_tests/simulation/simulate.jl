@@ -321,6 +321,25 @@ function CognitiveModeling.attribute_names(environment::RemembersReward)
     )
 end
 
+#Counts its timesteps, gives a reward of 1 on each, and sets parameters_valid to false on its third
+struct InvalidOnThirdTimestep <: AbstractEnvironmentModel end
+function CognitiveModeling.initialize_state(environment::InvalidOnThirdTimestep, parameters)
+    return (; n_timesteps=0)
+end
+function CognitiveModeling.timestep_model(
+    environment::InvalidOnThirdTimestep, context::ModelContext
+)
+    n_timesteps = context.previous_state.n_timesteps + 1
+    return ModelOutput(
+        (; reward=Deterministic(1.0)), (; n_timesteps); parameters_valid=n_timesteps < 3
+    )
+end
+function CognitiveModeling.attribute_names(environment::InvalidOnThirdTimestep)
+    return ModelAttributes(;
+        parameters=(), states=:n_timesteps, inputs=:choice, outputs=:reward
+    )
+end
+
 #Give a value itself where something to sample from is needed
 struct GivesUnwrapped{T} <: AbstractEnvironmentModel
     reward::T
@@ -884,7 +903,14 @@ end
             :action_distributions,
             :environment,
             :timestep_sizes,
+            :parameters_valid,
+            :n_timesteps,
+            :last_timestep,
         )
+        #A model that never sets parameters_valid gives valid parameters on every timestep
+        @test simulation.parameters_valid === true &&
+            simulation.n_timesteps == 3 &&
+            simulation.last_timestep === nothing
         @test keys(simulation.environment) ==
             (:states, :observations, :actions, :observation_distributions)
         #The names can be destructured
@@ -1136,24 +1162,6 @@ end
                 observation.reward for observation in simulation.observations[1:(end - 1)]
             ]
         end
-    end
-
-    @testset "An InvalidParametersError from a model stops the simulation, with its message" begin
-        @test_throws InvalidParametersError simulate_for_test(
-            ThrowsInvalidParameters(ByHand()),
-            BaselineEnvironment(ByHand());
-            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
-        )
-        @test_throws "The learning rate is above 0.9." simulate_for_test(
-            ThrowsInvalidParameters(ByHand()),
-            BaselineEnvironment(ByHand());
-            cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
-        )
-        @test simulate_for_test(
-            ThrowsInvalidParameters(ByHand()),
-            BaselineEnvironment(ByHand());
-            cognitive_parameters=BASELINE_PARAMETERS,
-        ) isa NamedTuple
     end
 
     @testset "cognitive_save_history and environment_save_history select what is saved of each kind" begin
@@ -2912,7 +2920,7 @@ end
         #An environment model runs on an action in the same way
         @test simulate_timestep(
             BaselineEnvironment(Means()), (; choice=true); parameters=REWARDS
-        ) === ((; reward=0.8), (; n_timesteps=1))
+        ) === ((; reward=0.8), (; n_timesteps=1), true)
     end
 
     @testset "Passing the state and the output on gives the same as a simulation with the same observations" begin
@@ -3610,5 +3618,169 @@ end
         )
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=10)
         @test agent.n_timesteps == environment.n_timesteps == 4
+    end
+end
+
+@testset "A model that sets parameters_valid to false" begin
+    #With a learning rate of 0.95 and a reward on every timestep, the expected reward is 0.975 after the first timestep,
+    #and 0.99875 after the second, which is above what WithInvalidParameters takes
+    turning_invalid = (; learning_rate=0.95, inverse_temperature=2.0)
+    always_rewarded = FixedObservationsEnvironment((; reward=fill(1.0, 5)))
+    simulate_turning_invalid(; keywords...) = simulate_for_test(
+        WithInvalidParameters(ByHand()),
+        always_rewarded;
+        n_steps=5,
+        cognitive_parameters=turning_invalid,
+        environment_parameters=(;),
+        action_map=NameMap(),
+        keywords...,
+    )
+
+    @testset "simulate_session stops before that timestep, returns its states on their own, and warns" begin
+        simulation = @test_logs (
+            :warn,
+            "A cognitive model of type WithInvalidParameters{ByHand} set parameters_valid to false on timestep 2, so the simulation stopped after timestep 1. The states of timestep 2 are under last_timestep in what the simulation returned.",
+        ) simulate_turning_invalid()
+        @test simulation.parameters_valid === false
+        @test simulation.n_timesteps == 1
+        #Timestep 1 is kept, in the vectors of both models, which leave timestep 0 out here
+        @test simulation.states == [(; expected_reward=0.975)]
+        @test length(simulation.actions) == 1 &&
+            length(simulation.environment.observations) == 1
+        #The last timestep, which turned invalid, has the states of both models
+        invalid = simulation.last_timestep
+        @test invalid.timestep == 2
+        @test invalid.parameters_valid === false &&
+            invalid.environment.parameters_valid === true
+        @test invalid.previous_state == (; expected_reward=0.975)
+        @test invalid.state.expected_reward ≈ 0.99875
+        @test keys(invalid.environment) == (:parameters_valid, :previous_state, :state)
+        #The same simulation without the warning
+        quiet = @test_logs simulate_turning_invalid(; warn_on_invalid_parameters=false)
+        @test quiet.n_timesteps == 1 && quiet.last_timestep.timestep == 2
+        #A simulation that stays valid has the states of its last timestep, which the trajectories end with, and the same type
+        staying_valid = simulate_turning_invalid(;
+            cognitive_parameters=(; learning_rate=0.1, inverse_temperature=2.0)
+        )
+        @test staying_valid.parameters_valid === true && staying_valid.n_timesteps == 5
+        @test staying_valid.last_timestep.timestep == 5 &&
+            staying_valid.last_timestep.state == staying_valid.states[end]
+        @test typeof(staying_valid) === typeof(simulation)
+        #The sizes of the timesteps are those of the timesteps that were kept
+        with_sizes = simulate_turning_invalid(;
+            timestep_sizes=[1, 2, 3, 4, 5], warn_on_invalid_parameters=false
+        )
+        @test with_sizes.timestep_sizes == [1]
+    end
+
+    @testset "A first timestep that turns invalid leaves only timestep 0" begin
+        #A learning rate of 1 takes the expected reward to 1 on the first timestep. Without timestep 0, the vectors are
+        #empty, with the types of the timesteps
+        simulation = simulate_turning_invalid(;
+            cognitive_parameters=(; learning_rate=1.0, inverse_temperature=2.0),
+            warn_on_invalid_parameters=false,
+        )
+        @test simulation.n_timesteps == 0 && isempty(simulation.states)
+        @test eltype(simulation.states) == @NamedTuple{expected_reward::Float64}
+        @test simulation.last_timestep.timestep == 1
+        #With timestep 0, it is all that is kept
+        with_initial = simulate_turning_invalid(;
+            cognitive_parameters=(; learning_rate=1.0, inverse_temperature=2.0),
+            cognitive_save_history=SaveHistory(SaveEverything()),
+            warn_on_invalid_parameters=false,
+        )
+        @test with_initial.states == [(; expected_reward=0.5)]
+    end
+
+    @testset "The environment model can set it too, whoever starts" begin
+        for who_starts in (EnvironmentStarts(), AgentStarts())
+            simulation = @test_logs (
+                :warn,
+                "An environment model of type InvalidOnThirdTimestep set parameters_valid to false on timestep 3, so the simulation stopped after timestep 2. The states of timestep 3 are under last_timestep in what the simulation returned.",
+            ) simulate_for_test(
+                Baseline(ByHand()),
+                InvalidOnThirdTimestep();
+                who_starts,
+                n_steps=5,
+                environment_parameters=(;),
+            )
+            @test simulation.n_timesteps == 2 &&
+                simulation.environment.states[end] == (; n_timesteps=2)
+            @test simulation.last_timestep.parameters_valid === true &&
+                simulation.last_timestep.environment.parameters_valid === false
+        end
+    end
+
+    @testset "simulate_session! leaves the agent and the environment after the timestep before" begin
+        agent = InstantiatedModel(
+            WithInvalidParameters(ByHand()),
+            turning_invalid;
+            save_history=SaveHistory(SaveEverything()),
+        )
+        environment = InstantiatedModel(always_rewarded, (;))
+        simulation = @test_logs (:warn, r"on timestep 2, so the simulation stopped") simulate_session!(
+            agent,
+            environment;
+            who_starts=EnvironmentStarts(),
+            n_steps=5,
+            action_map=NameMap(),
+        )
+        @test simulation.parameters_valid === false && simulation.n_timesteps == 1
+        @test agent.state == (; expected_reward=0.975)
+        @test agent.n_timesteps == environment.n_timesteps == 1
+        @test length(agent.history.states) == 2
+        @test simulation.last_timestep.state.expected_reward ≈ 0.99875
+        @test_logs simulate_session!(
+            agent,
+            environment;
+            who_starts=EnvironmentStarts(),
+            n_steps=2,
+            action_map=NameMap(),
+            warn_on_invalid_parameters=false,
+        )
+    end
+
+    @testset "simulate_timestep returns false as its third value, and warns" begin
+        output, state, parameters_valid = @test_logs (
+            :warn,
+            "A cognitive model of type WithInvalidParameters{ByHand} set parameters_valid to false on this timestep.",
+        ) simulate_timestep(
+            WithInvalidParameters(ByHand()),
+            (; reward=1.0);
+            parameters=(; learning_rate=1.0, inverse_temperature=2.0),
+        )
+        @test parameters_valid === false && state == (; expected_reward=1.0)
+        @test keys(output) == (:choice,)
+        @test simulate_timestep(
+            Baseline(ByHand()), (; reward=1.0); parameters=BASELINE_PARAMETERS
+        )[3] === true
+        quiet = @test_logs simulate_timestep(
+            WithInvalidParameters(ByHand()),
+            (; reward=1.0);
+            parameters=(; learning_rate=1.0, inverse_temperature=2.0),
+            warn_on_invalid_parameters=false,
+        )
+        @test quiet[3] === false
+    end
+
+    @testset "simulate_timestep! leaves the instantiated model as it was, and warns" begin
+        agent = InstantiatedModel(
+            WithInvalidParameters(ByHand()),
+            (; learning_rate=1.0, inverse_temperature=2.0);
+            save_history=SaveHistory(SaveEverything()),
+        )
+        @test_logs (
+            :warn,
+            "A cognitive model of type WithInvalidParameters{ByHand} set parameters_valid to false on this timestep, so the instantiated model was left as it was before the timestep.",
+        ) simulate_timestep!(agent, (; reward=1.0))
+        @test agent.state == (; expected_reward=0.5) &&
+            agent.n_timesteps == 0 &&
+            length(agent.history.states) == 1
+        @test_logs simulate_timestep!(
+            agent, (; reward=1.0); warn_on_invalid_parameters=false
+        )
+        #A reward of 0 keeps the parameters valid, and the model is updated
+        simulate_timestep!(agent, (; reward=0.0))
+        @test agent.state == (; expected_reward=0.0) && agent.n_timesteps == 1
     end
 end

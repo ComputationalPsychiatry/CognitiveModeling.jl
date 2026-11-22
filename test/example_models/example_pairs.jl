@@ -177,8 +177,8 @@ const EXAMPLE_PAIRS = [
         environment_parameters=(; reward_probability=0.8),
     ),
     (;
-        name="ThrowsInvalidParameters",
-        model=ThrowsInvalidParameters,
+        name="WithInvalidParameters",
+        model=WithInvalidParameters,
         environment=BaselineEnvironment,
         cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
         environment_parameters=(; reward_probability=0.8),
@@ -338,8 +338,10 @@ function sizes_of_timesteps(keywords, n_timesteps)
 end
 
 #Simulates a pair with a kind of distributions, saving everything of both models, with as many of the pair's sizes of
-#timesteps as there are timesteps
-function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(1))
+#timesteps as there are timesteps, and with any other keywords of simulate_session
+function simulate_pair(
+    pair, distributions, who_starts; n_steps=10, rng=Xoshiro(1), simulation_keywords...
+)
     keywords = get(pair, :keywords, (;))
     if haskey(keywords, :timestep_sizes)
         keywords = merge(keywords, (; timestep_sizes=sizes_of_timesteps(keywords, n_steps)))
@@ -355,6 +357,7 @@ function simulate_pair(pair, distributions, who_starts; n_steps=10, rng=Xoshiro(
         cognitive_save_history=SaveHistory(SaveEverything()),
         environment_save_history=SaveHistory(SaveEverything()),
         keywords...,
+        simulation_keywords...,
     )
 end
 

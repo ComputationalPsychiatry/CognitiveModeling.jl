@@ -746,13 +746,12 @@ function full_model_cases(distributions; missing_values=true)
             ),
         ),
         case(
-            "Invalid parameters caught",
+            "Parameters that can turn invalid",
             distributions;
-            pair=pair_named("ThrowsInvalidParameters"),
+            pair=pair_named("WithInvalidParameters"),
             parameters_model=IndependentParameters((;
                 learning_rate=Beta(2, 8), inverse_temperature=LogNormal(0, 0.5)
             )),
-            catch_invalid_parameters=true,
         ),
     ]
 end

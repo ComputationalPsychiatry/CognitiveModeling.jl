@@ -73,14 +73,10 @@ end
     is_session_model(model)
 
 Return whether `model` is a Turing.jl model made by `turing_full_model`,
-`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or one of them inside
-`turing_catch_invalid_parameters`. Used by `get_session_parameters`, `decondition_sessions`
-and `condition_sessions`.
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`. Used by
+`get_session_parameters`, `decondition_sessions` and `condition_sessions`.
 """
 function is_session_model(model::DynamicPPL.Model)
-    if model.f === CognitiveModeling.turing_catch_invalid_parameters
-        return is_session_model(model.args.model)
-    end
     return model.f === CognitiveModeling.turing_full_model ||
            model.f === CognitiveModeling.turing_multiple_behavioral_sessions ||
            model.f === CognitiveModeling.turing_behavioral_session
@@ -92,8 +88,8 @@ end
     with_session_info(model, change, function_name)
 
 Return a copy of `model`, a Turing.jl model made by `turing_full_model`,
-`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, or one of them inside
-`turing_catch_invalid_parameters`, whose session info is what `change` makes of its own: a
+`turing_multiple_behavioral_sessions` or `turing_behavioral_session`, whose session info is
+what `change` makes of its own: a
 `SessionInfo` for a single session, and a `MultipleSessionsInfo` for several. Its other
 arguments, its keyword arguments and whether it is marked thread-safe stay as they are. Any
 other model is an error, which names `function_name`, the function that was called. Used by
@@ -120,10 +116,6 @@ function with_session_info(
                 ),
             ),
         )
-    elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
-        new_args = merge(
-            args, (; model=with_session_info(args.model, change, function_name))
-        )
     else
         throw(
             ArgumentError(
@@ -148,8 +140,6 @@ of several. Used by `get_session_trajectories`, `get_session_parameters` and
 function info_of(model::DynamicPPL.Model)
     if model.f === CognitiveModeling.turing_behavioral_session
         return model.args.session_info
-    elseif model.f === CognitiveModeling.turing_catch_invalid_parameters
-        return info_of(model.args.model)
     else
         return model.args.sessions_info
     end
