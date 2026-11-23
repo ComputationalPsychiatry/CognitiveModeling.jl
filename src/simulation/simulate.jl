@@ -492,94 +492,6 @@ function initialize_all_storage(initial_timestep_values::NamedTuple, saved, n_st
 end
 
 """
-    storage_without_timesteps(initial_timestep_values, saved_type)
-
-Return the vectors of a simulation that kept no timestep, arranged as [`map_saved`](@ref)
-arranges them with an environment, and typed as [`initialize_all_storage`](@ref) types them
-from what the first timestep saves, from `saved_type`, the type of what a timestep saves as
-the compiler infers it. A kind of value whose type isn't known gets a vector of `Any`. When
-`initial_timestep_values` isn't `nothing`, each vector has what it has for timestep 0. Used
-by [`simulate_all_timesteps`](@ref) when a stopping criterion is met before the first
-timestep, where no timestep runs to give the vectors their types.
-"""
-function storage_without_timesteps(
-    initial_timestep_values, saved_type::Type{Tsaved}
-) where {Tsaved}
-    environment_type = saved_field_type(saved_type, Val(:environment))
-    initial_environment_values = initial_field(initial_timestep_values, Val(:environment))
-    return (;
-        states=vector_without_timesteps(
-            initial_field(initial_timestep_values, Val(:states)),
-            saved_field_type(saved_type, Val(:states)),
-        ),
-        observations=vector_without_timesteps(
-            initial_field(initial_timestep_values, Val(:observations)),
-            saved_field_type(saved_type, Val(:observations)),
-        ),
-        actions=vector_without_timesteps(
-            initial_field(initial_timestep_values, Val(:actions)),
-            saved_field_type(saved_type, Val(:actions)),
-        ),
-        action_distributions=vector_without_timesteps(
-            initial_field(initial_timestep_values, Val(:action_distributions)),
-            saved_field_type(saved_type, Val(:action_distributions)),
-        ),
-        environment=(;
-            states=vector_without_timesteps(
-                initial_field(initial_environment_values, Val(:states)),
-                saved_field_type(environment_type, Val(:states)),
-            ),
-            observations=vector_without_timesteps(
-                initial_field(initial_environment_values, Val(:observations)),
-                saved_field_type(environment_type, Val(:observations)),
-            ),
-            actions=vector_without_timesteps(
-                initial_field(initial_environment_values, Val(:actions)),
-                saved_field_type(environment_type, Val(:actions)),
-            ),
-            observation_distributions=vector_without_timesteps(
-                initial_field(initial_environment_values, Val(:observation_distributions)),
-                saved_field_type(environment_type, Val(:observation_distributions)),
-            ),
-        ),
-    )
-end
-
-"""
-    saved_field_type(type, Val(name))
-
-Return the type of the field `name` of the type `type`, or `Any` when `type` isn't concrete
-or has no such field, as when the compiler can't infer it. Used by
-[`storage_without_timesteps`](@ref).
-"""
-function saved_field_type(::Type{T}, ::Val{name}) where {T,name}
-    return isconcretetype(T) && hasfield(T, name) ? fieldtype(T, name) : Any
-end
-
-"""
-    initial_field(initial_values, Val(name))
-
-Return the field `name` of `initial_values`, what is saved from before the first timestep,
-or `nothing` when nothing is. Used by [`storage_without_timesteps`](@ref).
-"""
-initial_field(::Nothing, ::Val) = nothing
-function initial_field(initial_values::NamedTuple, ::Val{name}) where {name}
-    return getfield(initial_values, name)
-end
-
-"""
-    vector_without_timesteps(initial_value, type)
-
-Return an empty vector for values of the type `type`, or one with `initial_value`, what is
-saved from before the first timestep, as [`initialize_storage`](@ref) types it, when that
-isn't `nothing`. Used by [`storage_without_timesteps`](@ref).
-"""
-vector_without_timesteps(::Nothing, ::Type{T}) where {T} = T[]
-function vector_without_timesteps(initial_value, ::Type{T}) where {T}
-    return Union{typeof(initial_value),T}[initial_value]
-end
-
-"""
     store_timestep_values!(storage, saved, t)
 
 Store `saved`, what timestep `t` saved, as element `t` of each vector in `storage`, with
@@ -846,6 +758,30 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     )
 end
 
+"""
+    check_stopping_criterion_not_met(model, state, parameters)
+
+Throw an informative error if [`stopping_criterion`](@ref) of `model` is already met with
+`state` and `parameters`, before the first timestep, since no timestep can then run, and
+return `false` otherwise. A criterion that must be masked, as [`masks_bool`](@ref) says,
+such as a traced `Bool` of a compiler like Reactant.jl, can't be checked, and is returned
+instead, for the masking of the simulation or the session. Used for each model by
+[`simulate_all_timesteps`](@ref), and by fitted sessions, where there is nothing to check
+for an environment a session doesn't have.
+"""
+function check_stopping_criterion_not_met(model, state, parameters)
+    criterion_met = stopping_criterion(model, state, parameters)
+    masks_bool(criterion_met) && return criterion_met
+    if criterion_met
+        throw(
+            ArgumentError(
+                "The stopping criterion of $(describe_model(model)) is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!, and a fitted session needs parameters, and priors, under which it isn't met before the first timestep.",
+            ),
+        )
+    end
+    return false
+end
+
 #Its own function, so that it is compiled for the types of the values of the first timestep
 """
     simulate_remaining_timesteps(storage, timestep_values, who_starts, cognitive_model,
@@ -1014,11 +950,9 @@ that were kept, under `n_timesteps`, whether the parameters of both models staye
 under `parameters_valid`, under `last_record` the record of the last timestep that was
 simulated, from [`record_of_timestep`](@ref) with the timestep's number, and under `masked`
 whether the simulation was masked, as `Val(true)` or `Val(false)`. The simulation stops
-before `n_steps` timesteps if [`stopping_criterion`](@ref) of either model is met, and keeps no timestep if it is met
-already, before the first timestep. No timestep runs then, since a model that has ended may
-not run another, and the vectors get the types that a timestep would give them, as the
-compiler infers them, from [`storage_without_timesteps`](@ref), while `last_kept_values` and
-`last_record` are `nothing`. The simulation also stops when the parameters of either model turn invalid, and
+before `n_steps` timesteps if [`stopping_criterion`](@ref) of either model is met, and none
+can be simulated if it is met already, which [`check_stopping_criterion_not_met`](@ref) makes
+an error. The simulation also stops when the parameters of either model turn invalid, and
 that timestep is left out, so that it is the last one simulated but not the last one kept.
 When `save_initial_timestep_values` is `Val(true)`, each vector starts with what is saved
 from before the first timestep, as timestep 0.
@@ -1028,13 +962,13 @@ compiler like Reactant.jl, can't be branched on. From the first timestep with su
 `parameters_valid` or stopping criterion, the simulation is masked instead of stopped, with
 [`simulate_remaining_timesteps_masked`](@ref): every timestep is simulated and stored, and
 `n_timesteps`, `parameters_valid` and `last_record` say where the simulation ended, while
-`last_kept_values` is `nothing`.
+`last_kept_values` is `nothing`. A stopping criterion that must be masked and is met before
+the first timestep isn't an error, but leaves no timestep kept.
 
 `previous_timestep_values` and the last values kept are those of a timestep: the state and
 the action of the cognitive model, and under `environment` the state and the observation of
 the environment, each in its own names. When no timestep was kept, the last values kept are
-those of the first timestep, which turned invalid, or `nothing` when a stopping criterion
-was met before it. The vectors are arranged as
+those of the first timestep, which turned invalid. The vectors are arranged as
 [`map_saved`](@ref) arranges them, with what `cognitive_save_history` and
 `environment_save_history` select.
 
@@ -1073,14 +1007,13 @@ function simulate_all_timesteps(
         )
     end
 
-    #A stopping criterion of either model that is met already ends the simulation before its first timestep. One that must be masked ends a masked simulation there instead
-    stopped_before_first = stopping_criterion_of_either_model(
-        cognitive_model,
-        environment,
-        previous_timestep_values,
-        cognitive_parameters,
-        environment_parameters,
-    )
+    #No timestep can be simulated when the stopping criterion of either model is met already. A criterion that must be masked can't be checked, and ends a masked simulation before its first timestep instead
+    stopped_before_first =
+        check_stopping_criterion_not_met(
+            environment, previous_timestep_values.environment.state, environment_parameters
+        ) | check_stopping_criterion_not_met(
+            cognitive_model, previous_timestep_values.state, cognitive_parameters
+        )
 
     #Save what is kept from before the first timestep before it is simulated, since it can change a state in place
     initial_timestep_values = collect_initial_timestep_values(
@@ -1093,35 +1026,6 @@ function simulate_all_timesteps(
         cognitive_save_history,
         environment_save_history,
     )
-
-    #A simulation whose stopping criterion is met already keeps no timestep, and none runs, since a model that has ended may not run another: its vectors get the types that the values of a timestep would give them, as the compiler infers them
-    if stopped_before_first === true
-        timestep_values_type = Base.promote_op(
-            simulate_timestep_both_models,
-            typeof(who_starts),
-            typeof(cognitive_model),
-            typeof(environment),
-            typeof(cognitive_parameters),
-            typeof(environment_parameters),
-            typeof(cognitive_save_history),
-            typeof(environment_save_history),
-            typeof(observation_map),
-            typeof(action_map),
-            typeof(rng),
-            typeof(get_timestep_size(timestep_sizes, 1)),
-            typeof(previous_timestep_values),
-        )
-        return (;
-            storage=storage_without_timesteps(
-                initial_timestep_values, saved_field_type(timestep_values_type, Val(:saved))
-            ),
-            last_kept_values=nothing,
-            n_timesteps=0,
-            parameters_valid=true,
-            last_record=nothing,
-            masked=Val(false),
-        )
-    end
 
     #Simulate the first timestep outside the loop, since its inputs can have other types than all the rest
     timestep_values = simulate_timestep_both_models(
@@ -1248,8 +1152,9 @@ differently, or one gives something that isn't in the other's attributes, `obser
 and `action_map` say which outputs of one the other receives, and under which names.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
-model is met, and everything returned then has the timesteps that were simulated. When it is met already, before the first timestep, the
-trajectories have no timestep, and `n_timesteps` is 0.
+model is met, and everything returned then has the timesteps that were simulated. A model
+whose criterion is met already, before the first timestep, can't be simulated, and throws an
+error.
 
 The simulation also stops when either model sets `parameters_valid` to `false` in its
 [`ModelOutput`](@ref), and that timestep is left out of the trajectories. `parameters_valid`
@@ -1266,7 +1171,8 @@ ended, each starts from the values of the last timestep that was kept. The vecto
 have every timestep, of which the first `n_timesteps` were kept, after timestep 0 when it is
 there, and the sizes of the timesteps are those of every timestep. `parameters_valid`,
 `n_timesteps` and `last_timestep` are what they are when the simulation stops, as traced
-values, and there is no warning. A model whose parameters can turn invalid must
+values. There is no warning, and a stopping criterion that is met before the first timestep
+isn't an error, but leaves no timestep kept. A model whose parameters can turn invalid must
 then keep its values finite on the timestep that turns invalid, as with
 `ifelse(parameters_valid, new_value, previous_value)`, since the timesteps after it are
 still differentiated.
@@ -1534,9 +1440,9 @@ The two models must fit together, as for `simulate_session`, directly or through
 received them, and the environment's history the actions as its model did.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
-model is met. When it is met already, before
-the first timestep, no timestep is simulated, and the agent and the environment stay as they
-are, until [`reset!`](@ref) starts them again. The simulation also stops when either model sets `parameters_valid` to `false`, as for `simulate_session`:
+model is met. A model where it is met already can't be simulated further, and throws an
+error until it is [`reset!`](@ref). The simulation also stops when either model sets
+`parameters_valid` to `false`, as for `simulate_session`:
 that timestep is left out, the agent and the environment stay where they were after the
 timestep before, and its states are under `last_timestep` in what is returned. A
 simulation that must be masked, as under a compiler like Reactant.jl, is an error, since the

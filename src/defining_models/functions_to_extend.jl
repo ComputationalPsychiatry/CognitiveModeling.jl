@@ -323,11 +323,11 @@ either, no further timestep is simulated, and what is returned and added to the 
 has the timesteps that were simulated. When the environment starts, the cognitive model has
 then made its last observation and acted on it, and the environment doesn't receive that
 action. When the cognitive model starts, the environment has then responded to the last
-action with an observation, and the cognitive model doesn't receive that observation. When
-the criterion is met already, before the first timestep, no timestep is simulated, and the
-trajectories have none: a new simulation starts from the initial state, and [`reset!`](@ref)
-puts an [`InstantiatedModel`](@ref) back there. A fitted session checks it before every
-timestep too, and throws an error when it is met before the first, as [`SessionInfo`](@ref)
+action with an observation, and the cognitive model doesn't receive that observation. A
+model whose criterion is already met before the first timestep can't be simulated, and
+throws an error: a new simulation starts from the initial state, and [`reset!`](@ref) puts
+an [`InstantiatedModel`](@ref) back there. A fitted session checks it before every timestep
+too, and throws the same error when it is met before the first, as [`SessionInfo`](@ref)
 describes. Under a compiler like Reactant.jl, a criterion on traced values returns a traced
 Bool, and the simulation is then masked instead of stopped, as `simulate_session` describes.
 

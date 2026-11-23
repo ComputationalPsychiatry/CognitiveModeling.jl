@@ -1332,7 +1332,7 @@ end
             environment_parameters=(; last_pull=0),
             include_environment=true,
         )
-        @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep of a fitted session" logjoint(
+        @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep, so no timestep can run" logjoint(
             ends_before_first, (;)
         )
         without_data = session_for_test(
