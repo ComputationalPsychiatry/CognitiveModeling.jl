@@ -67,8 +67,8 @@ end
 
 Return whether [`stopping_criterion`](@ref) of either model is met on `timestep_values`, the
 values of the timestep before, combined with `|`, so that a criterion that a compiler
-traces is combined too. Used by the masking loop, and by
-[`simulate_all_timesteps`](@ref) to choose it.
+traces is combined too. Used by the loops of simulations and of fitted sessions, and by
+[`simulate_all_timesteps`](@ref) before the first timestep.
 """
 function stopping_criterion_of_either_model(
     cognitive_model,

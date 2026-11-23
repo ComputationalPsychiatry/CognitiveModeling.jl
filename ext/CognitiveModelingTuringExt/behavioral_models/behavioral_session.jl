@@ -252,13 +252,13 @@ Turing.@model function turing_run_all_timesteps(
     n_timesteps_that_ran = n_timesteps
     for t in 2:n_timesteps
 
-        #Stop when the stopping criterion of either model is met. While the data continues, the parameters can't give it, as when they turn invalid
-        if stopping_criterion(
+        #Stop when the stopping criterion of either model is met. While the data continues, the parameters can't give it, as when they turn invalid. The criteria are checked in a function that returns a Bool, also when the compiler doesn't know the type of the values of the timestep before, as when an output is NoValue on some timesteps, so that Enzyme.jl doesn't differentiate a state read from them
+        if stopping_criterion_of_either_model(
+            session_info.cognitive_model,
             session_info.environment,
-            timestep_values.environment.state,
+            timestep_values,
+            cognitive_parameters,
             environment_parameters,
-        ) || stopping_criterion(
-            session_info.cognitive_model, timestep_values.state, cognitive_parameters
         )
             if data_continues_after(session_info, t - 1)
                 Turing.@addlogprob! -Inf

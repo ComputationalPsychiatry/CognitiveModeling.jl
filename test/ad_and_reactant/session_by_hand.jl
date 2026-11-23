@@ -11,7 +11,7 @@ using CognitiveModeling:
     AbstractTimestepModel,
     timestep_model,
     initialize_state,
-    stopping_criterion,
+    stopping_criterion_of_either_model,
     merge_default_parameters,
     bundle_parameters,
     check_match_attribute_names,
@@ -524,15 +524,14 @@ function remaining_timesteps_by_hand(
     n_timesteps = session_info.n_timesteps
     for t in 2:n_timesteps
 
-        #The stopping criterion of either model. A traced one masks this timestep and the remaining ones
-        criterion_met =
-            stopping_criterion(
-                session_info.environment,
-                timestep_values.environment.state,
-                environment_parameters,
-            ) | stopping_criterion(
-                session_info.cognitive_model, timestep_values.state, cognitive_parameters
-            )
+        #The stopping criterion of either model, as the Turing.jl session checks it. A traced one masks this timestep and the remaining ones
+        criterion_met = stopping_criterion_of_either_model(
+            session_info.cognitive_model,
+            session_info.environment,
+            timestep_values,
+            cognitive_parameters,
+            environment_parameters,
+        )
         if masks_bool(criterion_met)
             return masked_timesteps_by_hand(
                 session_info,
@@ -650,14 +649,13 @@ function masked_timesteps_by_hand(
 )
     n_timesteps = session_info.n_timesteps
     for t in first_timestep:n_timesteps
-        criterion_met =
-            stopping_criterion(
-                session_info.environment,
-                masking.previous.environment.state,
-                environment_parameters,
-            ) | stopping_criterion(
-                session_info.cognitive_model, masking.previous.state, cognitive_parameters
-            )
+        criterion_met = stopping_criterion_of_either_model(
+            session_info.cognitive_model,
+            session_info.environment,
+            masking.previous,
+            cognitive_parameters,
+            environment_parameters,
+        )
         masking = stop_masked_fitted_session(
             masking, criterion_met, data_continues_after(session_info, t - 1)
         )
@@ -1432,6 +1430,6 @@ const SESSION_BY_HAND_CASES = [
     (;
         name="masked session by hand whose stopping criterion is met after its data, with imputed values after the end",
         f=masked_ending_session_by_hand(),
-        x=[0.6, 2.0, 0.9, 0.5, 0.6, 0.4, 0.7, 0.6, 0.5, 0.8, 0.3, 0.5, 0.6, 0.7, 0.4],
+        x=[0.5, 2.0, 0.9, 0.5, 0.6, 0.4, 0.7, 0.6, 0.5, 0.8, 0.3, 0.5, 0.6, 0.7, 0.4],
     ),
 ]
