@@ -1239,7 +1239,7 @@ end
             [(; n_timesteps=t) for t in 1:3]
     end
 
-    @testset "The stopping criterion ends a session only after the last timestep with data, unless told otherwise" begin
+    @testset "The stopping criterion ends a session where it is met, and while the data continues the parameters can't give that" begin
         rewards = (; reward=fill(ImputedMissingValue(), 5))
         choices = (; choice=fill(ImputedMissingValue(), 5))
         #A predictive session, where nothing is data, ends when the environment has ended, with what it saved until then
@@ -1271,7 +1271,7 @@ end
         )
         saved_sure = @test_logs match_mode = :any returned(sure, rand(Xoshiro(1), sure)).saved_trajectories
         @test [state.expected_reward for state in saved_sure.states] == [0.5, 0.75, 0.875]
-        #With a fit, the criterion is never checked by default, so every timestep runs
+        #With every value in the data, the environment isn't included, so its criterion isn't checked, and every timestep runs
         fitted = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -1282,8 +1282,8 @@ end
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         @test length(returned(fitted, (;)).saved_trajectories.states) == 6
-        #Checked on every timestep, a criterion met while the data continues counts as parameters that turned invalid:
-        #the log density is -Inf, the session ends there, and its flag is a Bool, also for a model that can't set it
+        #With the environment included, a criterion met while the data continues counts as parameters that turned invalid:
+        #the log density is -Inf, the session ends there, and its flag is false, also for a model that can't set it
         ends_early = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -1291,7 +1291,7 @@ end
             (; choice=fill(true, 5));
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=3),
-            check_stopping_criterion=true,
+            include_environment=true,
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         @test logjoint(ends_early, (;)) == -Inf
@@ -1306,26 +1306,30 @@ end
             (; choice=fill(true, 2));
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=0),
-            check_stopping_criterion=true,
+            include_environment=true,
         )
         @test logjoint(ends_before_first, (;)) == -Inf
         @test returned(ends_before_first, (;)).saved_trajectories.parameters_valid === false
-        #Without any data, a criterion met before the first timestep is an error, since no timestep can run
-        @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep" logjoint(
-            session_for_test(
-                WithDefaultParameters(DistributionsJl()),
-                SESSION_PARAMETERS,
-                (; reward=fill(SimulatedMissingValue(), 2)),
-                (; choice=fill(SimulatedMissingValue(), 2));
-                environment=EndsAfterPulls(),
-                environment_parameters=(; last_pull=0),
-                check_stopping_criterion=true,
-            ),
-            (;),
+        #Without any data, a criterion met before the first timestep leaves the session without a timestep, and its
+        #parameters valid, as in a simulation. The first timestep still runs, so that what is saved has its types
+        without_data = session_for_test(
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            (; reward=fill(SimulatedMissingValue(), 2)),
+            (; choice=fill(SimulatedMissingValue(), 2));
+            environment=EndsAfterPulls(),
+            environment_parameters=(; last_pull=0),
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
-        #With the criterion checked only after the data, by default, the flag of a model that can't set it is the default
-        @test returned(fitted, (;)).saved_trajectories.parameters_valid === ValidByDefault()
-        #Checked on every timestep and met after the data, or never checked, the session runs as the data says
+        values_without_data = @test_logs match_mode = :any rand(Xoshiro(1), without_data)
+        @test isfinite(logjoint(without_data, values_without_data))
+        ended_before_first = returned(without_data, values_without_data).saved_trajectories
+        @test ended_before_first.parameters_valid === true &&
+            ended_before_first.n_timesteps == 0 &&
+            length(ended_before_first.states) == 1
+        #The flag is a Bool, also for a model that can't set it, since a criterion can make the parameters invalid
+        @test returned(fitted, (;)).saved_trajectories.parameters_valid === true
+        #Met after the data, the session runs as the data says
         @test length(
             returned(
                 session_for_test(
@@ -1335,25 +1339,12 @@ end
                     (; choice=fill(true, 3));
                     environment=EndsAfterPulls(),
                     environment_parameters=(; last_pull=3),
-                    check_stopping_criterion=true,
+                    include_environment=true,
                     cognitive_save_history=SaveHistory(; states=:expected_reward),
                 ),
                 (;),
             ).saved_trajectories.states,
         ) == 4
-        never = session_for_test(
-            WithDefaultParameters(DistributionsJl()),
-            SESSION_PARAMETERS,
-            rewards,
-            choices;
-            environment=EndsAfterPulls(),
-            environment_parameters=(; last_pull=3),
-            check_stopping_criterion=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
-        )
-        @test length(
-            (@test_logs match_mode = :any returned(never, rand(Xoshiro(1), never))).saved_trajectories.states,
-        ) == 6
     end
 
     @testset "An environment which samples within a timestep has its variables under the timestep" begin
@@ -1529,9 +1520,8 @@ end
         )
         @test logjoint(valid, (;)) ≈
             sum(logpdf.(Normal.(expected_rewards, 1.0), actions.choice))
-        #A model that never sets it gives the default, as its type says
-        @test returned(session_for_test(), (;)).saved_trajectories.parameters_valid ===
-            ValidByDefault()
+        #A model that never sets it gives true, as a Bool, since a stopping criterion can make the parameters invalid
+        @test returned(session_for_test(), (;)).saved_trajectories.parameters_valid === true
         #An action imputed before the timestep that turned invalid is a variable, and one after it isn't
         imputing = session_for_test(
             RejectsHighExpectedReward(),

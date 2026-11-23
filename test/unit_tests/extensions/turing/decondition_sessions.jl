@@ -120,14 +120,6 @@ end
         )
     end
 
-    @testset "check_stopping_criterion is given to the sessions" begin
-        deconditioned = decondition_sessions(imputing; check_stopping_criterion=false)
-        @test all(
-            session -> session.check_stopping_criterion === false,
-            deconditioned.args.sessions_info.sessions,
-        )
-    end
-
     @testset "Turing.jl's predict simulates every choice with the parameters of the chain, also those that the fit imputed" begin
         #S3's choice at timestep 3 is imputed in the fit
         fitted = full_model(

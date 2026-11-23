@@ -650,9 +650,19 @@ function CognitiveModeling.stopping_criterion(
 )
     return state.expected_reward > 0.8
 end
+#A fitted session checks the criterion before every timestep, and the cases have data on every timestep, so a criterion
+#met before one of them, as when an imputed reward differs from the one that the data was simulated with, means that the
+#parameters can't give the data
 function log_likelihood_by_hand(
     model::WithStoppingCriterion, parameters, timesteps, latents=(;)
 )
+    expected_reward = 0.5
+    for timestep in timesteps
+        expected_reward > 0.8 && return -Inf
+        expected_reward = learn(
+            expected_reward, parameters.learning_rate, timestep.input.reward
+        )
+    end
     return log_likelihood_by_hand(Baseline(ByHand()), parameters, timesteps)
 end
 
@@ -1233,8 +1243,11 @@ CognitiveModeling.output_domains(model::EveryFeatureFamily) = (; choice=Domain(;
 function CognitiveModeling.default_parameters(model::EveryFeatureFamily)
     return (; inverse_temperature=2.0, strategy=:learning, learns=true)
 end
+#Stops after a thousand timesteps, as its environment does by default, which no test reaches: a fit checks the criterion
+#on every timestep, and one that the noise could meet while the data continues would end a session before the noise of
+#its later timesteps, whose draws then have fewer variables, which keeps a sampler of Turing.jl from starting
 function CognitiveModeling.stopping_criterion(model::EveryFeatureFamily, state, parameters)
-    return state.expected_reward > 0.95
+    return state.n_timesteps >= 1000
 end
 
 function log_likelihood_by_hand(model::EveryFeatureFamily, parameters, timesteps, latents)

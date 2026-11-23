@@ -1,9 +1,9 @@
 ## Sessions whose data is simulated instead of fitted to, and the other way round ##
 
 """
-    decondition_sessions(session_info; check_stopping_criterion=nothing)
-    decondition_sessions(sessions_info; check_stopping_criterion=nothing)
-    decondition_sessions(model; check_stopping_criterion=nothing)
+    decondition_sessions(session_info)
+    decondition_sessions(sessions_info)
+    decondition_sessions(model)
 
 Return a copy of a [`SessionInfo`](@ref), or of every session in a
 [`MultipleSessionsInfo`](@ref), where every action is [`SimulatedMissingValue`](@ref), and
@@ -19,10 +19,9 @@ same number of timesteps at most, the same settings and the same environment, an
 session without an environment stay those in the data, as for an experiment whose
 observations are fixed in advance. Every action is simulated, whatever it was in the data,
 also one that was [`UnimputedMissingValue`](@ref) or [`NoValue`](@ref). The copy checks the
-[`stopping_criterion`](@ref) of the models as `check_stopping_criterion` says, as for
-[`SessionInfo`](@ref), whatever the session was prepared with: by default after the last
-timestep with data, which in a session with an environment is before every timestep, so that
-the copy can end before the data did, as a simulation does.
+[`stopping_criterion`](@ref) of the models before every timestep, as every session does, and
+has no data that a criterion met earlier would contradict, so that it can end before the
+data did, as a simulation does.
 
 The models of the sessions take their data as arguments, and not as observed variables,
 since the data does more than give values to score: the models receive it on each timestep,
@@ -44,9 +43,7 @@ julia> decondition_sessions(session_info).actions
 (choice = [SimulatedMissingValue(), SimulatedMissingValue(), SimulatedMissingValue()],)
 ```
 """
-function decondition_sessions(
-    session_info::SessionInfo; check_stopping_criterion::Union{Nothing,Bool}=nothing
-)
+function decondition_sessions(session_info::SessionInfo)
 
     #Every action is simulated, and every observation too when there is an environment to give them
     actions = map(
@@ -62,21 +59,17 @@ function decondition_sessions(
             session_info.observations
         end
 
-    return with_data(session_info, observations, actions; check_stopping_criterion)
+    return with_data(session_info, observations, actions)
 end
 
-function decondition_sessions(sessions_info::MultipleSessionsInfo; keywords...)
-    return with_sessions(
-        sessions_info,
-        map(session -> decondition_sessions(session; keywords...), sessions_info.sessions),
-    )
+function decondition_sessions(sessions_info::MultipleSessionsInfo)
+    return with_sessions(sessions_info, map(decondition_sessions, sessions_info.sessions))
 end
 
 """
-    condition_sessions(model, values; check_stopping_criterion=nothing)
-    condition_sessions(model, table; check_stopping_criterion=nothing)
-    condition_sessions(model, observations, actions; check_stopping_criterion=nothing,
-                       timestep_sizes=...)
+    condition_sessions(model, values)
+    condition_sessions(model, table)
+    condition_sessions(model, observations, actions; timestep_sizes=...)
 
 Return a copy of `model`, an inference backend's model of fitted sessions, whose sessions
 have `values` as data, and which is otherwise the same. Each action or observation that is
@@ -91,8 +84,8 @@ Each session of the copy ends after its last timestep with data: the timesteps a
 where every action and observation would be sampled, are left out, as when a simulation that
 a model stopped is fitted from a table with the timesteps it had. A session that gets no
 value at all keeps its timesteps. The copy checks the [`stopping_criterion`](@ref) of the
-models as `check_stopping_criterion` says, as for [`SessionInfo`](@ref), from the data it
-has, which by default is after its last timestep, so never.
+models before every timestep, as every session does, so that a criterion met before its last
+value gives the parameters a log density of `-Inf`, as for [`SessionInfo`](@ref).
 
 An inference backend's own way of conditioning gives the variables values while they stay
 variables, which the model looks up by name on every evaluation. This function puts the
@@ -120,11 +113,7 @@ which collections the values can be given.
 function condition_sessions end
 
 #Reads the table with the settings that read the sessions' own, and checks that it has the same sessions, since the parameter models of a full model are prepared for them
-function condition_sessions(
-    sessions_info::MultipleSessionsInfo,
-    table;
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
-)
+function condition_sessions(sessions_info::MultipleSessionsInfo, table)
     #The settings that read the sessions' table
     column_settings = sessions_info.column_settings
     if column_settings === nothing
@@ -142,7 +131,6 @@ function condition_sessions(
         table;
         session_settings(first_session)...,
         column_settings...,
-        check_stopping_criterion,
     )
 
     #The table must have the same sessions, in the same order
@@ -161,14 +149,12 @@ function condition_sessions(
     session_info::SessionInfo,
     observations,
     actions;
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
     timestep_sizes=session_info.timestep_sizes,
 )
     return with_data(
         session_info,
         observations,
         actions;
-        check_stopping_criterion,
         timestep_sizes,
         missing_observation_values=(missing,),
         missing_action_values=(missing,),
@@ -176,15 +162,14 @@ function condition_sessions(
 end
 
 """
-    with_data(session_info, observations, actions; check_stopping_criterion,
+    with_data(session_info, observations, actions;
               timestep_sizes=session_info.timestep_sizes, missing_observation_values=(),
               missing_action_values=())
 
 Return a copy of `session_info`, a [`SessionInfo`](@ref), with `observations` and `actions`
 as its data, prepared again with its settings, so that what is scored and whether the
-environment runs follow from the new data. The copy checks the stopping criterion as
-`check_stopping_criterion` says, and has the sizes of the timesteps of `session_info`,
-unless others are given, as for data with other timesteps. No value in the data is replaced,
+environment runs follow from the new data. The copy has the sizes of the timesteps of
+`session_info`, unless others are given, as for data with other timesteps. No value in the data is replaced,
 unless values that stand for a missing one are given. Used by [`decondition_sessions`](@ref)
 and the methods of [`condition_sessions`](@ref).
 """
@@ -192,7 +177,6 @@ function with_data(
     session_info::SessionInfo,
     observations,
     actions;
-    check_stopping_criterion::Union{Nothing,Bool},
     timestep_sizes=session_info.timestep_sizes,
     missing_observation_values=(),
     missing_action_values=(),
@@ -202,7 +186,6 @@ function with_data(
         observations,
         actions;
         session_settings(session_info)...,
-        check_stopping_criterion,
         timestep_sizes,
         missing_observation_values,
         missing_action_values,
@@ -228,14 +211,13 @@ function session_settings(session_info::SessionInfo)
         session_info.timestep_sizes,
         session_info.cognitive_save_history,
         session_info.environment_save_history,
-        session_info.check_stopping_criterion,
         session_info.check_parameter_domains,
         session_info.previous_observation,
         session_info.previous_action,
     )
 end
 
-#The timesteps after the last one with data are where a session checks the stopping criterion of its models by default, and samples every action and observation, so that their number, and with it the number of variables, would change with the parameters, which a sampler that uses gradients can't handle. Without them, the session is the one that a table with the timesteps of a stopped simulation gives
+#The timesteps after the last one with data are where a session samples every action and observation, and where a stopping criterion can end it without the parameters turning invalid, so that their number, and with it the number of variables, would change with the parameters, which a sampler that uses gradients can't handle. Without them, the session is the one that a table with the timesteps of a stopped simulation gives
 """
     cut_after_last_timestep_with_data(observations, actions, timestep_sizes)
 

@@ -79,7 +79,6 @@ struct NoEnvironment end
 check_savehistory_selection_names(::SaveHistory, ::NoEnvironment) = nothing
 #A session without an environment has no environment whose stopping criterion could be met
 stopping_criterion(::NoEnvironment, state, parameters) = false
-check_stopping_criterion_not_met(::NoEnvironment, state, parameters) = nothing
 
 """
     SessionInfo(cognitive_model, observations, actions; who_starts, <keyword arguments>)
@@ -124,17 +123,17 @@ table.
 - `include_environment::Union{Nothing, Bool}=nothing`: whether the session includes
   `environment`, so that it runs on every timestep. By default, with `nothing`, it is
   included where an observation or an action is `ImputedMissingValue()` or
-  [`SimulatedMissingValue`](@ref), where `environment_save_history` saves anything, or where
-  `check_stopping_criterion` is `true`: the scored observations then inform what is imputed,
-  such as which arm of a bandit a missing choice was, from the reward that followed. It is
+  [`SimulatedMissingValue`](@ref), or where `environment_save_history` saves anything: the
+  scored observations then inform what is imputed, such as which arm of a bandit a missing
+  choice was, from the reward that followed. It is
   also included in every session of an inference backend's full model that estimates the
   environment's parameters, so that the observations inform them. Otherwise it is left out,
   since the scores of its observations would be the same for every value of the parameters,
   and the session has none of its variables. With `true` it is always included, such as for
   a model of one's own which estimates its parameters. With `false` it never is: an
-  observation that is `ImputedMissingValue()`, a selection in `environment_save_history` and
-  `check_stopping_criterion = true` are then errors, and an action that is
-  `ImputedMissingValue()` is imputed without the observations informing it.
+  observation that is `ImputedMissingValue()` and a selection in `environment_save_history`
+  are then errors, and an action that is `ImputedMissingValue()` is imputed without the
+  observations informing it.
 - `observation_map::Union{Nothing, NameMap}=nothing` and
   `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
   cognitive model receives, and which of its actions the environment receives, and under
@@ -156,13 +155,6 @@ table.
   fixed environment parameters they are the same for every value of the cognitive
   parameters, so the posterior is unchanged. Whether timestep 0 is saved follows
   `cognitive_save_history`.
-- `check_stopping_criterion::Union{Nothing, Bool}=nothing`: when the
-  [`stopping_criterion`](@ref) of the two models is checked before a timestep, so that the
-  session ends there, with what it saved up to it. With `nothing`, it is checked on the
-  timesteps after the last one with data. With `true`, it is checked before every timestep,
-  and a criterion that is met while the data continues counts as parameters that turned
-  invalid, which gives them a log density of `-Inf`. With `false`, it is
-  never checked. The extended help says why.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) each time the session runs, where a
   value outside its domain throws a [`ParameterDomainError`](@ref), which stops a fit.
@@ -197,8 +189,9 @@ environment starts from in its own names, `actions_to_condition_on` and
 `observations_to_condition_on`, the values in the data of each name, which fitting
 conditions on, with the observations in the environment's names, `n_timesteps`,
 `saved_timestep_sizes`, the sizes a fitted session returns with what it saves, and
-`first_timestep_to_check_stopping`, the first timestep before which the stopping criterion
-is checked, as `check_stopping_criterion` decides it.
+`last_timestep_with_action` and `last_timestep_with_observation`, the last timestep where an
+action or an observation in the data isn't `ImputedMissingValue()` or
+`SimulatedMissingValue()`, and 0 when there is none.
 
     SessionInfo(session_info; cognitive_save_history, environment_save_history)
 
@@ -235,17 +228,21 @@ julia> session_info.actions_to_condition_on
 ```
 
 # Extended help
-When the stopping criterion is checked follows from the data. The last timestep with data is
-the last one where an observation or an action isn't `ImputedMissingValue()` or
-`SimulatedMissingValue()`. With `check_stopping_criterion = nothing`, the criterion is only
-checked after it, so that a fit, where every timestep has data, never checks it, and a
-session from [`decondition_sessions`](@ref), whose data is all `SimulatedMissingValue()`,
-ends as a simulation does. With `true`, the session includes its environment, whose
-criterion is checked too. A criterion that is met while the data continues means that the
-parameters can't give the data, as when they turn invalid, so the session gives them a log
-density of `-Inf` and ends there, and the `parameters_valid` it returns is a `Bool`, also
-for models that can't set it. A criterion met before the first timestep of a session without
-any data is an error, since no timestep can run.
+A fitted session checks the [`stopping_criterion`](@ref) of the cognitive model before every
+timestep, and that of the environment when the session includes it, and ends where one is
+met, as a simulation does. The last timestep with data is the last one where an action isn't
+`ImputedMissingValue()` or `SimulatedMissingValue()`, or an observation isn't, when the
+session includes its environment and scores the observations. A criterion that is met
+before it means that the parameters can't give the data, as when they turn invalid, so the
+session gives them a log density of `-Inf` and ends there. A criterion met after it ends
+the session with the timesteps that ran, as in a session from
+[`decondition_sessions`](@ref), whose data is all `SimulatedMissingValue()`, and one met
+before the first timestep of a session without data leaves it without a timestep. The
+`parameters_valid` that a fitted session returns is therefore a `Bool`, also for models that
+can't set it. The observations of a session that leaves its environment out are what the
+cognitive model receives, as in a simulation with a [`FixedObservationsEnvironment`](@ref),
+which the cognitive model's criterion can end before the last of them, and the criterion of
+the environment would depend on the data alone.
 """
 struct SessionInfo{
     Tcognitive_model,
@@ -266,7 +263,6 @@ struct SessionInfo{
     Tenvironment_observations,
     Tprevious_environment_observation,
     Tinclude_environment,
-    Tcheck_stopping_criterion,
 }
     cognitive_model::Tcognitive_model
     environment::Tenvironment
@@ -288,8 +284,8 @@ struct SessionInfo{
     saved_timestep_sizes::Tsaved_timestep_sizes
     cognitive_save_history::Tcognitive_save_history
     environment_save_history::Tenvironment_save_history
-    check_stopping_criterion::Tcheck_stopping_criterion
-    first_timestep_to_check_stopping::Int
+    last_timestep_with_action::Int
+    last_timestep_with_observation::Int
     check_parameter_domains::Bool
     previous_observation::Tprevious_observation
     previous_action::Tprevious_action
@@ -323,7 +319,6 @@ function SessionInfo(
         timestep_sizes=session_info.timestep_sizes,
         cognitive_save_history,
         environment_save_history,
-        check_stopping_criterion=session_info.check_stopping_criterion,
         check_parameter_domains=session_info.check_parameter_domains,
         previous_observation=session_info.previous_observation,
         previous_action=session_info.previous_action,
@@ -350,7 +345,6 @@ function prepare_session(
     timestep_sizes=1,
     cognitive_save_history::SaveHistory=SaveHistory(),
     environment_save_history::SaveHistory=SaveHistory(),
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
     check_parameter_domains::Bool=true,
     missing_observation_values=(missing,),
     missing_action_values=(missing,),
@@ -392,14 +386,9 @@ function prepare_session(
         )
     end
 
-    #Whether the session includes its environment: as it is told, and otherwise only when something is to be imputed, an observation it fills in or an action that the observations it scores inform, when its history is saved, or when its stopping criterion is checked on every timestep
+    #Whether the session includes its environment: as it is told, and otherwise only when something is to be imputed, an observation it fills in or an action that the observations it scores inform, or when its history is saved
     includes_environment = decide_whether_environment_is_included(
-        include_environment,
-        environment,
-        observations,
-        actions,
-        environment_save_history,
-        check_stopping_criterion,
+        include_environment, environment, observations, actions, environment_save_history
     )
 
     #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, or simulated when the data can hold values to simulate, and it starts from the previous observation in the same way
@@ -418,10 +407,9 @@ function prepare_session(
     observations_to_condition_on = collect_values_to_condition_on(environment_observations)
     saved_sizes = saved_timestep_sizes(timestep_sizes, n_timesteps, cognitive_save_history)
 
-    #The stopping criterion is checked from the timestep after the last one with data, unless it is always or never checked
-    first_timestep_to_check = first_timestep_to_check_stopping(
-        check_stopping_criterion, observations, actions, n_timesteps
-    )
+    #A stopping criterion met before the last timestep with data means that the parameters can't give the data
+    last_action_timestep = last_timestep_with_data(actions)
+    last_observation_timestep = last_timestep_with_data(observations)
 
     return SessionInfo(
         cognitive_model,
@@ -441,8 +429,8 @@ function prepare_session(
         saved_sizes,
         cognitive_save_history,
         environment_save_history,
-        check_stopping_criterion,
-        first_timestep_to_check,
+        last_action_timestep,
+        last_observation_timestep,
         check_parameter_domains,
         previous_observation,
         previous_action,
@@ -467,8 +455,8 @@ CSV.jl. The values of a column that stand for a missing observation or action be
 [`ImputedMissingValue`](@ref), as for [`SessionInfo`](@ref): by default those that are
 `missing`. As for [`SessionInfo`](@ref), a session includes its environment where an
 observation or an action is `ImputedMissingValue()`, where `environment_save_history` saves
-anything or where `check_stopping_criterion` is `true`, and in an inference backend's full
-model that estimates the environment's parameters, unless `include_environment` says
+anything, and in an inference backend's full model that estimates the environment's
+parameters, unless `include_environment` says
 otherwise. The table is kept in the field `table`, without being copied, with the rows of
 each session in `session_rows`, so that a parameter model can read the columns it needs,
 such as those that a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the

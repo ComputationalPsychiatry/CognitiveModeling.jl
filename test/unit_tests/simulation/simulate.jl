@@ -2054,13 +2054,38 @@ end
         )
         @test expected_rewards(simulation.states) == [0.75, 0.875] &&
             length(simulation.actions) == 2
-        #An environment that has ended already can't be simulated
-        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_for_test(
+        #An environment that has ended already gives a simulation without a timestep, and no error
+        ended = simulate_for_test(
             Baseline(ByHand()),
             WithStoppingCriterionEnvironment(ByHand());
             environment_parameters=(; REWARDS..., last_timestep=7),
             previous_environment_state=(; n_timesteps=7),
         )
+        @test ended.n_timesteps == 0 && ended.parameters_valid === true
+        @test all(isempty, saved_vectors(ended))
+        #No timestep runs, and the trajectories have the types of those of a simulation that runs, which the compiler
+        #infers, also with timestep 0
+        @test typeof(ended) == typeof(
+            simulate_for_test(
+                Baseline(ByHand()),
+                WithStoppingCriterionEnvironment(ByHand());
+                environment_parameters=(; REWARDS..., last_timestep=7),
+            ),
+        )
+        with_timestep_0(; keywords...) = simulate_for_test(
+            Baseline(ByHand()),
+            WithStoppingCriterionEnvironment(ByHand());
+            environment_parameters=(; REWARDS..., last_timestep=7),
+            cognitive_save_history=SaveHistory(SaveEverything()),
+            environment_save_history=SaveHistory(SaveEverything()),
+            keywords...,
+        )
+        ended_with_timestep_0 = with_timestep_0(;
+            previous_environment_state=(; n_timesteps=7)
+        )
+        @test typeof(ended_with_timestep_0) == typeof(with_timestep_0())
+        @test length(ended_with_timestep_0.states) == 1 &&
+            ended_with_timestep_0.environment.states == [(; n_timesteps=7)]
     end
 
     @testset "A cognitive model's stopping criterion ends the simulation too, and check_stopping_criterion = false simulates every timestep" begin
@@ -2105,10 +2130,12 @@ end
             )
             @test all(vector -> length(vector) == 20, saved_vectors(environment_ends))
             @test environment_ends.environment.states[end] == (; n_timesteps=20)
-            #A model whose criterion is met already can't be simulated, unless the check is off
-            @test_throws "The stopping criterion of a cognitive model of type WithStoppingCriterion{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_until_end(
+            #A model whose criterion is met already gives a simulation without a timestep, unless the check is off
+            already_ended = simulate_until_end(;
                 previous_cognitive_state=(; expected_reward=0.9)
             )
+            @test already_ended.n_timesteps == 0 &&
+                all(isempty, saved_vectors(already_ended))
             @test length(
                 simulate_until_end(;
                     previous_cognitive_state=(; expected_reward=0.9),
@@ -2803,11 +2830,13 @@ end
         @test agent.history.timestep_sizes == [BeforeFirstTimestep(), 1, 1, 1.0, 2.0]
         @test environment.history.timestep_sizes == agent.history.timestep_sizes
         @test length(environment.history.states) == 5
-        #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_session!(
+        #It has ended, so a further simulation has no timestep, and the agent and the environment stay as they are until reset
+        state_at_the_end = environment.state
+        no_timestep = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
-        @test length(agent.history.states) == 5
+        @test no_timestep.n_timesteps == 0 && all(isempty, saved_vectors(no_timestep))
+        @test length(agent.history.states) == 5 && environment.state == state_at_the_end
         #Unless the check is off, in which case the simulation goes on
         @test length(
             simulate_session!(
@@ -2853,10 +2882,10 @@ end
         @test all(vector -> length(vector) == 2, saved_vectors(simulation))
         @test agent.state == (; expected_reward=0.841796875)
         @test length(agent.history.states) == length(environment.history.states) == 5
-        #It has ended, so it can't be simulated further until it is reset
-        @test_throws "The stopping criterion of a cognitive model of type WithStoppingCriterion{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_steps!(
-            10
-        )
+        #It has ended, so a further simulation has no timestep, and the agent stays as it is until it is reset
+        @test simulate_steps!(10).n_timesteps == 0
+        @test agent.state == (; expected_reward=0.841796875) &&
+            length(agent.history.states) == 5
         reset!(agent)
         @test length(simulate_steps!(10).actions) == 4
     end

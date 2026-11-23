@@ -119,8 +119,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.saved_timestep_sizes == Int[]
         @test session_info.cognitive_save_history === SaveHistory()
         @test session_info.environment_save_history === SaveHistory()
-        @test session_info.check_stopping_criterion === nothing
-        @test session_info.first_timestep_to_check_stopping == 4
+        @test session_info.last_timestep_with_action == 3 &&
+            session_info.last_timestep_with_observation == 3
         @test session_info.check_parameter_domains === true
         @test session_info.previous_observation === (; reward=BeforeFirstTimestep())
         @test session_info.previous_action === (; choice=BeforeFirstTimestep())
@@ -223,7 +223,6 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             timestep_sizes=[0.5, 1.0, 1.5],
             cognitive_save_history=SaveHistory(; states=:n_timesteps),
             environment_save_history=SaveHistory(; outputs=:reward),
-            check_stopping_criterion=false,
             check_parameter_domains=false,
             previous_action=(; choice=false),
         )
@@ -236,8 +235,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
         @test session_info.cognitive_save_history === SaveHistory(; states=:n_timesteps)
         @test session_info.environment_save_history === SaveHistory(; outputs=:reward)
-        @test session_info.check_stopping_criterion === false
-        @test session_info.first_timestep_to_check_stopping == 4
+        @test session_info.last_timestep_with_action == 3 &&
+            session_info.last_timestep_with_observation == 3
         @test session_info.check_parameter_domains === false
         @test session_info.previous_action === (; choice=false)
         #The observations to condition on leave out the missing one, and are named for scoring with an environment
@@ -263,7 +262,6 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             timestep_sizes=0.5,
-            check_stopping_criterion=false,
             check_parameter_domains=false,
         )
         copy = SessionInfo(
@@ -277,8 +275,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             copy.actions === session_info.actions &&
             copy.actions_to_condition_on == session_info.actions_to_condition_on
         @test copy.who_starts === EnvironmentStarts() && copy.timestep_sizes == 0.5
-        @test copy.check_stopping_criterion === false &&
-            copy.first_timestep_to_check_stopping == 4
+        @test copy.last_timestep_with_action == 3 &&
+            copy.last_timestep_with_observation == 3
         @test copy.check_parameter_domains === false
         #Saving the environment's history makes a session with one run its environment
         with_environment = SessionInfo(
@@ -295,18 +293,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test saving.includes_environment &&
             saving.environment_save_history === SaveHistory(; outputs=:reward) &&
             saving.cognitive_save_history === SaveHistory()
-        #Checking the stopping criterion on every timestep makes it run too
-        @test SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            COUNTER_CHOICES;
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
-            check_stopping_criterion=true,
-        ).includes_environment
     end
 
-    @testset "The stopping criterion is checked from the timestep after the last one with data" begin
+    @testset "The last timesteps with an action and with an observation say where the data continues, after which a stopping criterion ends a session without making the parameters invalid" begin
         counter_session(observations, actions; keywords...) = SessionInfo(
             SessionCounter(),
             observations,
@@ -315,34 +304,42 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             environment=GivesReward(),
             keywords...,
         )
-        #With data on every timestep, the check starts after the last one, and with none it starts at the first
-        @test counter_session(COUNTER_REWARDS, COUNTER_CHOICES).first_timestep_to_check_stopping ==
-            4
-        @test counter_session(
-            (; reward=fill(ImputedMissingValue(), 3)),
-            (; choice=fill(ImputedMissingValue(), 3)),
-        ).first_timestep_to_check_stopping == 1
-        #The last timestep with data in either kind counts, and a marker for nothing happening is data
-        @test counter_session(
-            (; reward=[1.0, ImputedMissingValue(), ImputedMissingValue()]),
-            (; choice=[true, false, ImputedMissingValue()]),
-        ).first_timestep_to_check_stopping == 3
-        @test counter_session(
+        last_timesteps(session_info) = (
+            session_info.last_timestep_with_observation,
+            session_info.last_timestep_with_action,
+        )
+        #With data on every timestep, both are the last timestep, and with none they are 0
+        @test last_timesteps(counter_session(COUNTER_REWARDS, COUNTER_CHOICES)) == (3, 3)
+        @test last_timesteps(
+            counter_session(
+                (; reward=fill(ImputedMissingValue(), 3)),
+                (; choice=fill(ImputedMissingValue(), 3)),
+            ),
+        ) == (0, 0)
+        #Each kind has its own, a marker for nothing happening is data, and a value to simulate isn't
+        @test last_timesteps(
+            counter_session(
+                (; reward=[1.0, ImputedMissingValue(), ImputedMissingValue()]),
+                (; choice=[true, false, ImputedMissingValue()]),
+            ),
+        ) == (1, 2)
+        @test last_timesteps(
+            counter_session(
+                (; reward=[1.0, SimulatedMissingValue(), SimulatedMissingValue()]),
+                (; choice=[true, false, SimulatedMissingValue()]),
+            ),
+        ) == (1, 2)
+        #The data continues after a timestep with an action after it, and with an observation after it only when the session includes its environment, which scores the observations
+        included = counter_session(
             (; reward=[1.0, ImputedMissingValue(), NoValue()]),
             (; choice=[true, ImputedMissingValue(), ImputedMissingValue()]),
-        ).first_timestep_to_check_stopping == 4
-        #A value to simulate isn't data either
-        @test counter_session(
-            (; reward=[1.0, SimulatedMissingValue(), SimulatedMissingValue()]),
-            (; choice=[true, false, SimulatedMissingValue()]),
-        ).first_timestep_to_check_stopping == 3
-        #true checks from the first timestep, and false never
-        @test counter_session(
-            COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=true
-        ).first_timestep_to_check_stopping == 1
-        @test counter_session(
-            COUNTER_REWARDS, COUNTER_CHOICES; check_stopping_criterion=false
-        ).first_timestep_to_check_stopping == 4
+        )
+        @test last_timesteps(included) == (3, 1) && included.includes_environment
+        @test CognitiveModeling.data_continues_after(included, 2) &&
+            !CognitiveModeling.data_continues_after(included, 3)
+        left_out = CognitiveModeling.remake_session_without_environment(included)
+        @test CognitiveModeling.data_continues_after(left_out, 0) &&
+            !CognitiveModeling.data_continues_after(left_out, 1)
         @test CognitiveModeling.last_timestep_with_data((;)) == 0
     end
 
@@ -407,8 +404,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.actions.choice == [true, UnimputedMissingValue(), true] &&
             session_info.actions.choice isa Vector{Union{UnimputedMissingValue,Bool}}
         @test session_info.actions_to_condition_on == (; choice=[true, true])
-        #Such a timestep has data, so the stopping criterion is checked after it
-        @test session_info.first_timestep_to_check_stopping == 4
+        #Such a timestep has data
+        @test session_info.last_timestep_with_action == 3 &&
+            session_info.last_timestep_with_observation == 3
         #A copy with other save histories, and one for prediction, replace nothing more in the data, also when missing was kept as a value
         kept = SessionInfo(
             SessionCounter(),
@@ -547,15 +545,6 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             environment=GivesReward(),
             include_environment=false,
             environment_save_history=SaveHistory(; outputs=:reward),
-        )
-        @test_throws "include_environment = false leaves the environment out of the session, but check_stopping_criterion = true checks its stopping criterion on every timestep." SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            COUNTER_CHOICES;
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
-            include_environment=false,
-            check_stopping_criterion=true,
         )
         @test_throws "include_environment = true needs an environment model, but the session has none." SessionInfo(
             SessionCounter(),

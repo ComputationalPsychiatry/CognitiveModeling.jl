@@ -1,9 +1,7 @@
 ### SESSIONS WHOSE DATA IS SIMULATED INSTEAD OF FITTED TO, AND THE OTHER WAY ROUND ###
 
 #The models of the package take the data of their sessions as arguments, which Turing.jl's decondition leaves as they are, so a copy of the model is made whose sessions are deconditioned. Turing.jl's own functions then simulate the data, and condition and decondition work on the copy as on any model
-function CognitiveModeling.decondition_sessions(
-    model::DynamicPPL.Model; check_stopping_criterion::Union{Nothing,Bool}=nothing
-)
+function CognitiveModeling.decondition_sessions(model::DynamicPPL.Model)
     #A model of one's own has no session info that the package can find, so its sessions are deconditioned before it is given them
     if !is_session_model(model)
         throw(
@@ -12,11 +10,7 @@ function CognitiveModeling.decondition_sessions(
             ),
         )
     end
-    return with_sessions_simulated(
-        model,
-        info -> decondition_sessions(info; check_stopping_criterion),
-        "decondition_sessions",
-    )
+    return with_sessions_simulated(model, decondition_sessions, "decondition_sessions")
 end
 
 #Several sessions are named after whether their data is simulated, with name_of_session, while a single session has no name of its own in the model. It is given one with DynamicPPL.jl's prefix, so that Turing.jl's predict draws every variable within it again, whatever a chain of a fit to it holds
@@ -42,9 +36,7 @@ end
 
 #The values go in the data of the sessions, which the models take as arguments, so that the copy is fitted to them as to any data. Turing.jl's condition on the variables gives the same posterior, but looks up every value by its name on each evaluation, which is slower
 function CognitiveModeling.condition_sessions(
-    model::DynamicPPL.Model,
-    values::Union{AbstractDict{<:VarName},DynamicPPL.VarNamedTuple};
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
+    model::DynamicPPL.Model, values::Union{AbstractDict{<:VarName},DynamicPPL.VarNamedTuple}
 )
     #A model of one's own has no session info that the package can find, so its sessions are given the values in their data before it is given them
     if !is_session_model(model)
@@ -61,9 +53,7 @@ function CognitiveModeling.condition_sessions(
     model_prefix = prefix_of_model(model)
     conditioned_model = with_session_info(
         model,
-        info -> with_values_in_data(
-            info, model_prefix, values_by_name, used_names; check_stopping_criterion
-        ),
+        info -> with_values_in_data(info, model_prefix, values_by_name, used_names),
         "condition_sessions",
     )
 
@@ -74,22 +64,16 @@ end
 
 #The values given as pairs, as Turing.jl's condition takes them too
 function CognitiveModeling.condition_sessions(
-    model::DynamicPPL.Model,
-    pairs::Pair{<:VarName}...;
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
+    model::DynamicPPL.Model, pairs::Pair{<:VarName}...
 )
-    return condition_sessions(model, Dict{VarName,Any}(pairs...); check_stopping_criterion)
+    return condition_sessions(model, Dict{VarName,Any}(pairs...))
 end
 
 #The data of several sessions in a table, read as the sessions were read from theirs
-function CognitiveModeling.condition_sessions(
-    model::DynamicPPL.Model, table; check_stopping_criterion::Union{Nothing,Bool}=nothing
-)
+function CognitiveModeling.condition_sessions(model::DynamicPPL.Model, table)
     check_takes_data_of(model, :several, "condition_sessions(model, table)")
     return with_session_info(
-        model,
-        info -> condition_sessions(info, table; check_stopping_criterion),
-        "condition_sessions",
+        model, info -> condition_sessions(info, table), "condition_sessions"
     )
 end
 
@@ -98,22 +82,17 @@ function CognitiveModeling.condition_sessions(
     model::DynamicPPL.Model,
     observations::Union{NamedTuple,AbstractVector},
     actions::Union{NamedTuple,AbstractVector};
-    check_stopping_criterion::Union{Nothing,Bool}=nothing,
     timestep_sizes=nothing,
 )
     check_takes_data_of(model, :one, "condition_sessions(model, observations, actions)")
     return with_session_info(
         model,
         info -> condition_sessions(
-            info,
-            observations,
-            actions;
-            check_stopping_criterion,
-            timestep_sizes=if timestep_sizes === nothing
+            info, observations, actions; timestep_sizes=if timestep_sizes === nothing
                 info.timestep_sizes
             else
                 timestep_sizes
-            end,
+            end
         ),
         "condition_sessions",
     )
@@ -168,8 +147,7 @@ function prefix_of_model(model::DynamicPPL.Model)
 end
 
 """
-    with_values_in_data(info, model_prefix, values_by_name, used_names;
-                        check_stopping_criterion)
+    with_values_in_data(info, model_prefix, values_by_name, used_names)
 
 Return a copy of `info`, a `SessionInfo` or a `MultipleSessionsInfo`, whose sessions have
 the values in `values_by_name` in their data, as `condition_sessions` describes, and add the
@@ -183,8 +161,7 @@ function with_values_in_data(
     session_info::SessionInfo,
     model_prefix::String,
     values_by_name::Dict{String,Any},
-    used_names::Set{String};
-    check_stopping_criterion::Union{Nothing,Bool},
+    used_names::Set{String},
 )
     observations, actions = columns_with_values(
         session_info, model_prefix, values_by_name, used_names
@@ -198,7 +175,6 @@ function with_values_in_data(
         session_info,
         only(with_common_element_types([data.observations])),
         only(with_common_element_types([data.actions]));
-        check_stopping_criterion,
         timestep_sizes=data.timestep_sizes,
     )
 end
@@ -207,8 +183,7 @@ function with_values_in_data(
     sessions_info::MultipleSessionsInfo,
     model_prefix::String,
     values_by_name::Dict{String,Any},
-    used_names::Set{String};
-    check_stopping_criterion::Union{Nothing,Bool},
+    used_names::Set{String},
 )
     #The data of every session with the values in it, where each session ends after its last timestep with data
     data = map(enumerate(sessions_info.sessions)) do (i, session)
@@ -228,11 +203,7 @@ function with_values_in_data(
     #Each session is prepared again with its new data
     sessions = [
         with_data(
-            session,
-            observations[i],
-            actions[i];
-            check_stopping_criterion,
-            timestep_sizes=data[i].timestep_sizes,
+            session, observations[i], actions[i]; timestep_sizes=data[i].timestep_sizes
         ) for (i, session) in enumerate(sessions_info.sessions)
     ]
 

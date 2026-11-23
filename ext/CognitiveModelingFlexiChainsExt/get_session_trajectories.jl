@@ -129,9 +129,9 @@ Add an entry to `entries` for everything one session saved, where `saved_traject
 gives the session's [`SessionTrajectories`](@ref) from the returned value of one sample, and
 `session_prefix` holds the session's symbol name, or nothing for a single session. The
 cognitive model's values are named under the session alone, and the environment's under
-`environment` after it, as [`add_model_entries!`](@ref) names them. When the models of the
-session can set `parameters_valid`, which a `Bool` shows, an entry `parameters_valid` under
-the session says for each sample whether its parameters stayed valid. Used by
+`environment` after it, as [`add_model_entries!`](@ref) names them. When the session gives
+`parameters_valid` as a `Bool`, as every fitted session does, an entry `parameters_valid`
+under the session says for each sample whether its parameters stayed valid. Used by
 [`get_session_trajectories`](@ref).
 """
 function add_session_entries!(

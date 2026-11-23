@@ -184,9 +184,10 @@
         deconditioned_rows = deconditioned_with_environment.args.sessions_info.session_rows
         @test cut_sessions.session_rows ==
             [deconditioned_rows[1], deconditioned_rows[2], deconditioned_rows[3][1:2]]
-        #So nothing within the sessions is left to sample, and the criterion is checked after the last timestep, which is never
+        #So nothing within the sessions is left to sample, and their data continues to their last timestep
         @test issetequal(keys(rand(Xoshiro(5), conditioned)), parameter_names)
-        @test cut_sessions.sessions[3].first_timestep_to_check_stopping == 3
+        @test cut_sessions.sessions[3].n_timesteps == 2 &&
+            cut_sessions.sessions[3].last_timestep_with_action == 2
         #A value on a later timestep keeps the timesteps before it, whose other values stay simulated
         only_a_late_choice = Dict(
             @varname(simulated_sessions[3].timesteps[3].choice.simulated) =>
@@ -339,16 +340,6 @@
         @test conditioned_single.args.session_info.n_timesteps == 2
         @test_throws "gives a single session its data, but the model has several sessions" condition_sessions(
             deconditioned, (; reward=[1.0]), (; choice=[true])
-        )
-    end
-
-    @testset "check_stopping_criterion is given to the sessions" begin
-        conditioned = condition_sessions(
-            deconditioned, simulated_choices; check_stopping_criterion=false
-        )
-        @test all(
-            session -> session.check_stopping_criterion === false,
-            conditioned.args.sessions_info.sessions,
         )
     end
 

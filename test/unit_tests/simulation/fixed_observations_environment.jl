@@ -209,10 +209,10 @@ end
         simulate_steps!(10)
         @test environment.state == (; n_observations_given=3)
         @test agent.state == (; expected_reward=0.6875)
-        #It has ended, so it can't be simulated again before it is reset
-        @test_throws "is already met before the first timestep, so no timestep can run" simulate_steps!(
-            1
-        )
+        #It has ended, so a further simulation has no timestep until it is reset, and it stays as it is
+        @test simulate_steps!(1).n_timesteps == 0
+        @test environment.state == (; n_observations_given=3) &&
+            agent.state == (; expected_reward=0.6875)
         reset!(environment)
         @test environment.state == (; n_observations_given=0)
         simulate_steps!(1)

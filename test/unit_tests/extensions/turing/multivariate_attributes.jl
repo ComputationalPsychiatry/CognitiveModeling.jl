@@ -297,12 +297,15 @@ const OPTIONS_VALUES = Dict(
             @varname(S1.ratings),
             @varname(S1.choice),
             @varname(S1.expected_payoffs),
+            @varname(S1.parameters_valid),
             @varname(S2.ratings),
             @varname(S2.choice),
             @varname(S2.expected_payoffs),
+            @varname(S2.parameters_valid),
             @varname(S3.ratings),
             @varname(S3.choice),
             @varname(S3.expected_payoffs),
+            @varname(S3.parameters_valid),
         ]
         session_parameters = get_session_parameters(model, chain)
         for draw in (1, 30)

@@ -168,14 +168,13 @@ Turing.jl model which runs the timesteps of a session from `previous`, where it 
 each as [`turing_run_timestep_both_models`](@ref) with the prefix `timesteps[t]`, saves what
 the save histories of `session_info` select, and scores the actions in the data, and the
 observations in the data when the environment runs, against the distributions of their
-timesteps all at once at the end, as observed values. Before each timestep from
-`first_timestep_to_check_stopping` of `session_info` on, it checks the
+timesteps all at once at the end, as observed values. Before each timestep, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
-what it saved up to it. When either model sets `parameters_valid` to `false` on a timestep,
-or a criterion is met while the data continues, which the parameters then can't give, the
-session gives the parameters a log density of `-Inf`, keeps nothing of that timestep, scores
-nothing and ends there. A criterion met before the first timestep of a session without data
-is an error, since no timestep can run. It returns the trajectories the session saved, in a
+what it saved up to it, also before the first timestep, which then still runs, so that what
+is saved has its types, and is left out. When either model sets `parameters_valid` to
+`false` on a timestep, or a criterion is met while the data continues, which the parameters
+then can't give, the session gives the parameters a log density of `-Inf`, keeps nothing of
+that timestep, scores nothing and ends there. It returns the trajectories the session saved, in a
 [`SessionTrajectories`](@ref), as [`turing_behavioral_session`](@ref) describes them, which
 returns them under `saved_trajectories`, with whether the parameters stayed valid as
 [`session_parameters_valid`](@ref) gives it. Both methods of that model call this one, after setting up the
@@ -186,31 +185,19 @@ Turing.@model function turing_run_all_timesteps(
     session_info, cognitive_parameters, environment_parameters, previous
 )
     n_timesteps = session_info.n_timesteps
-    first_timestep_to_check = session_info.first_timestep_to_check_stopping
 
     #Which states hold the states of submodels, for the trajectories the session returns
     submodel_states = submodel_states_of(
         session_info.cognitive_model, session_info.environment
     )
 
-    #When the criterion is checked from the start and is met already, no timestep can run: with data, the parameters can't give it, as when they turn invalid, and without data, it is an error
-    stopped_before_first = false
-    if first_timestep_to_check == 1
-        stopped_before_first =
-            stopping_criterion(
-                session_info.environment, previous.environment.state, environment_parameters
-            ) | stopping_criterion(
-                session_info.cognitive_model, previous.state, cognitive_parameters
-            )
-        if stopped_before_first && !data_continues_after(session_info, 0)
-            check_stopping_criterion_not_met(
-                session_info.environment, previous.environment.state, environment_parameters
-            )
-            check_stopping_criterion_not_met(
-                session_info.cognitive_model, previous.state, cognitive_parameters
-            )
-        end
-    end
+    #A criterion that is met already ends the session before its first timestep. While the data continues, the parameters can't give that, as when they turn invalid
+    stopped_before_first =
+        stopping_criterion(
+            session_info.environment, previous.environment.state, environment_parameters
+        ) | stopping_criterion(
+            session_info.cognitive_model, previous.state, cognitive_parameters
+        )
 
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
     initial_saved = select_initial_timestep_values_to_save(
@@ -238,16 +225,17 @@ Turing.@model function turing_run_all_timesteps(
     )
     offset = initial_saved === nothing ? 0 : 1
 
-    #A session whose parameters turned invalid on the first timestep, or whose criterion was met before it while its data continues, gives them a log density of -Inf, keeps nothing of the timestep, scores nothing and ends. The first timestep still ran, so that what is saved has its types
+    #A session whose criterion was met before the first timestep, or whose parameters turned invalid on it, keeps nothing of it, scores nothing and ends. The first timestep still ran, so that what is saved has its types. The parameters stay valid when the criterion ended the session and no data continues, whatever the first timestep gave, since it didn't count, and get a log density of -Inf otherwise
     if stopped_before_first || !parameters_are_valid(timestep_values.parameters_valid)
-        Turing.@addlogprob! -Inf
+        parameters_valid = stopped_before_first && !data_continues_after(session_info, 0)
+        if !parameters_valid
+            Turing.@addlogprob! -Inf
+        end
         map_saved(vector -> resize!(vector, offset), storage)
         return saved_trajectories(
             storage,
             timestep_sizes_until(session_info.saved_timestep_sizes, offset),
-            session_parameters_valid(
-                session_info, timestep_values.parameters_valid, !stopped_before_first
-            ),
+            parameters_valid,
             0,
             nothing,
             submodel_states,
@@ -266,15 +254,13 @@ Turing.@model function turing_run_all_timesteps(
     n_timesteps_that_ran = n_timesteps
     for t in 2:n_timesteps
 
-        #Stop when the stopping criterion of either model is met, on the timesteps where it is checked. While the data continues, the parameters can't give it, as when they turn invalid
-        if t >= first_timestep_to_check && (
-            stopping_criterion(
-                session_info.environment,
-                timestep_values.environment.state,
-                environment_parameters,
-            ) || stopping_criterion(
-                session_info.cognitive_model, timestep_values.state, cognitive_parameters
-            )
+        #Stop when the stopping criterion of either model is met. While the data continues, the parameters can't give it, as when they turn invalid
+        if stopping_criterion(
+            session_info.environment,
+            timestep_values.environment.state,
+            environment_parameters,
+        ) || stopping_criterion(
+            session_info.cognitive_model, timestep_values.state, cognitive_parameters
         )
             if data_continues_after(session_info, t - 1)
                 Turing.@addlogprob! -Inf
@@ -282,9 +268,7 @@ Turing.@model function turing_run_all_timesteps(
                 return saved_trajectories(
                     storage,
                     timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
-                    session_parameters_valid(
-                        session_info, timestep_values.parameters_valid, false
-                    ),
+                    session_parameters_valid(timestep_values.parameters_valid, false),
                     t - 1,
                     nothing,
                     submodel_states,
@@ -318,9 +302,7 @@ Turing.@model function turing_run_all_timesteps(
             return saved_trajectories(
                 storage,
                 timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
-                session_parameters_valid(
-                    session_info, next_timestep_values.parameters_valid, true
-                ),
+                session_parameters_valid(next_timestep_values.parameters_valid, true),
                 t - 1,
                 nothing,
                 submodel_states,
@@ -363,7 +345,7 @@ Turing.@model function turing_run_all_timesteps(
         timestep_sizes_until(
             session_info.saved_timestep_sizes, n_timesteps_that_ran + offset
         ),
-        session_parameters_valid(session_info, timestep_values.parameters_valid, true),
+        session_parameters_valid(timestep_values.parameters_valid, true),
         n_timesteps_that_ran,
         nothing,
         submodel_states,

@@ -49,10 +49,13 @@ end
         @test Turing.FlexiChains.get_name.(keys(session_trajectories)) == [
             @varname(S1.choice),
             @varname(S1.expected_reward),
+            @varname(S1.parameters_valid),
             @varname(S2.choice),
             @varname(S2.expected_reward),
+            @varname(S2.parameters_valid),
             @varname(S3.choice),
             @varname(S3.expected_reward),
+            @varname(S3.parameters_valid),
         ]
         parameters = get_session_parameters(model, chain)
         @test Turing.FlexiChains.iter_indices(parameters) ==
@@ -108,14 +111,17 @@ end
             keys(get_session_trajectories(sessions, chain; cognitive_save_history))
         ) == [
             @varname(S1.expected_reward),
+            @varname(S1.parameters_valid),
             @varname(S2.expected_reward),
+            @varname(S2.parameters_valid),
             @varname(S3.expected_reward),
+            @varname(S3.parameters_valid),
         ]
         session_trajectories = get_session_trajectories(
             session_for_test(), chain; cognitive_save_history
         )
         @test Turing.FlexiChains.get_name.(keys(session_trajectories)) ==
-            [@varname(expected_reward)]
+            [@varname(expected_reward), @varname(parameters_valid)]
         @test session_trajectories[@varname(expected_reward)][1] ≈ expected_rewards_by_hand(
             SESSION_REWARDS.reward, SESSION_PARAMETERS.learning_rate
         )
@@ -226,6 +232,7 @@ end
             keys(merge(single_trajectories, single_parameters))
         ) == [
             @varname(expected_reward),
+            @varname(parameters_valid),
             @varname(learning_rate),
             @varname(inverse_temperature),
         ]

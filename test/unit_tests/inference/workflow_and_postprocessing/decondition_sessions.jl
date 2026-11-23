@@ -14,8 +14,10 @@
         @test predictive.observations === session_info.observations
         @test isempty(predictive.actions_to_condition_on) &&
             !predictive.includes_environment
-        #The observations are still data, so the stopping criterion is checked after them, which is never
-        @test predictive.first_timestep_to_check_stopping == 4
+        #The observations are still data, but the session doesn't score them, so only the actions say where the data continues, and none of them is data
+        @test predictive.last_timestep_with_observation == 3 &&
+            predictive.last_timestep_with_action == 0
+        @test !CognitiveModeling.data_continues_after(predictive, 0)
         #Everything else is kept
         @test predictive.who_starts === AgentStarts() && predictive.n_timesteps == 3
         @test predictive.timestep_sizes == [1.0, 2.0, 1.0]
@@ -44,26 +46,10 @@
         predictive = decondition_sessions(session_info)
         @test predictive.observations == (; reward=fill(SimulatedMissingValue(), 3))
         @test predictive.includes_environment && predictive.environment === GivesReward()
-        #With no values in the data, the stopping criterion is checked from the first timestep
-        @test predictive.first_timestep_to_check_stopping == 1
-    end
-
-    @testset "The copy checks the stopping criterion as it is told, whatever the session was prepared with" begin
-        never_checked = SessionInfo(
-            SessionCounter(),
-            COUNTER_REWARDS,
-            COUNTER_CHOICES;
-            who_starts=EnvironmentStarts(),
-            environment=GivesReward(),
-            check_stopping_criterion=false,
-        )
-        @test never_checked.first_timestep_to_check_stopping == 4
-        #By default as a simulation does, from the first timestep, since the copy has no data
-        @test decondition_sessions(never_checked).first_timestep_to_check_stopping == 1
-        @test decondition_sessions(never_checked).check_stopping_criterion === nothing
-        #Or never, when it is told so
-        @test decondition_sessions(never_checked; check_stopping_criterion=false).first_timestep_to_check_stopping ==
-            4
+        #With no values in the data, a stopping criterion can end the copy on any timestep without making the parameters invalid, as in a simulation
+        @test predictive.last_timestep_with_observation == 0 &&
+            predictive.last_timestep_with_action == 0
+        @test !CognitiveModeling.data_continues_after(predictive, 0)
     end
 
     @testset "Several sessions are each copied, with their data identifiers" begin
@@ -81,11 +67,6 @@
         @test all(
             session -> all(==(SimulatedMissingValue()), session.actions.choice),
             predictive.sessions,
-        )
-        #A keyword is passed on to every session
-        @test all(
-            session -> session.check_stopping_criterion === false,
-            decondition_sessions(sessions_info; check_stopping_criterion=false).sessions,
         )
     end
 end

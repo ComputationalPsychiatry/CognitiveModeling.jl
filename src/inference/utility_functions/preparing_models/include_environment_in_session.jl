@@ -14,18 +14,15 @@ end
 
 """
     decide_whether_environment_is_included(include_environment, environment, observations,
-                                           actions, environment_save_history,
-                                           check_stopping_criterion)
+                                           actions, environment_save_history)
 
 Return whether a session includes its environment, as the `include_environment` of
 [`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
 `false`, and with `nothing` only when an observation or an action is
-[`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), the environment's history
-is saved, or its stopping criterion is checked on every timestep. A session without an
-environment never includes one. With `false`, it is an error when an observation is
-`ImputedMissingValue()`, the environment's history is saved, or its stopping criterion is
-checked on every timestep, since those need the environment. Used by
-[`prepare_session`](@ref).
+[`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), or the environment's
+history is saved. A session without an environment never includes one. With `false`, it is
+an error when an observation is `ImputedMissingValue()` or the environment's history is
+saved, since those need the environment. Used by [`prepare_session`](@ref).
 """
 function decide_whether_environment_is_included(
     include_environment::Union{Nothing,Bool},
@@ -33,7 +30,6 @@ function decide_whether_environment_is_included(
     observations,
     actions,
     environment_save_history::SaveHistory,
-    check_stopping_criterion,
 )
     #A session without an environment has none to include
     if environment isa NoEnvironment
@@ -51,8 +47,6 @@ function decide_whether_environment_is_included(
         "the data has observations that are ImputedMissingValue() or SimulatedMissingValue(), which only the environment can impute or simulate"
     elseif !saves_nothing(environment_save_history)
         "environment_save_history saves its history"
-    elseif check_stopping_criterion === true
-        "check_stopping_criterion = true checks its stopping criterion on every timestep"
     else
         nothing
     end
@@ -95,8 +89,8 @@ function remake_session_without_environment(session_info::SessionInfo)
         session_info.saved_timestep_sizes,
         session_info.cognitive_save_history,
         session_info.environment_save_history,
-        session_info.check_stopping_criterion,
-        session_info.first_timestep_to_check_stopping,
+        session_info.last_timestep_with_action,
+        session_info.last_timestep_with_observation,
         session_info.check_parameter_domains,
         session_info.previous_observation,
         session_info.previous_action,
@@ -137,8 +131,8 @@ function remake_session_including_environment(session_info::SessionInfo)
         session_info.saved_timestep_sizes,
         session_info.cognitive_save_history,
         session_info.environment_save_history,
-        session_info.check_stopping_criterion,
-        session_info.first_timestep_to_check_stopping,
+        session_info.last_timestep_with_action,
+        session_info.last_timestep_with_observation,
         session_info.check_parameter_domains,
         session_info.previous_observation,
         session_info.previous_action,
