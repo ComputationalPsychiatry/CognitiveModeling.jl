@@ -1,6 +1,8 @@
 #What the model of the tutorial gave when it ran: responses with a choice and a response time, read from two columns of
-#the data, a fit that recovers the drift rate and the non-decision time of each participant, a missing response that is
-#left out, and responses with only one of their parts, scored by that part
+#the data, a fit that recovers the drift rate and the non-decision time of each participant, a log-likelihood for each
+#response, which add up to that of the sample, and a PSIS-LOO that prefers parameters for each participant to shared
+#ones, and whose estimates are unreliable only at the fastest responses, a missing response that is left out, and
+#responses with only one of their parts, scored by that part
 using SequentialSamplingModels: SequentialSamplingModels
 using Statistics: mean
 
@@ -24,6 +26,19 @@ end
         participant in (:P1, :P2, :P3)
     ]
     @test all(abs.(non_decision_times .- 0.3) .< 0.05)
+end
+
+@testset "Each response has a log-likelihood, which add up to that of the sample, and PSIS-LOO prefers parameters for each participant" begin
+    @test size(log_likelihood) == (500, 1, 3 * n_trials)
+    @test sum(log_likelihood[1, 1, :]) ≈
+        loglikelihood(model, Turing.FlexiChains.parameters_at(chain; iter=1, chain=1))
+    @test isfinite(independent_parameters_loo.estimates.elpd)
+    #The estimates that are unreliable are those of the fastest responses, as the tutorial says
+    @test !isempty(unreliable_responses) &&
+        issubset(unreliable_responses, fastest_responses)
+    @test comparison.rank[findfirst(
+        ==(:independent_parameters), collect(comparison.name)
+    )] == 1
 end
 
 @testset "A response with a missing column is missing, and left out" begin

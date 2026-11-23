@@ -3,15 +3,17 @@
 # SequentialSamplingModels.jl has distributions over a choice and the time it took, such as
 # the drift diffusion model (DDM). A value of one is a `NamedTuple` with both, such as
 # `(choice = 1, rt = 0.53)`. This page uses a DDM as the distribution that a cognitive model
-# samples its response from, simulates the model on a task with two choices, and fits it to
-# the responses of three simulated participants with Turing.jl, also when a response has
-# only its choice or only its time. It was run with SequentialSamplingModels.jl 0.13.3.
+# samples its response from, simulates the model on a task with two choices, fits it to the
+# responses of three simulated participants with Turing.jl, compares two such fits with
+# leave-one-out cross-validation, and fits it also when a response has only its choice or
+# only its time. It was run with SequentialSamplingModels.jl 0.13.3.
 
 using CognitiveModeling
 using SequentialSamplingModels: DDM
 using Turing
 using Distributions: Distributions
 using LogExpFunctions: logsumexp
+using PosteriorStats: compare, loo
 using Random: AbstractRNG, Xoshiro
 using Statistics: mean
 
@@ -203,6 +205,75 @@ for (participant, true_drift_rate) in zip((:P1, :P2, :P3), true_drift_rates)
         " (0.3)",
     )
 end
+
+# ## Comparing models
+#
+# How well a fitted model predicts responses it wasn't fitted to can be estimated from the
+# fit itself, with leave-one-out cross-validation by Pareto-smoothed importance sampling,
+# PSIS-LOO. It needs the log-likelihood of each response with the parameters of each
+# sample. Turing.jl's `pointwise_loglikelihoods` gives them with `factorize = true`: each
+# session scores its responses together, and `factorize` splits them into a value for each
+# response, of its choice and its time together, in the order of the trials:
+
+pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
+
+# The `loo` of [PosteriorStats.jl](https://github.com/arviz-devs/PosteriorStats.jl), which
+# smooths with PSIS.jl, takes them in an array of samples by chains by responses:
+
+#The log-likelihoods of one output of the model, with the values of each session in turn
+function log_likelihood_array(pointwise, output)
+    session_names = collect(keys(pointwise))
+    n_samples, n_chains = size(pointwise[first(session_names)])
+    return stack(
+        [
+            getproperty(pointwise[session_name][sample_index, chain_index], output)[i] for
+            sample_index in 1:n_samples, chain_index in 1:n_chains
+        ] for session_name in session_names for
+        i in eachindex(getproperty(pointwise[session_name][1, 1], output))
+    )
+end
+log_likelihood = log_likelihood_array(pointwise, :response)
+independent_parameters_loo = loo(log_likelihood)
+
+# For each response, PSIS-LOO says how far its estimate can be trusted, with the shape of
+# the Pareto distribution fitted to its largest importance weights: above 0.7, the estimate
+# is unreliable. Here, that happens at the fastest response of some participants. The
+# DDM's density is close to zero for a response time just above the non-decision time, so
+# a participant's fastest response limits their non-decision time the most, and the
+# posterior without it differs more than importance sampling can make up for:
+
+#The responses whose estimates are unreliable, and the fastest response of each participant, which are in the order of
+#the table's rows, since no response is missing
+unreliable_responses = findall(>(0.7), independent_parameters_loo.pointwise.pareto_shape)
+fastest_responses = [
+    argmin(row -> data.rt[row], findall(==(participant), data.participant)) for
+    participant in ("P1", "P2", "P3")
+]
+unreliable_responses, fastest_responses
+
+# A model in which the three participants share their parameters, with
+# [`IdenticalParameters`](@ref), is fitted to the same data, and the two fits are compared
+# by their PSIS-LOO estimates. The participants were simulated with different drift rates,
+# so the model that gives each their own predicts their responses better:
+
+model_with_identical_parameters = full_model(
+    TuringBackend(), IdenticalParameters(priors), sessions_info
+)
+chain_with_identical_parameters = sample(
+    Xoshiro(3), model_with_identical_parameters, NUTS(), 500
+)
+identical_parameters_loo = loo(
+    log_likelihood_array(
+        pointwise_loglikelihoods(
+            model_with_identical_parameters, chain_with_identical_parameters; factorize=true
+        ),
+        :response,
+    ),
+)
+comparison = compare((;
+    independent_parameters=independent_parameters_loo,
+    identical_parameters=identical_parameters_loo,
+))
 
 # ## Missing responses
 #
