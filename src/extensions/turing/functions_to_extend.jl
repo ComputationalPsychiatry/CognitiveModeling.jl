@@ -16,9 +16,9 @@ The same holds for an environment model, which fitting uses to fill in observati
 [`ImputedMissingValue`](@ref) in the data: what it samples itself, such as a change of its
 state, must be sampled with `~`, while fitting samples the observations from what it
 returns. A variable that is sampled on some timesteps only must be chosen by the timestep or
-the data, and not by the parameters or the state, since the samples of a fit must have the
-same variables for a sampler of Turing.jl to start, as
-[`CognitiveModeling.turing_full_model`](@ref) describes.
+the data, and not by the parameters or the state, since samples with different variables
+keep a sampler of Turing.jl from starting, or give a wrong posterior, as the page
+[Fitting with Turing.jl](@ref) describes.
 
 # Examples
 ```julia

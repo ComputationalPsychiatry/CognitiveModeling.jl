@@ -155,6 +155,31 @@ function CognitiveModeling.attribute_names(model::NoisyWhenExpectingHighReward)
     )
 end
 
+#Adds noise to its choices when its attention is below 0.5, so that whether it samples the noise depends on a parameter.
+#The noise hardly changes how likely the choices are, so the posterior of the attention is about its prior
+struct NoisyWhenInattentive <: AbstractCognitiveModel end
+CognitiveModeling.initialize_state(model::NoisyWhenInattentive, parameters) = (;)
+function CognitiveModeling.timestep_model(
+    model::NoisyWhenInattentive, context::ModelContext
+)
+    return ModelOutput((; choice=Normal(0.5, 1.0)), (;))
+end
+Turing.@model function CognitiveModeling.turing_timestep_model(
+    model::NoisyWhenInattentive, context::ModelContext
+)
+    mean_choice = 0.5
+    if context.parameters.attention < 0.5
+        noise ~ Normal(0, 0.1)
+        mean_choice += noise
+    end
+    return ModelOutput((; choice=Normal(mean_choice, 1.0)), (;))
+end
+function CognitiveModeling.attribute_names(model::NoisyWhenInattentive)
+    return ModelAttributes(;
+        parameters=:attention, states=(), inputs=:reward, outputs=:choice
+    )
+end
+
 #Starts its expected reward from a parameter, so that the start is fitted with the rest
 struct StartsFromParameter <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StartsFromParameter, parameters)
@@ -1633,4 +1658,52 @@ end
         progress=false,
         initial_params=InitFromParams((; learning_rate=0.9)),
     )
+end
+
+@testset "A variable that a model samples within a timestep only when its parameters say so has no density in the samples that don't sample it, so that a sampler which starts gives a wrong posterior without an error" begin
+    session_info = SessionInfo(
+        NoisyWhenInattentive(),
+        (; reward=fill(1.0, 4)),
+        (; choice=[0.4, 0.6, 0.5, 0.5]);
+        who_starts=EnvironmentStarts(),
+    )
+    @model function fit(session_info)
+        attention ~ Uniform(0, 1)
+        session ~ to_submodel(turing_behavioral_session(session_info, (; attention)), false)
+        return session
+    end
+    model = fit(session_info)
+    #The noise of every timestep, under its names, from a session with low attention
+    noise_names = collect(
+        keys(rand(Xoshiro(1), turing_behavioral_session(session_info, (; attention=0.2))))
+    )
+    @test length(noise_names) == 4
+    with_noise(attention, noise) =
+        Dict(@varname(attention) => attention, (name => noise for name in noise_names)...)
+    #With low attention the noise is scored, and with high attention it isn't sampled, so nothing holds its values
+    @test logjoint(model, with_noise(0.2, 0.0)) != logjoint(model, with_noise(0.2, 3.0))
+    @test logjoint(model, with_noise(0.8, 0.0)) == logjoint(model, with_noise(0.8, 3.0))
+    #Sampling starts when the first draw, which Turing.jl takes the variables from, has the noise. The sampler then moves
+    #the noise freely in the samples with high attention, after which samples with low attention are unlikely, so it stays
+    #among those with high attention: the attention is almost never below 0.5, where about half of the samples belong
+    chain = nothing
+    for seed in 1:20
+        Random.seed!(seed)
+        chain = try
+            sample(
+                Xoshiro(seed),
+                model,
+                NUTS(),
+                400;
+                progress=false,
+                initial_params=InitFromParams(with_noise(0.2, 0.0)),
+            )
+        catch error
+            error isa KeyError || rethrow()
+            nothing
+        end
+        chain === nothing || break
+    end
+    @test chain !== nothing
+    @test count(<(0.5), vec(chain[@varname(attention)])) < 40
 end

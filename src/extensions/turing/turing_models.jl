@@ -310,20 +310,13 @@ downstream model doesn't run, so `downstream_values` is `nothing`.
 
 Such a sample doesn't have the variables that come after that timestep: the values that the
 later timesteps impute, simulate or sample, and the variables of the downstream model. A fit
-of a model with such variables can then fail when it starts, in two ways. A sampler of
-Turing.jl, and its `maximum_a_posteriori` and `maximum_likelihood`, take the variables of
-the model from one draw from the prior, which they make with Julia's default random number
-generator, whatever `initial_params` they are given. When that draw ends early, they throw a
-`KeyError` which names a variable that the draw doesn't have, such as
-`KeyError: key slope not found`. When it doesn't, but the parameters they start from end
-early, they throw an `ArgumentError` which says that some indices in the output vector were
-not set, and valid `initial_params` prevent that one. Both happen less often the more seldom
-the priors give parameters that end a session early, and `Random.seed!` sets the generator
-that makes the first draw. A model without such variables has neither problem, and its
-samples that end early are rejected as any other. A chain sampled from the prior, and the
-predictions of `predict`, have `missing` for those variables in such samples. The same
-happens when a model samples a variable within a timestep on some timesteps only, chosen by
-its parameters or its state, as [`turing_timestep_model`](@ref) describes.
+of a model with such variables can then fail when it starts, since Turing.jl takes the
+variables of a model from one draw from the prior, whatever `initial_params` it is given. A
+chain sampled from the prior, and the predictions of `predict`, have `missing` for those
+variables in such samples. A model that samples a variable within a timestep on some
+timesteps only, chosen by its parameters or its state, can fail in the same way, or give a
+wrong posterior without an error. The page [Fitting with Turing.jl](@ref) describes when
+this happens, and what to do.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read

@@ -163,6 +163,58 @@ CognitiveModeling.turing_timestep_model
 CognitiveModeling.turing_initialize_state
 ```
 
+## Variables that only some samples have
+
+Turing.jl's samplers, and its `maximum_a_posteriori` and `maximum_likelihood`, take the
+variables of a model from one draw from the prior. They make it with Julia's default random
+number generator, whatever `initial_params` they are given. A sample of a model of the
+package can have fewer variables than another in two ways.
+
+A session can end early, when its parameters turn invalid, or when a stopping criterion is
+met while its data continues. The sample then has a log density of `-Inf`, and it doesn't
+have what would have been sampled after the timestep where the session ended: the actions
+and observations that later timesteps impute, what a model samples within a later timestep,
+and the variables of the downstream model, which doesn't run. A sampler rejects such
+samples, so every sample in the chain has every variable. But when the first draw ends
+early, the fit throws a `KeyError` that names a variable the draw doesn't have, such as
+`KeyError: key slope not found`, even when `initial_params` are valid. When the first draw
+doesn't end early but the parameters that the fit starts from do, a sampler throws an
+`ArgumentError` which says that some indices in the output vector were not set, and
+`maximum_a_posteriori` and `maximum_likelihood` throw an error which says that some values
+are missing. Valid `initial_params` prevent those. These errors happen less often the more
+seldom the priors give parameters that end a session early, and `Random.seed!` sets the
+generator that makes the first draw. A model in which nothing is sampled after a session
+ends has none of them.
+
+`maximum_a_posteriori` and `maximum_likelihood` don't look for parameters to start from
+whose log density is finite, as the samplers do. Without valid `initial_params`, they can
+return a mode with a log density of `-Inf`, without an error, for any model whose priors
+give parameters that end a session early.
+
+A model can also sample a variable within a timestep on some timesteps only. This is no
+problem when the data or the number of the timestep chooses those timesteps, as when an
+action that is missing in the data is imputed: every sample then has the variable on the
+same timesteps. When the parameters choose them, directly or through the state, samples with
+valid parameters have different variables, which Turing.jl's samplers don't allow for, and
+don't check. Sampling then either fails to start, with the same `KeyError`, or gives a wrong
+posterior without an error. In a sample that doesn't use the variable, nothing holds its
+value, so the sampler moves it freely, far from where its prior puts it. A sample that uses
+it again then has a low density, so the sampler stays among the samples that don't use it.
+In a test where a parameter should be above 0.5 in half of the samples, and a variable was
+sampled only then, the parameter was above 0.5 in at most 1 of 400. Instead, sample such a
+variable on every timestep, and use it only where it is needed, as for noise that is added
+to the expected reward `Vₜ` only when it is above 0.6:
+
+```julia
+noise ~ Normal(0, 0.1)
+if Vₜ > 0.6
+    Vₜ += noise
+end
+```
+
+A chain sampled with `Prior()`, and the predictions of `predict`, have `missing` for a
+variable in the samples that don't have it.
+
 ## Fitting several sessions
 
 These are what the parts of [`CognitiveModeling.turing_full_model`](@ref) are written with,
