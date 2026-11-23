@@ -169,3 +169,14 @@ jobs:
       - uses: julia-actions/cache@v3
       - name: Run the premade tests against this commit
         run: julia --color=yes --project=../PremadeCognitiveModels.jl -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+  # One check that says whether every test job passed, whatever the matrix holds, which the protection of main and dev
+  # requires. The job of the premade models reports without blocking, so it isn't among them
+  all_tests_passed:
+    name: All tests passed
+    if: always()
+    needs: [test, separate_environments]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail when a test job failed, was cancelled or was skipped
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1

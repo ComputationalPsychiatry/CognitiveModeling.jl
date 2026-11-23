@@ -1,0 +1,23 @@
+name: Pull requests into main
+
+# Only dev of this repository is merged into main, which the protection of main requires as a check
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  from_dev:
+    name: Pull request from dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the pull request comes from dev of this repository
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPOSITORY" != "$REPOSITORY" ]; then
+            echo "Only dev of $REPOSITORY is merged into main, but this pull request comes from $HEAD_REPOSITORY:$HEAD_REF."
+            exit 1
+          fi
