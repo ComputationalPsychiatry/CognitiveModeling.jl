@@ -189,6 +189,7 @@ function with_empty_environment_trajectories(saved_trajectories::SessionTrajecto
         saved_trajectories.parameters_valid,
         saved_trajectories.n_timesteps,
         saved_trajectories.last_timestep,
+        saved_trajectories.submodel_states,
     )
 end
 

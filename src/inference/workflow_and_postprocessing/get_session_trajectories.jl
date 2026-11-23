@@ -39,7 +39,9 @@ distribution is named like its action, so it is under its kind, as
 `P1.action_distributions.choice`. The environment's values are under `environment`, in the
 same way: `P1.environment.level` for a state, `P1.environment.reward` for an observation it
 gave, `P1.environment.choice` for an action it received and
-`P1.environment.observation_distributions.reward`. Each entry holds a vector over the
+`P1.environment.observation_distributions.reward`. The state of a submodel, which the
+trajectories name under `submodel_states`, has an entry for each of its own states, named
+after the submodel too, as `P1.perception.expected_value`. Each entry holds a vector over the
 timesteps for every sample, which starts with timestep 0 when the initial timestep values
 are saved, so that element `t + 1` is timestep `t`, as everywhere in the package. The
 observations, the actions and the distributions of timestep 0 are
@@ -49,7 +51,8 @@ column, as in `id_S1__block_2`, as [`CognitiveModeling.session_id_to_symbol`](@r
 it. When the models can set `parameters_valid` in their [`ModelOutput`](@ref), each session
 also has an entry `parameters_valid`, as in `P1.parameters_valid`, which says whether its
 parameters stayed valid in each sample; where they didn't, its trajectories end before the
-timestep on which they turned invalid. `iter_indices` and `chain_indices` number the samples as the chain that was fitted does.
+timestep on which they turned invalid. `iter_indices` and `chain_indices` number the
+samples as the chain that was fitted does.
 
 The third form takes one of the three models and a chain sampled from it, a `FlexiChain`. It
 runs a copy of the model whose sessions save what the two save histories select on every

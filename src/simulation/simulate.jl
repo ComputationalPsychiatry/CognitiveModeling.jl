@@ -505,17 +505,24 @@ end
 
 """
     saved_trajectories(storage, timestep_sizes, parameters_valid, n_timesteps,
-                       last_timestep)
+                       last_timestep,
+                       submodel_states=(; cognitive_model=(;), environment=(;)))
 
 Return the [`SessionTrajectories`](@ref) of a simulation or of a fitted session: the vectors
 in `storage`, with the cognitive model's under `states`, `observations`, `actions` and
 `action_distributions` and the environment's under `environment`, and then the other
-arguments as given. The `storage` of a fitted session without an environment has no
+arguments as given, with which states hold the state of a submodel, from
+[`submodel_states_of`](@ref), for models with submodels. The `storage` of a fitted session without an environment has no
 `environment`, and its trajectories have [`NoEnvironment`](@ref) there. Used by
 [`simulate_session`](@ref), [`simulate_session!`](@ref) and fitted sessions.
 """
 function saved_trajectories(
-    storage::NamedTuple, timestep_sizes, parameters_valid, n_timesteps, last_timestep
+    storage::NamedTuple,
+    timestep_sizes,
+    parameters_valid,
+    n_timesteps,
+    last_timestep,
+    submodel_states=(; cognitive_model=(;), environment=(;)),
 )
     return SessionTrajectories(
         storage.states,
@@ -527,6 +534,7 @@ function saved_trajectories(
         parameters_valid,
         n_timesteps,
         last_timestep,
+        submodel_states,
     )
 end
 
@@ -1417,13 +1425,14 @@ function simulate_session(
         timestep_sizes, n_timesteps_stored, save_initial_timestep_values
     )
 
-    #Return the trajectories that were saved, with how the simulation ended
+    #Return the trajectories that were saved, with how the simulation ended and which states hold those of submodels
     return saved_trajectories(
         simulation.storage,
         timestep_sizes_simulated,
         simulation.parameters_valid,
         simulation.n_timesteps,
         simulation.last_record,
+        submodel_states_of(cognitive_model, environment),
     )
 end
 
@@ -1621,13 +1630,14 @@ function simulate_session!(
         append!(environment.history.timestep_sizes, sizes_for_histories)
     end
 
-    #Return the trajectories that were saved, with how the simulation ended
+    #Return the trajectories that were saved, with how the simulation ended and which states hold those of submodels
     return saved_trajectories(
         storage,
         timestep_sizes_simulated,
         simulation.parameters_valid,
         simulation.n_timesteps,
         simulation.last_record,
+        submodel_states_of(agent.model, environment.model),
     )
 end
 

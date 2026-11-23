@@ -99,6 +99,57 @@ Return the names that [`get_attribute_names`](@ref) gives for a model of the
     return :(ModelAttributes{$parameters,$states,$(own.inputs),$(own.outputs)}())
 end
 
+## The states of the submodels of a model ##
+
+#Generated, so that the names are known when the code is compiled, and the trajectories that hold them have one type
+"""
+    submodel_state_names(model::AbstractSubmodel)
+
+Return the names of the submodels of `model` that have a state, in a `NamedTuple` with the
+names of the submodels with a state of each under its name, such as `(; perception = (;))`:
+the state of `model` keeps the state of each under its name, in the same way down through
+the submodels. A model without submodels that have a state gives `(;)`. Used by
+[`submodel_states_of`](@ref).
+"""
+submodel_state_names(model::AbstractSubmodel) = submodel_state_names(model_layout(model))
+@generated function submodel_state_names(layout::ModelLayout)
+    return submodel_state_names_expression(layout)
+end
+
+"""
+    submodel_state_names_expression(::Type{<:ModelLayout})
+
+Return the expression of the `NamedTuple` that [`submodel_state_names`](@ref) gives for a
+layout type, with [`has_state`](@ref) to find the submodels with a state. Used while the
+code of `submodel_state_names` is generated.
+"""
+function submodel_state_names_expression(
+    ::Type{ModelLayout{Tattributes,prefixes,Tsubmodels}}
+) where {Tattributes,prefixes,Tsubmodels}
+    entries = Any[
+        Expr(:kw, name, submodel_state_names_expression(Tsubmodel)) for
+        (name, Tsubmodel) in zip(fieldnames(Tsubmodels), fieldtypes(Tsubmodels)) if
+        has_state(Tsubmodel)
+    ]
+    return Expr(:tuple, Expr(:parameters, entries...))
+end
+
+"""
+    submodel_states_of(cognitive_model, environment)
+
+Return which states of `cognitive_model` and of `environment` hold the state of a
+submodel, as [`SessionTrajectories`](@ref) keeps them under `submodel_states`: those of the
+cognitive model under `cognitive_model`, and those of the environment under `environment`,
+each from [`submodel_state_names`](@ref). Used by simulations and fitted sessions, for the
+trajectories they return.
+"""
+function submodel_states_of(cognitive_model, environment)
+    return (;
+        cognitive_model=submodel_state_names(cognitive_model),
+        environment=submodel_state_names(environment),
+    )
+end
+
 ## Checking the submodels of a model ##
 
 """

@@ -152,14 +152,14 @@ end
 
 Throw an informative error if `fixed_parameters`, the values given with the keyword argument
 `keyword`, name a parameter that isn't in the attributes of `model`, a cognitive model or an
-environment model, from [`attribute_names`](@ref), or if they are given for sessions without
-an environment, where `model` is `NoEnvironment()`. Used by [`with_fixed_parameters`](@ref).
+environment model, from [`get_attribute_names`](@ref), with those of its submodels, or if
+they are given for sessions without an environment, where `model` is `NoEnvironment()`. Used
+by [`with_fixed_parameters`](@ref).
 """
 function check_fixed_parameter_names(
     fixed_parameters::NamedTuple, model::AbstractTimestepModel, keyword::String
 )
-    names_in_attributes =
-        check_type_attribute_names(attribute_names(model), model).parameters
+    names_in_attributes = get_attribute_names(model).parameters
     unknown_names = Tuple(
         name for name in keys(fixed_parameters) if !(name in names_in_attributes)
     )
@@ -214,8 +214,9 @@ end
 
 Throw an informative error if `parameters_model`, a parameter model, gives a parameter that
 isn't in the attributes of `model`, a cognitive model or an environment model, from
-[`attribute_names`](@ref), or, when `model_runs` is `true`, doesn't give one in its
-attributes that has no default value in [`default_parameters`](@ref). For sessions without
+[`get_attribute_names`](@ref), with those of its submodels, or, when `model_runs` is
+`true`, doesn't give one in its attributes that has no default value in
+[`default_parameters`](@ref) of the model or of its submodels. For sessions without
 an environment, `model` is `NoEnvironment()`, and any parameter given is an error. Nothing
 is checked when [`parameter_names`](@ref) doesn't know the parameters. Used by
 [`prepare_full_model`](@ref).
@@ -227,8 +228,7 @@ function check_given_parameters(
 )
     given_names = parameter_names(parameters_model)
     given_names === nothing && return nothing
-    names_in_attributes =
-        check_type_attribute_names(attribute_names(model), model).parameters
+    names_in_attributes = get_attribute_names(model).parameters
 
     #Every parameter that is given must be one in the model's attributes
     unknown_names = Tuple(name for name in given_names if !(name in names_in_attributes))
@@ -242,7 +242,7 @@ function check_given_parameters(
 
     #Every parameter in the model's attributes must be given, or have a default value, when the model runs
     model_runs || return nothing
-    default_names = keys(default_parameters(model))
+    default_names = keys(collected_default_parameters(model))
     missing_names = Tuple(
         name for
         name in names_in_attributes if !(name in given_names) && !(name in default_names)

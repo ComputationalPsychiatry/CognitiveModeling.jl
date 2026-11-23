@@ -13,6 +13,7 @@ using CognitiveModeling:
     initialize_state,
     stopping_criterion,
     merge_default_parameters,
+    bundle_parameters,
     check_match_attribute_names,
     check_parameters_in_domains,
     check_model_output,
@@ -285,9 +286,12 @@ function session_by_hand(
     check_environment_parameters(session_info, environment_parameters)
     cognitive_model = session_info.cognitive_model
 
-    #Fill in the default parameters, and initialize the state with them
+    #Fill in the default parameters, and initialize the state with them, bundled as a model with submodels reads them
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
-    initial_cognitive_state = initialize_state(cognitive_model, cognitive_parameters)
+    bundled_cognitive_parameters = bundle_parameters(cognitive_model, cognitive_parameters)
+    initial_cognitive_state = initialize_state(
+        cognitive_model, bundled_cognitive_parameters
+    )
 
     #Check the names against attribute_names, and that each parameter is within its domain
     check_match_attribute_names(
@@ -307,7 +311,9 @@ function session_by_hand(
         action=session_info.previous_action,
         environment=(; state=nothing),
     )
-    return timesteps_by_hand(session_info, cognitive_parameters, (;), previous, evaluation)
+    return timesteps_by_hand(
+        session_info, bundled_cognitive_parameters, (;), previous, evaluation
+    )
 end
 
 # The same with an environment, which fills in the observations that are missing in the data
@@ -334,8 +340,14 @@ function session_by_hand(
     #Fill in the default parameters of both models, and initialize both states with them
     cognitive_parameters = merge_default_parameters(cognitive_model, cognitive_parameters)
     environment_parameters = merge_default_parameters(environment, environment_parameters)
-    initial_cognitive_state = initialize_state(cognitive_model, cognitive_parameters)
-    initial_environment_state = initialize_state(environment, environment_parameters)
+    bundled_cognitive_parameters = bundle_parameters(cognitive_model, cognitive_parameters)
+    bundled_environment_parameters = bundle_parameters(environment, environment_parameters)
+    initial_cognitive_state = initialize_state(
+        cognitive_model, bundled_cognitive_parameters
+    )
+    initial_environment_state = initialize_state(
+        environment, bundled_environment_parameters
+    )
 
     #Check the names of both models against attribute_names, and that each parameter is within its domain
     check_match_attribute_names(
@@ -367,7 +379,11 @@ function session_by_hand(
         ),
     )
     return timesteps_by_hand(
-        session_info, cognitive_parameters, environment_parameters, previous, evaluation
+        session_info,
+        bundled_cognitive_parameters,
+        bundled_environment_parameters,
+        previous,
+        evaluation,
     )
 end
 

@@ -174,3 +174,11 @@ end
 function session_parameters_valid(::Bool, parameters_valid, criterion_allows_data)
     return parameters_are_valid(parameters_valid) & criterion_allows_data
 end
+
+"""
+    submodel_state_names(::NoEnvironment)
+
+Return `(;)`, since a session without an environment has no state of a submodel of one.
+Used by [`submodel_states_of`](@ref).
+"""
+submodel_state_names(::NoEnvironment) = (;)

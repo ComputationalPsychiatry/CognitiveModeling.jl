@@ -180,7 +180,8 @@ end
 
 """
     SessionTrajectories(states, observations, actions, action_distributions, environment,
-                        timestep_sizes, parameters_valid, n_timesteps, last_timestep)
+                        timestep_sizes, parameters_valid, n_timesteps, last_timestep,
+                        submodel_states=(; cognitive_model=(;), environment=(;)))
 
 The trajectories of one session, which are what changed over its timesteps, and how the
 session ended. [`simulate_session`](@ref) and [`simulate_session!`](@ref) return one, and a
@@ -211,8 +212,10 @@ parameters stayed valid. On one line, as inside a vector, they show the number o
   is saved.
 - `parameters_valid`: whether the parameters of both models stayed valid on every timestep.
   With `false`, the trajectories end before the timestep on which a model set
-  `parameters_valid` to `false` in its [`ModelOutput`](@ref). A fitted session whose models
-  can't set it has [`ValidByDefault`](@ref) instead.
+  `parameters_valid` to `false` in its [`ModelOutput`](@ref), or, in a fitted session, before
+  a [`stopping_criterion`](@ref) that was met while the data continues. A fitted session
+  whose models can't set it has [`ValidByDefault`](@ref) instead, unless its
+  `check_stopping_criterion` is a `Bool`.
 - `n_timesteps`: the number of timesteps in the trajectories, without timestep 0. A
   simulation that was masked, under a compiler like Reactant.jl, has every timestep in the
   vectors, of which the first `n_timesteps` were kept, as [`simulate_session`](@ref)
@@ -222,6 +225,12 @@ parameters stayed valid. On one line, as inside a vector, they show the number o
   `parameters_valid` is `false`: its number, under `timestep`, and for each model whether
   its parameters stayed valid on it and its state before and after it, with the cognitive
   model's at the top and the environment's under `environment`. Otherwise `nothing`.
+- `submodel_states`: which of the states hold the state of a submodel, under
+  `cognitive_model` for the cognitive model and under `environment` for the environment: the
+  name of each submodel with a state, with those of its own submodels with a state in a
+  `NamedTuple`, as [`CognitiveModeling.submodel_state_names`](@ref) gives them, so that
+  `(; perception = (;))` says that `states[t].perception` is the state of the submodel
+  `perception`. A model without submodels has `(;)`.
 
 # Examples
 ```jldoctest
@@ -280,6 +289,7 @@ struct SessionTrajectories{
     Tparameters_valid,
     Tn_timesteps,
     Tlast_timestep,
+    Tsubmodel_states,
 }
     states::Tstates
     observations::Tobservations
@@ -290,6 +300,33 @@ struct SessionTrajectories{
     parameters_valid::Tparameters_valid
     n_timesteps::Tn_timesteps
     last_timestep::Tlast_timestep
+    submodel_states::Tsubmodel_states
+end
+
+#Trajectories of models without submodels, which keep no state of a submodel
+function SessionTrajectories(
+    states,
+    observations,
+    actions,
+    action_distributions,
+    environment,
+    timestep_sizes,
+    parameters_valid,
+    n_timesteps,
+    last_timestep,
+)
+    return SessionTrajectories(
+        states,
+        observations,
+        actions,
+        action_distributions,
+        environment,
+        timestep_sizes,
+        parameters_valid,
+        n_timesteps,
+        last_timestep,
+        (; cognitive_model=(;), environment=(;)),
+    )
 end
 
 #The fields in a NamedTuple, for what a NamedTuple offers and the type doesn't, such as keys and merge
@@ -304,6 +341,7 @@ function Base.NamedTuple(trajectories::SessionTrajectories)
         trajectories.parameters_valid,
         trajectories.n_timesteps,
         trajectories.last_timestep,
+        trajectories.submodel_states,
     )
 end
 

@@ -55,6 +55,7 @@ function saved_by_session(
     states=fill((;), n_timesteps + 1),
     environment=NoEnvironment(),
     parameters_valid=ValidByDefault(),
+    submodel_states=(; cognitive_model=(;), environment=(;)),
 )
     timestep_sizes = Union{BeforeFirstTimestep,Int}[
         BeforeFirstTimestep();
@@ -70,6 +71,7 @@ function saved_by_session(
         parameters_valid,
         n_timesteps,
         nothing,
+        submodel_states,
     )
 end
 
@@ -400,6 +402,29 @@ end
         @test entry_names(chain) ==
             ["outcome", "prediction", "action_distributions.prediction", "expected_value"]
         @test entry(chain, "expected_value")[1] == [0.0, 0.0, 0.5]
+    end
+
+    @testset "The state of a submodel has an entry for each of its own states, from the trajectories alone, and another state that is a NamedTuple one entry" begin
+        #The state keeps the perception's state under its name, whose own submodel inner has a state too, and beliefs of
+        #the model's own, which are a NamedTuple
+        states = [
+            (; perception=(; expected_value, inner=(; count)), beliefs=(; cue=count)) for
+            (count, expected_value) in enumerate([0.0, 0.5, 0.75])
+        ]
+        saved = saved_by_session(
+            2;
+            states,
+            submodel_states=(;
+                cognitive_model=(; perception=(; inner=(;))), environment=(;)
+            ),
+        )
+        chain = get_session_trajectories(
+            reshape([single_session_result((; learning_rate=0.5), saved)], 1, 1)
+        )
+        @test entry_names(chain) ==
+            ["perception.expected_value", "perception.inner.count", "beliefs"]
+        @test entry(chain, "perception.expected_value")[1] == [0.0, 0.5, 0.75]
+        @test entry(chain, "beliefs")[1] == [(; cue=1), (; cue=2), (; cue=3)]
     end
 
     @testset "Identifiers from several session columns are named by each column's name and value" begin

@@ -137,14 +137,15 @@ the session says for each sample whether its parameters stayed valid. Used by
 function add_session_entries!(
     entries, returned_values, session_prefix::Tuple{Vararg{Symbol}}, saved_trajectories_of
 )
+    first_saved = saved_trajectories_of(first(returned_values))
     add_model_entries!(
         entries,
         returned_values,
         session_prefix,
         saved_trajectories_of,
         :action_distributions,
+        first_saved.submodel_states.cognitive_model,
     )
-    first_saved = saved_trajectories_of(first(returned_values))
     if !(first_saved.environment isa NoEnvironment)
         add_model_entries!(
             entries,
@@ -152,6 +153,7 @@ function add_session_entries!(
             (session_prefix..., :environment),
             returned_value -> saved_trajectories_of(returned_value).environment,
             :observation_distributions,
+            first_saved.submodel_states.environment,
         )
     end
 
@@ -170,7 +172,8 @@ function add_session_entries!(
 end
 
 """
-    add_model_entries!(entries, returned_values, prefix, saved_trajectories_of, distribution_kind)
+    add_model_entries!(entries, returned_values, prefix, saved_trajectories_of,
+                       distribution_kind, submodel_states)
 
 Add an entry under `prefix` to `entries` for everything one model of a session saved, where
 `saved_trajectories_of` gives its saved trajectories from the returned value of one sample,
@@ -178,8 +181,9 @@ the [`SessionTrajectories`](@ref) for a cognitive model and their `environment` 
 environment model, with `states`, `observations`, `actions` and `distribution_kind`, which
 is `action_distributions` for a cognitive model and `observation_distributions` for an
 environment model. There is one entry for each observation and action that was saved, named
-after it alone, one for each distribution, under its kind, and one for each state. Each
-entry holds, for every sample, a vector over the timesteps. Used by
+after it alone, one for each distribution, under its kind, and one for each state, or for
+each state of a submodel, which `submodel_states` names, as [`add_state_entries!`](@ref)
+adds them. Each entry holds, for every sample, a vector over the timesteps. Used by
 [`add_session_entries!`](@ref).
 """
 function add_model_entries!(
@@ -188,6 +192,7 @@ function add_model_entries!(
     prefix::Tuple{Vararg{Symbol}},
     saved_trajectories_of,
     distribution_kind,
+    submodel_states::NamedTuple,
 )
     first_saved = saved_trajectories_of(first(returned_values))
 
@@ -224,11 +229,11 @@ function add_model_entries!(
         )
     end
 
-    #Each state that was saved, named after it alone
+    #Each state that was saved, named after it alone, and each state of a submodel, named after the submodel too
     for name in saved_names(first_saved.states)
-        add_entry!(
+        add_state_entries!(
             entries,
-            entry_name(prefix..., name),
+            (prefix..., name),
             map(
                 returned_value -> [
                     getproperty(state, name) for
@@ -236,6 +241,38 @@ function add_model_entries!(
                 ],
                 returned_values,
             ),
+            get(submodel_states, name, nothing),
+        )
+    end
+    return entries
+end
+
+"""
+    add_state_entries!(entries, names, values_of_state, submodel_states)
+
+Add an entry to `entries` for a state that was saved, named after `names`, the session and
+the state, whose values `values_of_state` holds, a vector over the timesteps for every
+sample. A state that holds the state of a submodel, which `submodel_states` names with the
+states of its own submodels, as [`SessionTrajectories`](@ref) keeps them, gets an entry for
+each of the submodel's states instead, named after the submodel too, as in
+`P1.perception.expected_reward`, in the same way down through its submodels. Otherwise
+`submodel_states` is `nothing`. Used by [`add_model_entries!`](@ref).
+"""
+function add_state_entries!(entries, names, values_of_state, ::Nothing)
+    return add_entry!(entries, entry_name(names...), values_of_state)
+end
+function add_state_entries!(entries, names, values_of_state, submodel_states::NamedTuple)
+
+    #The names of the submodel's states, from a sample that saved a timestep, or one entry when none did
+    sample_with_timesteps = findfirst(!isempty, values_of_state)
+    sample_with_timesteps === nothing &&
+        return add_entry!(entries, entry_name(names...), values_of_state)
+    for name in keys(first(values_of_state[sample_with_timesteps]))
+        add_state_entries!(
+            entries,
+            (names..., name),
+            map(values -> [getproperty(value, name) for value in values], values_of_state),
+            get(submodel_states, name, nothing),
         )
     end
     return entries

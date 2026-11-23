@@ -59,6 +59,23 @@ end
         @test @inferred(CognitiveModeling.get_attribute_names(prefixed)) isa ModelAttributes
     end
 
+    @testset "submodel_state_names gives the submodels with a state, with theirs, down through the submodels" begin
+        #The response has no state, so only the perception has one
+        @test CognitiveModeling.submodel_state_names(
+            PerceptionAndResponse(PerceptionForTest(), ResponseForTest())
+        ) == (; perception=(;))
+        #A submodel has a state when one of its own submodels has one
+        nested = PerceptionAndResponse(
+            ResponseForTest(),
+            PerceptionAndResponse(PerceptionForTest(), ResponseForTest(); prefixes=true);
+            prefixes=true,
+        )
+        @test CognitiveModeling.submodel_state_names(nested) ==
+            (; response=(; perception=(;)))
+        @test CognitiveModeling.submodel_state_names(PerceptionForTest()) == (;)
+        @test @inferred(CognitiveModeling.submodel_state_names(nested)) isa NamedTuple
+    end
+
     @testset "Submodels that aren't declared or named as they must be give informative errors" begin
         @test_throws "CognitiveModeling.submodel_fields of a cognitive model of type NamesMissingField names :response, but it has no field :response. Its fields are (:perception,)." CognitiveModeling.get_attribute_names(
             NamesMissingField(PerceptionForTest())

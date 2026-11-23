@@ -10,9 +10,13 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     cognitive_parameters_with_defaults = merge_default_parameters(
         cognitive_model, cognitive_parameters
     )
-    initial_cognitive_state ~ to_submodel(
-        turing_initialize_state(cognitive_model, cognitive_parameters_with_defaults)
+
+    #The parameters of a model with submodels are bundled, as the model reads them
+    bundled_cognitive_parameters = bundle_parameters(
+        cognitive_model, cognitive_parameters_with_defaults
     )
+    initial_cognitive_state ~
+    to_submodel(turing_initialize_state(cognitive_model, bundled_cognitive_parameters))
 
     #Check the names of the parameters, the state and the previous action against attribute_names, which is decided at compile time, and that each parameter is within its domain
     check_match_attribute_names(
@@ -33,9 +37,7 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
         environment=(; state=nothing),
     )
     saved_trajectories ~ to_submodel(
-        turing_run_all_timesteps(
-            session_info, cognitive_parameters_with_defaults, (;), previous
-        ),
+        turing_run_all_timesteps(session_info, bundled_cognitive_parameters, (;), previous),
         false,
     )
 
@@ -76,11 +78,18 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     environment_parameters_with_defaults = merge_default_parameters(
         environment, environment_parameters
     )
-    initial_cognitive_state ~ to_submodel(
-        turing_initialize_state(cognitive_model, cognitive_parameters_with_defaults)
+
+    #The parameters of models with submodels are bundled, as the models read them
+    bundled_cognitive_parameters = bundle_parameters(
+        cognitive_model, cognitive_parameters_with_defaults
     )
+    bundled_environment_parameters = bundle_parameters(
+        environment, environment_parameters_with_defaults
+    )
+    initial_cognitive_state ~
+    to_submodel(turing_initialize_state(cognitive_model, bundled_cognitive_parameters))
     initial_environment_state ~
-    to_submodel(turing_initialize_state(environment, environment_parameters_with_defaults))
+    to_submodel(turing_initialize_state(environment, bundled_environment_parameters))
 
     #Check the names of both models against attribute_names, which is decided at compile time
     check_match_attribute_names(
@@ -116,8 +125,8 @@ Turing.@model function CognitiveModeling.turing_behavioral_session(
     saved_trajectories ~ to_submodel(
         turing_run_all_timesteps(
             session_info,
-            cognitive_parameters_with_defaults,
-            environment_parameters_with_defaults,
+            bundled_cognitive_parameters,
+            bundled_environment_parameters,
             previous,
         ),
         false,
@@ -179,6 +188,11 @@ Turing.@model function turing_run_all_timesteps(
     n_timesteps = session_info.n_timesteps
     first_timestep_to_check = session_info.first_timestep_to_check_stopping
 
+    #Which states hold the states of submodels, for the trajectories the session returns
+    submodel_states = submodel_states_of(
+        session_info.cognitive_model, session_info.environment
+    )
+
     #When the criterion is checked from the start and is met already, no timestep can run: with data, the parameters can't give it, as when they turn invalid, and without data, it is an error
     stopped_before_first = false
     if first_timestep_to_check == 1
@@ -236,6 +250,7 @@ Turing.@model function turing_run_all_timesteps(
             ),
             0,
             nothing,
+            submodel_states,
         )
     end
 
@@ -272,6 +287,7 @@ Turing.@model function turing_run_all_timesteps(
                     ),
                     t - 1,
                     nothing,
+                    submodel_states,
                 )
             end
             n_timesteps_that_ran = t - 1
@@ -307,6 +323,7 @@ Turing.@model function turing_run_all_timesteps(
                 ),
                 t - 1,
                 nothing,
+                submodel_states,
             )
         end
 
@@ -349,5 +366,6 @@ Turing.@model function turing_run_all_timesteps(
         session_parameters_valid(session_info, timestep_values.parameters_valid, true),
         n_timesteps_that_ran,
         nothing,
+        submodel_states,
     )
 end

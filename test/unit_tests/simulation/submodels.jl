@@ -230,6 +230,13 @@ end
         @test CognitiveModeling.discrete_parameter_names(LearnerWithSubmodels()) == ()
     end
 
+    @testset "A simulation says which of its states hold the states of submodels" begin
+        @test simulate_with(LearnerWithSubmodels(), flat_parameters).submodel_states ==
+            (; cognitive_model=(; perception=(;)), environment=(;))
+        @test simulate_with(LearnerInOne(), flat_parameters).submodel_states ==
+            (; cognitive_model=(;), environment=(;))
+    end
+
     @testset "The return type of a simulation with submodels is known, and bundling allocates nothing" begin
         model = LearnerWithSubmodels(; prefixes=true)
         parameters = (; perception__learning_rate=0.3, response__inverse_temperature=2.0)

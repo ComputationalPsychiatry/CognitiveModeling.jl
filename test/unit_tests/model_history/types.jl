@@ -133,6 +133,7 @@ end
             :parameters_valid,
             :n_timesteps,
             :last_timestep,
+            :submodel_states,
         )
         @test trajectories.states[2] === (; expected_reward=0.75)
         @test trajectories.observations[1] === (; reward=BeforeFirstTimestep())
@@ -141,6 +142,8 @@ end
             trajectories.parameters_valid === true &&
             trajectories.n_timesteps === 2 &&
             trajectories.last_timestep === nothing
+        #Given nine arguments, no state holds the state of a submodel
+        @test trajectories.submodel_states === (; cognitive_model=(;), environment=(;))
         #The names can be destructured
         (; states, n_timesteps) = trajectories
         @test states === trajectories.states && n_timesteps === 2

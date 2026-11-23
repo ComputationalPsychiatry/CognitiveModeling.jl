@@ -1010,6 +1010,7 @@ end
             :parameters_valid,
             :n_timesteps,
             :last_timestep,
+            :submodel_states,
         )
         #A model that never sets parameters_valid gives valid parameters on every timestep
         @test simulation.parameters_valid === true &&

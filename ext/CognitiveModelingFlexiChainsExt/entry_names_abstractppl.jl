@@ -22,3 +22,22 @@ function entry_name(
 )
     @varname($first_name.$second_name.$third_name.$fourth_name)
 end
+function entry_name(
+    first_name::Symbol,
+    second_name::Symbol,
+    third_name::Symbol,
+    fourth_name::Symbol,
+    fifth_name::Symbol,
+)
+    @varname($first_name.$second_name.$third_name.$fourth_name.$fifth_name)
+end
+function entry_name(
+    first_name::Symbol,
+    second_name::Symbol,
+    third_name::Symbol,
+    fourth_name::Symbol,
+    fifth_name::Symbol,
+    sixth_name::Symbol,
+)
+    @varname($first_name.$second_name.$third_name.$fourth_name.$fifth_name.$sixth_name)
+end
