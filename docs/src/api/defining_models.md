@@ -37,6 +37,17 @@ CognitiveModeling.output_domains
 CognitiveModeling.stopping_criterion
 ```
 
+## Functions that a model with submodels implements
+
+A model can hold submodels, each an [`AbstractSubmodel`](@ref), in its fields. These say
+which fields hold them, and how the names of their parameters are given.
+
+```@docs
+CognitiveModeling.submodel_fields
+CognitiveModeling.submodels
+CognitiveModeling.uses_submodel_prefixes
+```
+
 ## Reading a model's parameters
 
 ```@docs

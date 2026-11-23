@@ -329,3 +329,4 @@ function describe_model(environment::AbstractEnvironmentModel)
     return "an environment model of type $(typeof(environment))"
 end
 describe_model(model::AbstractTimestepModel) = "a model of type $(typeof(model))"
+describe_model(model::AbstractSubmodel) = "a submodel of type $(typeof(model))"

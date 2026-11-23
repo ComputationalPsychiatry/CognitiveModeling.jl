@@ -10,6 +10,7 @@ include("defining_models/functions_to_extend.jl")
 include("defining_models/functions_to_call.jl")
 include("defining_models/utility_functions/check_model_methods.jl")
 include("defining_models/utility_functions/read_parameters_valid.jl")
+include("defining_models/utility_functions/bundle_submodel_parameters.jl")
 include("defining_models/utility_functions/compare_names.jl")
 include("defining_models/utility_functions/check_attributes_against_names.jl")
 include("defining_models/utility_functions/check_parameters_in_domains.jl")
@@ -63,7 +64,7 @@ include("extensions/turing/functions_to_extend.jl")
 include("extensions/turing/turing_models.jl")
 
 #What users work with directly
-export AbstractCognitiveModel, AbstractEnvironmentModel
+export AbstractCognitiveModel, AbstractEnvironmentModel, AbstractSubmodel
 export AbstractNoValue, NoValue, BeforeFirstTimestep
 export ImputedMissingValue, UnimputedMissingValue, SimulatedMissingValue
 export ModelContext, ModelOutput, ModelAttributes, Deterministic, ValidByDefault
@@ -104,6 +105,7 @@ export get_session_trajectories, get_session_parameters, predict_session_traject
 public timestep_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, input_domains, output_domains
+public submodel_fields, submodels, uses_submodel_prefixes
 public discrete_parameter_names, continuous_parameter_names
 public turing_timestep_model,
     turing_initialize_state, turing_parameters_model, turing_downstream_model

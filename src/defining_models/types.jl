@@ -1,6 +1,24 @@
 ## Supertypes of models ##
 
 """
+    AbstractSubmodel
+
+Supertype for submodels: parts of a model, held in its fields, with parameters and states of
+their own, such as the perception and the response of a cognitive model. Every
+[`AbstractTimestepModel`](@ref) is one, so that a cognitive model or an environment model can
+be a submodel of another, and a part that is only ever a submodel, such as the hierarchy of
+beliefs of a hierarchical Gaussian filter, subtypes this type directly.
+
+A model says which of its fields hold submodels with [`submodel_fields`](@ref), and a
+submodel can have submodels of its own. A submodel has [`attribute_names`](@ref), with the
+names of its own attributes only, [`initialize_state`](@ref), [`default_parameters`](@ref),
+[`parameter_domains`](@ref) and [`prepare_state_for_saving`](@ref), as a model has them.
+What else it has, such as a function that updates it, and what that returns, is up to the
+model that holds it.
+"""
+abstract type AbstractSubmodel end
+
+"""
     AbstractTimestepModel
 
 Supertype for timestep models: cognitive models and environment models, which every
@@ -13,9 +31,10 @@ an input and gives an output, in a [`ModelContext`](@ref) and a [`ModelOutput`](
 simulation or a fitted session, the outputs of the cognitive model are its actions, which
 are the inputs of the environment model, and the outputs of the environment model are the
 observations, which are the inputs of the cognitive model. A cognitive model can therefore
-also serve as the environment of another.
+also serve as the environment of another. Every timestep model is also an
+[`AbstractSubmodel`](@ref), so that it can be a submodel of another model.
 """
-abstract type AbstractTimestepModel end
+abstract type AbstractTimestepModel <: AbstractSubmodel end
 
 """
     AbstractCognitiveModel

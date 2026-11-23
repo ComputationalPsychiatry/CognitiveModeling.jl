@@ -4,15 +4,15 @@
 
 Return `attributes` if it is the [`ModelAttributes`](@ref) that a method of
 [`attribute_names`](@ref) must return, and throw an informative error otherwise. `model` is
-the cognitive model or the environment model whose method returned it. Used wherever the
-names of a model are read: by the checks of simulations, instantiated models, save histories
-and fitted sessions, and by the display of a model.
+the model or the submodel whose method returned it. Used wherever the names of a model are
+read: by the checks of simulations, instantiated models, save histories and fitted sessions,
+and by the display of a model.
 """
-function check_type_attribute_names(attributes::ModelAttributes, ::AbstractTimestepModel)
+function check_type_attribute_names(attributes::ModelAttributes, ::AbstractSubmodel)
     return attributes
 end
 
-function check_type_attribute_names(attributes, model::AbstractTimestepModel)
+function check_type_attribute_names(attributes, model::AbstractSubmodel)
     return error(
         "The attribute_names method of $(describe_model(model)) must return a ModelAttributes, but it returned a value of type $(typeof(attributes)).",
     )
@@ -40,11 +40,11 @@ end
 """
     has_attribute_names(model)
 
-Return whether `model`, a cognitive model or an environment model, has its own method of
+Return whether `model`, a model or a submodel, has its own method of
 [`attribute_names`](@ref), instead of the fallback which throws. Used by the display of a
 model, which shows one without a method of its own as `not specified`.
 """
-function has_attribute_names(model::AbstractTimestepModel)
+function has_attribute_names(model::AbstractSubmodel)
     method_signature = which(attribute_names, (typeof(model),)).sig
-    return method_signature != Tuple{typeof(attribute_names),AbstractTimestepModel}
+    return method_signature != Tuple{typeof(attribute_names),AbstractSubmodel}
 end

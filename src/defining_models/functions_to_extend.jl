@@ -64,10 +64,10 @@ function timestep_model(model::AbstractTimestepModel, context)
 end
 
 """
-    initialize_state(model::AbstractTimestepModel, parameters)
+    initialize_state(model::AbstractSubmodel, parameters)
 
 Create the initial state that `model` has before its first timestep, which can depend on
-`parameters`.
+`parameters`. A submodel has one too, as an [`AbstractSubmodel`](@ref).
 
 # Implementation
 Every model must add a method of this function, which throws an error otherwise. It returns
@@ -88,17 +88,18 @@ julia> CognitiveModeling.initialize_state(RescorlaWagner(), (; initial_value = 0
 (expected_reward = 0.5,)
 ```
 """
-function initialize_state(model::AbstractTimestepModel, parameters)
+function initialize_state(model::AbstractSubmodel, parameters)
     return error(
         "There is no initialize_state method for $(describe_model(model)). Each model must define CognitiveModeling.initialize_state(model::$(typeof(model)), parameters), which returns (;) if the model has no state.",
     )
 end
 
 """
-    attribute_names(model::AbstractTimestepModel)::ModelAttributes
+    attribute_names(model::AbstractSubmodel)::ModelAttributes
 
 Return the names of the parameters, states, inputs and outputs of `model`, in a
-[`ModelAttributes`](@ref).
+[`ModelAttributes`](@ref). These are the names of the model's own attributes: those of its
+submodels, which [`submodel_fields`](@ref) names, are their own.
 
 The names define the model, so they must match what the model uses. The parameters are the
 names that [`timestep_model`](@ref) and [`initialize_state`](@ref) read from the parameters.
@@ -136,7 +137,7 @@ julia> CognitiveModeling.attribute_names(RescorlaWagner()).parameters
 (:learning_rate, :inverse_temperature)
 ```
 """
-function attribute_names(model::AbstractTimestepModel)
+function attribute_names(model::AbstractSubmodel)
     return error(
         "There is no attribute_names method for $(describe_model(model)). Each model must define CognitiveModeling.attribute_names(model::$(typeof(model))), which returns a ModelAttributes with the names of its parameters, states, inputs and outputs.",
     )
@@ -145,7 +146,7 @@ end
 ## Functions that a model can implement ##
 
 """
-    prepare_state_for_saving(model::AbstractTimestepModel, state)
+    prepare_state_for_saving(model::AbstractSubmodel, state)
 
 Return what a simulation saves of `state`, the state of a cognitive model or of an
 environment model, as it is about to save it. The state that the next timestep starts from
@@ -172,12 +173,12 @@ julia> CognitiveModeling.prepare_state_for_saving(LearnsInPlace(), state).values
 false
 ```
 """
-function prepare_state_for_saving(model::AbstractTimestepModel, state)
+function prepare_state_for_saving(model::AbstractSubmodel, state)
     return state
 end
 
 """
-    default_parameters(model::AbstractTimestepModel)
+    default_parameters(model::AbstractSubmodel)
 
 Return the default parameter values of a cognitive model or of an environment model, such as
 `(; learning_rate = 0.1)`, which [`InstantiatedModel`](@ref) and [`simulate_session`](@ref)
@@ -188,12 +189,12 @@ after the name of its parameter.
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
 there are no default values.
 """
-function default_parameters(model::AbstractTimestepModel)
+function default_parameters(model::AbstractSubmodel)
     return (;)
 end
 
 """
-    parameter_domains(model::AbstractTimestepModel)
+    parameter_domains(model::AbstractSubmodel)
 
 Return the values that the parameters of `model`, a cognitive model or an environment
 model, can take: a `NamedTuple` with a [`Domain`](@ref) under the name of each
@@ -243,7 +244,7 @@ Inputs: none
 Outputs: none
 ```
 """
-function parameter_domains(model::AbstractTimestepModel)
+function parameter_domains(model::AbstractSubmodel)
     return (;)
 end
 
@@ -348,5 +349,78 @@ true
 ```
 """
 function stopping_criterion(model::AbstractTimestepModel, state, parameters)
+    return false
+end
+
+## Functions that a model with submodels implements ##
+
+"""
+    submodel_fields(model::AbstractSubmodel)::Tuple{Vararg{Symbol}}
+
+Return the names of the fields of `model` that hold its submodels, each an
+[`AbstractSubmodel`](@ref), as a tuple of `Symbol`s. The names are also those under which the
+parameters and the state of each submodel are bundled. [`CognitiveModeling.submodels`](@ref)
+reads the submodels from these fields.
+
+# Implementation
+A model with submodels adds a method of this function, which returns the names as a literal
+tuple, so that they are known when the code is compiled. The default returns `()`, for a
+model without submodels. A model whose submodels aren't fields of its own adds a method of
+`submodels` instead.
+
+# Examples
+```jldoctest
+julia> struct Perception <: AbstractSubmodel end
+
+julia> struct Response <: AbstractSubmodel end
+
+julia> struct PerceptionAndResponse <: AbstractCognitiveModel
+           perception::Perception
+           response::Response
+       end
+
+julia> CognitiveModeling.submodel_fields(model::PerceptionAndResponse) = (:perception, :response);
+
+julia> CognitiveModeling.submodels(PerceptionAndResponse(Perception(), Response()))
+(perception = Perception(), response = Response())
+```
+"""
+function submodel_fields(model::AbstractSubmodel)
+    return ()
+end
+
+"""
+    submodels(model::AbstractSubmodel)::NamedTuple
+
+Return the submodels of `model` in a `NamedTuple`, each under the name that its parameters
+and its state are bundled under. A model without submodels returns an empty `NamedTuple`,
+`(;)`.
+
+# Implementation
+The default reads the fields that [`CognitiveModeling.submodel_fields`](@ref) names, which is
+how most models declare their submodels. A model can add a method of this function instead,
+when its submodels aren't fields of its own, such as a model that keeps them in a
+`NamedTuple`. The method must return the same names whenever it is called on a model of the
+same type, so that they are known when the code is compiled.
+"""
+function submodels(model::AbstractSubmodel)
+    return fields_as_named_tuple(model, Val(submodel_fields(model)))
+end
+
+"""
+    uses_submodel_prefixes(model::AbstractSubmodel)::Bool
+
+Return whether the flat names of the parameters of the submodels of `model` start with the
+name of their submodel and `__`, as in `perception__learning_rate`, so that two submodels can
+have parameters of the same name. Without prefixes, the flat names are the submodels' own
+names, as in `learning_rate`, and must then differ.
+
+# Implementation
+A model with submodels can add a method of this function. The default returns `false`. A
+model whose submodels are chosen by its users, such as a generic combination of a perceptual
+model and a response model, can take the choice as a keyword of its constructor and keep it
+in its type, so that its own method returns it.
+"""
+function uses_submodel_prefixes(model::AbstractSubmodel)
     return false
 end

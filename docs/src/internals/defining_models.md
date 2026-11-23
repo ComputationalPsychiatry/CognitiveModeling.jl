@@ -30,6 +30,14 @@ Public = false
 Pages = ["defining_models/utility_functions/read_parameters_valid.jl"]
 ```
 
+### The parameters of a model with submodels
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["defining_models/utility_functions/bundle_submodel_parameters.jl"]
+```
+
 ### Comparing names
 
 ```@autodocs

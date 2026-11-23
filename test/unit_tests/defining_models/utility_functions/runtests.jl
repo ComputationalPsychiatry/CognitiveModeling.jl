@@ -23,4 +23,5 @@ end
     include("check_parameters_in_domains.jl")
     include("outputs_and_inputs_before_first_timestep.jl")
     include("display_models.jl")
+    include("bundle_submodel_parameters.jl")
 end
