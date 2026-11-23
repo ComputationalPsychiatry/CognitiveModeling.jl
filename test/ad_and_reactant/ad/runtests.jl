@@ -10,10 +10,8 @@ using ReverseDiff: ReverseDiff
 
 using Random: AbstractRNG, Xoshiro
 
-#The example models and the simulation cases that the suites share
-include(joinpath(@__DIR__, "..", "..", "example_models", "ExampleModels.jl"))
-using .ExampleModels
-include(joinpath(@__DIR__, "..", "..", "test_cases", "simulation_cases.jl"))
+#The code that the suites share, the package in test/common: the models of the tests and the simulation cases
+using CommonTestFunctionality
 
 #The cases of the suite, each differentiated as the sum of every real number that it saved: every simulation case with the
 #means of the distributions, which is deterministic, so that the gradient goes all the way round the loop, and those of
@@ -46,7 +44,7 @@ const TEST_CASES = [
 
 # Every form of every supported backend. Zygote is left out on purpose, because the
 # package uses for loops. The Turing.jl models have their own suite in
-# test/ad_and_reactant/turing, so that the package is tested without Turing.jl here. The
+# test/extensions/turing/ad, so that the package is tested without Turing.jl here. The
 # functions are marked constant for Enzyme, because the derivative data is in x alone: each
 # case's function holds the models, the data and the forms of the parameters, which aren't
 # differentiated, some of them in vectors, which Enzyme otherwise refuses as not read-only.

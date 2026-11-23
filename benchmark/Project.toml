@@ -2,6 +2,7 @@
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+CommonTestFunctionality = "7693ca21-d518-48fb-9fab-23cd56a26025"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -12,6 +13,7 @@ Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
 [sources]
 CognitiveModeling = {path = ".."}
+CommonTestFunctionality = {path = "../test/common"}
 
 [compat]
 ADTypes = "1"

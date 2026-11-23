@@ -811,7 +811,7 @@ end
 
 #The baseline, whose expected reward starts at a parameter plus an offset that it samples, with a standard deviation that
 #is a parameter. A simulation has no random number generator to sample a start from, so there it starts at the
-#parameter, and the Turing.jl suites sample the offset, in turing_methods.jl
+#parameter, and the Turing.jl suites sample the offset, in the package's extension for Turing.jl
 struct SampledInitialState{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end

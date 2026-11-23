@@ -3312,8 +3312,16 @@ end
             [(; choice=BeforeFirstTimestep()), first_action, second_action]
         @test agent.history.output_distributions == [
             (; choice=BeforeFirstTimestep()),
-            (; choice=ExampleModels.BernoulliByHand(baseline_choice_probability(0.75))),
-            (; choice=ExampleModels.BernoulliByHand(baseline_choice_probability(0.75))),
+            (;
+                choice=CommonTestFunctionality.BernoulliByHand(
+                    baseline_choice_probability(0.75)
+                )
+            ),
+            (;
+                choice=CommonTestFunctionality.BernoulliByHand(
+                    baseline_choice_probability(0.75)
+                )
+            ),
         ]
         @test agent.history.states ==
             [(; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.75)]

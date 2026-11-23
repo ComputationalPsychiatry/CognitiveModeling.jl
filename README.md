@@ -33,7 +33,7 @@ Run the main tests:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-The automatic differentiation and Reactant tests each have their own environment, and both check the simulation cases that the suites share, in `test/test_cases/simulation_cases.jl`:
+The automatic differentiation and Reactant tests each have their own environment, and both check the simulation cases that the suites share, in `test/common/src/simulation_cases.jl`:
 
 ```bash
 julia --project=test/ad_and_reactant/ad -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/ad/runtests.jl")'
@@ -46,19 +46,19 @@ julia --project=test/ad_and_reactant/reactant -e 'using Pkg; Pkg.instantiate(); 
 The Turing.jl extension is tested in an environment of its own, since Turing.jl holds FlexiChains.jl at an older version than the main tests use:
 
 ```bash
-julia --project=test/unit_tests/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/unit_tests/extensions/turing/runtests.jl")'
+julia --project=test/extensions/turing -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/runtests.jl")'
 ```
 
 Its two parts, the tests of the extension's features and the shared inference cases, can be run on their own, as CI runs them in a job each:
 
 ```bash
-julia --project=test/unit_tests/extensions/turing test/unit_tests/extensions/turing/runtests.jl shared_cases
+julia --project=test/extensions/turing test/extensions/turing/runtests.jl shared_cases
 ```
 
 Automatic differentiation of the Turing.jl extension is tested in another environment, with its own cases:
 
 ```bash
-julia --project=test/ad_and_reactant/turing -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/turing/runtests.jl")'
+julia --project=test/extensions/turing/ad -e 'using Pkg; Pkg.instantiate(); include("test/extensions/turing/ad/runtests.jl")'
 ```
 
 Both suites of automatic differentiation test every backend when they are run without arguments, and otherwise the backends whose names start with one of their arguments, as CI runs each group of backends in a job of its own:

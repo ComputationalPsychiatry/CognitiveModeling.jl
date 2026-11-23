@@ -16,13 +16,11 @@ using Turing.DynamicPPL: LogDensityFunction, LogDensityProblems
 
 ## The models ##
 
-# The example models of the test suites, with the distributions of Distributions.jl. The baseline learns the reward it
-# expects for a choice of true, and chooses true by a softmax of it, and its environment rewards a choice of true with a
-# probability, and a choice of false with half of it
-const TEST_DIRECTORY = joinpath(@__DIR__, "..", "test")
-include(joinpath(TEST_DIRECTORY, "example_models", "ExampleModels.jl"))
-using .ExampleModels
-include(joinpath(TEST_DIRECTORY, "example_models", "turing_methods.jl"))
+# The models of the test suites, from the package in test/common that they share, with the distributions of
+# Distributions.jl, which its extension for Turing.jl gives. The baseline learns the reward it expects for a choice of true,
+# and chooses true by a softmax of it, and its environment rewards a choice of true with a probability, and a choice of
+# false with half of it
+using CommonTestFunctionality
 
 const COGNITIVE_MODEL = Baseline(DistributionsJl())
 const ENVIRONMENT = BaselineEnvironment(DistributionsJl())
@@ -162,8 +160,8 @@ SUITE["turing"]["full model, independent sessions"] = benchmark_turing_model(
 )
 
 # A study of 50 sessions of 200 timesteps, whose parameters come from a distribution for each group, with a learning rate
-# that a logistic function maps to between 0 and 1, and an inverse temperature that is positive
-to_unit_interval(x) = 1 / (1 + exp(-x))
+# that a logistic function maps to between 0 and 1, to_unit_interval of the shared package, and an inverse temperature
+# that is positive
 const STUDY_SESSIONS = sessions_of(simulate_table(50, 200))
 SUITE["turing"]["study of 50 sessions of 200 timesteps, parameters by group"] = benchmark_turing_model(
     full_model(

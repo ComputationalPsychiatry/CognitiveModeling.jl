@@ -33,7 +33,7 @@ function log_likelihood_by_running(
             log_likelihood += if distribution isa Deterministic
                 value == distribution.value ? 0.0 : -Inf
             else
-                ExampleModels.log_density(distribution, value)
+                CommonTestFunctionality.log_density(distribution, value)
             end
         end
     end
@@ -43,34 +43,46 @@ end
 @testset "Example models" begin
     @testset "The distributions written by hand" begin
         #The log densities at known points, and the samples in their support
-        @test ExampleModels.log_density(ExampleModels.BernoulliByHand(0.8), true) ≈ log(0.8)
-        @test ExampleModels.log_density(ExampleModels.BernoulliByHand(0.8), false) ≈
-            log(0.2)
-        @test ExampleModels.log_density(ExampleModels.NormalByHand(1.0, 2.0), 3.0) ≈
-            -1 / 2 - log(2.0) - log(2π) / 2
-        @test ExampleModels.log_density(
-            ExampleModels.CategoricalByHand([0.2, 0.3, 0.5]), 2
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.BernoulliByHand(0.8), true
+        ) ≈ log(0.8)
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.BernoulliByHand(0.8), false
+        ) ≈ log(0.2)
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.NormalByHand(1.0, 2.0), 3.0
+        ) ≈ -1 / 2 - log(2.0) - log(2π) / 2
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.CategoricalByHand([0.2, 0.3, 0.5]), 2
         ) ≈ log(0.3)
-        @test ExampleModels.log_density(ExampleModels.SymbolChoiceByHand(0.8), :left) ≈
-            log(0.2)
-        @test ExampleModels.log_density(
-            ExampleModels.ChoiceAndTimeByHand(0.8, 2.0), (; choice=2, time=0.5)
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.SymbolChoiceByHand(0.8), :left
+        ) ≈ log(0.2)
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.ChoiceAndTimeByHand(0.8, 2.0), (; choice=2, time=0.5)
         ) ≈ log(0.2) + log(2.0) - 1.0
-        @test ExampleModels.log_density(
-            ExampleModels.RewardAndCueByHand(0.8, 0.5, 0.1), (; reward=true, cue=0.5)
+        @test CommonTestFunctionality.log_density(
+            CommonTestFunctionality.RewardAndCueByHand(0.8, 0.5, 0.1),
+            (; reward=true, cue=0.5),
         ) ≈ log(0.8) - log(0.1) - log(2π) / 2
         rng = Xoshiro(1)
         @test all(
             option -> option in 1:3,
-            [rand(rng, ExampleModels.CategoricalByHand([0.2, 0.3, 0.5])) for _ in 1:100],
+            [
+                rand(rng, CommonTestFunctionality.CategoricalByHand([0.2, 0.3, 0.5])) for
+                _ in 1:100
+            ],
         )
         @test all(
             response -> response.choice in (1, 2) && response.time > 0,
-            [rand(rng, ExampleModels.ChoiceAndTimeByHand(0.8, 2.0)) for _ in 1:100],
+            [
+                rand(rng, CommonTestFunctionality.ChoiceAndTimeByHand(0.8, 2.0)) for
+                _ in 1:100
+            ],
         )
     end
 
-    @testset "$(pair.name), $(nameof(typeof(who_starts)))" for pair in EXAMPLE_PAIRS,
+    @testset "$(pair.name), $(nameof(typeof(who_starts)))" for pair in MODEL_PAIRS,
         who_starts in (EnvironmentStarts(), AgentStarts())
 
         simulation = simulate_pair(pair, ByHand(), who_starts)
