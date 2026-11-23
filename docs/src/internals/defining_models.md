@@ -38,6 +38,14 @@ Public = false
 Pages = ["defining_models/utility_functions/bundle_submodel_parameters.jl"]
 ```
 
+### The names of a model with submodels
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["defining_models/utility_functions/collect_submodel_names.jl"]
+```
+
 ### Comparing names
 
 ```@autodocs

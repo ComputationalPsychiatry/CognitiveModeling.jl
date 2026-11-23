@@ -382,7 +382,7 @@ julia> struct PerceptionAndResponse <: AbstractCognitiveModel
 julia> CognitiveModeling.submodel_fields(model::PerceptionAndResponse) = (:perception, :response);
 
 julia> CognitiveModeling.submodels(PerceptionAndResponse(Perception(), Response()))
-(perception = Perception(), response = Response())
+(perception = Perception (submodel), response = Response (submodel))
 ```
 """
 function submodel_fields(model::AbstractSubmodel)

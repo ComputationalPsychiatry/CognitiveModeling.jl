@@ -24,4 +24,5 @@ end
     include("outputs_and_inputs_before_first_timestep.jl")
     include("display_models.jl")
     include("bundle_submodel_parameters.jl")
+    include("collect_submodel_names.jl")
 end

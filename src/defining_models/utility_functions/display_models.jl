@@ -247,8 +247,8 @@ function Base.show(io::IO, ::MIME"text/plain", attributes::ModelAttributes)
     return nothing
 end
 
-#Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, and the names of its attributes, with the domain and the default value of each parameter that has one
-function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
+#Shows the kind and the type of a model in the REPL and notebooks, the values of its fields, its submodels, and the names of its attributes, with the domain and the default value of each parameter that has one
+function Base.show(io::IO, ::MIME"text/plain", model::AbstractSubmodel)
 
     #Print the kind and the type of the model
     print(io, "-- ", uppercasefirst(model_kind(model)), " --")
@@ -261,17 +261,34 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
         print_current_values(io, "Fields", fields, "fieldnames")
     end
 
-    #Print that the model has no method of its own for its names, or the names
+    #Print the submodels, each with its type, if it has any
+    submodels_of_model = submodels(model)
+    if !isempty(submodels_of_model)
+        print(io, "\nSubmodels: ")
+        join(
+            io,
+            map(
+                name -> string(name, " (", nameof(typeof(submodels_of_model[name])), ")"),
+                keys(submodels_of_model),
+            ),
+            ", ",
+        )
+    end
+
+    #Print that the model has no method of its own for its names, or the names, with those of its submodels
     if has_attribute_names(model)
         attributes = check_type_attribute_names(attribute_names(model), model)
+        if !isempty(submodels_of_model)
+            attributes = collected_attribute_names(model_layout(model))
+        end
         print_attribute_names(
             io,
             attributes;
             shorten=true,
             domains=(;
                 parameters=domains_to_display(parameter_domains(model)),
-                inputs=domains_to_display(input_domains(model)),
-                outputs=domains_to_display(output_domains(model)),
+                inputs=input_domains_to_display(model),
+                outputs=output_domains_to_display(model),
             ),
             defaults=defaults_to_display(model),
         )
@@ -283,7 +300,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::AbstractTimestepModel)
 end
 
 #Shows the type and the kind of a model on one line, as inside a vector
-function Base.show(io::IO, model::AbstractTimestepModel)
+function Base.show(io::IO, model::AbstractSubmodel)
     print(io, nameof(typeof(model)), " (", model_kind(model), ")")
     return nothing
 end
@@ -299,7 +316,25 @@ it is a `NamedTuple`, and none otherwise, so that a model whose domains or defau
 aren't right is still shown. Used by the `show` method of a model.
 """
 domains_to_display(domains) = domains isa NamedTuple ? domains : (;)
-function defaults_to_display(model::AbstractTimestepModel)
+
+"""
+    input_domains_to_display(model)
+    output_domains_to_display(model)
+
+Return the domains of the inputs and of the outputs of `model` for its display, with
+[`domains_to_display`](@ref): those of [`input_domains`](@ref) and [`output_domains`](@ref)
+for a timestep model, and none for a submodel that isn't one, whose inputs and outputs are
+up to the model that holds it. Used by the `show` method of a model.
+"""
+function input_domains_to_display(model::AbstractTimestepModel)
+    return domains_to_display(input_domains(model))
+end
+input_domains_to_display(model::AbstractSubmodel) = (;)
+function output_domains_to_display(model::AbstractTimestepModel)
+    return domains_to_display(output_domains(model))
+end
+output_domains_to_display(model::AbstractSubmodel) = (;)
+function defaults_to_display(model::AbstractSubmodel)
     defaults = default_parameters(model)
     return defaults isa NamedTuple ? defaults : (;)
 end
@@ -308,12 +343,14 @@ end
     model_kind(model)
 
 Return which kind of model `model` is, as a display names it: `"cognitive model"`,
-`"environment model"`, or `"model"` for one of neither kind. Used by the `show` methods of a
-model and of an [`InstantiatedModel`](@ref).
+`"environment model"`, `"model"` for a timestep model of neither kind, or `"submodel"` for an
+[`AbstractSubmodel`](@ref) that isn't a timestep model. Used by the `show` methods of a model
+and of an [`InstantiatedModel`](@ref).
 """
 model_kind(::AbstractCognitiveModel) = "cognitive model"
 model_kind(::AbstractEnvironmentModel) = "environment model"
 model_kind(::AbstractTimestepModel) = "model"
+model_kind(::AbstractSubmodel) = "submodel"
 
 """
     describe_model(model)

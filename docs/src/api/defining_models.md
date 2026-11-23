@@ -48,9 +48,10 @@ CognitiveModeling.submodels
 CognitiveModeling.uses_submodel_prefixes
 ```
 
-## Reading a model's parameters
+## Reading a model's names and parameters
 
 ```@docs
+CognitiveModeling.get_attribute_names
 CognitiveModeling.discrete_parameter_names
 CognitiveModeling.continuous_parameter_names
 ```

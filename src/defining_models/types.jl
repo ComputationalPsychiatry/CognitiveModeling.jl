@@ -14,7 +14,7 @@ submodel can have submodels of its own. A submodel has [`attribute_names`](@ref)
 names of its own attributes only, [`initialize_state`](@ref), [`default_parameters`](@ref),
 [`parameter_domains`](@ref) and [`prepare_state_for_saving`](@ref), as a model has them.
 What else it has, such as a function that updates it, and what that returns, is up to the
-model that holds it.
+model that holds it. In the REPL, a submodel shows as a model does.
 """
 abstract type AbstractSubmodel end
 
@@ -41,9 +41,10 @@ abstract type AbstractTimestepModel <: AbstractSubmodel end
 
 Supertype for cognitive models, whose inputs are observations and whose outputs are actions.
 
-In the REPL, a cognitive model shows its type, the values of its fields if it has any, and
-the names of its attributes, or `not specified` if it has no method of
-[`attribute_names`](@ref). A kind of attribute with more than five names shows only how many
+In the REPL, a cognitive model shows its type, the values of its fields if it has any, its
+submodels if it has any, and the names of its attributes, with those of its submodels as
+[`CognitiveModeling.get_attribute_names`](@ref) collects them, or `not specified` if it has
+no method of [`attribute_names`](@ref). A kind of attribute with more than five names shows only how many
 there are, and `attribute_names` gives them. On one line, as inside a vector, a model shows
 its type and its kind.
 

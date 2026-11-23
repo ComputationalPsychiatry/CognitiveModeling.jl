@@ -11,6 +11,7 @@ include("defining_models/functions_to_call.jl")
 include("defining_models/utility_functions/check_model_methods.jl")
 include("defining_models/utility_functions/read_parameters_valid.jl")
 include("defining_models/utility_functions/bundle_submodel_parameters.jl")
+include("defining_models/utility_functions/collect_submodel_names.jl")
 include("defining_models/utility_functions/compare_names.jl")
 include("defining_models/utility_functions/check_attributes_against_names.jl")
 include("defining_models/utility_functions/check_parameters_in_domains.jl")
@@ -105,7 +106,7 @@ export get_session_trajectories, get_session_parameters, predict_session_traject
 public timestep_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, input_domains, output_domains
-public submodel_fields, submodels, uses_submodel_prefixes
+public submodel_fields, submodels, uses_submodel_prefixes, get_attribute_names
 public discrete_parameter_names, continuous_parameter_names
 public turing_timestep_model,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
