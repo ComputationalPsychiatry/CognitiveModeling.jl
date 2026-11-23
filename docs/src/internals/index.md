@@ -8,7 +8,8 @@ is under [API](@ref).
 - [Saving histories](saving_histories.md)
 - [Fitting](fitting.md), with the internals of
   [parameter models](parameter_models.md), and the utility functions for
-  [preparing models](preparing_models.md) and [within models](within_models.md)
+  [preparing models](preparing_models.md), [within models](within_models.md) and
+  [workflow and postprocessing](workflow_and_postprocessing.md)
 
 ```@index
 Pages = [
@@ -19,5 +20,6 @@ Pages = [
     "parameter_models.md",
     "preparing_models.md",
     "within_models.md",
+    "workflow_and_postprocessing.md",
 ]
 ```

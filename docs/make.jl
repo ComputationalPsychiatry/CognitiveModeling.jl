@@ -123,6 +123,7 @@ makedocs(;
                 "Parameter models" => "internals/parameter_models.md",
                 "Preparing models" => "internals/preparing_models.md",
                 "Within models" => "internals/within_models.md",
+                "Workflow and postprocessing" => "internals/workflow_and_postprocessing.md",
             ],
         ],
     ],

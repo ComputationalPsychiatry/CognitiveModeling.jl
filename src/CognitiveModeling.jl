@@ -55,6 +55,10 @@ include("inference/utility_functions/within_models/read_timestep_data.jl")
 include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
 include("inference/utility_functions/within_models/mask_fitted_timesteps.jl")
+include("inference/utility_functions/workflow_and_postprocessing/with_save_history.jl")
+include(
+    "inference/utility_functions/workflow_and_postprocessing/sessions_with_other_data.jl"
+)
 include("inference/workflow_and_postprocessing/get_session_trajectories.jl")
 include("inference/workflow_and_postprocessing/predict_session_trajectories.jl")
 include("inference/workflow_and_postprocessing/conditioning_sessions.jl")
