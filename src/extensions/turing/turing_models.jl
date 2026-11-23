@@ -79,19 +79,21 @@ from [`decondition_sessions`](@ref), they are simulated in the same way, as late
 named `timesteps[3].choice.simulated`. Where the data has [`UnimputedMissingValue`](@ref),
 or a marker for nothing happening, the models receive the marker as it is, and nothing is
 sampled or scored for it. The actions in the data are scored at the end as observed values,
-in one `product_distribution` over every action and timestep, against the distributions the
-cognitive model gave for them. The observations in the data are scored the same way against
-the distributions the environment gave, so that they inform the missing values and the
-environment's parameters. A `Deterministic` is scored as a point mass, with a log density of
-0 for its value and `-Inf` for any other, and only a number or a `Bool` can be, so a value
-in the data that the model gives as another kind of `Deterministic` is an error, and so is
-one where the model gave nothing, [`NoValue`](@ref). When the session doesn't include its
-environment, as the `include_environment` of `session_info` decides, which by default is
-when nothing in the data is `ImputedMissingValue()` or `SimulatedMissingValue()` and the
-environment's history isn't saved, the session is the same as one without an environment,
-with the same variables. The [`stopping_criterion`](@ref) of the models is checked before
-every timestep, as [`SessionInfo`](@ref) describes, so that a session from
-[`decondition_sessions`](@ref) can end early, as a simulation does.
+in one product over every action and timestep, against the distributions the cognitive model
+gave for them, which Turing.jl's `pointwise_loglikelihoods` with `factorize = true` splits
+into the log-likelihood of each action, also of outputs whose values aren't numbers. The
+observations in the data are scored the same way against the distributions the environment
+gave, so that they inform the missing values and the environment's parameters. A
+`Deterministic` is scored as a point mass, with a log density of 0 for its value and `-Inf`
+for any other, and only a number or a `Bool` can be, so a value in the data that the model
+gives as another kind of `Deterministic` is an error, and so is one where the model gave
+nothing, [`NoValue`](@ref). When the session doesn't include its environment, as the
+`include_environment` of `session_info` decides, which by default is when nothing in the
+data is `ImputedMissingValue()` or `SimulatedMissingValue()` and the environment's history
+isn't saved, the session is the same as one without an environment, with the same variables.
+The [`stopping_criterion`](@ref) of the models is checked before every timestep, as
+[`SessionInfo`](@ref) describes, so that a session from [`decondition_sessions`](@ref) can
+end early, as a simulation does.
 
 # What it returns
 A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as

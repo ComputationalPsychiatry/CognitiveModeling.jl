@@ -79,6 +79,8 @@ using Random: AbstractRNG, default_rng
 using Turing
 using Turing: DynamicPPL
 using Turing.DynamicPPL: VarName
+#Loaded with Turing.jl, through DynamicPPL.jl, and a trigger of the extension, for the pointwise log-likelihoods of a session
+using PartitionedDistributions: PartitionedDistributions
 
 include("extension_defaults.jl")
 #The full model, made from its parts, the Turing.jl models of the full model, the sessions, a session and a timestep, each in a file named after it, and the helpers they use, in files named after the models they serve
