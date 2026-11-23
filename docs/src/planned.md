@@ -67,6 +67,14 @@ This page lists what is planned and not written yet. The list will grow.
 - Mixture models and model selection within the fitted model, in the style of
   Michael D. Lee: a latent variable for each session, or each group, chooses which of
   several cognitive models generated its behavior, and its posterior compares the models.
+- Leave-one-session-out cross-validation, which estimates how well a model predicts the
+  behavior of a new participant or session. Summing the log-likelihoods of each session and
+  smoothing them with PSIS, as for single data points, gives unreliable estimates when each
+  session has parameters of its own, since leaving out a session's data changes its
+  parameters the most. They must instead be integrated over their population distribution,
+  by fitting again without each session, or by importance sampling over the session's
+  parameters. The parameter models know which parameters are a session's, so this would be
+  the package's, with PosteriorStats.jl for the smoothing.
 - Several sets of experimental data in one hierarchical model, such as different experiments
   or tasks done by the same participants, which share the parameters they have in common.
 - Imputing a missing part of a value, such as the time of a response whose choice was

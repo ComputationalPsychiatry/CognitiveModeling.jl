@@ -16,9 +16,11 @@
 # each step in both ways, and compares them at the end.
 
 using CognitiveModeling
-using Distributions: Bernoulli, BernoulliLogit, Beta, LogNormal
+using Distributions: Bernoulli, BernoulliLogit, Beta, LogNormal, Normal
+using LogExpFunctions: logsumexp
+using PosteriorStats: compare, loo
 using Random: Xoshiro
-using Statistics: mean
+using Statistics: mean, var
 using Turing
 using Turing: DynamicPPL
 
@@ -239,6 +241,108 @@ recovered_parameters = get_session_parameters(package_recovery_model, recovered)
         recovered=mean(recovered_parameters[@varname($participant.learning_rate)]),
     ) for (i, participant) in enumerate(participants)
 ]
+
+# ## Comparing models
+#
+# How well a fitted model predicts data it wasn't fitted to can be estimated from the fit
+# itself, with leave-one-out cross-validation by Pareto-smoothed importance sampling,
+# PSIS-LOO. It needs the log-likelihood of each data point with the parameters of each
+# sample. Turing.jl's `pointwise_loglikelihoods` gives them with `factorize = true`: each
+# session scores its choices together, and `factorize` splits them into a value for each
+# choice, in the order of the timesteps that have one:
+
+pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
+
+# The `loo` of [PosteriorStats.jl](https://github.com/arviz-devs/PosteriorStats.jl), which
+# smooths with PSIS.jl, and which ArviZ.jl includes, takes them in an array of samples by
+# chains by data points:
+
+function log_likelihood_array(pointwise, output)
+    session_names = collect(keys(pointwise))
+    n_samples, n_chains = size(pointwise[first(session_names)])
+    return stack(
+        [
+            getproperty(pointwise[session_name][sample_index, chain_index], output)[i] for
+            sample_index in 1:n_samples, chain_index in 1:n_chains
+        ] for session_name in session_names for
+        i in eachindex(getproperty(pointwise[session_name][1, 1], output))
+    )
+end
+log_likelihood = log_likelihood_array(pointwise, :choice)
+rescorla_wagner_loo = loo(log_likelihood)
+
+# A model that doesn't learn, and chooses the option with the same probability on every
+# timestep, is fitted to the same data, and the two are compared by their PSIS-LOO
+# estimates:
+
+struct FixedPreference <: AbstractCognitiveModel end
+
+CognitiveModeling.initialize_state(model::FixedPreference, parameters) = (;)
+
+function CognitiveModeling.timestep_model(model::FixedPreference, context::ModelContext)
+    return ModelOutput((; choice=BernoulliLogit(context.parameters.preference)), (;))
+end
+
+function CognitiveModeling.attribute_names(model::FixedPreference)
+    return ModelAttributes(;
+        parameters=:preference, states=(), inputs=:reward, outputs=:choice
+    )
+end
+
+fixed_preference_model = full_model(
+    TuringBackend(),
+    IndependentParameters((; preference=Normal(0, 2))),
+    MultipleSessionsInfo(
+        FixedPreference(),
+        table;
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:participant,
+        who_starts=EnvironmentStarts(),
+    ),
+)
+fixed_preference_chain = sample(
+    Xoshiro(9), fixed_preference_model, NUTS(), 300; progress=false
+)
+fixed_preference_loo = loo(
+    log_likelihood_array(
+        pointwise_loglikelihoods(
+            fixed_preference_model, fixed_preference_chain; factorize=true
+        ),
+        :choice,
+    ),
+)
+comparison = compare((;
+    rescorla_wagner=rescorla_wagner_loo, fixed_preference=fixed_preference_loo
+))
+
+# WAIC estimates the same as PSIS-LOO, with a larger error and without its diagnostics, so
+# PosteriorStats.jl no longer computes it. From the same array, by hand:
+
+function waic_estimate(log_likelihood)
+    draws = reshape(log_likelihood, :, size(log_likelihood, 3))
+    log_pointwise_predictive_density = sum(
+        logsumexp(draws[:, i]) - log(size(draws, 1)) for i in axes(draws, 2)
+    )
+    effective_number_of_parameters = sum(var(draws[:, i]) for i in axes(draws, 2))
+    return (;
+        elpd=log_pointwise_predictive_density - effective_number_of_parameters,
+        effective_number_of_parameters,
+    )
+end
+waic = waic_estimate(log_likelihood)
+
+# AIC and BIC need the maximum of the log-likelihood, which Turing.jl's
+# `maximum_likelihood` finds, the number of parameters, which is the length of the vector it
+# found the maximum at, and for BIC the number of data points:
+
+maximum_likelihood_estimate = maximum_likelihood(Xoshiro(10), model)
+n_parameters = length(maximum_likelihood_estimate.optim_result.u)
+n_data_points = size(log_likelihood, 3)
+information_criteria = (;
+    aic=2 * n_parameters - 2 * maximum_likelihood_estimate.lp,
+    bic=n_parameters * log(n_data_points) - 2 * maximum_likelihood_estimate.lp,
+)
 
 # ## Turing.jl's functions or the package's
 #
