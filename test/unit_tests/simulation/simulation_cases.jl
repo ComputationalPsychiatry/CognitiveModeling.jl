@@ -38,7 +38,7 @@ function saved_lengths(trajectories)
 end
 
 @testset "Every simulation case, $(nameof(typeof(distributions)))" for distributions in (
-    ExampleModels.ByHand(), Means()
+    CommonTestFunctionality.ByHand(), Means()
 )
     @testset "$(case.name)" for case in simulation_cases(distributions)
         result = case.run(case.x)
@@ -48,7 +48,7 @@ end
         if result isa SessionTrajectories
             @test allequal(saved_lengths(result))
         end
-        if case.inferred && distributions isa ExampleModels.ByHand
+        if case.inferred && distributions isa CommonTestFunctionality.ByHand
             @inferred case.run(case.x)
         end
     end

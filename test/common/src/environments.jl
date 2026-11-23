@@ -424,7 +424,7 @@ function CognitiveModeling.timestep_model(
         (;
             reward=bernoulli(
                 environment.distributions,
-                ExampleModels.reward_probability(choice, reward_probability),
+                CommonTestFunctionality.reward_probability(choice, reward_probability),
             ),
             cue=normal(environment.distributions, value_or(confidence, 0.5), noise),
             bonus=normal(
@@ -539,7 +539,7 @@ function CognitiveModeling.timestep_model(
     environment::NamedTupleAttributesEnvironment, context::ModelContext
 )
     (; reward_probability, cue_mean, cue_noise) = context.parameters
-    probability = ExampleModels.reward_probability(
+    probability = CommonTestFunctionality.reward_probability(
         chose_first(context.input.response), reward_probability
     )
     return ModelOutput(

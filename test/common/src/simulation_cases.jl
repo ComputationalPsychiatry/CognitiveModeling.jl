@@ -1,10 +1,9 @@
-#The simulation cases that the suites share. Each simulates an example model in one of the ways that the package offers,
-#with its real numbers, usually those of its parameters, taken from a vector x, and returns what was saved, so that a
-#suite can check what the simulation saved, differentiate it by x, or compile it. simulation_cases(distributions) gives
-#every case with a kind of distributions of the example models: with their means in the AD and Reactant suites, where a
+#The simulation cases that the suites share. Each simulates a model of the tests in one of the ways that the package
+#offers, with its real numbers, usually those of its parameters, taken from a vector x, and returns what was saved, so
+#that a suite can check what the simulation saved, differentiate it by x, or compile it. simulation_cases(distributions)
+#gives every case with a kind of distributions of the models: with their means in the AD and Reactant suites, where a
 #simulation is deterministic and the gradients go all the way round its loop, and with the distributions written by hand
-#in the main suite, where a case samples with a random number generator of its own, seeded on every run. A runner
-#includes this file after ExampleModels.jl
+#in the main suite, where a case samples with a random number generator of its own, seeded on every run
 using Random: Xoshiro
 
 ## The real numbers of the parameters ##
@@ -373,7 +372,7 @@ a_choice_or_reward(::Means) = 1.0
 #The rewards that the cases on single observations receive, which the agents start without
 const SINGLE_REWARDS = [(; reward=reward) for reward in (1.0, 0.0, 1.0, 1.0, 0.0)]
 
-#Every simulation case with a kind of distributions of the example models
+#Every simulation case with a kind of distributions of the models
 function simulation_cases(distributions)
     cases = []
     baseline = pair_named("Baseline")
@@ -385,8 +384,8 @@ function simulation_cases(distributions)
     )
     baseline_with(; replacements...) = merge(baseline_parts, NamedTuple(replacements))
 
-    #Every model with its environment, saving everything, as the example models' own tests run them
-    pairs = distributions isa Means ? PAIRS_WITH_MEANS : EXAMPLE_PAIRS
+    #Every model with its environment, saving everything, as the models' own tests run them
+    pairs = distributions isa Means ? PAIRS_WITH_MEANS : MODEL_PAIRS
     for pair in pairs, (who_starts, starts) in WHO_STARTS
         push!(
             cases,

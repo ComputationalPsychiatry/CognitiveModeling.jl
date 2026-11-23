@@ -10,10 +10,8 @@ using ReverseDiff: ReverseDiff
 
 using Random: AbstractRNG, Xoshiro
 
-#The example models and the simulation cases that the suites share
-include(joinpath(@__DIR__, "..", "..", "example_models", "ExampleModels.jl"))
-using .ExampleModels
-include(joinpath(@__DIR__, "..", "..", "test_cases", "simulation_cases.jl"))
+#The code that the suites share, the package in test/common: the models of the tests and the simulation cases
+using CommonTestFunctionality
 
 #The cases of the suite, each differentiated as the sum of every real number that it saved: every simulation case with the
 #means of the distributions, which is deterministic, so that the gradient goes all the way round the loop, and those of

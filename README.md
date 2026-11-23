@@ -33,7 +33,7 @@ Run the main tests:
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-The automatic differentiation and Reactant tests each have their own environment, and both check the simulation cases that the suites share, in `test/test_cases/simulation_cases.jl`:
+The automatic differentiation and Reactant tests each have their own environment, and both check the simulation cases that the suites share, in `test/common/src/simulation_cases.jl`:
 
 ```bash
 julia --project=test/ad_and_reactant/ad -e 'using Pkg; Pkg.instantiate(); include("test/ad_and_reactant/ad/runtests.jl")'

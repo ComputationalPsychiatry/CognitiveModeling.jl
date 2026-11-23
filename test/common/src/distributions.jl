@@ -1,8 +1,9 @@
-## The distributions that the example models give ##
-#Every example model that gives outputs, or samples anything of its own, takes a kind of distributions, and calls the
+## The distributions that the models give ##
+#Every model of the tests that gives outputs, or samples anything of its own, takes a kind of distributions, and calls the
 #functions below with it, such as bernoulli(model.distributions, probability). Each suite chooses the kind it needs, so
 #that the same models run with the distributions written by hand here, with their means, which makes a simulation
-#deterministic, and with those of Distributions.jl in the Turing.jl suites, whose kind turing_methods.jl adds
+#deterministic, and with those of Distributions.jl in the Turing.jl suites, whose methods the package's extension for
+#Turing.jl adds
 
 #The distributions written by hand below, which need no package of distributions, for the main suite and for Reactant
 struct ByHand end
@@ -11,6 +12,9 @@ struct ByHand end
 #its outputs are differentiable around the loop: the probability of a choice of two options, the mean of a normal
 #distribution, and the probabilities of the options of a choice of several
 struct Means end
+
+#The distributions of Distributions.jl, which Turing.jl scores, whose methods are in the package's extension for Turing.jl
+struct DistributionsJl end
 
 #A choice of true with a probability, and false otherwise
 function bernoulli end
@@ -37,6 +41,14 @@ function choice_and_time end
 #A NamedTuple of a reward, true with a probability and false otherwise, and a cue from a normal distribution with a mean
 #and a standard deviation, independent of the reward
 function reward_and_cue end
+
+#The priors of the parameter models of the inference cases, which only the kinds of an inference backend have: a beta
+#distribution with its two shapes, a log-normal distribution with the mean and the standard deviation of its logarithm,
+#an exponential distribution with its scale, and the product of a vector of distributions
+function beta end
+function log_normal end
+function exponential end
+function product_of end
 
 ## Written by hand ##
 #Each has a method of rand, which a simulation samples with, and of log_density, which the likelihoods by hand use. The

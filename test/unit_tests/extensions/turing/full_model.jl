@@ -72,9 +72,6 @@ const TWO_MISSING_REWARDS_TABLE = (;
     FULL_TABLE..., reward=[1.0, missing, 1.0, 0.0, 1.0, 1.0, missing, 0.0, 1.0]
 )
 
-#Maps the real line to the values between 0 and 1, as a transformation for a learning rate
-to_unit_interval(x) = 1 / (1 + exp(-x))
-
 #The three sessions of FULL_TABLE with a column that groups them: S1 and S3 in one group, and S2 in another
 const GROUPED_FULL_TABLE = merge(
     FULL_TABLE, (; group=["a", "a", "a", "b", "b", "a", "a", "a", "a"])

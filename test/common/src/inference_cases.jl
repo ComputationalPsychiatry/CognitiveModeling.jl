@@ -1,10 +1,9 @@
-#The inference cases that the suites share. Each is a session of an example model, several sessions, or a full model of
-#them, with data from a simulation with the distributions written by hand, in which some values can be missing.
+#The inference cases that the suites share. Each is a session of a model of the tests, several sessions, or a full model
+#of them, with data from a simulation with the distributions written by hand, in which some values can be missing.
 #session_log_density_by_hand gives the log density of a session by hand, at the values of its variables, which are the
 #imputed values and what the models sample of their own, so that a suite can compare the log density of an inference
-#backend's model with it. inference_cases(distributions) gives every case with a kind of distributions of the example
-#models, those of Distributions.jl in the Turing.jl suites. A runner includes this file after ExampleModels.jl and
-#turing_methods.jl
+#backend's model with it. The cases take a kind of distributions of the models, those of Distributions.jl in the
+#Turing.jl suites, which also gives the priors of the full models
 using Random: Xoshiro
 
 ## The data of the sessions ##
@@ -224,10 +223,10 @@ function session_case(
     )
 end
 
-#Every case of a single session with a kind of distributions of the example models
+#Every case of a single session with a kind of distributions of the models
 function session_cases(distributions)
     cases = []
-    for pair in EXAMPLE_PAIRS, (who_starts, starts) in WHO_STARTS
+    for pair in MODEL_PAIRS, (who_starts, starts) in WHO_STARTS
         observations, actions, _ = simulated_data(pair, who_starts)
 
         #The session as it is, which leaves the environment out, and with the environment, which scores the observations
@@ -477,7 +476,7 @@ function sessions_log_density_by_hand(
     end
 end
 
-#Every case of several sessions with a kind of distributions of the example models: sessions of different lengths, of
+#Every case of several sessions with a kind of distributions of the models: sessions of different lengths, of
 #which the first and the third have missing values, so that only they include their environment
 function sessions_cases(distributions)
     cases = []
@@ -569,15 +568,15 @@ function full_model_case(
     return merge(sessions, (; parameters_model, full_model_keywords=keywords))
 end
 
-#Every case of a full model with a kind of distributions of the example models, which are those of Distributions.jl, for
-#the priors of the parameter models: each parameter model, with the features it has, on three sessions of the baseline,
+#Every case of a full model with a kind of distributions of the models, which also gives the priors of the parameter
+#models, those of Distributions.jl in the Turing.jl suites: each parameter model, with the features it has, on three sessions of the baseline,
 #where the first has a missing choice, so that only it includes its environment. With missing_values = false, no value is
 #missing in any case
 function full_model_cases(distributions; missing_values=true)
     baseline = pair_named("Baseline")
     case(arguments...; keywords...) =
         full_model_case(arguments...; keywords..., missing_values)
-    group_priors = (; mean=Normal(0, 1), sd=Exponential(1))
+    group_priors = (; mean=normal(distributions, 0, 1), sd=exponential(distributions, 1))
     return [
         case(
             "Independent parameters without missing values",
@@ -585,7 +584,8 @@ function full_model_cases(distributions; missing_values=true)
             pair=baseline,
             missing_actions=((;), (;), (;)),
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
         case(
@@ -593,7 +593,8 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=baseline,
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
         case(
@@ -602,7 +603,8 @@ function full_model_cases(distributions; missing_values=true)
             pair=baseline,
             who_starts=AgentStarts(),
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
         case(
@@ -610,7 +612,8 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=baseline,
             parameters_model=IdenticalParameters((;
-                learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
         case(
@@ -635,7 +638,9 @@ function full_model_cases(distributions; missing_values=true)
             "A parameter fixed by keyword",
             distributions;
             pair=baseline,
-            parameters_model=IndependentParameters((; learning_rate=Beta(2, 2))),
+            parameters_model=IndependentParameters((;
+                learning_rate=beta(distributions, 2, 2)
+            )),
             fixed_cognitive_parameters=(; inverse_temperature=2.0),
         ),
         case(
@@ -658,25 +663,28 @@ function full_model_cases(distributions; missing_values=true)
             pair=baseline,
             parameters_model=HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(
-                    Intercept(Normal(0, 1)),
-                    ContinuousPredictor(:age, Normal(0, 1)),
-                    CategoricalPredictor(:group, Normal(0, 1)),
-                    Interaction((:age, :group), Normal(0, 1)),
+                    Intercept(normal(distributions, 0, 1)),
+                    ContinuousPredictor(:age, normal(distributions, 0, 1)),
+                    CategoricalPredictor(:group, normal(distributions, 0, 1)),
+                    Interaction((:age, :group), normal(distributions, 0, 1)),
                     VaryingEffects(
                         :participant,
-                        Intercept(Exponential(1)),
-                        ContinuousPredictor(:age, Exponential(1)),
+                        Intercept(exponential(distributions, 1)),
+                        ContinuousPredictor(:age, exponential(distributions, 1)),
                     ),
                     VaryingEffects(
-                        :id, Intercept(Exponential(1)); group_by=:group, name=:session
+                        :id,
+                        Intercept(exponential(distributions, 1));
+                        group_by=:group,
+                        name=:session,
                     );
                     transformation=to_unit_interval,
                 ),
                 inverse_temperature=RegressionParameter(
-                    Intercept(Normal(0, 1));
+                    Intercept(normal(distributions, 0, 1));
                     family=RegressionFamily(
-                        (; mean=RegressionOutcome(), sd=Exponential(1));
-                        distribution=LogNormal,
+                        (; mean=RegressionOutcome(), sd=exponential(distributions, 1));
+                        distribution=Base.Fix1(log_normal, distributions),
                     ),
                 ),
             )),
@@ -686,9 +694,9 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=baseline,
             parameters_model=CompositeParameters(
-                IdenticalParameters((; learning_rate=Beta(2, 2)));
+                IdenticalParameters((; learning_rate=beta(distributions, 2, 2)));
                 temperatures=IndependentParameters((;
-                    inverse_temperature=LogNormal(0, 0.5)
+                    inverse_temperature=log_normal(distributions, 0, 0.5)
                 )),
             ),
         ),
@@ -697,10 +705,11 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=baseline,
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
             environment_parameters_model=IdenticalParameters((;
-                reward_probability=Beta(2, 2)
+                reward_probability=beta(distributions, 2, 2)
             )),
         ),
         case(
@@ -708,9 +717,9 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=pair_named("WithDiscreteParameter, learning"),
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 2),
-                inverse_temperature=LogNormal(0, 0.5),
-                learns=Bernoulli(0.7),
+                learning_rate=beta(distributions, 2, 2),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
+                learns=bernoulli(distributions, 0.7),
             )),
         ),
         case(
@@ -719,8 +728,10 @@ function full_model_cases(distributions; missing_values=true)
             pair=pair_named("VectorAttributes"),
             missing_actions=((; ratings=(3,)), (;), (;)),
             parameters_model=IndependentParameters((;
-                learning_rates=product_distribution(fill(Beta(2, 2), 3)),
-                noise=LogNormal(-1, 0.5),
+                learning_rates=product_of(
+                    distributions, fill(beta(distributions, 2, 2), 3)
+                ),
+                noise=log_normal(distributions, -1, 0.5),
             )),
         ),
         case(
@@ -731,7 +742,8 @@ function full_model_cases(distributions; missing_values=true)
             parameters_model=CompositeParameters(
                 HierarchicalRegressionParameters((;
                     stickiness=RegressionParameter(
-                        Intercept(Normal(1, 0.5)), ContinuousPredictor(:age, Normal(0, 0.5))
+                        Intercept(normal(distributions, 1, 0.5)),
+                        ContinuousPredictor(:age, normal(distributions, 0, 0.5)),
                     ),
                 )),
                 FixedParameters((;
@@ -750,7 +762,8 @@ function full_model_cases(distributions; missing_values=true)
             distributions;
             pair=pair_named("WithInvalidParameters"),
             parameters_model=IndependentParameters((;
-                learning_rate=Beta(2, 8), inverse_temperature=LogNormal(0, 0.5)
+                learning_rate=beta(distributions, 2, 8),
+                inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
     ]

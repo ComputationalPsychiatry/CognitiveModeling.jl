@@ -43,12 +43,12 @@ function CognitiveModeling.initialize_state(model::BaselineOfSubmodels, paramete
     )
 end
 function CognitiveModeling.timestep_model(model::BaselineOfSubmodels, context::ModelContext)
-    expected_reward = ExampleModels.learn(
+    expected_reward = CommonTestFunctionality.learn(
         context.previous_state.perception.expected_reward,
         context.parameters.perception.learning_rate,
         context.input.reward,
     )
-    logit = ExampleModels.choice_logit(
+    logit = CommonTestFunctionality.choice_logit(
         expected_reward, context.parameters.response.inverse_temperature
     )
     return ModelOutput(
@@ -114,12 +114,12 @@ end
 function CognitiveModeling.timestep_model(
     model::BaselineOfNestedSubmodels, context::ModelContext
 )
-    expected_reward = ExampleModels.learn(
+    expected_reward = CommonTestFunctionality.learn(
         context.previous_state.perception.learning.expected_reward,
         context.parameters.perception.learning.learning_rate,
         context.input.reward,
     )
-    logit = ExampleModels.choice_logit(
+    logit = CommonTestFunctionality.choice_logit(
         expected_reward, context.parameters.response.inverse_temperature
     )
     return ModelOutput(

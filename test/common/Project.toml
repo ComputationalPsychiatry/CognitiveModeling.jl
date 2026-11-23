@@ -1,0 +1,22 @@
+name = "CommonTestFunctionality"
+uuid = "7693ca21-d518-48fb-9fab-23cd56a26025"
+authors = ["Peter Thestrup Waade <peter@waade.net>"]
+version = "0.1.0"
+
+[deps]
+CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[weakdeps]
+Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
+
+[extensions]
+CommonTestFunctionalityTuringExt = "Turing"
+
+[sources]
+CognitiveModeling = {path = "../.."}
+
+[compat]
+Random = "1"
+Turing = "0.49"
+julia = "1.13"

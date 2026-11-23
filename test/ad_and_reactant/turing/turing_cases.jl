@@ -9,14 +9,10 @@ using Turing.DynamicPPL:
     VarInfo
 using Random: Xoshiro
 
-#The example models, and the cases that the suites share, with the distributions of Distributions.jl. The simulation
-#cases give real_numbers and with_real_numbers, which make the parameters of a case variables
-const TEST_DIRECTORY = joinpath(@__DIR__, "..", "..")
-include(joinpath(TEST_DIRECTORY, "example_models", "ExampleModels.jl"))
-using .ExampleModels
-include(joinpath(TEST_DIRECTORY, "example_models", "turing_methods.jl"))
-include(joinpath(TEST_DIRECTORY, "test_cases", "simulation_cases.jl"))
-include(joinpath(TEST_DIRECTORY, "test_cases", "inference_cases.jl"))
+#The code that the suites share, the package in test/common, whose extension for Turing.jl loads with Turing.jl above
+#and gives the distributions of Distributions.jl. The simulation cases give real_numbers and with_real_numbers, which make
+#the parameters of a case variables
+using CommonTestFunctionality
 
 # Test cases for the log density of Turing.jl models of sessions and of full models, which only this suite runs, since
 # Turing.jl isn't loaded by the AD and Reactant suites of the package itself, in test/ad_and_reactant/ad and
@@ -92,7 +88,7 @@ end
 #models where who starts makes a difference to what is differentiated, and the imputed actions and observations of each
 #continuous kind
 const SESSION_CASE_NAMES = [
-    ["$(pair.name) with its environment, environment starts" for pair in EXAMPLE_PAIRS];
+    ["$(pair.name) with its environment, environment starts" for pair in MODEL_PAIRS];
     [
         "$name with its environment, agent starts" for name in
         ("Baseline", "EveryFeature", "Baseline with OutputNotEveryTimestepEnvironment")

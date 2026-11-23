@@ -12,12 +12,9 @@ using Turing
 #For PSIS-LOO of the pointwise log-likelihoods, which PosteriorStats.jl smooths with PSIS.jl
 using PosteriorStats: PosteriorStats
 
-#The example models that the suites share, with their methods for Turing.jl
-const EXAMPLE_MODELS_DIRECTORY = joinpath(@__DIR__, "..", "..", "..", "example_models")
-include(joinpath(EXAMPLE_MODELS_DIRECTORY, "ExampleModels.jl"))
-using .ExampleModels
-include(joinpath(EXAMPLE_MODELS_DIRECTORY, "turing_methods.jl"))
-include(joinpath(@__DIR__, "..", "..", "..", "test_cases", "inference_cases.jl"))
+#The code that the suites share, the package in test/common, whose extension for Turing.jl loads with Turing.jl above and
+#adds the distributions of Distributions.jl, the priors of the inference cases and the Turing.jl methods of the models
+using CommonTestFunctionality
 
 #Whether a report is about a local variable being undefined. DynamicPPL's ~ expands to code which reads
 #its left-hand side before assigning it, on a branch that is never taken, so JET reports every ~ this way
@@ -57,8 +54,8 @@ end
             isempty(reports) || show(stdout, result)
         end
 
-        #The example models with the distributions of Distributions.jl and their methods for Turing.jl
-        include(joinpath(EXAMPLE_MODELS_DIRECTORY, "turing_runtests.jl"))
+        #The models of the tests with the distributions of Distributions.jl
+        include("common_test_functionality.jl")
 
         include("extension_defaults.jl")
         include("turing_behavioral_session.jl")

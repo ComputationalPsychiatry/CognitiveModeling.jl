@@ -1,9 +1,9 @@
 ## Each cognitive model with the environment it runs with ##
-#The pairs that the example models' own tests simulate, and that the test cases are made from, with every kind of
+#The pairs that the models' own tests simulate, and that the test cases are made from, with every kind of
 #distributions, and helpers to simulate them and to read what each model received
 
 #Each cognitive model with the environment it runs with, as functions of a kind of distributions, and their parameters
-const EXAMPLE_PAIRS = [
+const MODEL_PAIRS = [
     (;
         name="Baseline",
         model=Baseline,
@@ -306,12 +306,12 @@ const EXAMPLE_PAIRS = [
 ]
 
 #The pair of a name
-pair_named(name) = only(filter(pair -> pair.name == name, EXAMPLE_PAIRS))
+pair_named(name) = only(filter(pair -> pair.name == name, MODEL_PAIRS))
 
 #The pairs whose distributions all have means, which simulate without randomness with them
 const PAIRS_WITH_MEANS = filter(
     pair -> !(pair.name in ("NamedTupleAttributes", "SymbolOutput", "EveryFeature")),
-    EXAMPLE_PAIRS,
+    MODEL_PAIRS,
 )
 
 #The input that a model received on each timestep, from what the other model gave, saved with timestep 0 first. The model
