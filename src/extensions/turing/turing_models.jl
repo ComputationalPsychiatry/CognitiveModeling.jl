@@ -304,7 +304,8 @@ continues, as [`SessionInfo`](@ref) describes, the session gives the parameters 
 density of `-Inf`, so that a sampler rejects them, and
 ends before that timestep without scoring the data. The trajectories of that session then
 end before the timestep, its `saved_trajectories` has `parameters_valid = false`, and the
-downstream model doesn't run, so `downstream_values` is `nothing`.
+downstream model doesn't run, so `downstream_values` is `nothing`. A criterion that is met
+already before the first timestep of a session is an error instead, which stops a fit.
 
 Such a sample doesn't have the variables that come after that timestep: the values that the
 later timesteps impute, simulate or sample, and the variables of the downstream model. A fit

@@ -149,6 +149,29 @@ function data_continues_after(session_info::SessionInfo, t)
 end
 
 """
+    check_stopping_criterion_not_met(model, state, parameters)
+
+Throw an informative error if [`stopping_criterion`](@ref) of `model`, the cognitive model or
+the environment of a fitted session, is already met with `state` and `parameters` before the
+first timestep, and return `false` otherwise. A criterion that must be masked, as
+[`masks_bool`](@ref) says, such as a traced `Bool` of a compiler like Reactant.jl, can't be
+checked, and is returned instead, for the masking of the session. Used by fitted sessions
+before their first timestep.
+"""
+function check_stopping_criterion_not_met(model, state, parameters)
+    criterion_met = stopping_criterion(model, state, parameters)
+    masks_bool(criterion_met) && return criterion_met
+    if criterion_met
+        throw(
+            ArgumentError(
+                "The stopping criterion of $(describe_model(model)) is already met before the first timestep of a fitted session, with its initial state and the parameters of the session, and a fitted session can't end before its first timestep. Give the parameters values, or priors, under which the criterion isn't met before the first timestep.",
+            ),
+        )
+    end
+    return false
+end
+
+"""
     session_parameters_valid(parameters_valid, criterion_allows_data)
 
 Return whether the parameters of a session stayed valid, from `parameters_valid`, as the

@@ -286,6 +286,30 @@ function CognitiveModeling.stopping_criterion(
     return state.pulls >= parameters.last_pull
 end
 
+#Like EndsAfterPulls, but throws when it is asked for a timestep after it has ended, as an environment that can't run
+#another may
+struct ThrowsAfterPulls <: AbstractEnvironmentModel end
+CognitiveModeling.initialize_state(environment::ThrowsAfterPulls, parameters) = (; pulls=0)
+function CognitiveModeling.timestep_model(
+    environment::ThrowsAfterPulls, context::ModelContext
+)
+    context.previous_state.pulls >= context.parameters.last_pull &&
+        error("ThrowsAfterPulls has ended, so it can't run another timestep.")
+    return ModelOutput(
+        (; reward=Deterministic(1.0)), (; pulls=context.previous_state.pulls + 1)
+    )
+end
+function CognitiveModeling.attribute_names(environment::ThrowsAfterPulls)
+    return ModelAttributes(;
+        parameters=:last_pull, states=:pulls, inputs=:choice, outputs=:reward
+    )
+end
+function CognitiveModeling.stopping_criterion(
+    environment::ThrowsAfterPulls, state, parameters
+)
+    return state.pulls >= parameters.last_pull
+end
+
 #A cognitive model which stops when its expected reward is high enough, otherwise like the baseline with a default
 #inverse temperature
 struct StopsWhenSure <: AbstractCognitiveModel end
@@ -1298,7 +1322,7 @@ end
         ended = returned(ends_early, (;)).saved_trajectories
         @test ended.parameters_valid === false && ended.n_timesteps == 3
         @test length(ended.states) == 4
-        #Also before the first timestep, where the first timestep still gives what is saved its types
+        #A criterion that is met already before the first timestep is an error, with data and without
         ends_before_first = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -1308,10 +1332,9 @@ end
             environment_parameters=(; last_pull=0),
             include_environment=true,
         )
-        @test logjoint(ends_before_first, (;)) == -Inf
-        @test returned(ends_before_first, (;)).saved_trajectories.parameters_valid === false
-        #Without any data, a criterion met before the first timestep leaves the session without a timestep, and its
-        #parameters valid, as in a simulation. The first timestep still runs, so that what is saved has its types
+        @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep of a fitted session" logjoint(
+            ends_before_first, (;)
+        )
         without_data = session_for_test(
             WithDefaultParameters(DistributionsJl()),
             SESSION_PARAMETERS,
@@ -1321,12 +1344,31 @@ end
             environment_parameters=(; last_pull=0),
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
-        values_without_data = @test_logs match_mode = :any rand(Xoshiro(1), without_data)
-        @test isfinite(logjoint(without_data, values_without_data))
-        ended_before_first = returned(without_data, values_without_data).saved_trajectories
-        @test ended_before_first.parameters_valid === true &&
-            ended_before_first.n_timesteps == 0 &&
-            length(ended_before_first.states) == 1
+        @test_throws ArgumentError rand(Xoshiro(1), without_data)
+        #Also for the cognitive model's criterion: sure at 0.4, it is sure already with its initial expected reward of 0.5
+        sure_already = session_for_test(
+            StopsWhenSure(),
+            (; learning_rate=0.5, inverse_temperature=2.0, sure=0.4),
+            rewards,
+            choices;
+            environment=EndsAfterPulls(),
+            environment_parameters=(; last_pull=10),
+        )
+        @test_throws "The stopping criterion of a cognitive model of type StopsWhenSure is already met" rand(
+            Xoshiro(1), sure_already
+        )
+        #No timestep runs, so a model that can't run another timestep isn't asked to: the error is the session's, not the
+        #environment's
+        throws_after = session_for_test(
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            (; reward=fill(1.0, 2)),
+            (; choice=fill(true, 2));
+            environment=ThrowsAfterPulls(),
+            environment_parameters=(; last_pull=0),
+            include_environment=true,
+        )
+        @test_throws ArgumentError logjoint(throws_after, (;))
         #The flag is a Bool, also for a model that can't set it, since a criterion can make the parameters invalid
         @test returned(fitted, (;)).saved_trajectories.parameters_valid === true
         #Met after the data, the session runs as the data says

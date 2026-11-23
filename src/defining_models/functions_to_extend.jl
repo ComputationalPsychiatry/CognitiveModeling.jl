@@ -320,16 +320,16 @@ of simulating all of `n_steps`.
 [`simulate_session`](@ref) and [`simulate_session!`](@ref) check it for both models before
 each timestep, with the states that the timestep before left. When it returns `true` for
 either, no further timestep is simulated, and what is returned and added to the histories
-has the timesteps that were simulated. When the environment starts, the cognitive model has then made its last
-observation and acted on it, and the environment doesn't receive that action. When the
-cognitive model starts, the environment has then responded to the last action with an
-observation, and the cognitive model doesn't receive that observation. When the criterion
-is met already, before the first timestep, no timestep is simulated, and the trajectories
-have none: a new simulation starts from the initial state, and [`reset!`](@ref) puts an
-[`InstantiatedModel`](@ref) back there. A fitted session checks it before every timestep, as
-[`SessionInfo`](@ref) describes. Under a compiler like Reactant.jl, a criterion on traced values returns a traced
-Bool, and the simulation is then masked instead of stopped, as `simulate_session`
-describes.
+has the timesteps that were simulated. When the environment starts, the cognitive model has
+then made its last observation and acted on it, and the environment doesn't receive that
+action. When the cognitive model starts, the environment has then responded to the last
+action with an observation, and the cognitive model doesn't receive that observation. When
+the criterion is met already, before the first timestep, no timestep is simulated, and the
+trajectories have none: a new simulation starts from the initial state, and [`reset!`](@ref)
+puts an [`InstantiatedModel`](@ref) back there. A fitted session checks it before every
+timestep too, and throws an error when it is met before the first, as [`SessionInfo`](@ref)
+describes. Under a compiler like Reactant.jl, a criterion on traced values returns a traced
+Bool, and the simulation is then masked instead of stopped, as `simulate_session` describes.
 
 # Implementation
 A model can add a method of this function. The default returns `false`, so a simulation

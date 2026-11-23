@@ -232,17 +232,17 @@ A fitted session checks the [`stopping_criterion`](@ref) of the cognitive model 
 timestep, and that of the environment when the session includes it, and ends where one is
 met, as a simulation does. The last timestep with data is the last one where an action isn't
 `ImputedMissingValue()` or `SimulatedMissingValue()`, or an observation isn't, when the
-session includes its environment and scores the observations. A criterion that is met
-before it means that the parameters can't give the data, as when they turn invalid, so the
-session gives them a log density of `-Inf` and ends there. A criterion met after it ends
-the session with the timesteps that ran, as in a session from
-[`decondition_sessions`](@ref), whose data is all `SimulatedMissingValue()`, and one met
-before the first timestep of a session without data leaves it without a timestep. The
-`parameters_valid` that a fitted session returns is therefore a `Bool`, also for models that
-can't set it. The observations of a session that leaves its environment out are what the
-cognitive model receives, as in a simulation with a [`FixedObservationsEnvironment`](@ref),
-which the cognitive model's criterion can end before the last of them, and the criterion of
-the environment would depend on the data alone.
+session includes its environment and scores the observations. A criterion that is met before
+it means that the parameters can't give the data, as when they turn invalid, so the session
+gives them a log density of `-Inf` and ends there. A criterion met after it ends the session
+with the timesteps that ran, as in a session from [`decondition_sessions`](@ref), whose data
+is all `SimulatedMissingValue()`. A criterion that is met already before the first timestep,
+with the initial states and the parameters of the session, is an error, with data and
+without. The `parameters_valid` that a fitted session returns is a `Bool`, also for models
+that can't set it. The observations of a session that leaves its environment out are what
+the cognitive model receives, as in a simulation with a
+[`FixedObservationsEnvironment`](@ref), which the cognitive model's criterion can end before
+the last of them, and the criterion of the environment would depend on the data alone.
 """
 struct SessionInfo{
     Tcognitive_model,

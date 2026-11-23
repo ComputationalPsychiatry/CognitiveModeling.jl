@@ -164,21 +164,22 @@ end
     turing_run_all_timesteps(session_info, cognitive_parameters, environment_parameters,
                          previous)
 
-Turing.jl model which runs the timesteps of a session from `previous`, where it starts,
-each as [`turing_run_timestep_both_models`](@ref) with the prefix `timesteps[t]`, saves what
-the save histories of `session_info` select, and scores the actions in the data, and the
+Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
+as [`turing_run_timestep_both_models`](@ref) with the prefix `timesteps[t]`, saves what the
+save histories of `session_info` select, and scores the actions in the data, and the
 observations in the data when the environment runs, against the distributions of their
 timesteps all at once at the end, as observed values. Before each timestep, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
-what it saved up to it, also before the first timestep, which then still runs, so that what
-is saved has its types, and is left out. When either model sets `parameters_valid` to
-`false` on a timestep, or a criterion is met while the data continues, which the parameters
-then can't give, the session gives the parameters a log density of `-Inf`, keeps nothing of
-that timestep, scores nothing and ends there. It returns the trajectories the session saved, in a
-[`SessionTrajectories`](@ref), as [`turing_behavioral_session`](@ref) describes them, which
-returns them under `saved_trajectories`, with whether the parameters stayed valid as
-[`session_parameters_valid`](@ref) gives it. Both methods of that model call this one, after setting up the
-parameters and the initial states with or without an environment. Used by
+what it saved up to it. A criterion that is met already before the first timestep is an
+error, from [`check_stopping_criterion_not_met`](@ref). When either model sets
+`parameters_valid` to `false` on a timestep, or a criterion is met while the data continues,
+which the parameters then can't give, the session gives the parameters a log density of
+`-Inf`, keeps nothing of that timestep, scores nothing and ends there. It returns the
+trajectories the session saved, in a [`SessionTrajectories`](@ref), as
+[`turing_behavioral_session`](@ref) describes them, which returns them under
+`saved_trajectories`, with whether the parameters stayed valid as
+[`session_parameters_valid`](@ref) gives it. Both methods of that model call this one, after
+setting up the parameters and the initial states with or without an environment. Used by
 [`turing_behavioral_session`](@ref).
 """
 Turing.@model function turing_run_all_timesteps(
@@ -191,13 +192,13 @@ Turing.@model function turing_run_all_timesteps(
         session_info.cognitive_model, session_info.environment
     )
 
-    #A criterion that is met already ends the session before its first timestep. While the data continues, the parameters can't give that, as when they turn invalid
-    stopped_before_first =
-        stopping_criterion(
-            session_info.environment, previous.environment.state, environment_parameters
-        ) | stopping_criterion(
-            session_info.cognitive_model, previous.state, cognitive_parameters
-        )
+    #A criterion that is met already would end the session before its first timestep, which is an error
+    check_stopping_criterion_not_met(
+        session_info.environment, previous.environment.state, environment_parameters
+    )
+    check_stopping_criterion_not_met(
+        session_info.cognitive_model, previous.state, cognitive_parameters
+    )
 
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
     initial_saved = select_initial_timestep_values_to_save(
@@ -225,17 +226,14 @@ Turing.@model function turing_run_all_timesteps(
     )
     offset = initial_saved === nothing ? 0 : 1
 
-    #A session whose criterion was met before the first timestep, or whose parameters turned invalid on it, keeps nothing of it, scores nothing and ends. The first timestep still ran, so that what is saved has its types. The parameters stay valid when the criterion ended the session and no data continues, whatever the first timestep gave, since it didn't count, and get a log density of -Inf otherwise
-    if stopped_before_first || !parameters_are_valid(timestep_values.parameters_valid)
-        parameters_valid = stopped_before_first && !data_continues_after(session_info, 0)
-        if !parameters_valid
-            Turing.@addlogprob! -Inf
-        end
+    #A session whose parameters turned invalid on the first timestep gives them a log density of -Inf, keeps nothing of the timestep, scores nothing and ends
+    if !parameters_are_valid(timestep_values.parameters_valid)
+        Turing.@addlogprob! -Inf
         map_saved(vector -> resize!(vector, offset), storage)
         return saved_trajectories(
             storage,
             timestep_sizes_until(session_info.saved_timestep_sizes, offset),
-            parameters_valid,
+            false,
             0,
             nothing,
             submodel_states,

@@ -41,6 +41,7 @@ using CognitiveModeling:
     with_empty_environment_trajectories,
     timestep_sizes_until,
     data_continues_after,
+    check_stopping_criterion_not_met,
     session_parameters_valid,
     masking_fitted_session_after_first_timestep,
     masking_fitted_session_before_timestep,
@@ -426,18 +427,19 @@ end
 # Runs the timesteps of a session from where it starts, saves what its save histories select, and scores the values in
 # the data against the distributions of their timesteps at the end. Returns the trajectories the session saved. A session
 # whose parameters turn invalid, or whose stopping criterion is met while its data continues, gets a log density of -Inf
-# and ends there, as the Turing.jl session does. From the first timestep whose flag or criterion a compiler traces, every
-# timestep runs instead, and the session is masked, as an inference backend that Reactant.jl compiles would mask it
+# and ends there, and a criterion met before the first timestep is an error, as in the Turing.jl session. From the first
+# timestep whose flag or criterion a compiler traces, every timestep runs instead, and the session is masked, as an
+# inference backend that Reactant.jl compiles would mask it
 function timesteps_by_hand(
     session_info, cognitive_parameters, environment_parameters, previous, evaluation
 )
     n_timesteps = session_info.n_timesteps
 
-    #A criterion that is met already ends the session before its first timestep: while the data continues, the parameters can't give that. A traced criterion can't be checked, and is masked
+    #A criterion that is met already would end the session before its first timestep, which is an error, as in the Turing.jl session. A traced criterion can't be checked, and is masked
     stopped_before_first =
-        stopping_criterion(
+        check_stopping_criterion_not_met(
             session_info.environment, previous.environment.state, environment_parameters
-        ) | stopping_criterion(
+        ) | check_stopping_criterion_not_met(
             session_info.cognitive_model, previous.state, cognitive_parameters
         )
 
@@ -483,17 +485,14 @@ function timesteps_by_hand(
         )
     end
 
-    #A session whose criterion was met before the first timestep, or whose parameters turned invalid on it, ends, keeping nothing of the timestep. Its parameters stay valid when the criterion ended it and no data continues, and get a log density of -Inf otherwise
-    if stopped_before_first || !parameters_are_valid(timestep_values.parameters_valid)
-        parameters_valid = stopped_before_first && !data_continues_after(session_info, 0)
-        if !parameters_valid
-            evaluation.log_density += -Inf
-        end
+    #A session whose parameters turned invalid on the first timestep gets a log density of -Inf and ends, keeping nothing of the timestep
+    if !parameters_are_valid(timestep_values.parameters_valid)
+        evaluation.log_density += -Inf
         map_saved(vector -> resize!(vector, offset), storage)
         return saved_trajectories(
             storage,
             timestep_sizes_until(session_info.saved_timestep_sizes, offset),
-            parameters_valid,
+            false,
             0,
             nothing,
         )
