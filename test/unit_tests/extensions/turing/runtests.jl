@@ -9,6 +9,8 @@ using Test
 using JET: JET
 using Random: Random, Xoshiro
 using Turing
+#For PSIS-LOO of the pointwise log-likelihoods, which PosteriorStats.jl smooths with PSIS.jl
+using PosteriorStats: PosteriorStats
 
 #The example models that the suites share, with their methods for Turing.jl
 const EXAMPLE_MODELS_DIRECTORY = joinpath(@__DIR__, "..", "..", "..", "example_models")

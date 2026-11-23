@@ -119,6 +119,16 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
+        bug="Enzyme forward without runtime activity throws an EnzymeRuntimeActivityError on sessions with their environment whose outputs are NoValue on some timesteps, where the session scores its actions in the product of its outputs: the type of the product isn't known there, so the call that scores the actions is chosen at runtime, and Enzyme reports constant memory stored with what it differentiates. They passed with Distributions.jl's product of a NamedTuple, which the product of the outputs replaced so that pointwise log-likelihoods split every kind of output. With runtime activity it is right, and Turing.jl's own tests run Enzyme only with it. Not reported yet",
+        backends=["Enzyme forward"],
+        cases=[
+            "OutputNotEveryTimestep with its environment, environment starts",
+            "Baseline with OutputNotEveryTimestepEnvironment with its environment, environment starts",
+            "Baseline with OutputNotEveryTimestepEnvironment with its environment, agent starts",
+            "Baseline with NoOutputBeforeFirstInputEnvironment with its environment, environment starts",
+        ],
+    ),
+    (;
         bug="Enzyme reverse, with and without runtime activity, throws a TypeError, that a RefValue was given where a value was expected, when an output of a model is NoValue on some timesteps, so that it has two types in the loop over the timesteps. Enzyme.jl issue 4044 reports it",
         backends=["Enzyme reverse", "Enzyme reverse, runtime activity"],
         cases=[

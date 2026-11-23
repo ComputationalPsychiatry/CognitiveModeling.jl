@@ -171,4 +171,112 @@ const RATES = [2.0, 3.0, 1.5]
               logpdf(MvNormal(fill(0.2, 2), IDENTITY_2), [0.3, 0.2]) +
               logpdf(MvNormal(fill(-0.1, 2), IDENTITY_2), [-0.2, 0.0])
     end
+
+    @testset "pointwise_loglikelihoods with factorize = true gives the log-likelihood of each response and each confidence" begin
+        model = full_model(
+            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), response_sessions()
+        )
+        chain = sample(Xoshiro(1), model, Prior(), 3; progress=false)
+        pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
+        whole = pointwise_loglikelihoods(model, chain)
+        for (session, id) in enumerate(unique(RESPONSES_TABLE.id)), draw in 1:3
+            name = @varname(sessions[session].session_info.actions_to_condition_on)
+            probability = chain[@varname(choice_probability.sessions)][draw, 1][session]
+            rate = chain[@varname(rate.sessions)][draw, 1][session]
+            rows = findall(==(id), RESPONSES_TABLE.id)
+            each_value = pointwise[name][draw, 1]
+            #A value for each row of the session, in the order of its timesteps
+            @test each_value.response ≈ [
+                logpdf(
+                    ChoiceAndTime(probability, rate),
+                    (; choice=RESPONSES_TABLE.choice[row], rt=RESPONSES_TABLE.rt[row]),
+                ) for row in rows
+            ]
+            @test each_value.confidence ≈ [
+                logpdf(Normal(probability, 0.1), RESPONSES_TABLE.confidence[row]) for
+                row in rows
+            ]
+            #Together they are the log-likelihood of the session
+            @test sum(each_value.response) + sum(each_value.confidence) ≈
+                whole[name][draw, 1]
+        end
+    end
+
+    @testset "PosteriorStats.jl's PSIS-LOO takes the log-likelihood of each response and each confidence" begin
+        model = full_model(
+            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), response_sessions()
+        )
+        chain = sample(Xoshiro(1), model, NUTS(), 100; progress=false)
+        pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
+        #An array of draws by chains by values, with the responses and then the confidences of each session in turn
+        names = [
+            @varname(sessions[session].session_info.actions_to_condition_on) for
+            session in 1:3
+        ]
+        log_likelihood = stack(
+            [getproperty(pointwise[name][draw, 1], output)[i] for draw in 1:100, _ in 1:1]
+            for name in names for output in (:response, :confidence) for
+            i in eachindex(getproperty(pointwise[name][1, 1], output))
+        )
+        @test size(log_likelihood) == (100, 1, 2 * length(RESPONSES_TABLE.id))
+        #Together they are the log-likelihood of the sessions in each draw
+        whole = pointwise_loglikelihoods(model, chain)
+        @test vec(sum(log_likelihood; dims=3)) ≈
+            [sum(whole[name][draw, 1] for name in names) for draw in 1:100]
+        #An estimate of the expected log predictive density of each value, which is finite, and of all of them
+        result = PosteriorStats.loo(log_likelihood)
+        @test length(result.pointwise.elpd) == 2 * length(RESPONSES_TABLE.id)
+        @test all(isfinite, result.pointwise.elpd) &&
+            all(isfinite, result.pointwise.pareto_shape)
+        @test isfinite(result.estimates.elpd)
+        @test result.estimates.elpd ≈ sum(result.pointwise.elpd)
+    end
+
+    @testset "pointwise_loglikelihoods with factorize = true gives the log-likelihood of each vector of an output whose values are vectors" begin
+        table = (;
+            id=["S1", "S1", "S2"],
+            trial=[1, 2, 1],
+            first=[0.1, 0.3, -0.2],
+            second=[0.5, 0.2, 0.0],
+        )
+        sessions_info = MultipleSessionsInfo(
+            ReportsTwoNumbers(),
+            table;
+            observation_columns=:trial,
+            action_columns=(:first, :second) => ((first, second) -> [first, second]),
+            session_columns=:id,
+            who_starts=EnvironmentStarts(),
+        )
+        model = full_model(
+            TuringBackend(), IndependentParameters((; mean=Normal(0, 1))), sessions_info
+        )
+        chain = sample(Xoshiro(1), model, Prior(), 2; progress=false)
+        pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
+        means = chain[@varname(mean.sessions)][1, 1]
+        @test pointwise[@varname(sessions[1].session_info.actions_to_condition_on)][1, 1].report ≈
+            [
+            logpdf(MvNormal(fill(means[1], 2), IDENTITY_2), [0.1, 0.5]),
+            logpdf(MvNormal(fill(means[1], 2), IDENTITY_2), [0.3, 0.2]),
+        ]
+        @test pointwise[@varname(sessions[2].session_info.actions_to_condition_on)][1, 1].report ≈
+            [logpdf(MvNormal(fill(means[2], 2), IDENTITY_2), [-0.2, 0.0])]
+    end
+
+    @testset "The product of the outputs of a session scores each output, and draws a value for each" begin
+        extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
+        product = extension.ProductOfOutputs((;
+            choice=product_distribution([Bernoulli(0.3), Bernoulli(0.6)]),
+            response=extension.ProductOfValuesOfAnyType([ChoiceAndTime(0.6, 2.0)]),
+        ))
+        values = (; choice=[true, false], response=[(; choice=1, rt=0.4)])
+        @test logpdf(product, values) ≈
+            logpdf(Bernoulli(0.3), true) +
+              logpdf(Bernoulli(0.6), false) +
+              logpdf(ChoiceAndTime(0.6, 2.0), (; choice=1, rt=0.4))
+        @test loglikelihood(product, values) == logpdf(product, values)
+        draw = rand(Xoshiro(1), product)
+        @test keys(draw) == (:choice, :response) &&
+            length(draw.choice) == 2 &&
+            only(draw.response) isa NamedTuple
+    end
 end

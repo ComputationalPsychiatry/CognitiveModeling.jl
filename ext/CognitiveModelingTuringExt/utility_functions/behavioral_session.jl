@@ -53,6 +53,76 @@ function Base.rand(rng::AbstractRNG, product::ProductOfValuesOfAnyType)
     return map(distribution -> rand(rng, distribution), product.distributions)
 end
 
+#The outputs of a session are scored in one statement, which DynamicPPL.jl's pointwise_loglikelihoods with factorize = true splits with PartitionedDistributions.jl. Its product of a NamedTuple of distributions splits each with internal functions that only take numbers and arrays of numbers, so the outputs are in a product of their own, which splits each output with the products' own methods
+"""
+    ProductOfOutputs(products)
+
+The distribution of the values to condition on of every output of a session, a `NamedTuple`
+with a vector for each output, from `products`, a `NamedTuple` with the product of
+distributions of each output, as [`product_of_distributions`](@ref) makes it. The log
+density of the values is the sum of that of each output. Split with
+PartitionedDistributions.jl's `pointwise_conditional_logpdfs`, as DynamicPPL.jl's
+`pointwise_loglikelihoods` with `factorize = true` splits it, it gives a `NamedTuple` with a
+vector for each output, with the log density of each of its values, from
+[`pointwise_logpdfs_of_output`](@ref). Used by [`turing_run_all_timesteps`](@ref).
+"""
+struct ProductOfOutputs{names,Tproducts<:NamedTuple{names}} <:
+       Distribution{Distributions.NamedTupleVariate{names},ValueSupport}
+    products::Tproducts
+end
+function Distributions.logpdf(
+    product::ProductOfOutputs{names}, values::NamedTuple{names}
+) where {names}
+    return sum(map(logpdf, Tuple(product.products), Tuple(values)); init=0.0)
+end
+function Distributions.loglikelihood(
+    product::ProductOfOutputs{names}, values::NamedTuple{names}
+) where {names}
+    return logpdf(product, values)
+end
+function Base.rand(rng::AbstractRNG, product::ProductOfOutputs{names}) where {names}
+    return NamedTuple{names}(map(output -> rand(rng, output), Tuple(product.products)))
+end
+function PartitionedDistributions.pointwise_conditional_logpdfs(
+    product::ProductOfOutputs{names}, values::NamedTuple{names}
+) where {names}
+    return NamedTuple{names}(
+        map(pointwise_logpdfs_of_output, Tuple(product.products), Tuple(values))
+    )
+end
+
+"""
+    product_of_outputs(distributions, values)
+
+Return the [`ProductOfOutputs`](@ref) of `values`, the values to condition on of every
+output of a session, a `NamedTuple` with a vector for each output, each value under its
+distribution in `distributions`, a `NamedTuple` with a vector for each output too, with the
+product of distributions of each output that [`product_of_distributions`](@ref) chooses. Used
+by [`turing_run_all_timesteps`](@ref).
+"""
+function product_of_outputs(distributions::NamedTuple, values::NamedTuple)
+    return ProductOfOutputs(
+        map(product_of_distributions, map(scorable_distributions, distributions), values)
+    )
+end
+
+"""
+    pointwise_logpdfs_of_output(product, values)
+
+Return the log density of each of `values`, the values to condition on of one output, under
+its distribution in `product`, the product of distributions of the output, as
+[`product_of_distributions`](@ref) makes it: for a [`ProductOfValuesOfAnyType`](@ref), the
+log density of each value under its own distribution, and for a product of
+Distributions.jl, what PartitionedDistributions.jl's `pointwise_conditional_logpdfs` gives,
+the log density of each of its numbers. Used by [`ProductOfOutputs`](@ref).
+"""
+function pointwise_logpdfs_of_output(product::ProductOfValuesOfAnyType, values)
+    return map(logpdf, product.distributions, values)
+end
+function pointwise_logpdfs_of_output(product, values)
+    return PartitionedDistributions.pointwise_conditional_logpdfs(product, values)
+end
+
 """
     initialize_distributions_for_conditioning(session_info, timestep_values)
     store_distributions_for_conditioning(session_info, distributions_for_conditioning,

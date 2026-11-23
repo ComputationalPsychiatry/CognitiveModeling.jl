@@ -318,23 +318,16 @@ Turing.@model function turing_run_all_timesteps(
         )
     end
 
-    #Score the actions in the data, and the observations in the data with an environment, against the distributions of their timesteps, all at once as observed values, with the product of distributions that takes the kind of values of each output
+    #Score the actions in the data, and the observations in the data with an environment, against the distributions of their timesteps, all at once as observed values, in a product of the outputs, each with the product of distributions that takes its kind of values
     if !isempty(session_info.actions_to_condition_on)
-        session_info.actions_to_condition_on ~ product_distribution(
-            map(
-                product_of_distributions,
-                map(scorable_distributions, distributions_for_conditioning.actions),
-                session_info.actions_to_condition_on,
-            ),
+        session_info.actions_to_condition_on ~ product_of_outputs(
+            distributions_for_conditioning.actions, session_info.actions_to_condition_on
         )
     end
     if has_environment(session_info) && !isempty(session_info.observations_to_condition_on)
-        session_info.observations_to_condition_on ~ product_distribution(
-            map(
-                product_of_distributions,
-                map(scorable_distributions, distributions_for_conditioning.observations),
-                session_info.observations_to_condition_on,
-            ),
+        session_info.observations_to_condition_on ~ product_of_outputs(
+            distributions_for_conditioning.observations,
+            session_info.observations_to_condition_on,
         )
     end
 
