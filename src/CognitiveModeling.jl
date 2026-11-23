@@ -113,7 +113,7 @@ public timestep_model, initialize_state, attribute_names
 public prepare_state_for_saving, default_parameters, stopping_criterion
 public parameter_domains, input_domains, output_domains
 public submodel_fields, submodels, uses_submodel_prefixes, get_attribute_names
-public discrete_parameter_names, continuous_parameter_names
+public get_parameter_names, discrete_parameter_names, continuous_parameter_names
 public turing_timestep_model,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
 public turing_behavioral_session, turing_multiple_behavioral_sessions, turing_full_model
