@@ -10,7 +10,15 @@ be a submodel of another, and a part that is only ever a submodel, such as the h
 beliefs of a hierarchical Gaussian filter, subtypes this type directly.
 
 A model says which of its fields hold submodels with [`submodel_fields`](@ref), and a
-submodel can have submodels of its own. A submodel has [`attribute_names`](@ref), with the
+submodel can have submodels of its own. The parameters of a model with submodels are given
+flat, under the names that [`CognitiveModeling.get_attribute_names`](@ref) gives, and the
+model receives them bundled, in its context and in [`initialize_state`](@ref): its own under
+their names, and those of each submodel in a `NamedTuple` under the submodel's name, as in
+`context.parameters.perception.learning_rate`. Its state keeps the state of each submodel
+that has one in the same way, under the submodel's name, and the model's own
+`initialize_state` and [`timestep_model`](@ref) build it, as in
+`(; perception = initialize_state(model.perception, parameters.perception))`. The defaults
+and the domains of the submodels' parameters are read from the submodels. A submodel has [`attribute_names`](@ref), with the
 names of its own attributes only, [`initialize_state`](@ref), [`default_parameters`](@ref),
 [`parameter_domains`](@ref) and [`prepare_state_for_saving`](@ref), as a model has them.
 What else it has, such as a function that updates it, and what that returns, is up to the
@@ -268,7 +276,8 @@ the input is the action of the cognitive model and the output the observation it
 - `previous_output`: what the model gave on the previous timestep, in a `NamedTuple` with
   the names the model gave the entries, as in `context.previous_output.choice`. On the first
   timestep, each of them is [`BeforeFirstTimestep`](@ref).
-- `parameters`: the parameters of the model, in a `NamedTuple`.
+- `parameters`: the parameters of the model, in a `NamedTuple`, with those of each of its
+  submodels bundled under the submodel's name, as [`AbstractSubmodel`](@ref) describes.
 - `timestep_size=1`: how much time this timestep covers; the difference between the end of
   the previous and the end of the current timestep.
 - `rng=default_rng()`: the random number generator to sample from if anything in the model

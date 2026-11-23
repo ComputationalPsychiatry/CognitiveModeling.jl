@@ -5,13 +5,16 @@
 Throw an informative error if the names of the parameters, of the previous output or of the
 state aren't those in the attributes of `model`, a cognitive model or an environment model,
 from [`attribute_names`](@ref), or if the previous output or the state isn't a `NamedTuple`.
-Used by [`InstantiatedModel`](@ref), [`simulate_session`](@ref), [`simulate_timestep`](@ref)
-and fitted sessions, before anything runs.
+For a model with submodels, the names are those that [`get_attribute_names`](@ref)
+collects, which also checks the submodels, and the state of each submodel is checked within
+the state with [`check_submodel_states`](@ref). Used by [`InstantiatedModel`](@ref),
+[`simulate_session`](@ref), [`simulate_timestep`](@ref) and fitted sessions, before anything
+runs.
 """
 function check_match_attribute_names(
     model::AbstractTimestepModel, parameters, state, previous_output
 )
-    attributes = check_type_attribute_names(attribute_names(model), model)
+    attributes = get_attribute_names(model)
     if !same_names(keys(parameters), attributes.parameters)
         throw(
             ArgumentError(
@@ -43,6 +46,7 @@ function check_match_attribute_names(
             ),
         )
     end
+    check_submodel_states(model, state)
     return nothing
 end
 

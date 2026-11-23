@@ -39,12 +39,13 @@ end
     merge_default_parameters(model, parameters)
 
 Return `parameters` with the values from [`default_parameters`](@ref) of `model`, a
-cognitive model or an environment model, for the parameters it doesn't have, if `model`
-provides defaults for them. Used by [`simulate_session`](@ref),
-[`simulate_timestep`](@ref), [`InstantiatedModel`](@ref) and fitted sessions.
+cognitive model or an environment model, and of its submodels, under their flat names, for
+the parameters it doesn't have, if they provide defaults for them. Used by
+[`simulate_session`](@ref), [`simulate_timestep`](@ref), [`InstantiatedModel`](@ref) and
+fitted sessions.
 """
 function merge_default_parameters(model::AbstractTimestepModel, parameters)
-    return merge(default_parameters(model), parameters)
+    return merge(collected_default_parameters(model), parameters)
 end
 
 ## Passing outputs between the model and the environment ##
@@ -1143,9 +1144,11 @@ the timesteps that were simulated, after `BeforeFirstTimestep()` for timestep 0 
 there.
 
 Parameters that aren't given take the values in [`default_parameters`](@ref), if
-`cognitive_model` or `environment` provides defaults for them. The names of the parameters,
-the states, the previous action and the previous observation must be those in
-[`attribute_names`](@ref), and the outputs of each model must be the inputs of the other,
+`cognitive_model` or `environment` provides defaults for them. The parameters of a model with
+submodels are given flat, and the model receives them bundled, as [`AbstractSubmodel`](@ref)
+describes. The names of the parameters, the states, the previous action and the previous
+observation must be those in [`attribute_names`](@ref), with those of the submodels as
+[`CognitiveModeling.get_attribute_names`](@ref) collects them, and the outputs of each model must be the inputs of the other,
 or an `ArgumentError` is thrown before the first timestep. When the two name things
 differently, or one gives something that isn't in the other's attributes, `observation_map`
 and `action_map` say which outputs of one the other receives, and under which names.
@@ -1327,11 +1330,17 @@ function simulate_session(
     check_parameter_domains::Bool=true,
     warn_on_invalid_parameters::Bool=true,
     previous_cognitive_state=initialize_state(
-        cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
+        cognitive_model,
+        bundle_parameters(
+            cognitive_model, merge_default_parameters(cognitive_model, cognitive_parameters)
+        ),
     ),
     previous_action=output_before_first_timestep(cognitive_model),
     previous_environment_state=initialize_state(
-        environment, merge_default_parameters(environment, environment_parameters)
+        environment,
+        bundle_parameters(
+            environment, merge_default_parameters(environment, environment_parameters)
+        ),
     ),
     previous_observation=output_before_first_timestep(environment),
 )
@@ -1359,6 +1368,10 @@ function simulate_session(
     end
     check_savehistory_selection_names(cognitive_save_history, cognitive_model)
     check_savehistory_selection_names(environment_save_history, environment)
+
+    #The parameters of a model with submodels are bundled, as the model reads them
+    cognitive_parameters = bundle_parameters(cognitive_model, cognitive_parameters)
+    environment_parameters = bundle_parameters(environment, environment_parameters)
 
     #Collect the values from before the first timestep, each side's in its own names
     previous_timestep_values = (;
@@ -1536,8 +1549,8 @@ function simulate_session!(
         who_starts,
         agent.model,
         environment.model,
-        agent.parameters,
-        environment.parameters,
+        bundle_parameters(agent.model, agent.parameters),
+        bundle_parameters(environment.model, environment.parameters),
         agent.save_history,
         environment.save_history,
         observation_map,
@@ -1785,7 +1798,9 @@ function simulate_timestep(
     parameters::NamedTuple,
     timestep_size=1,
     rng::AbstractRNG=default_rng(),
-    previous_state=initialize_state(model, merge_default_parameters(model, parameters)),
+    previous_state=initialize_state(
+        model, bundle_parameters(model, merge_default_parameters(model, parameters))
+    ),
     previous_output=output_before_first_timestep(model),
     check_parameter_domains::Bool=true,
     warn_on_invalid_parameters::Bool=true,
@@ -1798,13 +1813,13 @@ function simulate_timestep(
     check_match_attribute_names(model, parameters, previous_state, previous_output)
     check_parameter_domains && check_parameters_in_domains(model, parameters)
 
-    #Simulate the timestep, where nothing is selected for saving, since everything is returned
+    #Simulate the timestep, where nothing is selected for saving, since everything is returned, with the parameters of a model with submodels bundled
     timestep_values = simulate_one_model(
         model,
         input,
         previous_state,
         previous_output,
-        parameters,
+        bundle_parameters(model, parameters),
         timestep_size,
         rng,
         SaveHistory(),
@@ -1898,7 +1913,7 @@ function simulate_timestep!(
         input,
         instantiated_model.state,
         instantiated_model.previous_output,
-        instantiated_model.parameters,
+        bundle_parameters(instantiated_model.model, instantiated_model.parameters),
         timestep_size,
         rng,
         instantiated_model.save_history,

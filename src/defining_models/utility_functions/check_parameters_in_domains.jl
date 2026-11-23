@@ -8,14 +8,14 @@ lower bound or above its upper bound, not one of its possible values, or not sat
 constraint. Real numbers and values that aren't numbers are checked, and so is every element
 of an array or a tuple. A number that isn't a real number is left alone. It is an
 `ArgumentError` when the domains aren't [`Domain`](@ref)s under the names of parameters in
-the model's attributes. Used by [`simulate_session`](@ref), [`simulate_timestep`](@ref),
-[`InstantiatedModel`](@ref) and fitted sessions, before anything runs, unless they are given
-`check_parameter_domains = false`.
+the model's attributes. The parameters of a model with submodels are given flat, and each
+submodel's are checked against its own domains, with
+[`check_parameters_of_submodels_in_domains`](@ref). Used by [`simulate_session`](@ref),
+[`simulate_timestep`](@ref), [`InstantiatedModel`](@ref) and fitted sessions, before
+anything runs, unless they are given `check_parameter_domains = false`.
 """
-function check_parameters_in_domains(model::AbstractTimestepModel, parameters::NamedTuple)
-    domains = parameter_domains(model)
-    check_domains_fit_model(model, domains)
-    check_each_parameter_in_domain(model, parameters, domains)
+function check_parameters_in_domains(model::AbstractSubmodel, parameters::NamedTuple)
+    check_parameters_of_submodels_in_domains(model, bundle_parameters(model, parameters))
     return nothing
 end
 
@@ -29,9 +29,9 @@ model's attributes, from [`attribute_names`](@ref). Used by
 [`check_parameters_in_domains`](@ref), [`discrete_parameter_names`](@ref) and the display of
 a model.
 """
-check_domains_fit_model(::AbstractTimestepModel, ::NamedTuple{()}) = nothing
+check_domains_fit_model(::AbstractSubmodel, ::NamedTuple{()}) = nothing
 function check_domains_fit_model(
-    model::AbstractTimestepModel, ::NamedTuple{names,<:Tuple{Vararg{Domain}}}
+    model::AbstractSubmodel, ::NamedTuple{names,<:Tuple{Vararg{Domain}}}
 ) where {names}
     names_in_attributes =
         check_type_attribute_names(attribute_names(model), model).parameters
@@ -44,7 +44,7 @@ function check_domains_fit_model(
     end
     return nothing
 end
-function check_domains_fit_model(model::AbstractTimestepModel, domains)
+function check_domains_fit_model(model::AbstractSubmodel, domains)
     return throw(
         ArgumentError(
             "parameter_domains of $(describe_model(model)) returns $(repr(domains)), but it must return a NamedTuple with a Domain under the name of each parameter that has a domain, such as (; learning_rate = Domain(; lower = 0, upper = 1)).",
@@ -61,7 +61,7 @@ which it has when its names are those in the model's attributes. Used by
 [`check_parameters_in_domains`](@ref).
 """
 function check_each_parameter_in_domain(
-    model::AbstractTimestepModel, parameters::NamedTuple, domains::NamedTuple{names}
+    model::AbstractSubmodel, parameters::NamedTuple, domains::NamedTuple{names}
 ) where {names}
 
     #Read the values of the parameters with a domain as a tuple, in the order of the domains. The names are in the type of the domains, so nothing is searched for when the model runs
@@ -79,11 +79,11 @@ domain at the same place in `domains`, a tuple of [`Domain`](@ref)s, with
 [`check_value_in_domain`](@ref), one after the other. Used by
 [`check_each_parameter_in_domain`](@ref).
 """
-check_values_in_domains(::AbstractTimestepModel, ::Tuple{}, ::Tuple{}, ::Tuple{}) = nothing
+check_values_in_domains(::AbstractSubmodel, ::Tuple{}, ::Tuple{}, ::Tuple{}) = nothing
 
 #Each call checks the first value and calls itself with the remaining ones, so that the compiler knows the type of every value and of every domain
 function check_values_in_domains(
-    model::AbstractTimestepModel, names::Tuple, values::Tuple, domains::Tuple
+    model::AbstractSubmodel, names::Tuple, values::Tuple, domains::Tuple
 )
     check_value_in_domain(model, first(names), first(values), first(domains))
     return check_values_in_domains(
@@ -115,7 +115,7 @@ the model when `checked` is a model, and `the action choice in row 7 of the tabl
 `the observation reward at timestep 3` when it is a [`DataValue`](@ref). Used by the
 functions that throw the errors of [`check_value_in_domain`](@ref).
 """
-function describe_value(model::AbstractTimestepModel, name::Symbol)
+function describe_value(model::AbstractSubmodel, name::Symbol)
     return "the parameter $name of $(describe_model(model))"
 end
 function describe_value(checked::DataValue, name::Symbol)
@@ -135,7 +135,7 @@ Return the error for a value outside its domain, with `message`: a
 `ArgumentError` for a [`DataValue`](@ref). Used by the functions that throw the errors of
 [`check_value_in_domain`](@ref).
 """
-domain_error(::AbstractTimestepModel, message::String) = ParameterDomainError(message)
+domain_error(::AbstractSubmodel, message::String) = ParameterDomainError(message)
 domain_error(::DataValue, message::String) = ArgumentError(message)
 
 """
@@ -153,10 +153,7 @@ elements. The whole value is then checked against the domain's constraint, with
 alone. Used by [`check_values_in_domains`](@ref) and [`check_data_in_domains`](@ref).
 """
 function check_value_in_domain(
-    checked::Union{AbstractTimestepModel,DataValue},
-    name::Symbol,
-    value,
-    domain::Domain{Ttype},
+    checked::Union{AbstractSubmodel,DataValue}, name::Symbol, value, domain::Domain{Ttype}
 ) where {Ttype}
     check_value_in_domain(checked, name, value, domain, kind_of_values(Ttype))
     check_constraint(checked, name, value, domain.constraint)
@@ -201,7 +198,7 @@ kind_of_values(::Type) = SingleValues()
 
 #A single value is checked as it is
 function check_value_in_domain(
-    checked::Union{AbstractTimestepModel,DataValue},
+    checked::Union{AbstractSubmodel,DataValue},
     name::Symbol,
     value,
     domain::Domain{Ttype},
@@ -212,7 +209,7 @@ end
 
 #An array has the number of dimensions of the domain's type, and each of its elements is checked at its position. Which kind of elements it has is in its type, so an array that is left alone costs nothing
 function check_value_in_domain(
-    checked::Union{AbstractTimestepModel,DataValue},
+    checked::Union{AbstractSubmodel,DataValue},
     name::Symbol,
     values,
     domain::Domain{Ttype,Telement},
@@ -238,7 +235,7 @@ end
 
 #A tuple has the length of the domain's type, if it has one, and each of its elements is checked at its position
 function check_value_in_domain(
-    checked::Union{AbstractTimestepModel,DataValue},
+    checked::Union{AbstractSubmodel,DataValue},
     name::Symbol,
     values,
     domain::Domain{Ttype,Telement},

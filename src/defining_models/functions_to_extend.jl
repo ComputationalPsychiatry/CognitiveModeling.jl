@@ -154,7 +154,7 @@ isn't affected.
 
 # Implementation
 A model can add a method of this function. The default returns `state` as it is, so nothing
-is copied. One which changes an object in its state in place must add a method which copies
+is copied, apart from the state of each submodel, which the submodel's own method prepares. One which changes an object in its state in place must add a method which copies
 it, or all the saved states show the final values, with no error. The method must return the
 state with the names in the model's attributes, since a [`SaveHistory`](@ref) selects states
 by those names. Nothing checks this while the model runs.
@@ -174,7 +174,7 @@ false
 ```
 """
 function prepare_state_for_saving(model::AbstractSubmodel, state)
-    return state
+    return prepare_submodel_states_for_saving(model, state)
 end
 
 """

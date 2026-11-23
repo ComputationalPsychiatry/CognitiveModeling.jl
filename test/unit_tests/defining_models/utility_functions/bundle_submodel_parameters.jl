@@ -116,10 +116,13 @@ end
         @test CognitiveModeling.flat_parameter_names(prefixed) == keys(flat_prefixed)
         @test CognitiveModeling.bundle_parameters(prefixed, flat_prefixed) === bundled
         @test CognitiveModeling.flatten_parameters(prefixed, bundled) === flat_prefixed
-        #A model without submodels gets its own parameters, in the order of its attributes
+        #A model without submodels gets its parameters as they are given, and a missing flat parameter is an informative error
         @test CognitiveModeling.bundle_parameters(
             PerceptionForTest(), (; initial_value=0.5, learning_rate=0.3)
-        ) === (; learning_rate=0.3, initial_value=0.5)
+        ) === (; initial_value=0.5, learning_rate=0.3)
+        @test_throws "The parameters of a model with submodels are given flat, under the names that CognitiveModeling.get_attribute_names gives, but :inverse_temperature isn't among them" CognitiveModeling.bundle_parameters(
+            model, (; lapse_rate=0.1, learning_rate=0.3, initial_value=0.5)
+        )
     end
 
     @testset "Submodels can have submodels, of any kind, also in a NamedTuple and of the same type twice" begin

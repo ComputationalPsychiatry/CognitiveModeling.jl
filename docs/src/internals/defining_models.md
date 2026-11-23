@@ -46,6 +46,14 @@ Public = false
 Pages = ["defining_models/utility_functions/collect_submodel_names.jl"]
 ```
 
+### The parameters and the states of the submodels of a model
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["defining_models/utility_functions/collect_submodel_parameters.jl"]
+```
+
 ### Comparing names
 
 ```@autodocs

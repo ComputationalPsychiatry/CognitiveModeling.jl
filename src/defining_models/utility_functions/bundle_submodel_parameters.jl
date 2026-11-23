@@ -61,7 +61,7 @@ and flatten the parameters of a model with submodels.
 function model_layout(model::AbstractSubmodel)
     submodels_of_model = submodels(model)
     return layout_with(
-        attribute_names(model),
+        check_type_attribute_names(attribute_names(model), model),
         Val(uses_submodel_prefixes(model)),
         NamedTuple{keys(submodels_of_model)}(layouts_of(values(submodels_of_model))),
     )
@@ -133,8 +133,9 @@ function bundling_expression(
     ::Type{ModelLayout{Tattributes,prefixes,Tsubmodels}}, prefix::String
 ) where {Tattributes,prefixes,Tsubmodels}
     entries = Any[
-        Expr(:kw, name, :(getfield(flat, $(QuoteNode(Symbol(prefix, name)))))) for
-        name in own_parameter_names(Tattributes)
+        Expr(
+            :kw, name, :(read_flat_parameter(flat, Val($(QuoteNode(Symbol(prefix, name))))))
+        ) for name in own_parameter_names(Tattributes)
     ]
     for (submodel_name, Tsubmodel) in zip(fieldnames(Tsubmodels), fieldtypes(Tsubmodels))
         prefix_of_submodel = if prefixes
@@ -160,14 +161,35 @@ Return the parameters of `model` as it reads them, from `flat`, its parameters a
 its submodels in one `NamedTuple`, under the names that [`flat_parameter_names`](@ref)
 gives: the model's own parameters under their names, and those of each submodel bundled in a
 `NamedTuple` under the submodel's name, in the same way down through its submodels. A model
-without submodels gets its parameters in the order of its attributes. The code is generated
-from the [`ModelLayout`](@ref), so that nothing is looked up while it runs.
+without submodels gets its parameters as they are given. The code is generated from the
+[`ModelLayout`](@ref), so that nothing is looked up while it runs, and a parameter that
+isn't given is an informative error.
 """
 function bundle_parameters(model::AbstractSubmodel, flat::NamedTuple)
     return bundle_parameters(model_layout(model), flat)
 end
-@generated function bundle_parameters(layout::ModelLayout, flat::NamedTuple)
+@generated function bundle_parameters(
+    layout::ModelLayout{Tattributes,prefixes,Tsubmodels}, flat::NamedTuple
+) where {Tattributes,prefixes,Tsubmodels}
+    fieldcount(Tsubmodels) == 0 && return :(flat)
     return bundling_expression(layout, "")
+end
+
+#The check of whether the parameter is there is on the type, so it costs nothing when it is
+"""
+    read_flat_parameter(flat::NamedTuple, ::Val{name})
+
+Return the parameter `name` of `flat`, the parameters of a model with submodels as they are
+given, and throw an informative error if it isn't there. Used by the code of
+[`bundle_parameters`](@ref).
+"""
+function read_flat_parameter(flat::NamedTuple, ::Val{name}) where {name}
+    hasfield(typeof(flat), name) && return getfield(flat, name)
+    return throw(
+        ArgumentError(
+            "The parameters of a model with submodels are given flat, under the names that CognitiveModeling.get_attribute_names gives, but $(repr(name)) isn't among them, which are $(keys(flat)).",
+        ),
+    )
 end
 
 """

@@ -159,7 +159,7 @@ function InstantiatedModel(
     return InstantiatedModel(
         model,
         parameters,
-        initialize_state(model, parameters),
+        initialize_state(model, bundle_parameters(model, parameters)),
         output_before_first_timestep(model);
         save_history,
         check_parameter_domains,
@@ -277,7 +277,8 @@ agent.state, agent.previous_output, agent.history.states
 """
 function reset!(instantiated_model::InstantiatedModel)
     instantiated_model.state = initialize_state(
-        instantiated_model.model, instantiated_model.parameters
+        instantiated_model.model,
+        bundle_parameters(instantiated_model.model, instantiated_model.parameters),
     )
     instantiated_model.previous_output = output_before_first_timestep(
         instantiated_model.model
