@@ -67,8 +67,7 @@ end
 
 Return whether [`stopping_criterion`](@ref) of either model is met on `timestep_values`, the
 values of the timestep before, combined with `|`, so that a criterion that a compiler
-traces is combined too. Used by the masking loop, and by
-[`simulate_all_timesteps`](@ref) to choose it.
+traces is combined too. Used by the loops of simulations and of fitted sessions.
 """
 function stopping_criterion_of_either_model(
     cognitive_model,
@@ -187,8 +186,7 @@ end
                                         cognitive_model, environment, cognitive_parameters,
                                         environment_parameters, cognitive_save_history,
                                         environment_save_history, observation_map,
-                                        action_map, rng, timestep_sizes, n_steps, offset,
-                                        check_stopping_criterion)
+                                        action_map, rng, timestep_sizes, n_steps, offset)
 
 Simulate every timestep from `first_timestep` on, also those after the simulation ended,
 and return what [`simulate_all_timesteps`](@ref) returns, with `masked=Val(true)`. It
@@ -199,9 +197,8 @@ nothing can branch on: the `parameters_valid` of a model, or what its
 
 Instead of stopping, the simulation carries `masking`, as
 [`masking_after_first_timestep`](@ref) arranges it, whose running flag turns false when the
-stopping criterion of either model is met before a timestep, when
-`check_stopping_criterion` is `true`, or when the parameters of either model turn invalid
-on a timestep, and stays false. From then on, every timestep starts from the values of the
+stopping criterion of either model is met before a timestep, or when the parameters of
+either model turn invalid on a timestep, and stays false. From then on, every timestep starts from the values of the
 last timestep that was kept, and nothing of it counts, as
 [`count_masked_timestep`](@ref) works out, so that `n_timesteps`, `parameters_valid` and
 `last_record` are what the stopping loop returns. The vectors in `storage` keep every
@@ -226,23 +223,20 @@ function simulate_remaining_timesteps_masked(
     timestep_sizes,
     n_steps,
     offset,
-    check_stopping_criterion,
 )
 
     #Loop through timesteps
     for t in first_timestep:n_steps
 
         #The simulation ends before this timestep when the stopping criterion of either model is met
-        if check_stopping_criterion
-            criterion_met = stopping_criterion_of_either_model(
-                cognitive_model,
-                environment,
-                masking.previous,
-                cognitive_parameters,
-                environment_parameters,
-            )
-            masking = merge(masking, (; running=masking.running & !criterion_met))
-        end
+        criterion_met = stopping_criterion_of_either_model(
+            cognitive_model,
+            environment,
+            masking.previous,
+            cognitive_parameters,
+            environment_parameters,
+        )
+        masking = merge(masking, (; running=masking.running & !criterion_met))
 
         #Simulate the timestep, also after the simulation ended, starting from the values of the last timestep that was kept
         timestep_values = simulate_timestep_both_models(

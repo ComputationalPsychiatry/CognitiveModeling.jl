@@ -183,14 +183,13 @@ end
             environment, (; n_observations_given=3), (;)
         )
         @test CognitiveModeling.n_fixed_timesteps(environment) == 3
+        #A single timestep, which doesn't check the stopping criterion, can ask for one more
         @test_throws ErrorException(
-            "The FixedObservationsEnvironment has given the observations of all its 3 timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
-        ) simulate_fixed_observations(environment; check_stopping_criterion=false)
-        @test length(
-            simulate_fixed_observations(
-                environment; n_steps=3, check_stopping_criterion=false
-            ).states,
-        ) == 3
+            "The FixedObservationsEnvironment has given the observations of all its 3 timesteps, so it has none for another timestep. A simulation stops by itself after the last one, while a single timestep of simulate_timestep doesn't check that. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
+        ) simulate_timestep(
+            environment, (;); parameters=(;), previous_state=(; n_observations_given=3)
+        )
+        @test length(simulate_fixed_observations(environment; n_steps=3).states) == 3
     end
 
     @testset "An instantiated one is simulated in steps, and starts from its first entry after reset!" begin
@@ -209,10 +208,12 @@ end
         simulate_steps!(10)
         @test environment.state == (; n_observations_given=3)
         @test agent.state == (; expected_reward=0.6875)
-        #It has ended, so it can't be simulated again before it is reset
+        #It has ended, so it can't be simulated again before it is reset, and it stays as it is
         @test_throws "is already met before the first timestep, so no timestep can run" simulate_steps!(
             1
         )
+        @test environment.state == (; n_observations_given=3) &&
+            agent.state == (; expected_reward=0.6875)
         reset!(environment)
         @test environment.state == (; n_observations_given=0)
         simulate_steps!(1)

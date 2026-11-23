@@ -97,12 +97,14 @@ function CognitiveModeling.timestep_model(
     probability = choice_probability(
         model.response,
         context.parameters.response,
-        current_expected_reward(perception.expected_reward),
+        current_expected_reward(model.perception, perception),
     )
     return ModelOutput((; choice=ChooseWithProbability(probability)), (; perception))
 end
 
-#The expected reward as a number, from a perception that keeps it as one or in a vector
+#The expected reward as a number, from the state of a perception that keeps it as one or in a vector, or in the state of
+#a submodel of its own
+current_expected_reward(perception, state) = current_expected_reward(state.expected_reward)
 current_expected_reward(expected_reward::Real) = expected_reward
 current_expected_reward(expected_reward::AbstractVector) = expected_reward[1]
 
@@ -123,6 +125,52 @@ function learn_reward(perception::LearnsInPlace, parameters, state, reward)
     state.expected_reward[1] +=
         parameters.learning_rate * (reward - state.expected_reward[1])
     return state
+end
+
+#A perception whose learning is a submodel of its own, so that the model has a submodel within a submodel. It keeps the
+#learning's state under its name, and uses prefixes when it is constructed with them
+struct PerceivesThroughLearning{Tlearning,prefixes} <: AbstractSubmodel
+    learning::Tlearning
+end
+function PerceivesThroughLearning(; prefixes=false)
+    learning = LearnsExpectedReward()
+    return PerceivesThroughLearning{typeof(learning),prefixes}(learning)
+end
+CognitiveModeling.submodel_fields(perception::PerceivesThroughLearning) = (:learning,)
+function CognitiveModeling.uses_submodel_prefixes(
+    perception::PerceivesThroughLearning{<:Any,prefixes}
+) where {prefixes}
+    return prefixes
+end
+function CognitiveModeling.attribute_names(perception::PerceivesThroughLearning)
+    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=())
+end
+function CognitiveModeling.initialize_state(
+    perception::PerceivesThroughLearning, parameters
+)
+    return (;
+        learning=CognitiveModeling.initialize_state(
+            perception.learning, parameters.learning
+        ),
+    )
+end
+function learn_reward(perception::PerceivesThroughLearning, parameters, state, reward)
+    return (;
+        learning=learn_reward(
+            perception.learning, parameters.learning, state.learning, reward
+        ),
+    )
+end
+function current_expected_reward(perception::PerceivesThroughLearning, state)
+    return current_expected_reward(perception.learning, state.learning)
+end
+
+#The learner with the nested perception, with prefixes on both levels or on neither
+function LearnerWithNestedSubmodels(; prefixes=false)
+    perception, response = PerceivesThroughLearning(; prefixes), ChoosesByExpectedReward()
+    return LearnerWithSubmodels{typeof(perception),typeof(response),prefixes}(
+        perception, response
+    )
 end
 
 @testset "Models with submodels" begin
@@ -235,6 +283,61 @@ end
             (; cognitive_model=(; perception=(;)), environment=(;))
         @test simulate_with(LearnerInOne(), flat_parameters).submodel_states ==
             (; cognitive_model=(;), environment=(;))
+    end
+
+    @testset "A submodel can have submodels of its own, whose parameters are given flat and whose states are kept under their names within the submodel's" begin
+        in_one = simulate_with(LearnerInOne(), flat_parameters)
+        nested = simulate_with(LearnerWithNestedSubmodels(), flat_parameters)
+        @test nested.actions == in_one.actions
+        @test map(state -> state.perception.learning, nested.states) == in_one.states
+        #With prefixes on both levels, the flat names start with the names of both submodels
+        @test CognitiveModeling.get_attribute_names(
+            LearnerWithNestedSubmodels(; prefixes=true)
+        ).parameters ==
+            (:perception__learning__learning_rate, :response__inverse_temperature)
+        prefixed = simulate_with(
+            LearnerWithNestedSubmodels(; prefixes=true),
+            (; perception__learning__learning_rate=0.3, response__inverse_temperature=2.0),
+        )
+        @test prefixed.actions == in_one.actions && prefixed.states == nested.states
+        #The innermost submodel's default fills in, and its domain is checked with its own name
+        @test simulate_with(LearnerWithNestedSubmodels(), (; inverse_temperature=2.0)).actions ==
+            simulate_with(LearnerInOne(), (; learning_rate=0.5, inverse_temperature=2.0)).actions
+        @test_throws "LearnsExpectedReward" simulate_with(
+            LearnerWithNestedSubmodels(), (; learning_rate=2.0, inverse_temperature=2.0)
+        )
+        #A state must have the innermost submodel's state within the submodel's
+        @test_throws "The state of a cognitive model of type LearnerWithSubmodels" simulate_with(
+            LearnerWithNestedSubmodels(),
+            flat_parameters;
+            previous_cognitive_state=(; perception=(; expected_reward=0.5)),
+        )
+        #The simulation says which states hold the states of submodels, down through the submodels
+        @test nested.submodel_states ==
+            (; cognitive_model=(; perception=(; learning=(;))), environment=(;))
+        #An instantiated model has the nested state, and a history selects it by the outer submodel's name
+        agent = InstantiatedModel(LearnerWithNestedSubmodels(), flat_parameters)
+        @test agent.state == (; perception=(; learning=(; expected_reward=0.5)))
+        simulate_timestep!(agent, (; reward=1.0))
+        @test agent.state.perception.learning.expected_reward ≈ 0.65
+        saving_perception = simulate_with(
+            LearnerWithNestedSubmodels(),
+            flat_parameters;
+            cognitive_save_history=SaveHistory(;
+                states=:perception, save_initial_timestep_values=false
+            ),
+        )
+        @test map(state -> state.perception.learning, saving_perception.states) ==
+            in_one.states
+        #Its return type is known, and bundling allocates nothing
+        @inferred simulate_with(
+            LearnerWithNestedSubmodels(; prefixes=true),
+            (; perception__learning__learning_rate=0.3, response__inverse_temperature=2.0),
+        )
+        @test (@allocated CognitiveModeling.bundle_parameters(
+            LearnerWithNestedSubmodels(; prefixes=true),
+            (; perception__learning__learning_rate=0.3, response__inverse_temperature=2.0),
+        )) == 0
     end
 
     @testset "The return type of a simulation with submodels is known, and bundling allocates nothing" begin

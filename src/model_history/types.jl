@@ -213,9 +213,9 @@ parameters stayed valid. On one line, as inside a vector, they show the number o
 - `parameters_valid`: whether the parameters of both models stayed valid on every timestep.
   With `false`, the trajectories end before the timestep on which a model set
   `parameters_valid` to `false` in its [`ModelOutput`](@ref), or, in a fitted session, before
-  a [`stopping_criterion`](@ref) that was met while the data continues. A fitted session
-  whose models can't set it has [`ValidByDefault`](@ref) instead, unless its
-  `check_stopping_criterion` is a `Bool`.
+  a [`stopping_criterion`](@ref) that was met while the data continues. It is a `Bool`, also
+  for models that can't set it, except in a simulation that a compiler like Reactant.jl
+  masked, where it can be a traced `Bool`.
 - `n_timesteps`: the number of timesteps in the trajectories, without timestep 0. A
   simulation that was masked, under a compiler like Reactant.jl, has every timestep in the
   vectors, of which the first `n_timesteps` were kept, as [`simulate_session`](@ref)

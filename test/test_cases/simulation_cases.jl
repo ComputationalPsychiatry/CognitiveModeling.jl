@@ -496,20 +496,6 @@ function simulation_cases(distributions)
                     environment_save_history=SaveHistory(SaveEverything()),
                 ),
                 simulate_case(
-                    "Baseline without checking the stopping criteria, $starts",
-                    distributions;
-                    baseline_with(;
-                        environment=WithStoppingCriterionEnvironment(distributions),
-                        environment_parameters=(;
-                            baseline.environment_parameters..., last_timestep=4
-                        ),
-                    )...,
-                    who_starts,
-                    n_steps=10,
-                    check_stopping_criterion=false,
-                    SAVE_BOTH...,
-                ),
-                simulate_case(
                     "Baseline continuing from given states, action and observation, $starts",
                     distributions;
                     baseline_parts...,

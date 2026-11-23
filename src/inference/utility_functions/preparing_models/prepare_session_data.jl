@@ -29,26 +29,6 @@ function collect_values_to_condition_on(columns::NamedTuple{names}) where {names
 end
 
 """
-    first_timestep_to_check_stopping(check_stopping_criterion, observations, actions,
-                                     n_timesteps)
-
-Return the first timestep before which a session checks the [`stopping_criterion`](@ref) of
-its models, from the `check_stopping_criterion` of [`SessionInfo`](@ref): the timestep after
-the last one with data when it is `nothing`, which is 1 when every value is
-[`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), 1 when it is `true`, and
-`n_timesteps + 1` when it is `false`, so that no timestep is checked. Used by
-`SessionInfo`.
-"""
-function first_timestep_to_check_stopping(
-    ::Nothing, observations::NamedTuple, actions::NamedTuple, n_timesteps
-)
-    return max(last_timestep_with_data(observations), last_timestep_with_data(actions)) + 1
-end
-function first_timestep_to_check_stopping(check::Bool, observations, actions, n_timesteps)
-    return check ? 1 : n_timesteps + 1
-end
-
-"""
     narrow_element_type(column)
 
 Return `column` with the types it holds as its element type, when its element type is `Any`

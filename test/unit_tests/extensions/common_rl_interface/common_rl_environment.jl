@@ -293,10 +293,12 @@ end
         observations =
             simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2).observations
         @test [observation.observation for observation in observations] == [2, 3]
-        #The episode has ended, so it can't continue until the environment is reset
-        @test_throws "The stopping criterion of an environment model of type CommonRLEnvironment{CountingBandit, :arm} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!." simulate_session!(
+        #The episode has ended, so it can't continue until the environment is reset, and the environment isn't acted on
+        pulls_at_the_end = rl_env.pulls
+        @test_throws "The stopping criterion of an environment model of type CommonRLEnvironment{CountingBandit, :arm} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=1
         )
+        @test rl_env.pulls == pulls_at_the_end && environment.state.rl_env === rl_env
         #After a reset of both, a call that asks for more timesteps than the episode has stops with it
         CognitiveModeling.reset!(environment)
         CognitiveModeling.reset!(agent)

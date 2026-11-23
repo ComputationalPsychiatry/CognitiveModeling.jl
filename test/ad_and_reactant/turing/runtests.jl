@@ -51,8 +51,10 @@ on_macos_without_bounds_checks() = Sys.isapple() && Base.JLOptions().check_bound
 # test can catch, says kills_the_process = true, and its tests are skipped, so that a fix doesn't
 # show up, and the bug must be checked by hand. A bug that only happens in some settings says
 # only_when, a function which tells whether this process is in them, and is tested as any other
-# case elsewhere. Each entry has the bug, the backends and the test cases it hits. The
-# documentation page on automatic differentiation lists the same bugs, so update both together.
+# case elsewhere. A gradient that is only wrong when it is prepared at another point says
+# only_when_prepared_elsewhere = true. Each entry has the bug, the backends and the test cases it
+# hits. The documentation page on automatic differentiation lists the same bugs, so update both
+# together.
 
 const KNOWN_FAILURES = [
     (;
@@ -153,6 +155,12 @@ const KNOWN_FAILURES = [
         ],
     ),
     (;
+        bug="ReverseDiff's compiled tape records the path through the code at the point where it is compiled, and the tests compile it at another point too, where a session whose stopping criterion is met once a value passes a threshold, which the session checks on every timestep, ends on another timestep, so the tape gives the gradient of that path, with no error. This is a limitation of compiled tapes, which the page on automatic differentiation describes among its pitfalls",
+        backends=["ReverseDiff, compiled tape"],
+        only_when_prepared_elsewhere=true,
+        cases=["WithStoppingCriterion with its environment, environment starts"],
+    ),
+    (;
         bug="ReverseDiff, also with a compiled tape, throws an InexactError on sessions of a model whose actions are numbers from a normal distribution, when the agent starts: the first action of a session, before any reward, has a mean that is a constant, so that its distribution has another type of tracked numbers than the later ones, and Distributions.jl's product_distribution makes their means a TrackedReal{Real}, whose log ReverseDiff can't take. Not reported yet",
         backends=["ReverseDiff", "ReverseDiff, compiled tape"],
         cases=["ContinuousOutput, sessions, agent starts"],
@@ -215,6 +223,12 @@ end
                 @test_skip DI.gradient(
                     f, DI.prepare_gradient(f, backend, x .+ 0.25), backend, x
                 ) ≈ reference rtol = 1.0e-6
+            elseif get(failure, :only_when_prepared_elsewhere, false)
+                # Right when prepared at the point itself, and broken when prepared at another
+                @test DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6 atol = 1.0e-10
+                @test_broken DI.gradient(
+                    f, DI.prepare_gradient(f, backend, x .+ 0.25), backend, x
+                ) ≈ reference rtol = 1.0e-6 atol = 1.0e-10
             else
                 # Broken until the bug is fixed, which then shows up as an unexpected pass
                 @test_broken DI.gradient(f, backend, x) ≈ reference rtol = 1.0e-6

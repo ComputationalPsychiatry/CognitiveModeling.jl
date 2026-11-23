@@ -941,7 +941,8 @@ end
         lengths_in_S2 = map(length, vec(trajectories[@varname(S2.expected_reward)]))
         @test all(lengths_in_S2[valid_in_S2] .== 3) &&
             all(lengths_in_S2[.!valid_in_S2] .< 3)
-        #A model that never sets parameters_valid has no such entry
+        #A model that never sets parameters_valid has such an entry too, since a stopping criterion can make the parameters
+        #invalid, and it is true for every sample
         plain = saving_full_model(
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(; cognitive_save_history=saving_states),
@@ -954,7 +955,14 @@ end
                 ),
             ),
         )
-        @test !any(name -> occursin("parameters_valid", string(name)), plain_names)
+        @test @varname(S2.parameters_valid) in plain_names
+        @test all(
+            vec(
+                get_session_trajectories(
+                    plain, plain_chain; cognitive_save_history=saving_states
+                )[@varname(S2.parameters_valid)],
+            ),
+        )
     end
 
     @testset "Sampling and finding a mode start when the first draw ends no session early, and can't start when it ends one early and a variable comes after" begin

@@ -11,13 +11,12 @@ using CognitiveModeling:
     AbstractTimestepModel,
     timestep_model,
     initialize_state,
-    stopping_criterion,
+    stopping_criterion_of_either_model,
     merge_default_parameters,
     bundle_parameters,
     check_match_attribute_names,
     check_parameters_in_domains,
     check_model_output,
-    check_stopping_criterion_not_met,
     parameters_are_valid,
     combine_parameters_valid,
     masks_flag,
@@ -42,6 +41,7 @@ using CognitiveModeling:
     with_empty_environment_trajectories,
     timestep_sizes_until,
     data_continues_after,
+    check_stopping_criterion_not_met,
     session_parameters_valid,
     masking_fitted_session_after_first_timestep,
     masking_fitted_session_before_timestep,
@@ -427,33 +427,21 @@ end
 # Runs the timesteps of a session from where it starts, saves what its save histories select, and scores the values in
 # the data against the distributions of their timesteps at the end. Returns the trajectories the session saved. A session
 # whose parameters turn invalid, or whose stopping criterion is met while its data continues, gets a log density of -Inf
-# and ends there, as the Turing.jl session does. From the first timestep whose flag or criterion a compiler traces, every
-# timestep runs instead, and the session is masked, as an inference backend that Reactant.jl compiles would mask it
+# and ends there, and a criterion met before the first timestep is an error, as in the Turing.jl session. From the first
+# timestep whose flag or criterion a compiler traces, every timestep runs instead, and the session is masked, as an
+# inference backend that Reactant.jl compiles would mask it
 function timesteps_by_hand(
     session_info, cognitive_parameters, environment_parameters, previous, evaluation
 )
     n_timesteps = session_info.n_timesteps
 
-    #When the criterion is checked from the start and is met already, no timestep can run: with data, the parameters can't give it, and without data it is an error. A traced criterion can't be checked, and is masked
-    stopped_before_first = false
-    if session_info.first_timestep_to_check_stopping == 1
-        stopped_before_first =
-            stopping_criterion(
-                session_info.environment, previous.environment.state, environment_parameters
-            ) | stopping_criterion(
-                session_info.cognitive_model, previous.state, cognitive_parameters
-            )
-        if !masks_bool(stopped_before_first) &&
-            stopped_before_first &&
-            !data_continues_after(session_info, 0)
-            check_stopping_criterion_not_met(
-                session_info.environment, previous.environment.state, environment_parameters
-            )
-            check_stopping_criterion_not_met(
-                session_info.cognitive_model, previous.state, cognitive_parameters
-            )
-        end
-    end
+    #A criterion that is met already would end the session before its first timestep, which is an error, as in the Turing.jl session. A traced criterion can't be checked, and is masked
+    stopped_before_first =
+        check_stopping_criterion_not_met(
+            session_info.environment, previous.environment.state, environment_parameters
+        ) | check_stopping_criterion_not_met(
+            session_info.cognitive_model, previous.state, cognitive_parameters
+        )
 
     #Save what is kept from before the first timestep
     initial_saved = select_initial_timestep_values_to_save(
@@ -497,16 +485,14 @@ function timesteps_by_hand(
         )
     end
 
-    #A session whose parameters turned invalid on the first timestep, or whose criterion was met before it while its data continues, gets a log density of -Inf and ends, keeping nothing of the timestep
-    if stopped_before_first || !parameters_are_valid(timestep_values.parameters_valid)
+    #A session whose parameters turned invalid on the first timestep gets a log density of -Inf and ends, keeping nothing of the timestep
+    if !parameters_are_valid(timestep_values.parameters_valid)
         evaluation.log_density += -Inf
         map_saved(vector -> resize!(vector, offset), storage)
         return saved_trajectories(
             storage,
             timestep_sizes_until(session_info.saved_timestep_sizes, offset),
-            session_parameters_valid(
-                session_info, timestep_values.parameters_valid, !stopped_before_first
-            ),
+            false,
             0,
             nothing,
         )
@@ -538,19 +524,14 @@ function remaining_timesteps_by_hand(
     n_timesteps = session_info.n_timesteps
     for t in 2:n_timesteps
 
-        #The stopping criterion of either model, on the timesteps where it is checked. A traced one masks this timestep and the remaining ones
-        criterion_met =
-            t >= session_info.first_timestep_to_check_stopping && (
-                stopping_criterion(
-                    session_info.environment,
-                    timestep_values.environment.state,
-                    environment_parameters,
-                ) | stopping_criterion(
-                    session_info.cognitive_model,
-                    timestep_values.state,
-                    cognitive_parameters,
-                )
-            )
+        #The stopping criterion of either model, as the Turing.jl session checks it. A traced one masks this timestep and the remaining ones
+        criterion_met = stopping_criterion_of_either_model(
+            session_info.cognitive_model,
+            session_info.environment,
+            timestep_values,
+            cognitive_parameters,
+            environment_parameters,
+        )
         if masks_bool(criterion_met)
             return masked_timesteps_by_hand(
                 session_info,
@@ -573,9 +554,7 @@ function remaining_timesteps_by_hand(
                 return saved_trajectories(
                     storage,
                     timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
-                    session_parameters_valid(
-                        session_info, timestep_values.parameters_valid, false
-                    ),
+                    session_parameters_valid(timestep_values.parameters_valid, false),
                     t - 1,
                     nothing,
                 )
@@ -586,9 +565,7 @@ function remaining_timesteps_by_hand(
                 distributions,
                 offset,
                 t - 1,
-                session_parameters_valid(
-                    session_info, timestep_values.parameters_valid, true
-                ),
+                session_parameters_valid(timestep_values.parameters_valid, true),
                 t - 1,
                 evaluation,
             )
@@ -638,9 +615,7 @@ function remaining_timesteps_by_hand(
             return saved_trajectories(
                 storage,
                 timestep_sizes_until(session_info.saved_timestep_sizes, t - 1 + offset),
-                session_parameters_valid(
-                    session_info, timestep_values.parameters_valid, true
-                ),
+                session_parameters_valid(timestep_values.parameters_valid, true),
                 t - 1,
                 nothing,
             )
@@ -652,7 +627,7 @@ function remaining_timesteps_by_hand(
         distributions,
         offset,
         n_timesteps,
-        session_parameters_valid(session_info, timestep_values.parameters_valid, true),
+        session_parameters_valid(timestep_values.parameters_valid, true),
         n_timesteps,
         evaluation,
     )
@@ -674,21 +649,16 @@ function masked_timesteps_by_hand(
 )
     n_timesteps = session_info.n_timesteps
     for t in first_timestep:n_timesteps
-        if t >= session_info.first_timestep_to_check_stopping
-            criterion_met =
-                stopping_criterion(
-                    session_info.environment,
-                    masking.previous.environment.state,
-                    environment_parameters,
-                ) | stopping_criterion(
-                    session_info.cognitive_model,
-                    masking.previous.state,
-                    cognitive_parameters,
-                )
-            masking = stop_masked_fitted_session(
-                masking, criterion_met, data_continues_after(session_info, t - 1)
-            )
-        end
+        criterion_met = stopping_criterion_of_either_model(
+            session_info.cognitive_model,
+            session_info.environment,
+            masking.previous,
+            cognitive_parameters,
+            environment_parameters,
+        )
+        masking = stop_masked_fitted_session(
+            masking, criterion_met, data_continues_after(session_info, t - 1)
+        )
         timestep_values = run_timestep_both_models_by_hand(
             session_info,
             t,
@@ -1288,15 +1258,10 @@ function invalid_parameters_session_by_hand()
     )
 end
 
-# A session whose stopping criterion is checked on every timestep, so that a criterion met while its data continues counts
-# as parameters that turned invalid
+# A session whose stopping criterion is met while its data continues, which counts as parameters that turned invalid
 function criterion_with_data_session_by_hand()
     session_info = SessionInfo(
-        StopsAboveByHand(),
-        REWARDS_BY_HAND,
-        CHOICES_BY_HAND;
-        who_starts=EnvironmentStarts(),
-        check_stopping_criterion=true,
+        StopsAboveByHand(), REWARDS_BY_HAND, CHOICES_BY_HAND; who_starts=EnvironmentStarts()
     )
     return x -> log_density_by_hand(
         session_by_hand,
@@ -1465,6 +1430,6 @@ const SESSION_BY_HAND_CASES = [
     (;
         name="masked session by hand whose stopping criterion is met after its data, with imputed values after the end",
         f=masked_ending_session_by_hand(),
-        x=[0.6, 2.0, 0.9, 0.5, 0.6, 0.4, 0.7, 0.6, 0.5, 0.8, 0.3, 0.5, 0.6, 0.7, 0.4],
+        x=[0.5, 2.0, 0.9, 0.5, 0.6, 0.4, 0.7, 0.6, 0.5, 0.8, 0.3, 0.5, 0.6, 0.7, 0.4],
     ),
 ]

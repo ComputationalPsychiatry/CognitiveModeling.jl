@@ -89,10 +89,9 @@ one where the model gave nothing, [`NoValue`](@ref). When the session doesn't in
 environment, as the `include_environment` of `session_info` decides, which by default is
 when nothing in the data is `ImputedMissingValue()` or `SimulatedMissingValue()` and the
 environment's history isn't saved, the session is the same as one without an environment,
-with the same variables. The [`stopping_criterion`](@ref) of the models is checked as the
-`check_stopping_criterion` of `session_info` says: by default only after the last timestep
-with data, so that a fit runs every timestep and a session from
-[`decondition_sessions`](@ref) can end early.
+with the same variables. The [`stopping_criterion`](@ref) of the models is checked before
+every timestep, as [`SessionInfo`](@ref) describes, so that a session from
+[`decondition_sessions`](@ref) can end early, as a simulation does.
 
 # What it returns
 A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as
@@ -112,12 +111,11 @@ states, which can depend on the parameters. Element `t + 1` is then timestep `t`
 returned actions and observations are those the models received, with the imputed values.
 `timestep_sizes` has the size of each timestep, after `BeforeFirstTimestep()` for timestep 0
 when it is there, when anything is selected, and is empty otherwise. `n_timesteps` is the
-number of timesteps that ran, and `last_timestep` is `nothing`. `parameters_valid` is as the
-models give it in their [`ModelOutput`](@ref): [`ValidByDefault`](@ref) when neither can set
-it, and otherwise whether the parameters stayed valid. It is a `Bool` when the session is
-given `check_stopping_criterion` as a `Bool`, since a [`stopping_criterion`](@ref) met while
-the data continues counts as parameters that turned invalid. When a model sets it to
-`false`, or such a criterion is met, the session gives the parameters a log density of
+number of timesteps that ran, and `last_timestep` is `nothing`. `parameters_valid` is a
+`Bool`, whether the parameters stayed valid, also for models that can't set it in their
+[`ModelOutput`](@ref), since a [`stopping_criterion`](@ref) met while the data continues
+counts as parameters that turned invalid. When a model sets it to `false`, or such a
+criterion is met, the session gives the parameters a log density of
 `-Inf`, ends before that timestep and scores nothing, so the trajectories end before it, and
 the variables of the later timesteps don't exist for that sample, which can keep a sampler
 from starting, as [`turing_full_model`](@ref) describes. Any latent variable in a session,
@@ -302,11 +300,12 @@ state is read from the chain without simulating again.
 
 When a cognitive model or an environment model sets `parameters_valid` to `false` in its
 [`ModelOutput`](@ref), or a [`stopping_criterion`](@ref) is met while the data of a session
-continues, which [`SessionInfo`](@ref) checks with `check_stopping_criterion = true`, the
-session gives the parameters a log density of `-Inf`, so that a sampler rejects them, and
+continues, as [`SessionInfo`](@ref) describes, the session gives the parameters a log
+density of `-Inf`, so that a sampler rejects them, and
 ends before that timestep without scoring the data. The trajectories of that session then
 end before the timestep, its `saved_trajectories` has `parameters_valid = false`, and the
-downstream model doesn't run, so `downstream_values` is `nothing`.
+downstream model doesn't run, so `downstream_values` is `nothing`. A criterion that is met
+already before the first timestep of a session is an error instead, which stops a fit.
 
 Such a sample doesn't have the variables that come after that timestep: the values that the
 later timesteps impute, simulate or sample, and the variables of the downstream model. A fit

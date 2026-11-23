@@ -9,24 +9,20 @@
             check_parameter_domains=false,
         )
         with_choices = CognitiveModeling.with_data(
-            session_info,
-            session_info.observations,
-            (; choice=[true, false, true]);
-            check_stopping_criterion=nothing,
+            session_info, session_info.observations, (; choice=[true, false, true])
         )
         @test with_choices.actions.choice == [true, false, true]
         @test with_choices.actions_to_condition_on.choice == [true, false, true]
         @test with_choices.timestep_sizes == [1.0, 2.0, 1.0]
         @test with_choices.who_starts === AgentStarts()
         @test with_choices.check_parameter_domains === false
-        #The stopping criterion is checked from the data the copy has, after its last timestep with data
-        @test with_choices.first_timestep_to_check_stopping == 4
+        #The last timestep with data is that of the data the copy has
+        @test with_choices.last_timestep_with_action == 3
         #Data with other timesteps is given their sizes
         with_two_timesteps = CognitiveModeling.with_data(
             session_info,
             map(column -> column[1:2], session_info.observations),
             (; choice=[true, false]);
-            check_stopping_criterion=nothing,
             timestep_sizes=[1.0, 2.0],
         )
         @test with_two_timesteps.n_timesteps == 2 &&
@@ -144,11 +140,6 @@ end
               SaveHistory(; states=:n_timesteps)
         @test conditioned.column_settings === sessions_info.column_settings &&
             conditioned.table === other_data
-        #check_stopping_criterion is given to the sessions
-        @test all(
-            session -> session.check_stopping_criterion === false,
-            condition_sessions(sessions_info, other_data; check_stopping_criterion=false).sessions,
-        )
     end
 
     @testset "A table with other sessions, and sessions without column settings, are errors" begin

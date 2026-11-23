@@ -762,19 +762,20 @@ end
     check_stopping_criterion_not_met(model, state, parameters)
 
 Throw an informative error if [`stopping_criterion`](@ref) of `model` is already met with
-`state`, before the first timestep, since no timestep can then run, and return `false`
-otherwise. A criterion that must be masked, as [`masks_bool`](@ref) says, such as a traced
-Bool of a compiler like Reactant.jl, can't be checked, and is returned instead, for the
-masking loop. Used for each model by [`simulate_all_timesteps`](@ref), and by fitted
-sessions, where there is nothing to check for an environment a session doesn't have.
+`state` and `parameters`, before the first timestep, since no timestep can then run, and
+return `false` otherwise. A criterion that must be masked, as [`masks_bool`](@ref) says,
+such as a traced `Bool` of a compiler like Reactant.jl, can't be checked, and is returned
+instead, for the masking of the simulation or the session. Used for each model by
+[`simulate_all_timesteps`](@ref), and by fitted sessions, where there is nothing to check
+for an environment a session doesn't have.
 """
-function check_stopping_criterion_not_met(model::AbstractTimestepModel, state, parameters)
+function check_stopping_criterion_not_met(model, state, parameters)
     criterion_met = stopping_criterion(model, state, parameters)
     masks_bool(criterion_met) && return criterion_met
     if criterion_met
         throw(
             ArgumentError(
-                "The stopping criterion of $(describe_model(model)) is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!.",
+                "The stopping criterion of $(describe_model(model)) is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!, and a fitted session needs parameters, and priors, under which it isn't met before the first timestep.",
             ),
         )
     end
@@ -787,11 +788,11 @@ end
                                  environment, cognitive_parameters, environment_parameters,
                                  cognitive_save_history, environment_save_history,
                                  observation_map, action_map, rng, timestep_sizes, n_steps,
-                                 offset, check_stopping_criterion)
+                                 offset)
 
 Simulate the timesteps after the first, and return what [`simulate_all_timesteps`](@ref)
-returns. When `check_stopping_criterion` is `true`, the simulation stops before `n_steps`
-timesteps if [`stopping_criterion`](@ref) of either model is met. It also stops when the
+returns. The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref)
+of either model is met. It also stops when the
 parameters of either model turn invalid on a timestep, which is left out. From the first
 timestep whose stopping criterion or `parameters_valid` must be masked, as
 [`masks_flag`](@ref) says, the simulation continues with
@@ -815,7 +816,6 @@ function simulate_remaining_timesteps(
     timestep_sizes,
     n_steps,
     offset,
-    check_stopping_criterion,
     keeps_last_values::Val,
 )
 
@@ -823,14 +823,13 @@ function simulate_remaining_timesteps(
     for t in 2:n_steps
 
         #Stop if the stopping criterion of either model is met, and keep only the timesteps that were simulated
-        criterion_met =
-            check_stopping_criterion && stopping_criterion_of_either_model(
-                cognitive_model,
-                environment,
-                timestep_values,
-                cognitive_parameters,
-                environment_parameters,
-            )
+        criterion_met = stopping_criterion_of_either_model(
+            cognitive_model,
+            environment,
+            timestep_values,
+            cognitive_parameters,
+            environment_parameters,
+        )
 
         #A criterion that must be masked can't be branched on, so this timestep and the remaining ones are masked
         if masks_bool(criterion_met)
@@ -851,7 +850,6 @@ function simulate_remaining_timesteps(
                 timestep_sizes,
                 n_steps,
                 offset,
-                check_stopping_criterion,
             )
         end
         if criterion_met
@@ -907,7 +905,6 @@ function simulate_remaining_timesteps(
                 timestep_sizes,
                 n_steps,
                 offset,
-                check_stopping_criterion,
             )
         end
 
@@ -944,7 +941,7 @@ end
                            environment, cognitive_parameters, environment_parameters,
                            cognitive_save_history, environment_save_history,
                            observation_map, action_map, rng, timestep_sizes, n_steps,
-                           save_initial_timestep_values::Val, check_stopping_criterion)
+                           save_initial_timestep_values::Val)
 
 Simulate up to `n_steps` timesteps starting from `previous_timestep_values`, and return in a
 `NamedTuple` the vectors with what the simulated timesteps saved, under `storage`, the
@@ -952,10 +949,10 @@ values of the last timestep that was kept, under `last_kept_values`, the number 
 that were kept, under `n_timesteps`, whether the parameters of both models stayed valid,
 under `parameters_valid`, under `last_record` the record of the last timestep that was
 simulated, from [`record_of_timestep`](@ref) with the timestep's number, and under `masked`
-whether the simulation was masked, as `Val(true)` or `Val(false)`. When
-`check_stopping_criterion` is `true`, the simulation stops before `n_steps` timesteps if
-[`stopping_criterion`](@ref) of either model is met, and none can be simulated if it is met
-already. The simulation also stops when the parameters of either model turn invalid, and
+whether the simulation was masked, as `Val(true)` or `Val(false)`. The simulation stops
+before `n_steps` timesteps if [`stopping_criterion`](@ref) of either model is met, and none
+can be simulated if it is met already, which [`check_stopping_criterion_not_met`](@ref) makes
+an error. The simulation also stops when the parameters of either model turn invalid, and
 that timestep is left out, so that it is the last one simulated but not the last one kept.
 When `save_initial_timestep_values` is `Val(true)`, each vector starts with what is saved
 from before the first timestep, as timestep 0.
@@ -995,7 +992,6 @@ function simulate_all_timesteps(
     timestep_sizes,
     n_steps,
     save_initial_timestep_values,
-    check_stopping_criterion,
     keeps_last_values::Val=Val(true),
 )
 
@@ -1012,17 +1008,12 @@ function simulate_all_timesteps(
     end
 
     #No timestep can be simulated when the stopping criterion of either model is met already. A criterion that must be masked can't be checked, and ends a masked simulation before its first timestep instead
-    stopped_before_first = false
-    if check_stopping_criterion
-        stopped_before_first =
-            check_stopping_criterion_not_met(
-                environment,
-                previous_timestep_values.environment.state,
-                environment_parameters,
-            ) | check_stopping_criterion_not_met(
-                cognitive_model, previous_timestep_values.state, cognitive_parameters
-            )
-    end
+    stopped_before_first =
+        check_stopping_criterion_not_met(
+            environment, previous_timestep_values.environment.state, environment_parameters
+        ) | check_stopping_criterion_not_met(
+            cognitive_model, previous_timestep_values.state, cognitive_parameters
+        )
 
     #Save what is kept from before the first timestep before it is simulated, since it can change a state in place
     initial_timestep_values = collect_initial_timestep_values(
@@ -1077,7 +1068,6 @@ function simulate_all_timesteps(
             timestep_sizes,
             n_steps,
             offset,
-            check_stopping_criterion,
         )
     end
 
@@ -1111,7 +1101,6 @@ function simulate_all_timesteps(
         timestep_sizes,
         n_steps,
         offset,
-        check_stopping_criterion,
         keeps_last_values,
     )
 end
@@ -1163,8 +1152,9 @@ differently, or one gives something that isn't in the other's attributes, `obser
 and `action_map` say which outputs of one the other receives, and under which names.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
-model is met, unless `check_stopping_criterion` is `false`, and everything returned then has
-the timesteps that were simulated.
+model is met, and everything returned then has the timesteps that were simulated. A model
+whose criterion is met already, before the first timestep, can't be simulated, and throws an
+error.
 
 The simulation also stops when either model sets `parameters_valid` to `false` in its
 [`ModelOutput`](@ref), and that timestep is left out of the trajectories. `parameters_valid`
@@ -1226,9 +1216,6 @@ still differentiated.
   `cognitive_model` gives to exactly those in the attributes of `environment`. Without one,
   the two must have the same actions in their attributes, which `environment` receives
   under the same names.
-- `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
-  models is checked before each timestep. With `false`, all of `n_steps` timesteps are
-  simulated.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) before the simulation, where a value
   outside its domain throws a [`ParameterDomainError`](@ref).
@@ -1335,7 +1322,6 @@ function simulate_session(
     environment_save_history::SaveHistory=SaveHistory(),
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
-    check_stopping_criterion::Bool=true,
     check_parameter_domains::Bool=true,
     warn_on_invalid_parameters::Bool=true,
     previous_cognitive_state=initialize_state(
@@ -1408,7 +1394,6 @@ function simulate_session(
         timestep_sizes,
         n_steps,
         save_initial_timestep_values,
-        check_stopping_criterion,
         Val(false),
     )
 
@@ -1455,9 +1440,9 @@ The two models must fit together, as for `simulate_session`, directly or through
 received them, and the environment's history the actions as its model did.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
-model is met, unless `check_stopping_criterion` is `false`. A model where it is met already
-can't be simulated further, and throws an error until it is [`reset!`](@ref). The simulation
-also stops when either model sets `parameters_valid` to `false`, as for `simulate_session`:
+model is met. A model where it is met already can't be simulated further, and throws an
+error until it is [`reset!`](@ref). The simulation also stops when either model sets
+`parameters_valid` to `false`, as for `simulate_session`:
 that timestep is left out, the agent and the environment stay where they were after the
 timestep before, and its states are under `last_timestep` in what is returned. A
 simulation that must be masked, as under a compiler like Reactant.jl, is an error, since the
@@ -1478,8 +1463,6 @@ An instantiated model isn't type stable, as [`InstantiatedModel`](@ref) describe
   the agent receives, and under which names, as for `simulate_session`.
 - `action_map::Union{Nothing, NameMap}=nothing`: which actions of the agent the environment
   receives, and under which names, as for `simulate_session`.
-- `check_stopping_criterion::Bool=true`: whether [`stopping_criterion`](@ref) of the two
-  models is checked before each timestep, as for `simulate_session`.
 - `warn_on_invalid_parameters::Bool=true`: whether a warning says when the parameters of
   either model turn invalid, as for `simulate_session`.
 
@@ -1539,7 +1522,6 @@ function simulate_session!(
     rng::AbstractRNG=default_rng(),
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
-    check_stopping_criterion::Bool=true,
     warn_on_invalid_parameters::Bool=true,
 )
 
@@ -1569,7 +1551,6 @@ function simulate_session!(
         timestep_sizes,
         n_steps,
         Val(false),
-        check_stopping_criterion,
     )
 
     #The histories and the counts of the models grow by the number of timesteps that were kept, which a masked simulation doesn't know

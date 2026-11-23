@@ -48,10 +48,11 @@ observations, the actions and the distributions of timestep 0 are
 [`BeforeFirstTimestep`](@ref), so a summary of those entries needs timestep 0 left out. The
 symbol name of a session with several session columns joins the name and the value of each
 column, as in `id_S1__block_2`, as [`CognitiveModeling.session_id_to_symbol`](@ref) gives
-it. When the models can set `parameters_valid` in their [`ModelOutput`](@ref), each session
-also has an entry `parameters_valid`, as in `P1.parameters_valid`, which says whether its
-parameters stayed valid in each sample; where they didn't, its trajectories end before the
-timestep on which they turned invalid. `iter_indices` and `chain_indices` number the
+it. Each session also has an entry `parameters_valid`, as in `P1.parameters_valid`, which
+says whether its parameters stayed valid in each sample, since a model can set
+`parameters_valid` in its [`ModelOutput`](@ref), and a [`stopping_criterion`](@ref) met
+while the data continues makes them invalid too; where they didn't, its trajectories end
+before the timestep on which they turned invalid. `iter_indices` and `chain_indices` number the
 samples as the chain that was fitted does.
 
 The third form takes one of the three models and a chain sampled from it, a `FlexiChain`. It
@@ -113,26 +114,3 @@ parameters[@varname(P1.learning_rate)]
 ```
 """
 function get_session_parameters end
-
-"""
-    with_save_history(info, cognitive_save_history, environment_save_history)
-
-Return a copy of `info`, a [`SessionInfo`](@ref) or a [`MultipleSessionsInfo`](@ref), whose
-sessions save what the two save histories select. Used by the methods of
-[`get_session_trajectories`](@ref) and [`predict_session_trajectories`](@ref) which take a
-model, to read or simulate the sessions again with what is to be saved.
-"""
-function with_save_history(
-    info::SessionInfo,
-    cognitive_save_history::SaveHistory,
-    environment_save_history::SaveHistory,
-)
-    return SessionInfo(info; cognitive_save_history, environment_save_history)
-end
-function with_save_history(
-    info::MultipleSessionsInfo,
-    cognitive_save_history::SaveHistory,
-    environment_save_history::SaveHistory,
-)
-    return MultipleSessionsInfo(info; cognitive_save_history, environment_save_history)
-end

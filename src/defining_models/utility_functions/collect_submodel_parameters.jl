@@ -29,43 +29,42 @@ function collect_parameter_values(read_values::F, model::AbstractSubmodel) where
     submodels_of_model = submodels(model)
     return merge(
         read_values(model)::NamedTuple,
-        values_of_submodels(
-            read_values,
+        prefixed_each(
             Val(keys(submodels_of_model)),
-            values(submodels_of_model),
             Val(uses_submodel_prefixes(model)),
+            values_of_submodels(read_values, values(submodels_of_model)),
         )...,
     )
 end
 
-#One submodel at a time off the front of the tuple, so that the type is inferred, as for model_layout
+#One submodel at a time off the front of the tuple, without their names, as for model_layout: Julia limits how far it
+#infers a function that calls itself, and a model whose submodels have submodels runs into that limit when the names are
+#peeled off with them
 """
-    values_of_submodels(read_values, ::Val{names}, submodels_of_model::Tuple, ::Val{prefixes})
+    values_of_submodels(read_values, submodels_of_model::Tuple)
 
 Return, in a tuple, what [`collect_parameter_values`](@ref) gives for each submodel in
-`submodels_of_model`, named in `names`, with the names prefixed when `prefixes` is `true`.
+`submodels_of_model`, in the same order.
 """
-values_of_submodels(read_values, ::Val{()}, ::Tuple{}, ::Val) = ()
-function values_of_submodels(
-    read_values::F, ::Val{names}, submodels_of_model::Tuple, prefixes::Val
-) where {F,names}
-    values_of_first =
-        collect_parameter_values(read_values, first(submodels_of_model))::NamedTuple
+values_of_submodels(read_values, ::Tuple{}) = ()
+function values_of_submodels(read_values::F, submodels_of_model::Tuple) where {F}
     return (
-        prefixed_if(prefixes, Val(first(names)), values_of_first),
-        values_of_submodels(
-            read_values, Val(Base.tail(names)), Base.tail(submodels_of_model), prefixes
-        )...,
+        collect_parameter_values(read_values, first(submodels_of_model))::NamedTuple,
+        values_of_submodels(read_values, Base.tail(submodels_of_model))...,
     )
 end
-"""
-    prefixed_if(::Val{prefixes}, name::Val, values::NamedTuple)
 
-Return `values` under their names after `name` and `__`, with [`prefixed_names`](@ref), when
-`prefixes` is `true`, and as they are otherwise. Used by [`values_of_submodels`](@ref).
 """
-prefixed_if(::Val{false}, name::Val, values::NamedTuple) = values
-prefixed_if(::Val{true}, name::Val, values::NamedTuple) = prefixed_names(name, values)
+    prefixed_each(::Val{names}, ::Val{prefixes}, values_of_each::Tuple)
+
+Return `values_of_each`, what [`collect_parameter_values`](@ref) gives for each submodel,
+with the names of each prefixed by the submodel's name in `names` and `__`, with
+[`prefixed_names`](@ref), when `prefixes` is `true`, and as they are otherwise.
+"""
+prefixed_each(::Val, ::Val{false}, values_of_each::Tuple) = values_of_each
+function prefixed_each(::Val{names}, ::Val{true}, values_of_each::Tuple) where {names}
+    return ntuple(i -> prefixed_names(Val(names[i]), values_of_each[i]), Val(length(names)))
+end
 
 """
     collected_default_parameters(model::AbstractSubmodel)

@@ -186,6 +186,12 @@ seldom the priors give parameters that end a session early, and `Random.seed!` s
 generator that makes the first draw. A model in which nothing is sampled after a session
 ends has none of them.
 
+A stopping criterion that is met already before the first timestep of a session, with its
+initial states and the parameters of a draw, is an error instead, which stops the fit: when
+the first draw gives such parameters, whatever `initial_params` are given, and when a sampler
+proposes them later. Priors under which the criterion isn't met before the first timestep
+prevent it.
+
 `maximum_a_posteriori` and `maximum_likelihood` don't look for parameters to start from
 whose log density is finite, as the samplers do. Without valid `initial_params`, they can
 return a mode with a log density of `-Inf`, without an error, for any model whose priors
