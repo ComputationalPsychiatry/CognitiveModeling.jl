@@ -15,7 +15,10 @@ Otherwise the model has a different log density each time it is evaluated, with 
 The same holds for an environment model, which fitting uses to fill in observations that are
 [`ImputedMissingValue`](@ref) in the data: what it samples itself, such as a change of its
 state, must be sampled with `~`, while fitting samples the observations from what it
-returns.
+returns. A variable that is sampled on some timesteps only must be chosen by the timestep or
+the data, and not by the parameters or the state, since the samples of a fit must have the
+same variables for a sampler of Turing.jl to start, as
+[`CognitiveModeling.turing_full_model`](@ref) describes.
 
 # Examples
 ```julia
@@ -134,9 +137,6 @@ function, which can ignore any of the arguments. A regression of some measuremen
 of the cognitive model, for instance, reads the state from `saved_trajectories`, a vector
 with the [`SessionTrajectories`](@ref) of each session, as
 [`turing_behavioral_session`](@ref) returns them, so the `cognitive_save_history` of the
-sessions must select that state. It also runs when the parameters of a session turned
-invalid, whose trajectories then end before that timestep, so it must not rely on every
-session having all of its timesteps, as in reading the last state with `states[end]` rather
-than at a fixed index.
+sessions must select that state.
 """
 function turing_downstream_model end

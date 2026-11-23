@@ -121,6 +121,40 @@ function CognitiveModeling.attribute_names(model::RejectsHighExpectedReward)
     )
 end
 
+#Adds noise to its expected reward on the timesteps where the expected reward is above 0.6, so that whether it samples
+#the noise, and on which timesteps, depends on its learning rate
+struct NoisyWhenExpectingHighReward <: AbstractCognitiveModel end
+function CognitiveModeling.initialize_state(model::NoisyWhenExpectingHighReward, parameters)
+    return (; expected_reward=0.5)
+end
+function CognitiveModeling.timestep_model(
+    model::NoisyWhenExpectingHighReward, context::ModelContext
+)
+    Vₜ =
+        context.previous_state.expected_reward +
+        context.parameters.learning_rate *
+        (context.input.reward - context.previous_state.expected_reward)
+    return ModelOutput((; choice=Normal(Vₜ, 1.0)), (; expected_reward=Vₜ))
+end
+Turing.@model function CognitiveModeling.turing_timestep_model(
+    model::NoisyWhenExpectingHighReward, context::ModelContext
+)
+    Vₜ =
+        context.previous_state.expected_reward +
+        context.parameters.learning_rate *
+        (context.input.reward - context.previous_state.expected_reward)
+    if Vₜ > 0.6
+        noise ~ Normal(0, 0.1)
+        Vₜ += noise
+    end
+    return ModelOutput((; choice=Normal(Vₜ, 1.0)), (; expected_reward=Vₜ))
+end
+function CognitiveModeling.attribute_names(model::NoisyWhenExpectingHighReward)
+    return ModelAttributes(;
+        parameters=:learning_rate, states=:expected_reward, inputs=:reward, outputs=:choice
+    )
+end
+
 #Starts its expected reward from a parameter, so that the start is fitted with the rest
 struct StartsFromParameter <: AbstractCognitiveModel end
 function CognitiveModeling.initialize_state(model::StartsFromParameter, parameters)
@@ -1223,31 +1257,49 @@ end
             cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
         @test length(returned(fitted, (;)).saved_trajectories.states) == 6
-        #Checked on every timestep, a criterion met while the data continues is an error, and one met before the first timestep too
-        @test_throws "A stopping criterion is met before timestep 4, but the data of the session has values until timestep 5. A session can't end while its data continues." logjoint(
-            session_for_test(
-                WithDefaultParameters(DistributionsJl()),
-                SESSION_PARAMETERS,
-                (; reward=fill(1.0, 5)),
-                (; choice=fill(true, 5));
-                environment=EndsAfterPulls(),
-                environment_parameters=(; last_pull=3),
-                check_stopping_criterion=true,
-            ),
-            (;),
+        #Checked on every timestep, a criterion met while the data continues counts as parameters that turned invalid:
+        #the log density is -Inf, the session ends there, and its flag is a Bool, also for a model that can't set it
+        ends_early = session_for_test(
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            (; reward=fill(1.0, 5)),
+            (; choice=fill(true, 5));
+            environment=EndsAfterPulls(),
+            environment_parameters=(; last_pull=3),
+            check_stopping_criterion=true,
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
         )
+        @test logjoint(ends_early, (;)) == -Inf
+        ended = returned(ends_early, (;)).saved_trajectories
+        @test ended.parameters_valid === false && ended.n_timesteps == 3
+        @test length(ended.states) == 4
+        #Also before the first timestep, where the first timestep still gives what is saved its types
+        ends_before_first = session_for_test(
+            WithDefaultParameters(DistributionsJl()),
+            SESSION_PARAMETERS,
+            (; reward=fill(1.0, 2)),
+            (; choice=fill(true, 2));
+            environment=EndsAfterPulls(),
+            environment_parameters=(; last_pull=0),
+            check_stopping_criterion=true,
+        )
+        @test logjoint(ends_before_first, (;)) == -Inf
+        @test returned(ends_before_first, (;)).saved_trajectories.parameters_valid === false
+        #Without any data, a criterion met before the first timestep is an error, since no timestep can run
         @test_throws "The stopping criterion of an environment model of type EndsAfterPulls is already met before the first timestep" logjoint(
             session_for_test(
                 WithDefaultParameters(DistributionsJl()),
                 SESSION_PARAMETERS,
-                (; reward=fill(1.0, 2)),
-                (; choice=fill(true, 2));
+                (; reward=fill(SimulatedMissingValue(), 2)),
+                (; choice=fill(SimulatedMissingValue(), 2));
                 environment=EndsAfterPulls(),
                 environment_parameters=(; last_pull=0),
                 check_stopping_criterion=true,
             ),
             (;),
         )
+        #With the criterion checked only after the data, by default, the flag of a model that can't set it is the default
+        @test returned(fitted, (;)).saved_trajectories.parameters_valid === ValidByDefault()
         #Checked on every timestep and met after the data, or never checked, the session runs as the data says
         @test length(
             returned(
@@ -1455,33 +1507,14 @@ end
         #A model that never sets it gives the default, as its type says
         @test returned(session_for_test(), (;)).saved_trajectories.parameters_valid ===
             ValidByDefault()
-        #The timesteps after the one that turned invalid still run, from the values before it, so that an action imputed after it is a variable too, as it is when the parameters stay valid
-        imputing(learning_rate) = session_for_test(
+        #An action imputed before the timestep that turned invalid is a variable, and one after it isn't
+        imputing = session_for_test(
             RejectsHighExpectedReward(),
-            (; learning_rate),
+            (; learning_rate=0.95),
             SESSION_REWARDS,
             (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
         )
-        both_imputed = [
-            @varname(timesteps[2].choice.imputed), @varname(timesteps[5].choice.imputed)
-        ]
-        @test issetequal(keys(rand(Xoshiro(1), imputing(0.95))), both_imputed)
-        @test issetequal(keys(rand(Xoshiro(1), imputing(0.3))), both_imputed)
-        #Nothing of them is kept, and nothing after the invalid timestep is scored
-        invalid_values = Dict(
-            @varname(timesteps[2].choice.imputed) => 0.5,
-            @varname(timesteps[5].choice.imputed) => 0.5,
-        )
-        @test logjoint(imputing(0.95), invalid_values) == -Inf
-        @test returned(imputing(0.95), invalid_values).saved_trajectories.n_timesteps == 3
-        #Also when the first timestep turns invalid
-        first_invalid_imputing = session_for_test(
-            RejectsHighExpectedReward(),
-            (; learning_rate=1.5),
-            SESSION_REWARDS,
-            (; choice=[0.2, ImputedMissingValue(), 0.6, 0.8, ImputedMissingValue()]),
-        )
-        @test issetequal(keys(rand(Xoshiro(1), first_invalid_imputing)), both_imputed)
+        @test keys(rand(Xoshiro(1), imputing)) == [@varname(timesteps[2].choice.imputed)]
         #Other errors get through
         @test_throws "gave no output" logjoint(
             session_for_test(
@@ -1562,4 +1595,42 @@ end
         @test trajectories[1].saved_trajectories.states[2].expected_reward ≈
             initial_value + chain[@varname(learning_rate)][1] * (1.0 - initial_value)
     end
+end
+
+@testset "A variable that a model samples within a timestep on some timesteps only, chosen by its state, gives the samples different variables, so that a sampler can't start" begin
+    session_info = SessionInfo(
+        NoisyWhenExpectingHighReward(),
+        (; reward=fill(1.0, 4)),
+        (; choice=[0.6, 0.7, 0.8, 0.9]);
+        who_starts=EnvironmentStarts(),
+    )
+    #A low learning rate never takes the expected reward above 0.6, and a higher one does so on every timestep
+    @test isempty(
+        keys(
+            rand(
+                Xoshiro(1), turing_behavioral_session(session_info, (; learning_rate=0.05))
+            ),
+        ),
+    )
+    @test length(
+        keys(
+            rand(Xoshiro(1), turing_behavioral_session(session_info, (; learning_rate=0.5)))
+        ),
+    ) == 4
+    #A prior which keeps the learning rate low gives a first draw without the noise, which Turing.jl takes the variables
+    #from, so sampling from a higher learning rate fails
+    @model function fit(session_info)
+        learning_rate ~ truncated(Normal(0.01, 0.001), 0, 1)
+        session ~
+        to_submodel(turing_behavioral_session(session_info, (; learning_rate)), false)
+        return session
+    end
+    @test_throws KeyError sample(
+        Xoshiro(1),
+        fit(session_info),
+        NUTS(),
+        10;
+        progress=false,
+        initial_params=InitFromParams((; learning_rate=0.9)),
+    )
 end

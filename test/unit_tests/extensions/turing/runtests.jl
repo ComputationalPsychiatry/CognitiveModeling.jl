@@ -7,7 +7,7 @@ using CognitiveModeling:
     turing_behavioral_session, turing_multiple_behavioral_sessions, turing_full_model
 using Test
 using JET: JET
-using Random: Random, Xoshiro
+using Random: Xoshiro
 using Turing
 
 #The example models that the suites share, with their methods for Turing.jl

@@ -160,7 +160,8 @@ table.
   [`stopping_criterion`](@ref) of the two models is checked before a timestep, so that the
   session ends there, with what it saved up to it. With `nothing`, it is checked on the
   timesteps after the last one with data. With `true`, it is checked before every timestep,
-  and a criterion that is met while the data continues is an error. With `false`, it is
+  and a criterion that is met while the data continues counts as parameters that turned
+  invalid, which gives them a log density of `-Inf`. With `false`, it is
   never checked. The extended help says why.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) each time the session runs, where a
@@ -240,9 +241,11 @@ the last one where an observation or an action isn't `ImputedMissingValue()` or
 checked after it, so that a fit, where every timestep has data, never checks it, and a
 session from [`decondition_sessions`](@ref), whose data is all `SimulatedMissingValue()`,
 ends as a simulation does. With `true`, the session includes its environment, whose
-criterion is checked too. A criterion that is met while the data continues is then an error,
-since the values in the data after that timestep couldn't be scored, which checks that the
-models agree with the length of the data.
+criterion is checked too. A criterion that is met while the data continues means that the
+parameters can't give the data, as when they turn invalid, so the session gives them a log
+density of `-Inf` and ends there, and the `parameters_valid` it returns is a `Bool`, also
+for models that can't set it. A criterion met before the first timestep of a session without
+any data is an error, since no timestep can run.
 """
 struct SessionInfo{
     Tcognitive_model,

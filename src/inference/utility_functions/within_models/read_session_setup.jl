@@ -128,3 +128,49 @@ function last_timestep_with_data(columns::NamedTuple)
     end
     return last_timestep
 end
+
+#Decided by the type of check_stopping_criterion: with nothing, the criterion is only checked after the last timestep with data, so the data never continues, which keeps the flag that a session returns of the type the models give it
+"""
+    data_continues_after(session_info, t)
+
+Return whether the data of a session has a value on a timestep after `t`, the last one that
+ran, so that a [`stopping_criterion`](@ref) met there ends the session while its data
+continues, which the parameters then can't give. With `check_stopping_criterion = nothing`,
+the criterion is only checked after the last timestep with data, so this is `false` when the
+code is compiled. Used by fitted sessions when a stopping criterion is met.
+"""
+function data_continues_after(session_info::SessionInfo, t)
+    return data_continues_after(session_info.check_stopping_criterion, session_info, t)
+end
+data_continues_after(::Nothing, session_info::SessionInfo, t) = false
+function data_continues_after(::Bool, session_info::SessionInfo, t)
+    return max(
+        last_timestep_with_data(session_info.observations),
+        last_timestep_with_data(session_info.actions),
+    ) > t
+end
+
+"""
+    session_parameters_valid(session_info, parameters_valid, criterion_allows_data)
+
+Return whether the parameters of a session stayed valid, from `parameters_valid`, as the
+models gave it on the last timestep that ran, and `criterion_allows_data`, which is `false`
+when a [`stopping_criterion`](@ref) ended the session while its data continues. With
+`check_stopping_criterion` given as a `Bool`, the criterion can do that, so the result is a
+`Bool`. With `nothing` it can't, and the result is `parameters_valid` as the models gave it,
+[`ValidByDefault`](@ref) for models that can't set it. Used by
+fitted sessions, so that what a session returns has one type.
+"""
+function session_parameters_valid(
+    session_info::SessionInfo, parameters_valid, criterion_allows_data::Bool
+)
+    return session_parameters_valid(
+        session_info.check_stopping_criterion, parameters_valid, criterion_allows_data
+    )
+end
+function session_parameters_valid(::Nothing, parameters_valid, criterion_allows_data)
+    return parameters_valid
+end
+function session_parameters_valid(::Bool, parameters_valid, criterion_allows_data)
+    return parameters_are_valid(parameters_valid) & criterion_allows_data
+end

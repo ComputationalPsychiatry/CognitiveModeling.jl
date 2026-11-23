@@ -167,27 +167,3 @@ end
 function scorable_distribution_of_each(distributions::NamedTuple)
     return map(scorable_distribution, distributions)
 end
-
-"""
-    check_no_data_after(session_info, t)
-
-Throw an informative error if the data of a session has a value on a timestep after `t`, the
-last one that ran, since a session which ends while its data continues can't score the
-values in the data after it. By default the criterion is only checked after the last
-timestep with data, so this only happens with `check_stopping_criterion = true`. Used by
-[`turing_run_all_timesteps`](@ref) when a stopping criterion is met.
-"""
-function check_no_data_after(session_info::SessionInfo, t)
-    last_with_data = max(
-        last_timestep_with_data(session_info.observations),
-        last_timestep_with_data(session_info.actions),
-    )
-    if last_with_data > t
-        throw(
-            ArgumentError(
-                "A stopping criterion is met before timestep $(t + 1), but the data of the session has values until timestep $last_with_data. A session can't end while its data continues. Give check_stopping_criterion = nothing to check the criterion only after the last timestep with data.",
-            ),
-        )
-    end
-    return nothing
-end

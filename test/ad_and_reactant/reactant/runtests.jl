@@ -15,12 +15,15 @@ Reactant.allowscalar(true)
 
 # Checks that a function of a vector gives the same number when Reactant compiles it, and that its compiled gradient is
 # that of finite differences. Reactant differentiates through Enzyme
-function test_compiled(f, x)
+function test_compiled(f, x; gradient=true)
     x_reactant = Reactant.to_rarray(x)
 
     @testset "Compiled function" begin
         @test Float64(@jit f(x_reactant)) ≈ f(x) rtol = 1.0e-8
     end
+
+    #A log density of -Inf has no gradient to compare
+    gradient || return nothing
 
     @testset "Compiled gradient" begin
         gradient_function(y) = Enzyme.gradient(Reverse, f, y)[1]
@@ -62,7 +65,7 @@ end
         end
 
         @testset "$(case.name)" for case in SESSION_BY_HAND_CASES
-            test_compiled(case.f, case.x)
+            test_compiled(case.f, case.x; gradient=get(case, :gradient, true))
         end
     end
 end

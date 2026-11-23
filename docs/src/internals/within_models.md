@@ -37,3 +37,11 @@ Modules = [CognitiveModeling]
 Public = false
 Pages = ["inference/utility_functions/within_models/save_fitted_session_trajectories.jl"]
 ```
+
+## Masking the timesteps of a fitted session
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = ["inference/utility_functions/within_models/mask_fitted_timesteps.jl"]
+```

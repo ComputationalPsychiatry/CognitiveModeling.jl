@@ -877,7 +877,7 @@ end
             Turing.FlexiChains.parameters(chain)
     end
 
-    @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model still runs, so that every sample has every variable" begin
+    @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model doesn't run" begin
         table = (; FULL_TABLE..., choice=[0.2, 0.4, 0.6, 0.8, 1.0, 0.2, 0.4, 0.6, 0.8])
         saving_states = SaveHistory(; states=:expected_reward)
         sessions_info = sessions_for_test(
@@ -900,7 +900,7 @@ end
                 (;),
             ),
         )
-        #The full model still runs its downstream model on such a sample, on the trajectories that end early, and returns everything
+        #The full model doesn't run its downstream model for such a sample, and returns the rest
         model = full_model(
             TuringBackend(),
             IndependentParameters((; learning_rate=Uniform(0, 2))),
@@ -912,20 +912,14 @@ end
         )
         @test logjoint(model, rejected) == -Inf
         rejected_value = returned(model, rejected)
-        @test rejected_value.downstream_values == 0.8 &&
+        @test rejected_value.downstream_values === nothing &&
             rejected_value.saved_trajectories[2].parameters_valid === false
         accepted = Dict(
             @varname(learning_rate.sessions) => fill(0.3, 3), @varname(slope) => 0.8
         )
         @test isfinite(logjoint(model, accepted)) &&
             returned(model, accepted).downstream_values == 0.8
-        #A sampler starts when most first draws are rejected, also with a downstream model that has variables of its own, whatever the draw that a sampler takes the variables from, which Julia's default random number generator makes
-        for seed in 1:4
-            Random.seed!(seed)
-            chain = sample(Xoshiro(seed), model, NUTS(), 10; progress=false)
-            @test size(chain, 1) == 10 &&
-                @varname(slope) in Turing.FlexiChains.parameters(chain)
-        end
+        #A sampler starts when most first draws are rejected
         without_downstream = saving_full_model(
             IndependentParameters((; learning_rate=Uniform(0, 2))), sessions_info
         )
@@ -961,6 +955,52 @@ end
             ),
         )
         @test !any(name -> occursin("parameters_valid", string(name)), plain_names)
+    end
+
+    @testset "Sampling and finding a mode start when the first draw ends no session early, and can't start when it ends one early and a variable comes after" begin
+        #With a learning rate above about 0.5, S2 turns invalid on its second timestep, so the downstream model doesn't run
+        table = (; FULL_TABLE..., choice=[0.2, 0.4, 0.6, 0.8, 1.0, 0.2, 0.4, 0.6, 0.8])
+        sessions_info = sessions_for_test(
+            RejectsHighExpectedReward(),
+            table;
+            cognitive_save_history=SaveHistory(; states=:expected_reward),
+        )
+        with_downstream(prior) = full_model(
+            TuringBackend(),
+            IndependentParameters((; learning_rate=prior)),
+            sessions_info;
+            downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
+        )
+        #Priors under which no session turns invalid: NUTS, MAP and MLE start, also with the downstream model's variable
+        never = with_downstream(Uniform(0, 0.4))
+        @test size(sample(Xoshiro(1), never, NUTS(), 10; progress=false), 1) == 10
+        @test isfinite(maximum_a_posteriori(never).lp) &&
+            isfinite(maximum_likelihood(never).lp)
+        #Priors under which the first draw, which Turing.jl takes the variables from, turns S2 invalid: the downstream
+        #model's variable doesn't exist for it, so none of them starts, also from parameters that are valid
+        concentrated = with_downstream(truncated(Normal(1.5, 0.01), 0, 2))
+        start = InitFromParams((; learning_rate=(; sessions=fill(0.3, 3)), slope=0.0))
+        @test_throws KeyError sample(
+            Xoshiro(1), concentrated, NUTS(), 10; progress=false, initial_params=start
+        )
+        @test_throws KeyError maximum_a_posteriori(concentrated; initial_params=start)
+        @test_throws KeyError maximum_likelihood(concentrated; initial_params=start)
+        #Without anything after the timestep that turns invalid, a mode is found from valid parameters, which turn no
+        #session invalid
+        plain = full_model(
+            TuringBackend(),
+            IndependentParameters((; learning_rate=Uniform(0, 2))),
+            sessions_for_test(RejectsHighExpectedReward(), table),
+        )
+        start_without_downstream = InitFromParams((;
+            learning_rate=(; sessions=fill(0.3, 3))
+        ))
+        @test isfinite(
+            maximum_a_posteriori(plain; initial_params=start_without_downstream).lp
+        )
+        @test isfinite(
+            maximum_likelihood(plain; initial_params=start_without_downstream).lp
+        )
     end
 
     @testset "ParallelSessions runs the sessions over the threads, and needs the model to be marked thread-safe" begin
