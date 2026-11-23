@@ -52,6 +52,7 @@ CognitiveModeling.uses_submodel_prefixes
 
 ```@docs
 CognitiveModeling.get_attribute_names
+CognitiveModeling.get_parameter_names
 CognitiveModeling.discrete_parameter_names
 CognitiveModeling.continuous_parameter_names
 ```

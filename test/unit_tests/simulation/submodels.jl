@@ -276,6 +276,21 @@ end
             LearnerWithSubmodels(; prefixes=true)
         ) == (:perception__learning_rate, :response__inverse_temperature)
         @test CognitiveModeling.discrete_parameter_names(LearnerWithSubmodels()) == ()
+        #The perception's learning rate has a default, under its flat name, and a submodel can be read on its own
+        @test CognitiveModeling.get_parameter_names(
+            LearnerWithSubmodels(; prefixes=true)
+        ) == (:perception__learning_rate, :response__inverse_temperature)
+        @test CognitiveModeling.get_parameter_names(
+            LearnerWithSubmodels(; prefixes=true); without_defaults=true
+        ) == (:response__inverse_temperature,)
+        @test CognitiveModeling.get_parameter_names(
+            LearnerWithSubmodels(); without_defaults=true
+        ) == (:inverse_temperature,)
+        @test CognitiveModeling.get_parameter_names(LearnsExpectedReward()) ==
+            (:learning_rate,)
+        @test CognitiveModeling.get_parameter_names(
+            LearnsExpectedReward(); without_defaults=true
+        ) == ()
     end
 
     @testset "A simulation says which of its states hold the states of submodels" begin

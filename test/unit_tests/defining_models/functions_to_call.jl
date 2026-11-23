@@ -89,7 +89,32 @@ function CognitiveModeling.attribute_names(model::ModelWithoutDomains)
     return ModelAttributes(; parameters=:learning_rate, states=(), inputs=(), outputs=())
 end
 
+#A model with a default for one of its two parameters
+struct ModelWithDefaultParameter <: AbstractCognitiveModel end
+function CognitiveModeling.attribute_names(model::ModelWithDefaultParameter)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.default_parameters(model::ModelWithDefaultParameter)
+    return (; inverse_temperature=1.0)
+end
+
 @testset "Functions that users call to read a model" begin
+    @testset "The parameters of a model, and those without a default, which a fit needs priors for" begin
+        @test CognitiveModeling.get_parameter_names(ModelWithDefaultParameter()) ===
+            (:learning_rate, :inverse_temperature)
+        @test CognitiveModeling.get_parameter_names(
+            ModelWithDefaultParameter(); without_defaults=true
+        ) === (:learning_rate,)
+        #A model without defaults has every parameter both ways, in the order of its attributes
+        @test CognitiveModeling.get_parameter_names(ModelWithDiscreteParameter()) ===
+            (:learning_rate, :n_options)
+        @test CognitiveModeling.get_parameter_names(
+            ModelWithDiscreteParameter(); without_defaults=true
+        ) === (:learning_rate, :n_options)
+    end
+
     @testset "The discrete parameters of a model are those whose domains have a type of whole numbers, or one that isn't of real numbers" begin
         @test CognitiveModeling.discrete_parameter_names(ModelWithDiscreteParameter()) ===
             (:n_options,)
