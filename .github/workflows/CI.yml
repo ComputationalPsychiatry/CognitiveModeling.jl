@@ -81,29 +81,29 @@ jobs:
           - name: reactant
             path: test/ad_and_reactant/reactant
           - name: turing, features
-            path: test/unit_tests/extensions/turing
+            path: test/extensions/turing
             arguments: features
             julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
             coverage: true
           - name: turing, shared cases
-            path: test/unit_tests/extensions/turing
+            path: test/extensions/turing
             arguments: shared_cases
             julia_flags: --check-bounds=yes --depwarn=yes --code-coverage=@
             coverage: true
           - name: turing ad, ForwardDiff and ReverseDiff
-            path: test/ad_and_reactant/turing
+            path: test/extensions/turing/ad
             arguments: ForwardDiff ReverseDiff
           - name: turing ad, Enzyme forward
-            path: test/ad_and_reactant/turing
+            path: test/extensions/turing/ad
             arguments: '"Enzyme forward"'
           - name: turing ad, Enzyme reverse
-            path: test/ad_and_reactant/turing
+            path: test/extensions/turing/ad
             arguments: '"Enzyme reverse"'
           - name: turing ad, Mooncake reverse
-            path: test/ad_and_reactant/turing
+            path: test/extensions/turing/ad
             arguments: '"Mooncake reverse"'
           - name: turing ad, Mooncake forward
-            path: test/ad_and_reactant/turing
+            path: test/extensions/turing/ad
             arguments: '"Mooncake forward"'
           - name: tutorials in the documentation's environment
             path: docs

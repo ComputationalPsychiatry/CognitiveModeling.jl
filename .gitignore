@@ -4,7 +4,7 @@
 /Manifest*.toml
 /docs/Manifest*.toml
 /test/ad_and_reactant/**/Manifest*.toml
-/test/unit_tests/extensions/**/Manifest*.toml
+/test/extensions/**/Manifest*.toml
 /test/documentation/**/Manifest*.toml
 /benchmark/Manifest*.toml
 /benchmark/results.json

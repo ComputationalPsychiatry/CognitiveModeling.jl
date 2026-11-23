@@ -2,7 +2,7 @@ using CognitiveModeling
 using Test
 
 #Packages that trigger extensions. CommonRLInterface.jl exports a reset! of its own, so only its name is brought in.
-#The Turing.jl extension is tested in an environment of its own, in unit_tests/extensions/turing
+#The Turing.jl extension is tested in an environment of its own, in extensions/turing
 using CommonRLInterface: CommonRLInterface
 using FlexiChains: FlexiChains
 using Tables: Tables
@@ -14,4 +14,5 @@ using CommonTestFunctionality
     include("code_quality/runtests.jl")
     include("common/test/runtests.jl")
     include("unit_tests/runtests.jl")
+    include("extensions/runtests.jl")
 end

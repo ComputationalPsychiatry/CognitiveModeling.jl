@@ -25,7 +25,7 @@ end
 #The two parts of the suite, which CI runs in jobs of their own: features, the tests of each feature of the extension,
 #with JET and the example models, and shared_cases, what holds for every inference case that the suites share. The suite
 #runs the parts it is given as arguments, and both without arguments:
-#    julia --project=test/unit_tests/extensions/turing test/unit_tests/extensions/turing/runtests.jl features
+#    julia --project=test/extensions/turing test/extensions/turing/runtests.jl features
 const PARTS = isempty(ARGS) ? ["features", "shared_cases"] : ARGS
 if !all(part -> part in ("features", "shared_cases"), PARTS)
     throw(
@@ -36,7 +36,7 @@ if !all(part -> part in ("features", "shared_cases"), PARTS)
 end
 
 #The tests of the Turing.jl extension, in an environment of their own, since Turing.jl holds FlexiChains.jl at an older
-#version than the main suite tests. Automatic differentiation of its models is tested in test/ad_and_reactant/turing,
+#version than the main suite tests. Automatic differentiation of its models is tested in test/extensions/turing/ad,
 #which has its own environment and its own runner
 @testset "Turing extension" begin
     extension = Base.get_extension(CognitiveModeling, :CognitiveModelingTuringExt)
