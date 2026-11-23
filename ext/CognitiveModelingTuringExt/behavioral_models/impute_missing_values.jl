@@ -11,7 +11,7 @@ variable such as `choice.simulated`, and the rest are taken from the data. It go
 the names of `data` one at a time and imputes each value with [`turing_impute_value`](@ref),
 and returns the rest of the data as it is once nothing in it is missing. For an environment
 it runs under the prefix `environment`, so that an observation and an action with the same
-name get a latent variable each. Used by [`turing_timestep_one_perspective`](@ref).
+name get a latent variable each. Used by [`turing_run_timestep_one_model`](@ref).
 """
 Turing.@model function turing_impute_missing_values(
     data::NamedTuple{names}, distributions

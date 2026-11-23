@@ -2942,7 +2942,7 @@ end
             InstantiatedModel(WithoutInputs(ByHand()), BASELINE_PARAMETERS), (;)
         ) isa NamedTuple
         #The check costs nothing when the types are known
-        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_one_model(
+        JET.@test_opt target_modules = (CognitiveModeling,) CognitiveModeling.simulate_timestep_one_model(
             Baseline(ByHand()),
             (; reward=1.0, cue=1.0),
             (; expected_reward=0.5),

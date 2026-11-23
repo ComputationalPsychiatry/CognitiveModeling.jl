@@ -155,11 +155,11 @@ end
     turing_run_all_timesteps(session_info, cognitive_parameters, environment_parameters,
                          previous)
 
-Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
-as [`turing_behavioral_timestep`](@ref) with the prefix `timesteps[t]`, saves what the save
-histories of `session_info` select, and scores the actions in the data, and the observations
-in the data when the environment runs, against the distributions of their timesteps all at
-once at the end, as observed values. Before each timestep from
+Turing.jl model which runs the timesteps of a session from `previous`, where it starts,
+each as [`turing_run_timestep_both_models`](@ref) with the prefix `timesteps[t]`, saves what
+the save histories of `session_info` select, and scores the actions in the data, and the
+observations in the data when the environment runs, against the distributions of their
+timesteps all at once at the end, as observed values. Before each timestep from
 `first_timestep_to_check_stopping` of `session_info` on, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
 what it saved up to it, which is an error when the data continues. When either model sets
@@ -198,7 +198,7 @@ Turing.@model function turing_run_all_timesteps(
     #Run the first timestep outside the loop, since its inputs can have other types than all the rest
     timestep_values ~ to_submodel(
         prefix(
-            turing_behavioral_timestep(
+            turing_run_timestep_both_models(
                 session_info, 1, cognitive_parameters, environment_parameters, previous
             ),
             @varname(timesteps[1]),
@@ -221,7 +221,7 @@ Turing.@model function turing_run_all_timesteps(
         for t_held in 2:n_timesteps
             held_timestep_values ~ to_submodel(
                 prefix(
-                    turing_behavioral_timestep(
+                    turing_run_timestep_both_models(
                         session_info,
                         t_held,
                         cognitive_parameters,
@@ -274,7 +274,7 @@ Turing.@model function turing_run_all_timesteps(
 
         next_timestep_values ~ to_submodel(
             prefix(
-                turing_behavioral_timestep(
+                turing_run_timestep_both_models(
                     session_info,
                     t,
                     cognitive_parameters,
@@ -293,7 +293,7 @@ Turing.@model function turing_run_all_timesteps(
             for t_held in (t + 1):n_timesteps
                 held_timestep_values ~ to_submodel(
                     prefix(
-                        turing_behavioral_timestep(
+                        turing_run_timestep_both_models(
                             session_info,
                             t_held,
                             cognitive_parameters,

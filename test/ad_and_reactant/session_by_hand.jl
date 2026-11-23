@@ -5,7 +5,7 @@
 #
 # The Reactant suite compiles these sessions, since the Turing.jl models can't be compiled with Reactant, so that
 # the functions are known to work with an inference backend which can. The steps follow turing_behavioral_session,
-# turing_run_all_timesteps, turing_behavioral_timestep and turing_timestep_one_perspective in
+# turing_run_all_timesteps, turing_run_timestep_both_models and turing_run_timestep_one_model in
 # ext/CognitiveModelingTuringExt, so a change in what those call belongs here too.
 using CognitiveModeling:
     AbstractTimestepModel,
@@ -351,7 +351,7 @@ function timesteps_by_hand(
     )
 
     #Run the first timestep on its own, since its inputs can have other types than all the rest
-    timestep_values = timestep_by_hand(
+    timestep_values = run_timestep_both_models_by_hand(
         session_info, 1, cognitive_parameters, environment_parameters, previous, evaluation
     )
 
@@ -431,7 +431,7 @@ function remaining_timesteps_by_hand(
         end
 
         #Run the timestep from the values of the one before, and store what it saves as element t + offset
-        timestep_values = timestep_by_hand(
+        timestep_values = run_timestep_both_models_by_hand(
             session_info,
             t,
             cognitive_parameters,
@@ -541,7 +541,7 @@ end
 
 # Without an environment, the observation comes from the data: the model acts on this timestep's observation when the
 # environment starts, and on the previous one when the agent starts
-function timestep_by_hand(
+function run_timestep_both_models_by_hand(
     session_info::SessionInfo{<:Any,NoEnvironment},
     t,
     cognitive_parameters,
@@ -555,7 +555,7 @@ function timestep_by_hand(
     else
         previous.observation
     end
-    cognitive = model_timestep_by_hand(
+    cognitive = run_timestep_one_model_by_hand(
         session_info.cognitive_model,
         ModelContext(
             observation,
@@ -586,7 +586,7 @@ end
 
 # With an environment, the environment gives the observation in response to the action, before the model acts when the
 # environment starts, and after when the agent starts
-function timestep_by_hand(
+function run_timestep_both_models_by_hand(
     session_info::SessionInfo{<:Any,<:AbstractTimestepModel},
     t,
     cognitive_parameters,
@@ -654,7 +654,7 @@ end
 function cognitive_timestep_by_hand(
     session_info, t, cognitive_parameters, observation, previous, evaluation
 )
-    return model_timestep_by_hand(
+    return run_timestep_one_model_by_hand(
         session_info.cognitive_model,
         ModelContext(
             observation,
@@ -673,7 +673,7 @@ end
 function environment_timestep_by_hand(
     session_info, t, environment_parameters, environment_action, previous, evaluation
 )
-    return model_timestep_by_hand(
+    return run_timestep_one_model_by_hand(
         session_info.environment,
         ModelContext(
             environment_action,
@@ -692,7 +692,7 @@ end
 
 # One model's part of a timestep, the same for a cognitive model and an environment model: the model runs, and its
 # outputs are then taken from the data where it has values, and imputed from what the model gave where they are missing
-function model_timestep_by_hand(model, context, data_columns, t, evaluation)
+function run_timestep_one_model_by_hand(model, context, data_columns, t, evaluation)
     data_output = select_row(data_columns, t)
     model_output = check_model_output(timestep_model(model, context), model)
     output = impute_by_hand(data_output, model_output.output_distribution, evaluation)

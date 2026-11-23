@@ -245,7 +245,7 @@ function simulate_remaining_timesteps_masked(
         end
 
         #Simulate the timestep, also after the simulation ended, starting from the values of the last timestep that was kept
-        timestep_values = simulate_both_models(
+        timestep_values = simulate_timestep_both_models(
             who_starts,
             cognitive_model,
             environment,
