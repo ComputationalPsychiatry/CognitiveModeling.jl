@@ -115,7 +115,7 @@ function timestep_model(environment::FixedObservationsEnvironment, context::Mode
     #Every entry is given once, and the environment doesn't start again from the first
     if n_observations_given > n_fixed_timesteps(environment)
         error(
-            "The FixedObservationsEnvironment has given the observations of all its $(n_fixed_timesteps(environment)) timesteps, so it has none for another timestep. A simulation stops by itself after the last one, unless it is given check_stopping_criterion = false. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
+            "The FixedObservationsEnvironment has given the observations of all its $(n_fixed_timesteps(environment)) timesteps, so it has none for another timestep. A simulation stops by itself after the last one, while a single timestep of simulate_timestep doesn't check that. A new call of simulate_session starts from the first again, and so does reset! of an InstantiatedModel.",
         )
     end
 

@@ -2088,15 +2088,13 @@ end
             ended_with_timestep_0.environment.states == [(; n_timesteps=7)]
     end
 
-    @testset "A cognitive model's stopping criterion ends the simulation too, and check_stopping_criterion = false simulates every timestep" begin
+    @testset "A cognitive model's stopping criterion ends the simulation too" begin
         @test CognitiveModeling.stopping_criterion(
             Baseline(ByHand()), (; expected_reward=0.5), BASELINE_PARAMETERS
         ) === false
         for who_starts in (EnvironmentStarts(), AgentStarts())
             #WithStoppingCriterion ends once its expected reward is above 0.8. Rewards of 1 take it to 1 - 0.5^(n + 1) after n of
             #them, which it learns from on the same timestep when the environment starts, and on the next when the agent starts
-            expected_reward_after(t) =
-                1 - 0.5^(who_starts isa EnvironmentStarts ? t + 1 : t)
             simulate_until_end(; keywords...) = simulate_for_test(
                 WithStoppingCriterion(ByHand()),
                 FixedObservationsEnvironment((; reward=fill(1.0, 20)));
@@ -2114,50 +2112,13 @@ end
                 vector -> length(vector) == n_timesteps_that_run, saved_vectors(simulation)
             )
             @test simulation.states[end] == (; expected_reward=0.875)
-            #Without the check, every timestep is simulated
-            every_timestep = simulate_until_end(; check_stopping_criterion=false)
-            @test all(vector -> length(vector) == 20, saved_vectors(every_timestep))
-            @test expected_rewards(every_timestep.states) == expected_reward_after.(1:20)
-            @test every_timestep.timestep_sizes === 1
-            #The same goes for an environment which would end the simulation
-            environment_ends = simulate_for_test(
-                Baseline(ByHand()),
-                WithStoppingCriterionEnvironment(ByHand());
-                who_starts,
-                n_steps=20,
-                environment_parameters=(; REWARDS..., last_timestep=7),
-                check_stopping_criterion=false,
-            )
-            @test all(vector -> length(vector) == 20, saved_vectors(environment_ends))
-            @test environment_ends.environment.states[end] == (; n_timesteps=20)
-            #A model whose criterion is met already gives a simulation without a timestep, unless the check is off
+            #A model whose criterion is met already gives a simulation without a timestep
             already_ended = simulate_until_end(;
                 previous_cognitive_state=(; expected_reward=0.9)
             )
             @test already_ended.n_timesteps == 0 &&
                 all(isempty, saved_vectors(already_ended))
-            @test length(
-                simulate_until_end(;
-                    previous_cognitive_state=(; expected_reward=0.9),
-                    check_stopping_criterion=false,
-                ).actions,
-            ) == 20
-            @test length(
-                simulate_for_test(
-                    Baseline(ByHand()),
-                    WithStoppingCriterionEnvironment(ByHand());
-                    who_starts,
-                    n_steps=20,
-                    environment_parameters=(; REWARDS..., last_timestep=7),
-                    previous_environment_state=(; n_timesteps=7),
-                    check_stopping_criterion=false,
-                ).actions,
-            ) == 20
         end
-        #Only a Bool is taken
-        @test_throws TypeError simulate_for_test(
-            Baseline(ByHand()), BaselineEnvironment(ByHand()); check_stopping_criterion=1
-        )
     end
 end
 
@@ -2837,17 +2798,6 @@ end
         )
         @test no_timestep.n_timesteps == 0 && all(isempty, saved_vectors(no_timestep))
         @test length(agent.history.states) == 5 && environment.state == state_at_the_end
-        #Unless the check is off, in which case the simulation goes on
-        @test length(
-            simulate_session!(
-                agent,
-                environment;
-                who_starts=EnvironmentStarts(),
-                n_steps=3,
-                check_stopping_criterion=false,
-            ).observations,
-        ) == 3
-        @test environment.state == (; n_timesteps=7)
         reset!(environment)
         @test length(
             simulate_session!(

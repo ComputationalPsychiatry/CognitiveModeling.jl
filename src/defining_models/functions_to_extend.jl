@@ -318,10 +318,9 @@ after a timestep and its `parameters`, has signaled for a simulation to stop the
 of simulating all of `n_steps`.
 
 [`simulate_session`](@ref) and [`simulate_session!`](@ref) check it for both models before
-each timestep, with the states that the timestep before left, unless they are given
-`check_stopping_criterion = false`. When it returns `true` for either, no further timestep
-is simulated, and what is returned and added to the histories has the timesteps that were
-simulated. When the environment starts, the cognitive model has then made its last
+each timestep, with the states that the timestep before left. When it returns `true` for
+either, no further timestep is simulated, and what is returned and added to the histories
+has the timesteps that were simulated. When the environment starts, the cognitive model has then made its last
 observation and acted on it, and the environment doesn't receive that action. When the
 cognitive model starts, the environment has then responded to the last action with an
 observation, and the cognitive model doesn't receive that observation. When the criterion
