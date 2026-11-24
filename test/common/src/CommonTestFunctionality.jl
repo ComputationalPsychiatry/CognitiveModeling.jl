@@ -34,6 +34,8 @@ export WithStoppingCriterion, DependsOnPreviousOutput, UsesTimestepSize
 export InitialStateFromParameter, SampledInitialState, SamplingWithinTimestep
 export OutputNotEveryTimestep, WithInvalidParameters
 export StateChangedInPlace, StateChangedInPlaceSavedWithDeepcopy, StateChangesType
+export WithSubmodels, WithNestedSubmodels, WithSubmodelChangedInPlace
+export LearnsRewards, ChoosesByRewards, PerceivesThroughLearning, LearnsRewardsInPlace
 export BaselineFamily, MethodsFromSupertype
 export EveryFeatureFamily, EveryFeature, EveryFeatureWithoutSampling
 
@@ -41,6 +43,7 @@ export EveryFeatureFamily, EveryFeature, EveryFeatureWithoutSampling
 export BaselineEnvironment, WithoutStatesEnvironment, WithoutParametersEnvironment
 export WithoutInputsEnvironment, WithoutOutputsEnvironment
 export OutputNotEveryTimestepEnvironment, WithStoppingCriterionEnvironment
+export WithSubmodelsEnvironment, RewardSchedule
 export NoOutputBeforeFirstInputEnvironment, SamplingWithinTimestepEnvironment
 export OtherNamesEnvironment, ManyAttributesEnvironment, VectorAttributesEnvironment
 export NamedTupleAttributesEnvironment, ContinuousInputEnvironment, SymbolInputEnvironment

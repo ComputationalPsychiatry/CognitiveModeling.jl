@@ -14,6 +14,8 @@ function log_likelihood_by_running(
     model, parameters, inputs, outputs, states, timestep_sizes
 )
     latents = latents_from_states(model, states)
+    #A model with submodels reads the parameters of each under its name
+    parameters = CognitiveModeling.bundle_parameters(model, parameters)
     log_likelihood = 0.0
     for t in eachindex(inputs)
         context = ModelContext(;
@@ -93,7 +95,7 @@ end
         #The cognitive model's outputs, by hand and by running it
         model = pair.model(ByHand())
         parameters = merge(
-            CognitiveModeling.default_parameters(model), pair.cognitive_parameters
+            CognitiveModeling.get_default_parameters(model), pair.cognitive_parameters
         )
         latents = latents_from_states(model, simulation.states)
         observations = inputs_received(simulation.observations, who_starts isa AgentStarts)
@@ -118,7 +120,8 @@ end
         #The environment's outputs, from its own side of the simulation
         environment = pair.environment(ByHand())
         environment_parameters = merge(
-            CognitiveModeling.default_parameters(environment), pair.environment_parameters
+            CognitiveModeling.get_default_parameters(environment),
+            pair.environment_parameters,
         )
         sides = simulation.environment
         environment_latents = latents_from_states(environment, sides.states)
@@ -235,6 +238,34 @@ end
         @test first_timestep(true) ==
             first_timestep(false) ==
             first_timestep(BeforeFirstTimestep())
+
+        #The models with submodels give what the baseline gives, with the state of the perception under its name: with
+        #prefixes and without, with a submodel within a submodel, and with a state that the submodel changes in place
+        baseline = simulate_pair(pair_named("Baseline"), ByHand(), EnvironmentStarts())
+        for name in ("WithSubmodels", "WithSubmodels, with prefixes")
+            simulation = simulate_pair(pair_named(name), ByHand(), EnvironmentStarts())
+            @test simulation.actions == baseline.actions
+            @test [state.perception for state in simulation.states] == baseline.states
+        end
+        nested = simulate_pair(
+            pair_named("WithNestedSubmodels"), ByHand(), EnvironmentStarts()
+        )
+        @test nested.actions == baseline.actions
+        @test [state.perception.learning for state in nested.states] == baseline.states
+        in_place = simulate_pair(
+            pair_named("WithSubmodelChangedInPlace"), ByHand(), EnvironmentStarts()
+        )
+        @test in_place.actions == baseline.actions
+        @test [state.perception.expected_reward[1] for state in in_place.states] == [state.expected_reward for state in baseline.states]
+
+        #The environment with a submodel gives the baseline's rewards, and counts its timesteps in the submodel's state
+        with_schedule = simulate_pair(
+            pair_named("Baseline with WithSubmodelsEnvironment"),
+            ByHand(),
+            EnvironmentStarts(),
+        )
+        @test with_schedule.observations == baseline.observations
+        @test [state.schedule for state in with_schedule.environment.states] == baseline.environment.states
 
         #The models which sample within their timesteps say so, and the others don't
         for sampling in (

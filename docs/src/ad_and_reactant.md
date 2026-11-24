@@ -4,32 +4,34 @@ Simulations can be differentiated with ForwardDiff, ReverseDiff, Enzyme and Moon
 compiled with Reactant. Every commit is tested against every form of each backend, on the
 simulation cases that the test suites share, in `test/common/src/simulation_cases.jl`: each
 model of the tests, from the shared package in `test/common`, simulated with its
-environment, with either starting, the baseline model with each setting of a simulation,
-such as timestep sizes and gradients of the sizes themselves, a selection of what is saved,
-an environment of fixed observations, given previous states, actions and observations,
-simulations that end before their last timestep, at a timestep that depends on the
-parameters, by a stopping criterion or by parameters that turn invalid, agents instantiated
-and simulated with `simulate_session!`, also twice and after `reset!`, and models simulated
-on single observations with `simulate_timestep` and `simulate_timestep!`. The models give
-the means of their distributions, so that a simulation is deterministic and the gradient
-goes all the way round its loop, and a few cases also sample from a seeded `Xoshiro`. The
-gradient is that of the sum of every real number that the simulation saved, and for a
-simulation that ends early, of those of the timesteps it kept, since Reactant masks it
-instead of stopping it. Code in the package's extensions is differentiated in suites of its
-own, each with its own environment, in the extension's folder of `test/extensions`. The one
-for Turing.jl, in `test/extensions/turing/ad`, differentiates the log density of the
-inference cases that the test suites share, in `test/common/src/inference_cases.jl`, the way
-a sampler does: through a `LogDensityFunction`, on the unconstrained values of every
-variable. The cases are those whose variables are all continuous: a session of each model of
-the tests with its environment, also with the agent starting where that changes what is
-differentiated, a session with an imputed action or observation of each continuous kind,
-several sessions in one table, of different lengths and of which only some include their
-environment, and the full model with each parameter model and its features, also with
-imputed values. The parameters of a session are variables with flat priors, so that the
-gradient is that of the session's own log density. That keeps the package's own code tested
-without Turing.jl, since the backends work without it and with other probabilistic
-programming languages. Every gradient is compared with finite differences. Zygote isn't
-supported, because the package uses for loops.
+environment, with either starting, among them models with submodels, also with one submodel
+within another and with a state that a submodel changes in place, the baseline model with
+each setting of a simulation, such as timestep sizes and gradients of the sizes themselves,
+a selection of what is saved, also of one state of a submodel, an environment of fixed
+observations, given previous states, actions and observations, simulations that end before
+their last timestep, at a timestep that depends on the parameters, by a stopping criterion
+or by parameters that turn invalid, agents instantiated and simulated with
+`simulate_session!`, also twice and after `reset!`, and models simulated on single
+observations with `simulate_timestep` and `simulate_timestep!`. The models give the means of
+their distributions, so that a simulation is deterministic and the gradient goes all the way
+round its loop, and a few cases also sample from a seeded `Xoshiro`. The gradient is that of
+the sum of every real number that the simulation saved, and for a simulation that ends
+early, of those of the timesteps it kept, since Reactant masks it instead of stopping it.
+Code in the package's extensions is differentiated in suites of its own, each with its own
+environment, in the extension's folder of `test/extensions`. The one for Turing.jl, in
+`test/extensions/turing/ad`, differentiates the log density of the inference cases that the
+test suites share, in `test/common/src/inference_cases.jl`, the way a sampler does: through
+a `LogDensityFunction`, on the unconstrained values of every variable. The cases are those
+whose variables are all continuous: a session of each model of the tests with its
+environment, also with the agent starting where that changes what is differentiated, a
+session with an imputed action or observation of each continuous kind, several sessions in
+one table, of different lengths and of which only some include their environment, and the
+full model with each parameter model and its features, also with imputed values. The
+parameters of a session are variables with flat priors, so that the gradient is that of the
+session's own log density. That keeps the package's own code tested without Turing.jl, since
+the backends work without it and with other probabilistic programming languages. Every
+gradient is compared with finite differences. Zygote isn't supported, because the package
+uses for loops.
 
 The Turing.jl models can't be compiled with Reactant, so the functions that the model of a
 session calls within an inference backend are compiled in sessions that are run by hand, in

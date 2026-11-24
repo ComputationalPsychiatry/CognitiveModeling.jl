@@ -205,6 +205,36 @@ const MODEL_PAIRS = [
         environment_parameters=(; reward_probability=0.8),
     ),
     (;
+        name="WithSubmodels",
+        model=WithSubmodels,
+        environment=BaselineEnvironment,
+        cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
+        environment_parameters=(; reward_probability=0.8),
+    ),
+    (;
+        name="WithSubmodels, with prefixes",
+        model=distributions -> WithSubmodels(distributions; prefixes=true),
+        environment=BaselineEnvironment,
+        cognitive_parameters=(;
+            perception__learning_rate=0.3, response__inverse_temperature=2.0
+        ),
+        environment_parameters=(; reward_probability=0.8),
+    ),
+    (;
+        name="WithNestedSubmodels",
+        model=WithNestedSubmodels,
+        environment=BaselineEnvironment,
+        cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
+        environment_parameters=(; reward_probability=0.8),
+    ),
+    (;
+        name="WithSubmodelChangedInPlace",
+        model=WithSubmodelChangedInPlace,
+        environment=BaselineEnvironment,
+        cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
+        environment_parameters=(; reward_probability=0.8),
+    ),
+    (;
         name="MethodsFromSupertype",
         model=MethodsFromSupertype,
         environment=BaselineEnvironment,
@@ -215,6 +245,13 @@ const MODEL_PAIRS = [
         name="Baseline with WithoutStatesEnvironment",
         model=Baseline,
         environment=WithoutStatesEnvironment,
+        cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
+        environment_parameters=(; reward_probability=0.8),
+    ),
+    (;
+        name="Baseline with WithSubmodelsEnvironment",
+        model=Baseline,
+        environment=WithSubmodelsEnvironment,
         cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
         environment_parameters=(; reward_probability=0.8),
     ),
