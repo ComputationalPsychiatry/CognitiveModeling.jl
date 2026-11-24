@@ -26,16 +26,16 @@ function CognitiveModeling.full_model(
 
     #Prepare the parts once, as every inference backend does: the parameter models for the sessions, with the values that are fixed, and the sessions with their environment running when its parameters are sampled
     prepared = prepare_full_model(
-        cognitive_parameters_model,
-        sessions_info;
+        sessions_info,
+        cognitive_parameters_model;
         environment_parameters_model,
         downstream_model,
         fixed_cognitive_parameters,
         fixed_environment_parameters,
     )
     return CognitiveModeling.turing_full_model(
-        prepared.cognitive_parameters_model,
-        prepared.sessions_info;
+        prepared.sessions_info,
+        prepared.cognitive_parameters_model;
         environment_parameters_model=prepared.environment_parameters_model,
         downstream_model=prepared.downstream_model,
         parallelization,

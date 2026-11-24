@@ -376,7 +376,7 @@ full_model(::TuringBackend, sessions_info::MultipleSessionsInfo, cognitive_param
 
 #The parts are prepared by full_model, outside the model's body, which is differentiated
 """
-    turing_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
+    turing_full_model(sessions_info::MultipleSessionsInfo, cognitive_parameters_model;
                       environment_parameters_model=NoParameters(),
                       downstream_model=NoDownstreamModel(),
                       parallelization=SerialSessions(), include_submodel_prefixes=false)

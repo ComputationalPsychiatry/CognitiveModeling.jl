@@ -632,10 +632,10 @@ const REGRESSION_TABLE = merge(
         ).designs.scale.design_columns == (; intercept=[1.0, 1.0, 1.0, 1.0])
         #A full model prepares it, and so does a composite, as one of its parts
         @test CognitiveModeling.prepare_full_model(
+            sessions_info,
             HierarchicalRegressionParameters((;
                 probability=RegressionParameter(ContinuousPredictor(:age, 2))
             )),
-            sessions_info,
         ).cognitive_parameters_model.designs.probability.design_columns ==
             (; age=[30.0, 40.0, 50.0, 60.0])
         @test CognitiveModeling.prepare_parameters_model(

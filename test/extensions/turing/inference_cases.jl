@@ -15,8 +15,8 @@ function parameter_models_log_density(case, values)
         :fixed_environment_parameters,
     )
     prepared = CognitiveModeling.prepare_full_model(
-        case.parameters_model,
-        case.sessions_info;
+        case.sessions_info,
+        case.parameters_model;
         filter(
             ((name, _),) -> name in keywords_of_every_backend,
             pairs(case.full_model_keywords),

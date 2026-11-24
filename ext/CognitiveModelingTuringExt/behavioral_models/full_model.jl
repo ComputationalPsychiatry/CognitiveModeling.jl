@@ -2,8 +2,8 @@
 
 #The Turing.jl model of a full model, from the parts that full_model prepared, outside this model's body. Its docstring is in the package, beside full_model
 Turing.@model function CognitiveModeling.turing_full_model(
-    cognitive_parameters_model,
-    sessions_info::MultipleSessionsInfo;
+    sessions_info::MultipleSessionsInfo,
+    cognitive_parameters_model;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
     parallelization=SerialSessions(),
