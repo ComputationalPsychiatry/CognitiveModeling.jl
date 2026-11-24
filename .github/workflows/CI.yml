@@ -149,8 +149,6 @@ jobs:
     name: PremadeCognitiveModels - ${{ matrix.suite }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Reports whether this commit breaks the premade models, without failing the build
-    continue-on-error: true
     permissions:
       actions: write # lets julia-actions/cache delete old caches
       contents: read
@@ -175,12 +173,12 @@ jobs:
         run: |
           julia --color=yes --project=PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }} PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }}/runtests.jl
-  # One check that says whether every test job passed, whatever the matrix holds, which the protection of main and dev
-  # requires. The job of the premade models reports without blocking, so it isn't among them
+  # One check that says whether every test job passed, those of the core and those of the premade models, whatever the
+  # matrix holds, which the protection of main and dev requires
   all_tests_passed:
     name: All tests passed
     if: always()
-    needs: [test, separate_environments]
+    needs: [test, separate_environments, premade]
     runs-on: ubuntu-latest
     steps:
       - name: Fail when a test job failed, was cancelled or was skipped
