@@ -184,8 +184,8 @@ end
 """
     simulate_remaining_timesteps_masked(storage, masking, first_timestep, who_starts,
                                         cognitive_model, environment, cognitive_parameters,
-                                        environment_parameters, cognitive_save_history,
-                                        environment_save_history, observation_map,
+                                        environment_parameters, save_cognitive_trajectories,
+                                        save_environment_trajectories, observation_map,
                                         action_map, rng, timestep_sizes, n_steps, offset)
 
 Simulate every timestep from `first_timestep` on, also those after the simulation ended,
@@ -215,8 +215,8 @@ function simulate_remaining_timesteps_masked(
     environment,
     cognitive_parameters,
     environment_parameters,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     observation_map,
     action_map,
     rng,
@@ -245,8 +245,8 @@ function simulate_remaining_timesteps_masked(
             environment,
             cognitive_parameters,
             environment_parameters,
-            cognitive_save_history,
-            environment_save_history,
+            save_cognitive_trajectories,
+            save_environment_trajectories,
             observation_map,
             action_map,
             rng,

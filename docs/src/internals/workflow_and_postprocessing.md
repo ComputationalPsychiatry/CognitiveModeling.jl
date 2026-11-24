@@ -20,5 +20,5 @@ Pages = ["inference/utility_functions/workflow_and_postprocessing/sessions_with_
 ```@autodocs
 Modules = [CognitiveModeling]
 Public = false
-Pages = ["inference/utility_functions/workflow_and_postprocessing/with_save_history.jl"]
+Pages = ["inference/utility_functions/workflow_and_postprocessing/with_save_trajectories.jl"]
 ```

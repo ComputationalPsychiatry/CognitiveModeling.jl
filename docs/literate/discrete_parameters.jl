@@ -70,7 +70,7 @@ simulations = map(1:4) do participant
         cognitive_parameters=(; learning_rate=0.3, uses_rewards=uses_rewards[participant]),
         environment_parameters=(;),
         action_map=NameMap(),
-        cognitive_save_history=SaveHistory(;
+        save_cognitive_trajectories=SaveTrajectories(;
             inputs=:reward, outputs=:choice, save_initial_timestep_values=false
         ),
         rng=Xoshiro(participant),

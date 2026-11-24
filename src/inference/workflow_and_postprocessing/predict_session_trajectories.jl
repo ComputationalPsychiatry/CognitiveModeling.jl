@@ -2,8 +2,8 @@
 
 """
     predict_session_trajectories([rng,] model, chain;
-                                 cognitive_save_history=SaveHistory(),
-                                 environment_save_history=SaveHistory())
+                                 save_cognitive_trajectories=SaveTrajectories(),
+                                 save_environment_trajectories=SaveTrajectories())
 
 Simulate the sessions of `model`, an inference backend's model of fitted sessions, again
 with the parameters of every sample in `chain`, and return the trajectories they saved for
@@ -11,7 +11,7 @@ every sample. This can be used for prior and posterior predictive checks.
 
 The sessions are deconditioned with [`decondition_sessions`](@ref), so that every action is
 simulated, and every observation too when the sessions have an environment, and they save
-what the two save histories select. The model of those sessions then runs once for each
+what the two `SaveTrajectories` select. The model of those sessions then runs once for each
 sample, with the sample's parameters, and with every variable within the sessions drawn
 again, as data is in a predictive check: an action imputed in the fit is simulated like the
 others, and so is what a model samples of its own, at its start or within a timestep. The

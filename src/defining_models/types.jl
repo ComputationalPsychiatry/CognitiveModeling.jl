@@ -166,10 +166,10 @@ too when the other side hasn't moved yet: a cognitive model when the agent start
 environment model when the environment starts. [`NoValue`](@ref) is different: it says that
 nothing was observed or done on a timestep that did run.
 
-Before the first timestep is timestep 0, which a simulation, a history and a fitted session
-start with when their [`SaveHistory`](@ref) saves the initial timestep values, as it does by
-default. Its observation and action are this marker unless others are given, and so is its
-size.
+Before the first timestep is timestep 0, which the trajectories of a simulation, of an
+instantiated model and of a fitted session start with when their [`SaveTrajectories`](@ref)
+saves the initial timestep values, as it does by default. Its observation and action are
+this marker unless others are given, and so is its size.
 """
 struct BeforeFirstTimestep <: AbstractNoValue end
 
@@ -489,7 +489,7 @@ end
 
 Return `values` as a `Tuple`: a tuple as it is, a vector as a tuple, and anything else in a
 tuple of one. Used for the arguments that take one value or several: the names given to
-[`ModelAttributes`](@ref), [`SaveHistory`](@ref), [`MultipleSessionsInfo`](@ref),
+[`ModelAttributes`](@ref), [`SaveTrajectories`](@ref), [`MultipleSessionsInfo`](@ref),
 [`HierarchicalGroupedParameters`](@ref) and [`HierarchicalRegressionParameters`](@ref),
 which are then asserted to be `Symbol`s, and the values that stand for a missing value in
 [`SessionInfo`](@ref).

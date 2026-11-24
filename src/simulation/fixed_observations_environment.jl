@@ -48,7 +48,7 @@ simulation = simulate_session(
     cognitive_parameters = (; learning_rate = 0.5),
     environment_parameters = (;),
     action_map = NameMap(),
-    cognitive_save_history = SaveHistory(; states = :expected_reward, save_initial_timestep_values = false),
+    save_cognitive_trajectories = SaveTrajectories(; states = :expected_reward, save_initial_timestep_values = false),
 )
 
 simulation.states

@@ -1,19 +1,20 @@
-@testset "Displaying save histories" begin
+@testset "Displaying SaveTrajectories" begin
     @testset "The REPL shows the selections on one line each" begin
         @test repr(
             "text/plain",
-            SaveHistory(; outputs=:choice, states=(:expected_reward, :surprise)),
+            SaveTrajectories(; outputs=:choice, states=(:expected_reward, :surprise)),
         ) == """
-SaveHistory
+SaveTrajectories
 States: expected_reward, surprise
 Inputs: none
 Outputs: choice
 Output distributions: none
 Initial timestep values: saved"""
         @test repr(
-            "text/plain", SaveHistory(SaveEverything(); save_initial_timestep_values=false)
+            "text/plain",
+            SaveTrajectories(SaveEverything(); save_initial_timestep_values=false),
         ) == """
-SaveHistory
+SaveTrajectories
 States: everything
 Inputs: everything
 Outputs: everything
@@ -24,11 +25,11 @@ Initial timestep values: not saved"""
     @testset "The states of a submodel are shown with the name of the submodel and a dot before them" begin
         @test repr(
             "text/plain",
-            SaveHistory(;
+            SaveTrajectories(;
                 states=(:surprise, :perception => (:expected_reward, :learning => :mean))
             ),
         ) == """
-SaveHistory
+SaveTrajectories
 States: surprise, perception.expected_reward, perception.learning.mean
 Inputs: none
 Outputs: none

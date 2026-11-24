@@ -9,7 +9,7 @@ using CognitiveModeling:
     NoEnvironment,
     get_session_trajectories,
     get_session_parameters,
-    with_save_history,
+    with_save_trajectories,
     with_data,
     with_common_element_types,
     cut_after_last_timestep_with_data,

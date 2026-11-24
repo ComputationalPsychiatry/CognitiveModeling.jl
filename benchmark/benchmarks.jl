@@ -30,7 +30,7 @@ const ENVIRONMENT = BaselineEnvironment(DistributionsJl())
 # A simulation of one session
 function simulate_baseline_session(
     rng,
-    save_history;
+    save_trajectories;
     n_timesteps=100,
     cognitive_parameters=(; learning_rate=0.3, inverse_temperature=2.0),
 )
@@ -42,22 +42,24 @@ function simulate_baseline_session(
         cognitive_parameters,
         environment_parameters=(; reward_probability=0.7),
         rng,
-        cognitive_save_history=save_history,
-        environment_save_history=save_history,
+        save_cognitive_trajectories=save_trajectories,
+        save_environment_trajectories=save_trajectories,
     )
 end
 
 # Simulated sessions as a table, with a row for each timestep. The first half of the sessions are of group a, and the
 # second half of group b, which learns faster
 function simulate_table(n_sessions, n_timesteps)
-    save_history = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
+    save_trajectories = SaveTrajectories(
+        SaveEverything(); save_initial_timestep_values=false
+    )
     group_of_each_session = [
         session <= n_sessions ÷ 2 ? "a" : "b" for session in 1:n_sessions
     ]
     simulations = [
         simulate_baseline_session(
             Xoshiro(session),
-            save_history;
+            save_trajectories;
             n_timesteps,
             cognitive_parameters=(;
                 learning_rate=group_of_each_session[session] == "a" ? 0.2 : 0.4,
@@ -137,10 +139,10 @@ const SUITE = BenchmarkGroup()
 
 SUITE["simulate"] = BenchmarkGroup()
 SUITE["simulate"]["saving nothing"] = @benchmarkable simulate_baseline_session(
-    rng, $(SaveHistory())
+    rng, $(SaveTrajectories())
 ) setup = (rng = Xoshiro(1))
 SUITE["simulate"]["saving everything"] = @benchmarkable simulate_baseline_session(
-    rng, $(SaveHistory(SaveEverything()))
+    rng, $(SaveTrajectories(SaveEverything()))
 ) setup = (rng = Xoshiro(1))
 
 const BENCHMARK_SESSIONS = sessions_of(simulate_table(10, 100))

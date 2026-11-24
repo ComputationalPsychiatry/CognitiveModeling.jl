@@ -75,8 +75,8 @@ place of the trajectories of an environment.
 """
 struct NoEnvironment end
 
-#A session without an environment has no environment history whose names could be checked
-check_savehistory_selection_names(::SaveHistory, ::NoEnvironment) = nothing
+#A session without an environment has no trajectories of an environment whose names could be checked
+check_savetrajectories_selection_names(::SaveTrajectories, ::NoEnvironment) = nothing
 #A session without an environment has no environment whose stopping criterion could be met
 stopping_criterion(::NoEnvironment, state, parameters) = false
 
@@ -123,38 +123,38 @@ table.
 - `include_environment::Union{Nothing, Bool}=nothing`: whether the session includes
   `environment`, so that it runs on every timestep. By default, with `nothing`, it is
   included where an observation or an action is `ImputedMissingValue()` or
-  [`SimulatedMissingValue`](@ref), or where `environment_save_history` saves anything: the
-  scored observations then inform what is imputed, such as which arm of a bandit a missing
-  choice was, from the reward that followed. It is
-  also included in every session of an inference backend's full model that estimates the
-  environment's parameters, so that the observations inform them. Otherwise it is left out,
-  since the scores of its observations would be the same for every value of the parameters,
-  and the session has none of its variables. With `true` it is always included, such as for
-  a model of one's own which estimates its parameters. With `false` it never is: an
-  observation that is `ImputedMissingValue()` and a selection in `environment_save_history`
-  are then errors, and an action that is `ImputedMissingValue()` is imputed without the
-  observations informing it.
-- `observation_map::Union{Nothing, NameMap}=nothing` and
-  `action_map::Union{Nothing, NameMap}=nothing`: which observations of `environment` the
-  cognitive model receives, and which of its actions the environment receives, and under
-  which names, as [`NameMap`](@ref)s, as for `simulate_session`. The data is in the
-  cognitive model's names, and is scored against the environment's distributions as the map
-  passes them on. An output of the environment that the map doesn't pass on isn't in the
-  data, so it is imputed on every timestep, or simulated when the data can hold
-  `SimulatedMissingValue()`. Each model's history is in its own names.
+  [`SimulatedMissingValue`](@ref), or where `save_environment_trajectories` saves anything:
+  the scored observations then inform what is imputed, such as which arm of a bandit a
+  missing choice was, from the reward that followed. It is also included in every session of
+  an inference backend's full model that estimates the environment's parameters, so that the
+  observations inform them. Otherwise it is left out, since the scores of its observations
+  would be the same for every value of the parameters, and the session has none of its
+  variables. With `true` it is always included, such as for a model of one's own which
+  estimates its parameters. With `false` it never is: an observation that is
+  `ImputedMissingValue()` and a selection in `save_environment_trajectories` are then
+  errors, and an action that is `ImputedMissingValue()` is imputed without the observations
+  informing it.
+- `observation_map::Union{Nothing, NameMap}=nothing` and `action_map::Union{Nothing,
+  NameMap}=nothing`: which observations of `environment` the cognitive model receives, and
+  which of its actions the environment receives, and under which names, as
+  [`NameMap`](@ref)s, as for `simulate_session`. The data is in the cognitive model's names,
+  and is scored against the environment's distributions as the map passes them on. An output
+  of the environment that the map doesn't pass on isn't in the data, so it is imputed on
+  every timestep, or simulated when the data can hold `SimulatedMissingValue()`. Each
+  model's trajectories are in its own names.
 - `timestep_sizes=1`: how much time each timestep covers, as in `simulate_session`.
-- `cognitive_save_history::SaveHistory=SaveHistory()`: which states, inputs, outputs and
-  output distributions of `cognitive_model` a fitted session returns, by name, and whether
-  timestep 0 is, as a [`SaveHistory`](@ref) in the model's own names. Nothing is selected by
-  default. What is returned names them by their role, as `states`, `observations`,
-  `actions` and `action_distributions`, as [`simulate_session`](@ref) does.
-- `environment_save_history::SaveHistory=SaveHistory()`: the same for `environment`, whose
-  inputs are the actions and whose outputs are the observations, returned under
-  `environment`. Selecting anything makes the environment run in the session, also when
-  nothing is missing, which adds its scores of the observations to the log density; with
-  fixed environment parameters they are the same for every value of the cognitive
-  parameters, so the posterior is unchanged. Whether timestep 0 is saved follows
-  `cognitive_save_history`.
+- `save_cognitive_trajectories::SaveTrajectories=SaveTrajectories()`: which states, inputs,
+  outputs and output distributions of `cognitive_model` a fitted session returns, by name,
+  and whether timestep 0 is, as a [`SaveTrajectories`](@ref) in the model's own names.
+  Nothing is selected by default. What is returned names them by their role, as `states`,
+  `observations`, `actions` and `action_distributions`, as [`simulate_session`](@ref) does.
+- `save_environment_trajectories::SaveTrajectories=SaveTrajectories()`: the same for
+  `environment`, whose inputs are the actions and whose outputs are the observations,
+  returned under `environment`. Selecting anything makes the environment run in the session,
+  also when nothing is missing, which adds its scores of the observations to the log
+  density; with fixed environment parameters they are the same for every value of the
+  cognitive parameters, so the posterior is unchanged. Whether timestep 0 is saved follows
+  `save_cognitive_trajectories`.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) each time the session runs, where a
   value outside its domain throws a [`ParameterDomainError`](@ref), which stops a fit.
@@ -163,11 +163,11 @@ table.
   or several in a tuple or a vector, such as `(missing, -1)`. Each is replaced by
   `ImputedMissingValue()`. A value is compared to them with `isequal`, and `()` keeps every
   value as it is, `missing` too. A function among them is called on each value instead,
-  which is then missing when it returns `true`, such as
-  `value -> value isa AbstractVector && any(ismissing, value)` for a vector with a missing
-  element. `ImputedMissingValue()` can also be put in the data directly. The arrays in the
-  values that are kept are narrowed to the types they hold, such as a `Vector{Float64}` for
-  a `Vector{Union{Missing,Float64}}` without a missing element.
+  which is then missing when it returns `true`, such as `value -> value isa AbstractVector
+  && any(ismissing, value)` for a vector with a missing element. `ImputedMissingValue()` can
+  also be put in the data directly. The arrays in the values that are kept are narrowed to
+  the types they hold, such as a `Vector{Float64}` for a `Vector{Union{Missing,Float64}}`
+  without a missing element.
 - `impute_missing_observations::Bool=true` and `impute_missing_actions::Bool=true`: whether
   the observations and the actions that are `ImputedMissingValue()` are imputed, as latent
   variables. With `false`, nothing is sampled for them, and they are replaced by
@@ -193,10 +193,10 @@ conditions on, with the observations in the environment's names, `n_timesteps`,
 action or an observation in the data isn't `ImputedMissingValue()` or
 `SimulatedMissingValue()`, and 0 when there is none.
 
-    SessionInfo(session_info; cognitive_save_history, environment_save_history)
+    SessionInfo(session_info; save_cognitive_trajectories, save_environment_trajectories)
 
-Update a session to have other save histories, which returns a new `SessionInfo`. This is
-for after a fit: a session is fitted fastest when it saves nothing, and its states, or
+Update a session to have other `SaveTrajectories`, which returns a new `SessionInfo`. This
+is for after a fit: a session is fitted fastest when it saves nothing, and its states, or
 anything else it can save, are read afterwards from the updated session, by evaluating its
 model with each sample of the fit. The two models have the same variables, so every sample
 fits both. The documentation of each inference backend describes how.
@@ -254,8 +254,8 @@ struct SessionInfo{
     Twho_starts,
     Ttimestep_sizes,
     Tsaved_timestep_sizes,
-    Tcognitive_save_history,
-    Tenvironment_save_history,
+    Tsave_cognitive_trajectories,
+    Tsave_environment_trajectories,
     Tprevious_observation,
     Tprevious_action,
     Tobservation_map,
@@ -282,8 +282,8 @@ struct SessionInfo{
     who_starts::Twho_starts
     timestep_sizes::Ttimestep_sizes
     saved_timestep_sizes::Tsaved_timestep_sizes
-    cognitive_save_history::Tcognitive_save_history
-    environment_save_history::Tenvironment_save_history
+    save_cognitive_trajectories::Tsave_cognitive_trajectories
+    save_environment_trajectories::Tsave_environment_trajectories
     last_timestep_with_action::Int
     last_timestep_with_observation::Int
     check_parameter_domains::Bool
@@ -299,11 +299,11 @@ function SessionInfo(
     return prepare_session(cognitive_model, observations, actions; keywords...)
 end
 
-#The same session with other save histories, prepared again, since whether the environment runs can follow from them. Its data has its markers already, so nothing more is replaced in it
+#The same session with other SaveTrajectories, prepared again, since whether the environment runs can follow from them. Its data has its markers already, so nothing more is replaced in it
 function SessionInfo(
     session_info::SessionInfo;
-    cognitive_save_history::SaveHistory=session_info.cognitive_save_history,
-    environment_save_history::SaveHistory=session_info.environment_save_history,
+    save_cognitive_trajectories::SaveTrajectories=session_info.save_cognitive_trajectories,
+    save_environment_trajectories::SaveTrajectories=session_info.save_environment_trajectories,
 )
     return prepare_session(
         session_info.cognitive_model,
@@ -317,8 +317,8 @@ function SessionInfo(
         action_map=session_info.action_map,
         include_environment=session_info.include_environment,
         timestep_sizes=session_info.timestep_sizes,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         check_parameter_domains=session_info.check_parameter_domains,
         previous_observation=session_info.previous_observation,
         previous_action=session_info.previous_action,
@@ -343,8 +343,8 @@ function prepare_session(
     action_map::Union{Nothing,NameMap}=nothing,
     include_environment::Union{Nothing,Bool}=nothing,
     timestep_sizes=1,
-    cognitive_save_history::SaveHistory=SaveHistory(),
-    environment_save_history::SaveHistory=SaveHistory(),
+    save_cognitive_trajectories::SaveTrajectories=SaveTrajectories(),
+    save_environment_trajectories::SaveTrajectories=SaveTrajectories(),
     check_parameter_domains::Bool=true,
     missing_observation_values=(missing,),
     missing_action_values=(missing,),
@@ -373,9 +373,9 @@ function prepare_session(
         cognitive_model, environment, observations, observation_map, action_map
     )
 
-    #Check that the save histories select names in the models' attributes
-    check_savehistory_selection_names(cognitive_save_history, cognitive_model)
-    check_savehistory_selection_names(environment_save_history, environment)
+    #Check that the SaveTrajectories select names in the models' attributes
+    check_savetrajectories_selection_names(save_cognitive_trajectories, cognitive_model)
+    check_savetrajectories_selection_names(save_environment_trajectories, environment)
 
     #A vector of timestep sizes must have one size for each timestep
     if timestep_sizes isa AbstractVector && length(timestep_sizes) != n_timesteps
@@ -386,9 +386,13 @@ function prepare_session(
         )
     end
 
-    #Whether the session includes its environment: as it is told, and otherwise only when something is to be imputed, an observation it fills in or an action that the observations it scores inform, or when its history is saved
+    #Whether the session includes its environment: as it is told, and otherwise only when something is to be imputed, an observation it fills in or an action that the observations it scores inform, or when its trajectories are saved
     includes_environment = decide_whether_environment_is_included(
-        include_environment, environment, observations, actions, environment_save_history
+        include_environment,
+        environment,
+        observations,
+        actions,
+        save_environment_trajectories,
     )
 
     #The environment's data is in its own names, as the observation map passes it on, with outputs that the map doesn't pass on imputed on every timestep, or simulated when the data can hold values to simulate, and it starts from the previous observation in the same way
@@ -405,7 +409,9 @@ function prepare_session(
     #The actions and observations in the data are scored at the end, the observations in the environment's names, and the sizes of the timesteps are returned with what is saved
     actions_to_condition_on = collect_values_to_condition_on(actions)
     observations_to_condition_on = collect_values_to_condition_on(environment_observations)
-    saved_sizes = saved_timestep_sizes(timestep_sizes, n_timesteps, cognitive_save_history)
+    saved_sizes = saved_timestep_sizes(
+        timestep_sizes, n_timesteps, save_cognitive_trajectories
+    )
 
     #A stopping criterion met before the last timestep with data means that the parameters can't give the data
     last_action_timestep = last_timestep_with_data(actions)
@@ -427,8 +433,8 @@ function prepare_session(
         who_starts,
         timestep_sizes,
         saved_sizes,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         last_action_timestep,
         last_observation_timestep,
         check_parameter_domains,
@@ -454,22 +460,22 @@ each column, or any other table that Tables.jl can read, such as a `DataFrame` o
 CSV.jl. The values of a column that stand for a missing observation or action become
 [`ImputedMissingValue`](@ref), as for [`SessionInfo`](@ref): by default those that are
 `missing`. As for [`SessionInfo`](@ref), a session includes its environment where an
-observation or an action is `ImputedMissingValue()`, where `environment_save_history` saves
-anything, and in an inference backend's full model that estimates the environment's
-parameters, unless `include_environment` says
-otherwise. The table is kept in the field `table`, without being copied, with the rows of
-each session in `session_rows`, so that a parameter model can read the columns it needs,
-such as those that a [`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the
-predictors of a [`HierarchicalRegressionParameters`](@ref). The keyword arguments that say
-how the table is read, `observation_columns`, `action_columns`, `session_columns`,
-`timestep_sizes`, `missing_observation_values`, `missing_action_values`,
-`impute_missing_observations` and `impute_missing_actions`, are kept in a `NamedTuple` in the
-field `column_settings`, so that [`condition_sessions`](@ref) reads another table with the
-same sessions in the same way.
+observation or an action is `ImputedMissingValue()`, where `save_environment_trajectories`
+saves anything, and in an inference backend's full model that estimates the environment's
+parameters, unless `include_environment` says otherwise. The table is kept in the field
+`table`, without being copied, with the rows of each session in `session_rows`, so that a
+parameter model can read the columns it needs, such as those that a
+[`HierarchicalGroupedParameters`](@ref) groups the sessions by, and the predictors of a
+[`HierarchicalRegressionParameters`](@ref). The keyword arguments that say how the table is
+read, `observation_columns`, `action_columns`, `session_columns`, `timestep_sizes`,
+`missing_observation_values`, `missing_action_values`, `impute_missing_observations` and
+`impute_missing_actions`, are kept in a `NamedTuple` in the field `column_settings`, so that
+[`condition_sessions`](@ref) reads another table with the same sessions in the same way.
 
-    MultipleSessionsInfo(sessions_info; cognitive_save_history, environment_save_history)
+    MultipleSessionsInfo(sessions_info; save_cognitive_trajectories,
+                         save_environment_trajectories)
 
-The same sessions with other save histories for every one, see [`SessionInfo`](@ref).
+The same sessions with other `SaveTrajectories` for every one, see [`SessionInfo`](@ref).
 
 # Arguments
 - `cognitive_model::AbstractTimestepModel`: the cognitive model, usually an
@@ -709,7 +715,7 @@ function MultipleSessionsInfo(
     )
 end
 
-#The same sessions with other save histories
+#The same sessions with other SaveTrajectories
 function MultipleSessionsInfo(sessions_info::MultipleSessionsInfo; keywords...)
     return with_sessions(
         sessions_info,

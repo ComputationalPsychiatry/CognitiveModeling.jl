@@ -5,8 +5,8 @@
 Return `attributes` if it is the [`ModelAttributes`](@ref) that a method of
 [`attribute_names`](@ref) must return, and throw an informative error otherwise. `model` is
 the model or the submodel whose method returned it. Used wherever the names of a model are
-read: by the checks of simulations, instantiated models, save histories and fitted sessions,
-and by the display of a model.
+read: by the checks of simulations, instantiated models, `SaveTrajectories` and fitted
+sessions, and by the display of a model.
 """
 function check_type_attribute_names(attributes::ModelAttributes, ::AbstractSubmodel)
     return attributes

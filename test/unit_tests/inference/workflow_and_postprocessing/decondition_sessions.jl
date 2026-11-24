@@ -6,7 +6,7 @@
             (; choice=[true, missing, true]);
             who_starts=AgentStarts(),
             timestep_sizes=[1.0, 2.0, 1.0],
-            cognitive_save_history=SaveHistory(; states=:n_timesteps),
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
             impute_missing_actions=false,
         )
         predictive = decondition_sessions(session_info)
@@ -21,7 +21,8 @@
         #Everything else is kept
         @test predictive.who_starts === AgentStarts() && predictive.n_timesteps == 3
         @test predictive.timestep_sizes == [1.0, 2.0, 1.0]
-        @test predictive.cognitive_save_history === session_info.cognitive_save_history
+        @test predictive.save_cognitive_trajectories ===
+            session_info.save_cognitive_trajectories
         @test predictive.previous_observation === session_info.previous_observation
         @test predictive.check_parameter_domains === true
         #A session that doesn't check its parameters against their domains still doesn't

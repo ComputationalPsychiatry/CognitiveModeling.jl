@@ -6,8 +6,8 @@
                              chain_indices=1:size(returned_values, 2))
     get_session_trajectories(returned_values; iter_indices=1:size(returned_values, 1),
                              chain_indices=1:size(returned_values, 2))
-    get_session_trajectories(model, chain; cognitive_save_history=SaveHistory(),
-                             environment_save_history=SaveHistory())
+    get_session_trajectories(model, chain; save_cognitive_trajectories=SaveTrajectories(),
+                             save_environment_trajectories=SaveTrajectories())
 
 Return the trajectories that fitted sessions saved, for every sample, as a `FlexiChain` from
 FlexiChains.jl with the same samples as the fit, so that they can be summarized and plotted
@@ -31,19 +31,19 @@ sample. Its elements are what one of three models returns:
 A model of one's own around the model of several sessions or of a single session can return
 what they return, and its returned values are then read in the same way.
 
-The trajectories each session saved, as its [`SaveHistory`](@ref)s selected, are one entry
-for each name, with the session's symbol name first. The cognitive model's values are named
-after the attribute alone, since a model uses a name for one attribute only: a state as
-`P1.expected_value`, an observation as `P1.reward` and an action as `P1.choice`. An action
-distribution is named like its action, so it is under its kind, as
+The trajectories each session saved, as the [`SaveTrajectories`](@ref) of its models
+selected, are one entry for each name, with the session's symbol name first. The cognitive
+model's values are named after the attribute alone, since a model uses a name for one
+attribute only: a state as `P1.expected_value`, an observation as `P1.reward` and an action
+as `P1.choice`. An action distribution is named like its action, so it is under its kind, as
 `P1.action_distributions.choice`. The environment's values are under `environment`, in the
 same way: `P1.environment.level` for a state, `P1.environment.reward` for an observation it
 gave, `P1.environment.choice` for an action it received and
 `P1.environment.observation_distributions.reward`. The state of a submodel, which the
 trajectories name under `submodel_states`, has an entry for each of its own states, named
-after the submodel too, as `P1.perception.expected_value`. Each entry holds a vector over the
-timesteps for every sample, which starts with timestep 0 when the initial timestep values
-are saved, so that element `t + 1` is timestep `t`, as everywhere in the package. The
+after the submodel too, as `P1.perception.expected_value`. Each entry holds a vector over
+the timesteps for every sample, which starts with timestep 0 when the initial timestep
+values are saved, so that element `t + 1` is timestep `t`, as everywhere in the package. The
 observations, the actions and the distributions of timestep 0 are
 [`BeforeFirstTimestep`](@ref), so a summary of those entries needs timestep 0 left out. The
 symbol name of a session with several session columns joins the name and the value of each
@@ -52,22 +52,22 @@ it. Each session also has an entry `parameters_valid`, as in `P1.parameters_vali
 says whether its parameters stayed valid in each sample, since a model can set
 `parameters_valid` in its [`ModelOutput`](@ref), and a [`stopping_criterion`](@ref) met
 while the data continues makes them invalid too; where they didn't, its trajectories end
-before the timestep on which they turned invalid. `iter_indices` and `chain_indices` number the
-samples as the chain that was fitted does.
+before the timestep on which they turned invalid. `iter_indices` and `chain_indices` number
+the samples as the chain that was fitted does.
 
 The third form takes one of the three models and a chain sampled from it, a `FlexiChain`. It
-runs a copy of the model whose sessions save what the two save histories select on every
+runs a copy of the model whose sessions save what the two `SaveTrajectories` select on every
 sample, and makes the chain of the returned values, numbered as `chain` is. A fit is fastest
 when its sessions save nothing, and their trajectories are then read afterwards in this way.
-Selecting anything in `environment_save_history` makes every session run its environment,
-see [`SessionInfo`](@ref). Each inference backend has a method of this form for its own
-models, which needs its package to be loaded, and its documentation says which models it
-takes.
+Selecting anything in `save_environment_trajectories` makes every session run its
+environment, see [`SessionInfo`](@ref). Each inference backend has a method of this form for
+its own models, which needs its package to be loaded, and its documentation says which
+models it takes.
 
 # Examples
 ```julia
 #The expected values of participant P2 over the timesteps, for every sample of a fit
-session_trajectories = get_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
+session_trajectories = get_session_trajectories(model, chain; save_cognitive_trajectories = SaveTrajectories(; states = :expected_value))
 session_trajectories[@varname(P2.expected_value)]
 
 #The parameters of the sessions, in the same chain

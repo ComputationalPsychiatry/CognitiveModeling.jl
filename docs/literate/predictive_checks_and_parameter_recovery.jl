@@ -85,7 +85,7 @@ simulations = map(enumerate(simulated_learning_rates)) do (participant, learning
         n_steps=40,
         cognitive_parameters=(; learning_rate, inverse_temperature=5.0),
         environment_parameters=(; reward_probability=0.7),
-        cognitive_save_history=SaveHistory(;
+        save_cognitive_trajectories=SaveTrajectories(;
             inputs=:reward, outputs=:choice, save_initial_timestep_values=false
         ),
         rng=Xoshiro(participant),
@@ -163,7 +163,7 @@ prior_trajectories = predict_session_trajectories(
     Xoshiro(3),
     model,
     prior_chain;
-    cognitive_save_history=SaveHistory(;
+    save_cognitive_trajectories=SaveTrajectories(;
         outputs=:choice, save_initial_timestep_values=false
     ),
 )
@@ -184,7 +184,7 @@ posterior_trajectories = predict_session_trajectories(
     Xoshiro(6),
     model,
     chain;
-    cognitive_save_history=SaveHistory(;
+    save_cognitive_trajectories=SaveTrajectories(;
         outputs=:choice, save_initial_timestep_values=false
     ),
 )

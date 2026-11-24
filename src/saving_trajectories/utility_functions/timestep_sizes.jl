@@ -3,10 +3,10 @@
 """
     each_timestep_size(timestep_sizes, n_steps)
 
-Return the size of each of `n_steps` timesteps as a vector, for a history. A vector of sizes
-is returned as it is, and anything else is repeated for every timestep. Used by
-[`simulate_session!`](@ref), for the sizes it adds to the histories, and by
-[`saved_timestep_sizes`](@ref).
+Return the size of each of `n_steps` timesteps as a vector, for the trajectories of an
+instantiated model. A vector of sizes is returned as it is, and anything else is repeated
+for every timestep. Used by [`simulate_session!`](@ref), for the sizes it adds to the
+trajectories of the instantiated models, and by [`saved_timestep_sizes`](@ref).
 """
 function each_timestep_size(timestep_sizes::AbstractVector, n_steps)
     return timestep_sizes
@@ -48,22 +48,23 @@ function returned_timestep_sizes(timestep_size, n_timesteps, save_initial_timest
 end
 
 """
-    saved_timestep_sizes(timestep_sizes, n_steps, save_history)
+    saved_timestep_sizes(timestep_sizes, n_steps, save_trajectories)
 
-Return the sizes of `n_steps` timesteps as they are returned with a history: one size for
-each timestep when `save_history` saves anything, after [`BeforeFirstTimestep`](@ref) for
-timestep 0 when it saves the initial timestep values, and an empty vector when it saves
-nothing. Used by [`SessionInfo`](@ref), for the sizes a fitted session returns.
+Return the sizes of `n_steps` timesteps as they are returned with what a session saves: one
+size for each timestep when `save_trajectories` saves anything, after
+[`BeforeFirstTimestep`](@ref) for timestep 0 when it saves the initial timestep values, and
+an empty vector when it saves nothing. Used by [`SessionInfo`](@ref), for the sizes a fitted
+session returns.
 """
-function saved_timestep_sizes(timestep_sizes, n_steps, save_history::SaveHistory)
+function saved_timestep_sizes(timestep_sizes, n_steps, save_trajectories::SaveTrajectories)
     return returned_timestep_sizes(
         each_timestep_size(timestep_sizes, n_steps),
         n_steps,
-        Val(saves_initial_timestep_values(save_history)),
+        Val(saves_initial_timestep_values(save_trajectories)),
     )
 end
 function saved_timestep_sizes(
-    timestep_sizes, n_steps, ::SaveHistory{(),(),(),(),Tsave_initial_timestep_values}
+    timestep_sizes, n_steps, ::SaveTrajectories{(),(),(),(),Tsave_initial_timestep_values}
 ) where {Tsave_initial_timestep_values}
     return empty(each_timestep_size(timestep_sizes, 0))
 end

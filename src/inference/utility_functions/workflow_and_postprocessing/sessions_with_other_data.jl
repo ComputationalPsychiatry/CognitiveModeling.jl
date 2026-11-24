@@ -36,7 +36,7 @@ end
 
 Return the settings that `session_info`, a [`SessionInfo`](@ref), was prepared with, as the
 keyword arguments of `SessionInfo` that take them: who starts, the environment and the maps,
-whether the environment is included, the sizes of the timesteps, the save histories, the
+whether the environment is included, the sizes of the timesteps, the `SaveTrajectories`, the
 checks, and the observation and the action before the first timestep. Used by
 [`with_data`](@ref) and [`condition_sessions`](@ref).
 """
@@ -48,8 +48,8 @@ function session_settings(session_info::SessionInfo)
         session_info.action_map,
         session_info.include_environment,
         session_info.timestep_sizes,
-        session_info.cognitive_save_history,
-        session_info.environment_save_history,
+        session_info.save_cognitive_trajectories,
+        session_info.save_environment_trajectories,
         session_info.check_parameter_domains,
         session_info.previous_observation,
         session_info.previous_action,

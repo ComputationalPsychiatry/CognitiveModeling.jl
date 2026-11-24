@@ -39,7 +39,7 @@ end
             ),
             n_timesteps=3,
         )
-        selection_of(states) = CognitiveModeling.state_selection(SaveHistory(; states))
+        selection_of(states) = CognitiveModeling.state_selection(SaveTrajectories(; states))
         @test CognitiveModeling.select_names(
             state, selection_of(:perception => :expected_reward)
         ) === (; perception=(; expected_reward=0.5))
@@ -75,7 +75,7 @@ end
         @test_throws "can only select names from a NamedTuple" CognitiveModeling.select_names(
             [0.5], selection_of(:perception => :expected_reward)
         )
-        @test_throws "A SaveHistory can select each state once, but it selects (:perception, :perception)" CognitiveModeling.select_names(
+        @test_throws "A SaveTrajectories can select each state once, but it selects (:perception, :perception)" CognitiveModeling.select_names(
             state,
             selection_of((
                 :perception => :expected_reward, :perception => :prediction_error

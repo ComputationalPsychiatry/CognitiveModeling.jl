@@ -226,10 +226,10 @@ end
     end
 
     @testset "The trajectories of a fit have an entry for each state of a submodel, named after the submodel" begin
-        saving_perception = SaveHistory(; states=:perception)
+        saving_perception = SaveTrajectories(; states=:perception)
         chain = sample(Xoshiro(1), with_submodels, Prior(), 5; progress=false)
         trajectories = get_session_trajectories(
-            with_submodels, chain; cognitive_save_history=saving_perception
+            with_submodels, chain; save_cognitive_trajectories=saving_perception
         )
         names = string.(Turing.FlexiChains.get_name.(keys(trajectories)))
         @test "S1.perception.expected_reward" in names && !("S1.perception" in names)
@@ -238,13 +238,13 @@ end
         baseline_trajectories = get_session_trajectories(
             baseline,
             baseline_chain;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test trajectories[@varname(S1.perception.expected_reward)] ==
             baseline_trajectories[@varname(S1.expected_reward)]
     end
 
-    @testset "A history selects some of the states of a submodel, and the trajectories of a fit have entries for those only" begin
+    @testset "A SaveTrajectories selects some of the states of a submodel, and the trajectories of a fit have entries for those only" begin
         keeping_changes = full_model(
             TuringBackend(),
             IndependentParameters(priors),
@@ -258,7 +258,7 @@ end
                     get_session_trajectories(
                         keeping_changes,
                         chain;
-                        cognitive_save_history=SaveHistory(; states),
+                        save_cognitive_trajectories=SaveTrajectories(; states),
                     ),
                 ),
             ),
@@ -270,20 +270,22 @@ end
             !("S1.perception.change" in only_expected_reward)
         #The entries are those of the whole state of the submodel
         whole = get_session_trajectories(
-            keeping_changes, chain; cognitive_save_history=SaveHistory(; states=:perception)
+            keeping_changes,
+            chain;
+            save_cognitive_trajectories=SaveTrajectories(; states=:perception),
         )
         in_part = get_session_trajectories(
             keeping_changes,
             chain;
-            cognitive_save_history=SaveHistory(; states=:perception => :change),
+            save_cognitive_trajectories=SaveTrajectories(; states=:perception => :change),
         )
         @test in_part[@varname(S2.perception.change)] ==
             whole[@varname(S2.perception.change)]
         #A state that the submodel doesn't have is an error when the sessions are made
-        @test_throws "The SaveHistory selects the states (:value,) of the submodel perception" get_session_trajectories(
+        @test_throws "The SaveTrajectories selects the states (:value,) of the submodel perception" get_session_trajectories(
             keeping_changes,
             chain;
-            cognitive_save_history=SaveHistory(; states=:perception => :value),
+            save_cognitive_trajectories=SaveTrajectories(; states=:perception => :value),
         )
     end
 
@@ -313,7 +315,9 @@ end
         #The state of the innermost submodel has an entry named after both submodels, with the baseline's expected rewards
         chain = sample(Xoshiro(1), nested, Prior(), 5; progress=false)
         trajectories = get_session_trajectories(
-            nested, chain; cognitive_save_history=SaveHistory(; states=:perception)
+            nested,
+            chain;
+            save_cognitive_trajectories=SaveTrajectories(; states=:perception),
         )
         names = string.(Turing.FlexiChains.get_name.(keys(trajectories)))
         @test "S1.perception.learning.expected_reward" in names &&
@@ -322,7 +326,7 @@ end
         baseline_trajectories = get_session_trajectories(
             baseline,
             baseline_chain;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test trajectories[@varname(S1.perception.learning.expected_reward)] ==
             baseline_trajectories[@varname(S1.expected_reward)]
@@ -330,7 +334,7 @@ end
         selected = get_session_trajectories(
             nested,
             chain;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:perception => :learning => :expected_reward
             ),
         )

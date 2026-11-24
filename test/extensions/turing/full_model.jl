@@ -96,7 +96,7 @@ end
 #A full model of sessions which save trajectories, without a downstream model, which warns when it is made
 const SAVING_WARNING = (
     :warn,
-    "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards.",
+    "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; save_cognitive_trajectories, save_environment_trajectories) then gives the trajectories of every sample afterwards.",
 )
 function saving_full_model(arguments...; keywords...)
     return @test_logs SAVING_WARNING full_model(TuringBackend(), arguments...; keywords...)
@@ -126,7 +126,7 @@ end
     @testset "Each session runs with its own parameters under sessions[i], and the log density is the sum over the sessions" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         learning_rates = [0.2, 0.3, 0.4]
         inverse_temperatures = [1.0, 2.0, 3.0]
@@ -184,7 +184,7 @@ end
         #S3's missing choice isn't imputed, so S3 saves UnimputedMissingValue() there, which the other sessions don't
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         )
         model = turing_multiple_behavioral_sessions(
             sessions_info,
@@ -225,7 +225,7 @@ end
             table;
             environment=RewardsPreviousChoice(),
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         parameters = (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
         returned_value = returned(
@@ -345,7 +345,7 @@ end
     @testset "It returns the parameters of every session, what each session saved, and what the downstream model returned" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
         given = Dict(
@@ -371,7 +371,7 @@ end
     @testset "With include_submodel_prefixes, the parameter models and the downstream model have their variables under their names" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         model = full_model(
             TuringBackend(),
@@ -427,7 +427,7 @@ end
     @testset "A downstream model of its own gets what the sessions saved" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         measurements = [0.4, 0.6, 0.5]
         model = full_model(
@@ -569,7 +569,7 @@ end
     @testset "The cognitive parameters can be fixed, for every session or by session, with nothing sampled" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         same = saving_full_model(
             FixedParameters((; learning_rate=0.3, inverse_temperature=2.0)), sessions_info
@@ -606,19 +606,19 @@ end
     @testset "Sessions which save without a downstream model give a warning when the model is made, since the fit is slower for nothing" begin
         saving = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test_logs SAVING_WARNING full_model(
             TuringBackend(), IndependentParameters(FULL_PRIORS), saving
         )
-        #The environment's history counts too, and with a downstream model or without saving there is no warning
+        #The environment's trajectories count too, and with a downstream model or without saving there is no warning
         @test_logs SAVING_WARNING full_model(
             TuringBackend(),
             IndependentParameters(FULL_PRIORS),
             sessions_for_test(;
                 impute_missing_actions=false,
                 environment=RewardsAroundMean(),
-                environment_save_history=SaveHistory(; outputs=:reward),
+                save_environment_trajectories=SaveTrajectories(; outputs=:reward),
             );
             environment_parameters_model=FixedParameters((; mean_reward=0.5)),
         )
@@ -732,7 +732,7 @@ end
             TWO_MISSING_REWARDS_TABLE;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test [session.includes_environment for session in sessions_info.sessions] == [true, false, true]
         in_sequence = saving_full_model(
@@ -842,7 +842,7 @@ end
     @testset "It can be sampled, and returned gives the parameters and the states of every session for each sample" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
@@ -876,9 +876,9 @@ end
 
     @testset "A session whose parameters turn invalid gives the sample a log density of -Inf, and the downstream model doesn't run" begin
         table = (; FULL_TABLE..., choice=[0.2, 0.4, 0.6, 0.8, 1.0, 0.2, 0.4, 0.6, 0.8])
-        saving_states = SaveHistory(; states=:expected_reward)
+        saving_states = SaveTrajectories(; states=:expected_reward)
         sessions_info = sessions_for_test(
-            RejectsHighExpectedReward(), table; cognitive_save_history=saving_states
+            RejectsHighExpectedReward(), table; save_cognitive_trajectories=saving_states
         )
         #A learning rate of 1.5 takes the expected reward of S2, rewarded 0 and then 1, above 0.99 on its second timestep
         sessions = turing_multiple_behavioral_sessions(
@@ -931,7 +931,7 @@ end
         #the trajectories of a session end where they turned invalid
         prior_chain = sample(Xoshiro(4), without_downstream, Prior(), 40; progress=false)
         trajectories = get_session_trajectories(
-            without_downstream, prior_chain; cognitive_save_history=saving_states
+            without_downstream, prior_chain; save_cognitive_trajectories=saving_states
         )
         valid_in_S2 = vec(trajectories[@varname(S2.parameters_valid)])
         @test any(valid_in_S2) && !all(valid_in_S2)
@@ -942,13 +942,13 @@ end
         #invalid, and it is true for every sample
         plain = saving_full_model(
             IndependentParameters(FULL_PRIORS),
-            sessions_for_test(; cognitive_save_history=saving_states),
+            sessions_for_test(; save_cognitive_trajectories=saving_states),
         )
         plain_chain = sample(Xoshiro(5), plain, Prior(), 5; progress=false)
         plain_names = Turing.FlexiChains.get_name.(
             keys(
                 get_session_trajectories(
-                    plain, plain_chain; cognitive_save_history=saving_states
+                    plain, plain_chain; save_cognitive_trajectories=saving_states
                 ),
             ),
         )
@@ -956,7 +956,7 @@ end
         @test all(
             vec(
                 get_session_trajectories(
-                    plain, plain_chain; cognitive_save_history=saving_states
+                    plain, plain_chain; save_cognitive_trajectories=saving_states
                 )[@varname(S2.parameters_valid)],
             ),
         )
@@ -968,7 +968,7 @@ end
         sessions_info = sessions_for_test(
             RejectsHighExpectedReward(),
             table;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         with_downstream(prior) = full_model(
             TuringBackend(),
@@ -1011,7 +1011,7 @@ end
     @testset "ParallelSessions runs the sessions over the threads, and needs the model to be marked thread-safe" begin
         sessions_info = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         parameters = (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[1.0, 2.0, 3.0])
         in_sequence = turing_multiple_behavioral_sessions(sessions_info, parameters)
@@ -1028,7 +1028,7 @@ end
         #Sessions whose saved trajectories have different types give what they give in sequence, since S3 saves UnimputedMissingValue() for its missing choice
         saving_actions = sessions_for_test(;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         )
         in_parallel_saving_actions = Turing.DynamicPPL.setthreadsafe(
             turing_multiple_behavioral_sessions(
@@ -1058,7 +1058,8 @@ end
     @testset "A chain from a model that saves nothing gives the states through returned with a copy that saves" begin
         unsaved_sessions = sessions_for_test(; impute_missing_actions=false)
         saving_sessions = MultipleSessionsInfo(
-            unsaved_sessions; cognitive_save_history=SaveHistory(; states=:expected_reward)
+            unsaved_sessions;
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         unsaved = full_model(
             TuringBackend(), IndependentParameters(FULL_PRIORS), unsaved_sessions
@@ -1323,7 +1324,8 @@ end
     saving = extension.with_session_info(
         model,
         info -> MultipleSessionsInfo(
-            info; cognitive_save_history=SaveHistory(; states=:expected_reward)
+            info;
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         ),
         "get_session_trajectories",
     )

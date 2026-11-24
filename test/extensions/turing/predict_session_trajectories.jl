@@ -5,9 +5,9 @@
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "predict_session_trajectories simulates every action again with the parameters of each sample" begin
-        cognitive_save_history = SaveHistory(; inputs=:reward, outputs=:choice)
+        save_cognitive_trajectories = SaveTrajectories(; inputs=:reward, outputs=:choice)
         simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(2), model, chain; cognitive_save_history
+            Xoshiro(2), model, chain; save_cognitive_trajectories
         )
         @test Turing.FlexiChains.iter_indices(simulated) ==
             Turing.FlexiChains.iter_indices(chain)
@@ -34,8 +34,10 @@
             Xoshiro(3),
             with_environment,
             chain;
-            cognitive_save_history=SaveHistory(; inputs=:reward, outputs=:choice),
-            environment_save_history=SaveHistory(; states=:n_timesteps, outputs=:reward),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=:reward, outputs=:choice),
+            save_environment_trajectories=SaveTrajectories(;
+                states=:n_timesteps, outputs=:reward
+            ),
         )
         rewards = vec(simulated[@varname(S1.reward)])
         choices = vec(simulated[@varname(S1.choice)])
@@ -49,7 +51,10 @@
         #A chain from the prior gives a prior predictive check
         prior_chain = sample(Xoshiro(4), with_environment, Prior(), 10; progress=false)
         prior_simulated = @test_logs match_mode = :any predict_session_trajectories(
-            Xoshiro(5), with_environment, prior_chain; cognitive_save_history=SaveHistory()
+            Xoshiro(5),
+            with_environment,
+            prior_chain;
+            save_cognitive_trajectories=SaveTrajectories(),
         )
         @test Turing.FlexiChains.iter_indices(prior_simulated) ==
             Turing.FlexiChains.iter_indices(prior_chain)
@@ -73,7 +78,7 @@
             Xoshiro(7),
             imputing,
             prior_chain;
-            cognitive_save_history=SaveHistory(; outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         )
         @test all(
             choices -> all(choice -> choice isa Bool, choices[2:end]),
@@ -94,7 +99,7 @@
             Xoshiro(14),
             sampling,
             prior_chain;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         starts_of_fit =
             pair.cognitive_parameters.initial_value .+
@@ -116,7 +121,7 @@
             Xoshiro(9),
             different_lengths,
             prior_chain;
-            cognitive_save_history=SaveHistory(; outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         )
         #Every choice of each session is simulated, on each of its own timesteps
         for (name, n_timesteps) in
@@ -143,7 +148,7 @@
             Xoshiro(10),
             with_environment,
             prior_chain;
-            cognitive_save_history=SaveHistory(; inputs=:reward, outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=:reward, outputs=:choice),
         )
         rewards = vec(simulated[@varname(S3.reward)])
         choices = vec(simulated[@varname(S3.choice)])
@@ -161,7 +166,7 @@
             Xoshiro(12),
             some_running,
             prior_chain;
-            cognitive_save_history=SaveHistory(; inputs=:reward),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=:reward),
         )
 
         #Every session observes rewards that its environment gives for each of its timesteps, S2 too, which didn't run it in the fit, so that its rewards aren't those in the data
@@ -186,8 +191,8 @@
 
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
-        @test_throws "predict_session_trajectories(model, chain; cognitive_save_history) takes a model made by full_model" predict_session_trajectories(
-            own_model(), chain; cognitive_save_history=SaveHistory()
+        @test_throws "predict_session_trajectories(model, chain; save_cognitive_trajectories) takes a model made by full_model" predict_session_trajectories(
+            own_model(), chain; save_cognitive_trajectories=SaveTrajectories()
         )
     end
 end

@@ -525,7 +525,9 @@ function folds(f, argument_types...)
 end
 
 #Saves everything but timestep 0, so that element t of what a simulation returns is timestep t
-const EVERY_TIMESTEP = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
+const EVERY_TIMESTEP = SaveTrajectories(
+    SaveEverything(); save_initial_timestep_values=false
+)
 
 #Shortens the calls below
 function simulate_for_test(
@@ -536,8 +538,8 @@ function simulate_for_test(
     cognitive_parameters=BASELINE_PARAMETERS,
     environment_parameters=REWARDS,
     rng=Xoshiro(1),
-    cognitive_save_history=EVERY_TIMESTEP,
-    environment_save_history=EVERY_TIMESTEP,
+    save_cognitive_trajectories=EVERY_TIMESTEP,
+    save_environment_trajectories=EVERY_TIMESTEP,
     keywords...,
 )
     return simulate_session(
@@ -548,8 +550,8 @@ function simulate_for_test(
         cognitive_parameters,
         environment_parameters,
         rng,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         keywords...,
     )
 end
@@ -643,7 +645,7 @@ end
             n_steps=2,
             cognitive_parameters=(; learning_rate=1.5, inverse_temperature=2.0),
             environment_parameters=(; reward_probability=-0.5),
-            cognitive_save_history=EVERY_TIMESTEP,
+            save_cognitive_trajectories=EVERY_TIMESTEP,
             check_parameter_domains=false,
         )
         @test simulation.states == [(; expected_reward=1.25), (; expected_reward=0.875)]
@@ -805,8 +807,8 @@ end
             cognitive_parameters=vector_parameters,
             environment_parameters=vector_environment_parameters,
             rng,
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         )
     end
 
@@ -889,7 +891,7 @@ end
             environment_parameters=(;),
             action_map=NameMap(),
             rng=Xoshiro(1),
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test [state.expected_rewards for state in simulation.states] ≈ [
             [0.5, 0.5, 0.5],
@@ -1056,8 +1058,8 @@ end
             cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         )
         for who_starts in (EnvironmentStarts(), AgentStarts())
             @test @inferred(simulate_with(who_starts, 10)) isa SessionTrajectories
@@ -1194,12 +1196,12 @@ end
             action_map=NameMap(),
         )
         @test observations == [(; reward=1.0), (; reward=0.0), (; reward=0.25)]
-        #One that is sampled and one that isn't, in the same observation, which the environment's history has both of as its outputs
+        #One that is sampled and one that isn't, in the same observation, which the environment's trajectories have both of as its outputs
         #OtherNamesEnvironment samples its payoff, and gives the number of the timestep in a Deterministic
         environment = InstantiatedModel(
             OtherNamesEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(; outputs=SaveEverything()),
+            save_trajectories=SaveTrajectories(; outputs=SaveEverything()),
         )
         simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
@@ -1212,16 +1214,16 @@ end
         )
         @test [
             observation.timestep_number for
-            observation in environment.history.outputs[2:end]
+            observation in environment.trajectories.outputs[2:end]
         ] == 1:50
         @test Set(
-            observation.payoff for observation in environment.history.outputs[2:end]
+            observation.payoff for observation in environment.trajectories.outputs[2:end]
         ) == Set([false, true])
     end
 
     @testset "NoValue and a NamedTuple inside the observations are sampled on their own" begin
         environment = InstantiatedModel(
-            ObservesInGroups(), (;); save_history=SaveHistory(SaveEverything())
+            ObservesInGroups(), (;); save_trajectories=SaveTrajectories(SaveEverything())
         )
         simulate_session!(
             InstantiatedModel(WithoutOutputs(), LEARNING),
@@ -1232,7 +1234,7 @@ end
         )
         sampled = (; reward=1.0, skipped=NoValue(), cues=(; left=0.0, right=2))
         @test all(
-            observation -> observation === sampled, environment.history.outputs[2:end]
+            observation -> observation === sampled, environment.trajectories.outputs[2:end]
         )
         @test environment.previous_output === sampled
     end
@@ -1287,7 +1289,7 @@ end
         end
     end
 
-    @testset "cognitive_save_history and environment_save_history select what is saved of each kind" begin
+    @testset "save_cognitive_trajectories and save_environment_trajectories select what is saved of each kind" begin
         #DependsOnPreviousOutput counts its timesteps beside its expected reward
         simulate_with(; keywords...) = simulate_for_test(
             DependsOnPreviousOutput(ByHand()),
@@ -1301,10 +1303,10 @@ end
         #The helper saves everything, which selecting everything also does
         everything = simulate_with()
         @test simulate_with(;
-            cognitive_save_history=SaveHistory(
+            save_cognitive_trajectories=SaveTrajectories(
                 SaveEverything(); save_initial_timestep_values=false
             ),
-            environment_save_history=SaveHistory(
+            save_environment_trajectories=SaveTrajectories(
                 SaveEverything(); save_initial_timestep_values=false
             ),
         ) == everything
@@ -1315,7 +1317,7 @@ end
         ]
         #Names keep those entries, and a kind that isn't given keeps nothing
         simulation = simulate_with(;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:n_timesteps, save_initial_timestep_values=false
             ),
         )
@@ -1326,7 +1328,7 @@ end
         @test simulation.environment == everything.environment
         #Several names keep the entries in the order given
         (; states) = simulate_with(;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=(:n_timesteps, :expected_reward), save_initial_timestep_values=false
             ),
         )
@@ -1342,7 +1344,7 @@ end
         )
         everything_with_actions = with_actions()
         simulation = with_actions(;
-            environment_save_history=SaveHistory(;
+            save_environment_trajectories=SaveTrajectories(;
                 outputs=:reward, inputs=:choice, save_initial_timestep_values=false
             ),
         )
@@ -1354,8 +1356,12 @@ end
         @test simulation.environment.observation_distributions == fill((;), 3)
         #Nothing at all gives empty NamedTuples of everything, followed by the size of the timesteps
         nothing_saved = simulate_with(;
-            cognitive_save_history=SaveHistory(; save_initial_timestep_values=false),
-            environment_save_history=SaveHistory(; save_initial_timestep_values=false),
+            save_cognitive_trajectories=SaveTrajectories(;
+                save_initial_timestep_values=false
+            ),
+            save_environment_trajectories=SaveTrajectories(;
+                save_initial_timestep_values=false
+            ),
         )
         @test all(==(fill((;), 3)), saved_vectors(nothing_saved))
         @test nothing_saved.timestep_sizes === 1
@@ -1379,7 +1385,7 @@ end
     end
 
     @testset "Timestep 0 is saved by default, with the previous observation and action and the states before the first timestep" begin
-        everything = SaveHistory(SaveEverything())
+        everything = SaveTrajectories(SaveEverything())
         for who_starts in (EnvironmentStarts(), AgentStarts())
             with_timestep_zero = simulate_for_test(
                 DependsOnPreviousOutput(ByHand()),
@@ -1387,8 +1393,8 @@ end
                 who_starts,
                 n_steps=3,
                 cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
-                cognitive_save_history=everything,
-                environment_save_history=everything,
+                save_cognitive_trajectories=everything,
+                save_environment_trajectories=everything,
             )
             @test with_timestep_zero.observations[1] === (; reward=BeforeFirstTimestep())
             @test with_timestep_zero.actions[1] === (; choice=BeforeFirstTimestep())
@@ -1424,8 +1430,8 @@ end
             previous_observation=(; reward=true),
             previous_action=(; choice=true),
             previous_cognitive_state=(; expected_reward=0.1, n_timesteps=5),
-            cognitive_save_history=everything,
-            environment_save_history=everything,
+            save_cognitive_trajectories=everything,
+            save_environment_trajectories=everything,
         )
         @test (
             simulation.observations[1],
@@ -1449,22 +1455,22 @@ end
             n_steps=2,
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-            cognitive_save_history=everything,
-            environment_save_history=everything,
+            save_cognitive_trajectories=everything,
+            save_environment_trajectories=everything,
         )
         @test simulation.observations[1] === (; reward=BeforeFirstTimestep()) &&
             simulation.actions[1] === (; choice=BeforeFirstTimestep())
         @test simulation.environment.observations[1] ===
               (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep()) &&
             simulation.environment.actions[1] === (; lever=BeforeFirstTimestep())
-        #A selection applies to it too, and cognitive_save_history decides for the environment's vectors as well, so that all of
+        #A selection applies to it too, and save_cognitive_trajectories decides for the environment's vectors as well, so that all of
         #them have the same length
         simulation = simulate_for_test(
             DependsOnPreviousOutput(ByHand()),
             BaselineEnvironment(ByHand());
             n_steps=2,
             cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
-            cognitive_save_history=SaveHistory(; states=:n_timesteps),
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
         @test simulation.states == [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2)]
         @test simulation.environment.states ==
@@ -1478,7 +1484,7 @@ end
                 who_starts,
                 n_steps=2,
                 cognitive_parameters=(;),
-                cognitive_save_history=SaveHistory(; states=:who_starts),
+                save_cognitive_trajectories=SaveTrajectories(; states=:who_starts),
             ).states[end] === (; who_starts)
             @test simulate_for_test(
                 RecordsWhoStarts(),
@@ -1487,7 +1493,7 @@ end
                 n_steps=2,
                 cognitive_parameters=(;),
                 environment_parameters=(;),
-                cognitive_save_history=SaveHistory(; states=:who_starts),
+                save_cognitive_trajectories=SaveTrajectories(; states=:who_starts),
             ).environment.states[end] === (; who_starts)
         end
         @test simulate_timestep(RecordsWhoStarts(), (; reward=1.0); parameters=(;))[2] ===
@@ -1500,7 +1506,7 @@ end
             n_steps=3,
             environment_parameters=(;),
             action_map=NameMap(),
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 outputs=:choice, output_distributions=:choice
             ),
         )
@@ -1515,12 +1521,12 @@ end
             n_steps=3,
             environment_parameters=(;),
             action_map=NameMap(),
-            cognitive_save_history=SaveHistory(; outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         ).action_distributions == fill((;), 4)
-        @test_throws "The SaveHistory selects the output distributions (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,). A history can only select names in the model's attributes." InstantiatedModel(
+        @test_throws "The SaveTrajectories selects the output distributions (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,). A SaveTrajectories can only select names in the model's attributes." InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(; output_distributions=:bet),
+            save_trajectories=SaveTrajectories(; output_distributions=:bet),
         )
         #A state changed in place is saved before the first timestep changes it
         (; states) = simulate_for_test(
@@ -1529,13 +1535,13 @@ end
             n_steps=2,
             environment_parameters=(;),
             action_map=NameMap(),
-            cognitive_save_history=everything,
+            save_cognitive_trajectories=everything,
         )
         @test [state.expected_reward[1] for state in states] == [0.5, 0.75, 0.875]
     end
 
     @testset "The environment's observations, actions and observation distributions are returned as it gave and received them" begin
-        everything = SaveHistory(SaveEverything())
+        everything = SaveTrajectories(SaveEverything())
         for who_starts in (EnvironmentStarts(), AgentStarts())
             #OtherNamesEnvironment, with the means of its distributions, gives the payoff for each lever exactly
             simulation = simulate_for_test(
@@ -1545,8 +1551,8 @@ end
                 n_steps=3,
                 observation_map=PAYOFF_AS_REWARD,
                 action_map=CHOICE_AS_LEVER,
-                cognitive_save_history=everything,
-                environment_save_history=everything,
+                save_cognitive_trajectories=everything,
+                save_environment_trajectories=everything,
             )
             environment = simulation.environment
             #The observations are as the environment gave them, before the observation_map, with the number of the timestep the
@@ -1610,7 +1616,7 @@ end
             n_steps=3,
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-            environment_save_history=SaveHistory(;
+            save_environment_trajectories=SaveTrajectories(;
                 outputs=:timestep_number, save_initial_timestep_values=false
             ),
         )
@@ -1625,7 +1631,7 @@ end
             n_steps=3,
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
-            environment_save_history=SaveHistory(;
+            save_environment_trajectories=SaveTrajectories(;
                 inputs=:lever,
                 output_distributions=:payoff,
                 save_initial_timestep_values=false,
@@ -1644,20 +1650,22 @@ end
             Baseline(ByHand()),
             NoOutputBeforeFirstInputEnvironment(Means());
             n_steps=3,
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 inputs=:reward, outputs=:choice, save_initial_timestep_values=false
             ),
         )
         @test observations[1] === (; reward=NoValue())
         @test observations[2] == (; reward=reward_for_choice(actions[1].choice))
-        for cognitive_save_history in
-            (SaveHistory(; outputs=(), save_initial_timestep_values=false), EVERY_TIMESTEP)
+        for save_cognitive_trajectories in (
+            SaveTrajectories(; outputs=(), save_initial_timestep_values=false),
+            EVERY_TIMESTEP,
+        )
             (; actions) = simulate_for_test(
                 WithoutOutputs(),
                 WithoutInputsEnvironment(ByHand());
                 n_steps=3,
                 cognitive_parameters=LEARNING,
-                cognitive_save_history,
+                save_cognitive_trajectories,
             )
             @test actions == fill((;), 3)
         end
@@ -1748,35 +1756,35 @@ end
             LearnsInPlace(state -> error("prepared anyway")),
             BaselineEnvironment(ByHand());
             cognitive_parameters=LEARNING,
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test states == fill((;), 51)
     end
 
     @testset "Selecting a name that isn't there, or from something that isn't a NamedTuple, gives an error" begin
-        @test_throws "The SaveHistory selects the states (:surprise,), but the states in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:expected_reward, :n_timesteps)." simulate_for_test(
+        @test_throws "The SaveTrajectories selects the states (:surprise,), but the states in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:expected_reward, :n_timesteps)." simulate_for_test(
             DependsOnPreviousOutput(ByHand()),
             BaselineEnvironment(ByHand());
             cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
-            cognitive_save_history=SaveHistory(; states=:surprise),
+            save_cognitive_trajectories=SaveTrajectories(; states=:surprise),
         )
-        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:reward,)." simulate_for_test(
+        @test_throws "The SaveTrajectories selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type DependsOnPreviousOutput{ByHand} are (:reward,)." simulate_for_test(
             DependsOnPreviousOutput(ByHand()),
             BaselineEnvironment(ByHand());
             cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
-            cognitive_save_history=SaveHistory(; inputs=:cue),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=:cue),
         )
         @test_throws "can only select names from a NamedTuple" simulate_for_test(
             LearnsInPlace(state -> state.values),
             BaselineEnvironment(ByHand());
             cognitive_parameters=LEARNING,
-            cognitive_save_history=SaveHistory(; states=:values),
+            save_cognitive_trajectories=SaveTrajectories(; states=:values),
         )
     end
 
     @testset "A selection keeps the return type known and the loop free of allocations" begin
         rng = Xoshiro(1)
-        simulate_with(cognitive_save_history, n_steps) = simulate_session(
+        simulate_with(save_cognitive_trajectories, n_steps) = simulate_session(
             DependsOnPreviousOutput(ByHand()),
             BaselineEnvironment(ByHand());
             who_starts=EnvironmentStarts(),
@@ -1784,25 +1792,25 @@ end
             cognitive_parameters=DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
-            cognitive_save_history,
-            environment_save_history=SaveHistory(),
+            save_cognitive_trajectories,
+            save_environment_trajectories=SaveTrajectories(),
         )
-        for cognitive_save_history in (
-            SaveHistory(; states=:n_timesteps),
-            SaveHistory(; inputs=:reward, states=(:expected_reward, :n_timesteps)),
-            SaveHistory(),
+        for save_cognitive_trajectories in (
+            SaveTrajectories(; states=:n_timesteps),
+            SaveTrajectories(; inputs=:reward, states=(:expected_reward, :n_timesteps)),
+            SaveTrajectories(),
         )
-            @test @inferred(simulate_with(cognitive_save_history, 10)) isa
+            @test @inferred(simulate_with(save_cognitive_trajectories, 10)) isa
                 SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) simulate_with(
-                cognitive_save_history, 10
+                save_cognitive_trajectories, 10
             )
         end
         #Saving only the integer state adds 8 bytes for each timestep
-        simulate_with(SaveHistory(; states=:n_timesteps), 10)
+        simulate_with(SaveTrajectories(; states=:n_timesteps), 10)
         extra_bytes =
-            @allocated(simulate_with(SaveHistory(; states=:n_timesteps), 20_000)) -
-            @allocated(simulate_with(SaveHistory(; states=:n_timesteps), 10_000))
+            @allocated(simulate_with(SaveTrajectories(; states=:n_timesteps), 20_000)) -
+            @allocated(simulate_with(SaveTrajectories(; states=:n_timesteps), 10_000))
         @test extra_bytes <= 9 * 10_000
     end
 
@@ -1880,8 +1888,8 @@ end
             environment_parameters=(;),
             previous_cognitive_state=(; value=1.0),
             previous_environment_state=(; value=2.0),
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         )
         #The given states are those of timestep 0
         @test simulation.states == fill((; value=1.0), 3)
@@ -1918,8 +1926,8 @@ end
                 cognitive_parameters=(;),
                 environment_parameters=(;),
                 rng=Xoshiro(1),
-                cognitive_save_history=EVERY_TIMESTEP,
-                environment_save_history=EVERY_TIMESTEP,
+                save_cognitive_trajectories=EVERY_TIMESTEP,
+                save_environment_trajectories=EVERY_TIMESTEP,
                 keywords...,
             )
             #The default is the integer 1
@@ -1960,8 +1968,8 @@ end
             cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         )
         for timestep_sizes in (1, 0.5, [0.5, 2.0, 0.25], 1:3)
             @test @inferred(simulate_with(timestep_sizes)) isa SessionTrajectories
@@ -1989,21 +1997,22 @@ end
         #They are returned whatever is saved
         @test simulate_with_sizes(
             0.5;
-            cognitive_save_history=SaveHistory(),
-            environment_save_history=SaveHistory(),
+            save_cognitive_trajectories=SaveTrajectories(),
+            save_environment_trajectories=SaveTrajectories(),
         ) === 0.5
         #With timestep 0, a vector starts with BeforeFirstTimestep for it, so that it has an element for each element of the others, and one size stays as it is
         @test isequal(
             simulate_with_sizes(
-                [0.5, 2.0, 0.25]; cognitive_save_history=SaveHistory(SaveEverything())
+                [0.5, 2.0, 0.25];
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
             ),
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25],
         )
         @test simulate_with_sizes(
-            [0.5, 2.0, 0.25]; cognitive_save_history=SaveHistory(SaveEverything())
+            [0.5, 2.0, 0.25]; save_cognitive_trajectories=SaveTrajectories(SaveEverything())
         ) isa Vector{Union{BeforeFirstTimestep,Float64}}
         @test simulate_with_sizes(
-            0.5; cognitive_save_history=SaveHistory(SaveEverything())
+            0.5; save_cognitive_trajectories=SaveTrajectories(SaveEverything())
         ) === 0.5
     end
 
@@ -2038,8 +2047,8 @@ end
             with_timestep_zero = simulate_until_end(
                 20;
                 timestep_sizes=collect(0.5:0.5:10.0),
-                cognitive_save_history=SaveHistory(SaveEverything()),
-                environment_save_history=SaveHistory(SaveEverything()),
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+                save_environment_trajectories=SaveTrajectories(SaveEverything()),
             )
             @test all(vector -> length(vector) == 8, saved_vectors(with_timestep_zero))
             @test length(with_timestep_zero.timestep_sizes) == 8
@@ -2055,8 +2064,8 @@ end
                 cognitive_parameters=BASELINE_PARAMETERS,
                 environment_parameters=(; REWARDS..., last_timestep=7),
                 rng,
-                cognitive_save_history=SaveHistory(SaveEverything()),
-                environment_save_history=SaveHistory(SaveEverything()),
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+                save_environment_trajectories=SaveTrajectories(SaveEverything()),
             )
             @test @inferred(typed_simulation(20)) isa SessionTrajectories
             JET.@test_opt target_modules = (CognitiveModeling,) typed_simulation(20)
@@ -2124,25 +2133,25 @@ end
                 cognitive_parameters=BASELINE_PARAMETERS,
                 environment_parameters=REWARDS,
                 rng=Xoshiro(9),
-                cognitive_save_history=SaveHistory(SaveEverything()),
-                environment_save_history=SaveHistory(SaveEverything()),
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+                save_environment_trajectories=SaveTrajectories(SaveEverything()),
             )
 
             agent = InstantiatedModel(
                 Baseline(ByHand()),
                 BASELINE_PARAMETERS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             environment = InstantiatedModel(
                 NoOutputBeforeFirstInputEnvironment(ByHand()),
                 REWARDS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             rng = Xoshiro(9)
             first_part = simulate_session!(agent, environment; who_starts, n_steps=25, rng)
             second_part = simulate_session!(agent, environment; who_starts, n_steps=35, rng)
 
-            #simulate_session! returns no timestep 0, which the one simulation starts with, and which the histories have
+            #simulate_session! returns no timestep 0, which the one simulation starts with, and which the trajectories of the agent and of the environment have
             #from where they started
             for (first_vector, second_vector, whole_vector) in zip(
                 saved_vectors(first_part),
@@ -2151,19 +2160,23 @@ end
             )
                 @test isequal(vcat(first_vector, second_vector), whole_vector[2:end])
             end
-            @test isequal(agent.history.inputs, one_simulation.observations)
-            @test isequal(agent.history.outputs, one_simulation.actions)
-            @test isequal(agent.history.states, one_simulation.states)
+            @test isequal(agent.trajectories.inputs, one_simulation.observations)
+            @test isequal(agent.trajectories.outputs, one_simulation.actions)
+            @test isequal(agent.trajectories.states, one_simulation.states)
             @test isequal(
-                agent.history.output_distributions, one_simulation.action_distributions
+                agent.trajectories.output_distributions, one_simulation.action_distributions
             )
-            @test isequal(environment.history.states, one_simulation.environment.states)
             @test isequal(
-                environment.history.outputs, one_simulation.environment.observations
+                environment.trajectories.states, one_simulation.environment.states
             )
-            @test isequal(environment.history.inputs, one_simulation.environment.actions)
             @test isequal(
-                environment.history.output_distributions,
+                environment.trajectories.outputs, one_simulation.environment.observations
+            )
+            @test isequal(
+                environment.trajectories.inputs, one_simulation.environment.actions
+            )
+            @test isequal(
+                environment.trajectories.output_distributions,
                 one_simulation.environment.observation_distributions,
             )
             #The size of the timesteps is returned as it was given
@@ -2190,19 +2203,19 @@ end
                 cognitive_parameters=BASELINE_PARAMETERS,
                 environment_parameters=REWARDS,
                 rng=Xoshiro(9),
-                cognitive_save_history=SaveHistory(SaveEverything()),
-                environment_save_history=SaveHistory(SaveEverything()),
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+                save_environment_trajectories=SaveTrajectories(SaveEverything()),
             )
 
             agent = InstantiatedModel(
                 UsesTimestepSize(ByHand()),
                 BASELINE_PARAMETERS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             environment = InstantiatedModel(
                 BaselineEnvironment(ByHand()),
                 REWARDS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             rng = Xoshiro(9)
             first_part = simulate_session!(
@@ -2212,7 +2225,7 @@ end
                 agent, environment; who_starts, n_steps=3, timestep_sizes=sizes[3:5], rng
             )
 
-            #The vectors, and the sizes of the timesteps that follow them, after timestep 0, which the histories have too
+            #The vectors, and the sizes of the timesteps that follow them, after timestep 0, which the trajectories of the agent and of the environment have too
             for (first_vector, second_vector, whole_vector) in zip(
                 saved_vectors(first_part),
                 saved_vectors(second_part),
@@ -2224,8 +2237,10 @@ end
                 vcat(first_part.timestep_sizes, second_part.timestep_sizes),
                 one_simulation.timestep_sizes[2:end],
             )
-            @test isequal(agent.history.timestep_sizes, one_simulation.timestep_sizes)
-            @test isequal(environment.history.timestep_sizes, one_simulation.timestep_sizes)
+            @test isequal(agent.trajectories.timestep_sizes, one_simulation.timestep_sizes)
+            @test isequal(
+                environment.trajectories.timestep_sizes, one_simulation.timestep_sizes
+            )
         end
     end
 
@@ -2233,7 +2248,7 @@ end
         agent = InstantiatedModel(
             StateChangedInPlaceSavedWithDeepcopy(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         (; states) = simulate_session!(
@@ -2250,7 +2265,7 @@ end
         agent = InstantiatedModel(
             StateChangedInPlace(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         first_states = simulate_session!(
@@ -2667,8 +2682,8 @@ end
             cognitive_parameters=BASELINE_PARAMETERS,
             environment_parameters=REWARDS,
             rng,
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
             observation_map=PAYOFF_AS_REWARD,
             action_map=CHOICE_AS_LEVER,
         )
@@ -2696,16 +2711,16 @@ end
         )
     end
 
-    @testset "With maps, each history has the names of its own side" begin
+    @testset "With maps, the trajectories of each side have its own names" begin
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(
             OtherNamesEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulation = simulate_session!(
             agent,
@@ -2717,29 +2732,31 @@ end
             action_map=CHOICE_AS_LEVER,
         )
         #The agent's are the ones returned as observations and actions, under the model's names
-        @test agent.history.inputs[2:end] == simulation.observations
-        @test agent.history.outputs[2:end] == simulation.actions
-        @test length(agent.history.output_distributions) == length(agent.history.outputs) &&
-            agent.history.output_distributions[1] === (; choice=BeforeFirstTimestep())
-        @test all(observation -> keys(observation) == (:reward,), agent.history.inputs)
-        @test all(action -> keys(action) == (:choice,), agent.history.outputs)
+        @test agent.trajectories.inputs[2:end] == simulation.observations
+        @test agent.trajectories.outputs[2:end] == simulation.actions
+        @test length(agent.trajectories.output_distributions) ==
+              length(agent.trajectories.outputs) &&
+            agent.trajectories.output_distributions[1] ===
+              (; choice=BeforeFirstTimestep())
+        @test all(observation -> keys(observation) == (:reward,), agent.trajectories.inputs)
+        @test all(action -> keys(action) == (:choice,), agent.trajectories.outputs)
         #The environment's are the same values, under its own names, with the number of the timestep the model didn't receive,
         #and are the ones returned under environment
         @test all(
             observation -> keys(observation) == (:payoff, :timestep_number),
-            environment.history.outputs,
+            environment.trajectories.outputs,
         )
-        @test all(action -> keys(action) == (:lever,), environment.history.inputs)
+        @test all(action -> keys(action) == (:lever,), environment.trajectories.inputs)
         @test isequal(
-            [observation.payoff for observation in environment.history.outputs],
-            [observation.reward for observation in agent.history.inputs],
+            [observation.payoff for observation in environment.trajectories.outputs],
+            [observation.reward for observation in agent.trajectories.inputs],
         )
-        @test [action.lever for action in environment.history.inputs[2:end]] == [action.choice for action in simulation.actions]
-        @test environment.history.outputs[2:end] == simulation.environment.observations
-        @test environment.history.inputs[2:end] == simulation.environment.actions
-        @test environment.history.output_distributions[2:end] ==
+        @test [action.lever for action in environment.trajectories.inputs[2:end]] == [action.choice for action in simulation.actions]
+        @test environment.trajectories.outputs[2:end] == simulation.environment.observations
+        @test environment.trajectories.inputs[2:end] == simulation.environment.actions
+        @test environment.trajectories.output_distributions[2:end] ==
             simulation.environment.observation_distributions
-        @test environment.history.output_distributions[1] ===
+        @test environment.trajectories.output_distributions[1] ===
             (; payoff=BeforeFirstTimestep(), timestep_number=BeforeFirstTimestep())
         #Where they are left for the next simulation, each side has its own names too
         @test keys(environment.previous_output) == (:payoff, :timestep_number)
@@ -2767,12 +2784,12 @@ end
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(
             WithStoppingCriterionEnvironment(ByHand()),
             (; REWARDS..., last_timestep=4);
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         #Two timesteps are simulated in full, and the next call stops after the two that are left
         @test length(
@@ -2790,17 +2807,20 @@ end
         @test all(vector -> length(vector) == 2, saved_vectors(simulation))
         @test simulation.timestep_sizes == [1.0, 2.0]
         @test environment.state == (; n_timesteps=4)
-        #Both histories have the timesteps that were simulated, after where they started
-        @test length(agent.history.states) == length(agent.history.timestep_sizes) == 5
-        @test agent.history.timestep_sizes == [BeforeFirstTimestep(), 1, 1, 1.0, 2.0]
-        @test environment.history.timestep_sizes == agent.history.timestep_sizes
-        @test length(environment.history.states) == 5
+        #The trajectories of both have the timesteps that were simulated, after where they started
+        @test length(agent.trajectories.states) ==
+            length(agent.trajectories.timestep_sizes) ==
+            5
+        @test agent.trajectories.timestep_sizes == [BeforeFirstTimestep(), 1, 1, 1.0, 2.0]
+        @test environment.trajectories.timestep_sizes == agent.trajectories.timestep_sizes
+        @test length(environment.trajectories.states) == 5
         #It has ended, so it can't be simulated further until it is reset, and the agent and the environment stay as they are
         state_at_the_end = environment.state
         @test_throws "The stopping criterion of an environment model of type WithStoppingCriterionEnvironment{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!" simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=10
         )
-        @test length(agent.history.states) == 5 && environment.state == state_at_the_end
+        @test length(agent.trajectories.states) == 5 &&
+            environment.state == state_at_the_end
         reset!(environment)
         @test length(
             simulate_session!(
@@ -2815,12 +2835,12 @@ end
         agent = InstantiatedModel(
             WithStoppingCriterion(ByHand()),
             (; learning_rate=0.25, inverse_temperature=2.0);
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(
             FixedObservationsEnvironment((; reward=fill(1.0, 10))),
             (;);
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulate_steps!(n_steps) = simulate_session!(
             agent,
@@ -2834,13 +2854,15 @@ end
         simulation = simulate_steps!(10)
         @test all(vector -> length(vector) == 2, saved_vectors(simulation))
         @test agent.state == (; expected_reward=0.841796875)
-        @test length(agent.history.states) == length(environment.history.states) == 5
+        @test length(agent.trajectories.states) ==
+            length(environment.trajectories.states) ==
+            5
         #It has ended, so it can't be simulated further until it is reset, and it stays as it is
         @test_throws "The stopping criterion of a cognitive model of type WithStoppingCriterion{ByHand} is already met before the first timestep, so no timestep can run. An InstantiatedModel whose stopping criterion is met starts again after reset!" simulate_steps!(
             10
         )
         @test agent.state == (; expected_reward=0.841796875) &&
-            length(agent.history.states) == 5
+            length(agent.trajectories.states) == 5
         reset!(agent)
         @test length(simulate_steps!(10).actions) == 4
     end
@@ -2879,7 +2901,7 @@ end
             environment_parameters=(;),
             action_map=NameMap(),
             rng=Xoshiro(9),
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         )
 
         agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS)
@@ -2935,7 +2957,7 @@ end
             BASELINE_PARAMETERS,
             1,
             Xoshiro(1),
-            SaveHistory(),
+            SaveTrajectories(),
         )
     end
 
@@ -2944,17 +2966,17 @@ end
         environment = InstantiatedModel(
             BaselineEnvironment(Means()),
             REWARDS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         observation = simulate_timestep!(environment, (; choice=true); rng=Xoshiro(1))
         @test observation === (; reward=0.8)
         @test environment.previous_output === observation
         @test environment.state === (; n_timesteps=1)
-        @test environment.history.inputs ==
+        @test environment.trajectories.inputs ==
             [(; choice=BeforeFirstTimestep()), (; choice=true)]
-        @test environment.history.outputs ==
+        @test environment.trajectories.outputs ==
             [(; reward=BeforeFirstTimestep()), (; reward=0.8)]
-        @test environment.history.output_distributions ==
+        @test environment.trajectories.output_distributions ==
             [(; reward=BeforeFirstTimestep()), (; reward=Deterministic(0.8))]
         @test_throws "The input is (cue = 1,), but it must be a NamedTuple with the inputs in the attributes of an environment model of type BaselineEnvironment{Means}, (:choice,)." simulate_timestep!(
             environment, (; cue=1)
@@ -3025,7 +3047,7 @@ end
             environment_parameters=(;),
             action_map=NameMap(),
             rng=Xoshiro(9),
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         )
 
         rng = Xoshiro(9)
@@ -3135,44 +3157,49 @@ end
     end
 end
 
-@testset "The history of an agent" begin
+@testset "The trajectories of an agent" begin
     @testset "It starts where the agent starts" begin
-        history = InstantiatedModel(
+        trajectories = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
-        ).history
-        @test history isa CognitiveModeling.ModelHistory
-        @test history.inputs == [(; reward=BeforeFirstTimestep())]
-        @test history.outputs == [(; choice=BeforeFirstTimestep())]
-        @test history.output_distributions == [(; choice=BeforeFirstTimestep())]
-        @test history.states == [(; expected_reward=0.5)]
-        @test history.timestep_sizes == [BeforeFirstTimestep()]
+            save_trajectories=SaveTrajectories(SaveEverything()),
+        ).trajectories
+        @test trajectories isa CognitiveModeling.TrajectoryHistory
+        @test trajectories.inputs == [(; reward=BeforeFirstTimestep())]
+        @test trajectories.outputs == [(; choice=BeforeFirstTimestep())]
+        @test trajectories.output_distributions == [(; choice=BeforeFirstTimestep())]
+        @test trajectories.states == [(; expected_reward=0.5)]
+        @test trajectories.timestep_sizes == [BeforeFirstTimestep()]
         #The vectors are untyped, since what is saved can change type between timesteps
-        @test history.states isa Vector{Any} && history.timestep_sizes isa Vector{Any}
+        @test trajectories.states isa Vector{Any} &&
+            trajectories.timestep_sizes isa Vector{Any}
         #Also if the state and the previous output are given
-        history = InstantiatedModel(
+        trajectories = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS,
             (; expected_reward=0.25),
             (; choice=true);
-            save_history=SaveHistory(SaveEverything()),
-        ).history
-        @test history.inputs == [(; reward=BeforeFirstTimestep())]
-        @test history.outputs == [(; choice=true)]
-        @test history.output_distributions == [(; choice=BeforeFirstTimestep())]
-        @test history.states == [(; expected_reward=0.25)]
+            save_trajectories=SaveTrajectories(SaveEverything()),
+        ).trajectories
+        @test trajectories.inputs == [(; reward=BeforeFirstTimestep())]
+        @test trajectories.outputs == [(; choice=true)]
+        @test trajectories.output_distributions == [(; choice=BeforeFirstTimestep())]
+        @test trajectories.states == [(; expected_reward=0.25)]
     end
 
     @testset "It starts empty when the initial timestep values aren't saved, and then has one element for each timestep" begin
-        save_history = SaveHistory(SaveEverything(); save_initial_timestep_values=false)
-        agent = InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS; save_history)
-        environment = InstantiatedModel(
-            FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;); save_history
+        save_trajectories = SaveTrajectories(
+            SaveEverything(); save_initial_timestep_values=false
         )
-        @test isempty(agent.history.states) &&
-            isempty(agent.history.timestep_sizes) &&
-            isempty(environment.history.states)
+        agent = InstantiatedModel(
+            Baseline(ByHand()), BASELINE_PARAMETERS; save_trajectories
+        )
+        environment = InstantiatedModel(
+            FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;); save_trajectories
+        )
+        @test isempty(agent.trajectories.states) &&
+            isempty(agent.trajectories.timestep_sizes) &&
+            isempty(environment.trajectories.states)
         simulate_session!(
             agent,
             environment;
@@ -3181,66 +3208,67 @@ end
             action_map=NameMap(),
         )
         simulate_timestep!(agent, (; reward=1.0); timestep_size=0.5)
-        @test agent.history.states == [
+        @test agent.trajectories.states == [
             (; expected_reward=0.75), (; expected_reward=0.375), (; expected_reward=0.6875)
         ]
-        @test agent.history.inputs == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]
-        @test agent.history.timestep_sizes == [1, 1, 0.5]
-        @test environment.history.states ==
+        @test agent.trajectories.inputs == [(; reward=1.0), (; reward=0.0), (; reward=1.0)]
+        @test agent.trajectories.timestep_sizes == [1, 1, 0.5]
+        @test environment.trajectories.states ==
             [(; n_observations_given=1), (; n_observations_given=2)]
-        @test environment.history.outputs == [(; reward=1.0), (; reward=0.0)]
-        @test environment.history.output_distributions ==
+        @test environment.trajectories.outputs == [(; reward=1.0), (; reward=0.0)]
+        @test environment.trajectories.output_distributions ==
             [(; reward=Deterministic(1.0)), (; reward=Deterministic(0.0))]
         #reset! starts it empty again
         reset!(agent)
-        @test isempty(agent.history.states) && isempty(agent.history.timestep_sizes)
+        @test isempty(agent.trajectories.states) &&
+            isempty(agent.trajectories.timestep_sizes)
     end
 
-    @testset "Nothing is saved by default, and a SaveHistory selects what is" begin
-        @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).save_history ===
-            SaveHistory()
+    @testset "Nothing is saved by default, and a SaveTrajectories selects what is" begin
+        @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).save_trajectories ===
+            SaveTrajectories()
         @test InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS,
             (; expected_reward=0.25),
             (; choice=NoValue()),
-        ).save_history === SaveHistory()
-        @test InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS).save_history ===
-            SaveHistory()
+        ).save_trajectories === SaveTrajectories()
+        @test InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS).save_trajectories ===
+            SaveTrajectories()
         @test InstantiatedModel(
             BaselineEnvironment(ByHand()), REWARDS, (; n_timesteps=0), (; reward=NoValue())
-        ).save_history === SaveHistory()
-        save_history = SaveHistory(; states=:n_timesteps)
+        ).save_trajectories === SaveTrajectories()
+        save_trajectories = SaveTrajectories(; states=:n_timesteps)
         agent = InstantiatedModel(
             DependsOnPreviousOutput(ByHand()),
             DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS;
-            save_history,
+            save_trajectories,
         )
-        @test agent.save_history === save_history
+        @test agent.save_trajectories === save_trajectories
         @test InstantiatedModel(
             DependsOnPreviousOutput(ByHand()),
             DEPENDS_ON_PREVIOUS_OUTPUT_PARAMETERS,
             (; expected_reward=0.25, n_timesteps=0),
             (; choice=NoValue());
-            save_history,
-        ).save_history === save_history
-        #The history starts with what is selected
-        @test agent.history.inputs == [(;)]
-        @test agent.history.outputs == [(;)]
-        @test agent.history.output_distributions == [(;)]
-        @test agent.history.states == [(; n_timesteps=0)]
+            save_trajectories,
+        ).save_trajectories === save_trajectories
+        #The trajectories start with what is selected
+        @test agent.trajectories.inputs == [(;)]
+        @test agent.trajectories.outputs == [(;)]
+        @test agent.trajectories.output_distributions == [(;)]
+        @test agent.trajectories.states == [(; n_timesteps=0)]
         #It gets what is selected on a single input and with an environment, which selects its own
         simulate_timestep!(agent, (; reward=1.0))
         environment = InstantiatedModel(
-            BaselineEnvironment(ByHand()), REWARDS; save_history=SaveHistory()
+            BaselineEnvironment(ByHand()), REWARDS; save_trajectories=SaveTrajectories()
         )
-        @test environment.save_history === SaveHistory()
+        @test environment.save_trajectories === SaveTrajectories()
         simulation = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=2
         )
-        @test agent.history.inputs == fill((;), 4)
-        @test agent.history.outputs == fill((;), 4)
-        @test agent.history.states ==
+        @test agent.trajectories.inputs == fill((;), 4)
+        @test agent.trajectories.outputs == fill((;), 4)
+        @test agent.trajectories.states ==
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2), (; n_timesteps=3)]
         @test simulation.states == [(; n_timesteps=2), (; n_timesteps=3)]
         @test all(==([(;), (;)]), saved_vectors(simulation)[5:end])
@@ -3249,53 +3277,56 @@ end
         @test environment.state == (; n_timesteps=2)
     end
 
-    @testset "A history can only select names in the model's attributes" begin
-        @test_throws "The SaveHistory selects the inputs (:reward,), but the inputs in the attributes of a cognitive model of type WithoutInputs{ByHand} are (). A history can only select names in the model's attributes." InstantiatedModel(
+    @testset "A SaveTrajectories can only select names in the model's attributes" begin
+        @test_throws "The SaveTrajectories selects the inputs (:reward,), but the inputs in the attributes of a cognitive model of type WithoutInputs{ByHand} are (). A SaveTrajectories can only select names in the model's attributes." InstantiatedModel(
             WithoutInputs(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(; inputs=:reward),
+            save_trajectories=SaveTrajectories(; inputs=:reward),
         )
-        @test_throws "The SaveHistory selects the outputs (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,)." InstantiatedModel(
+        @test_throws "The SaveTrajectories selects the outputs (:bet,), but the outputs in the attributes of a cognitive model of type Baseline{ByHand} are (:choice,)." InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(; outputs=:bet),
+            save_trajectories=SaveTrajectories(; outputs=:bet),
         )
         #For an environment, the inputs are the actions it receives, and the outputs the observations it gives
-        @test_throws "The SaveHistory selects the inputs (:choice,), but the inputs in the attributes of an environment model of type WithoutInputsEnvironment{ByHand} are ()." InstantiatedModel(
+        @test_throws "The SaveTrajectories selects the inputs (:choice,), but the inputs in the attributes of an environment model of type WithoutInputsEnvironment{ByHand} are ()." InstantiatedModel(
             WithoutInputsEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(; inputs=:choice),
+            save_trajectories=SaveTrajectories(; inputs=:choice),
         )
-        @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
-            BaselineEnvironment(ByHand()), REWARDS; save_history=SaveHistory(; outputs=:cue)
-        )
-        @test_throws "The SaveHistory selects the output distributions (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
+        @test_throws "The SaveTrajectories selects the outputs (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
             BaselineEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(; output_distributions=:cue),
+            save_trajectories=SaveTrajectories(; outputs=:cue),
+        )
+        @test_throws "The SaveTrajectories selects the output distributions (:cue,), but the outputs in the attributes of an environment model of type BaselineEnvironment{ByHand} are (:reward,)" InstantiatedModel(
+            BaselineEnvironment(ByHand()),
+            REWARDS;
+            save_trajectories=SaveTrajectories(; output_distributions=:cue),
         )
         #The states are checked too, since prepare_state_for_saving returns a state with the names in the model's attributes
-        @test_throws "The SaveHistory selects the states (:first_value,), but the states in the attributes of a cognitive model of type StateChangedInPlaceSavedWithDeepcopy{ByHand}" InstantiatedModel(
+        @test_throws "The SaveTrajectories selects the states (:first_value,), but the states in the attributes of a cognitive model of type StateChangedInPlaceSavedWithDeepcopy{ByHand}" InstantiatedModel(
             StateChangedInPlaceSavedWithDeepcopy(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(; states=:first_value),
+            save_trajectories=SaveTrajectories(; states=:first_value),
         )
         #Everything can always be selected, and an input with more than the inputs in the model's attributes is saved in full
         agent = InstantiatedModel(
             WithoutInputs(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulate_timestep!(agent, (; cue=1.0))
-        @test agent.history.inputs == [(;), (; cue=1.0)]
+        @test agent.trajectories.inputs == [(;), (; cue=1.0)]
         #A selected input is kept from an input with more
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(; inputs=:reward),
+            save_trajectories=SaveTrajectories(; inputs=:reward),
         )
         simulate_timestep!(agent, (; reward=1.0, cue=1.0))
-        @test agent.history.inputs == [(; reward=BeforeFirstTimestep()), (; reward=1.0)]
+        @test agent.trajectories.inputs ==
+            [(; reward=BeforeFirstTimestep()), (; reward=1.0)]
     end
 
     @testset "It adds what simulate_session! returns" begin
@@ -3303,27 +3334,27 @@ end
             agent = InstantiatedModel(
                 Baseline(ByHand()),
                 BASELINE_PARAMETERS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
             rng = Xoshiro(9)
             first_part = simulate_session!(agent, environment; who_starts, n_steps=3, rng)
             second_part = simulate_session!(agent, environment; who_starts, n_steps=2, rng)
 
-            @test agent.history.inputs == vcat(
+            @test agent.trajectories.inputs == vcat(
                 [(; reward=BeforeFirstTimestep())],
                 first_part.observations,
                 second_part.observations,
             )
-            @test agent.history.outputs == vcat(
+            @test agent.trajectories.outputs == vcat(
                 (; choice=BeforeFirstTimestep()), first_part.actions, second_part.actions
             )
-            @test agent.history.output_distributions == vcat(
+            @test agent.trajectories.output_distributions == vcat(
                 (; choice=BeforeFirstTimestep()),
                 first_part.action_distributions,
                 second_part.action_distributions,
             )
-            @test agent.history.states ==
+            @test agent.trajectories.states ==
                 vcat((; expected_reward=0.5), first_part.states, second_part.states)
         end
     end
@@ -3332,16 +3363,16 @@ end
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         first_action = simulate_timestep!(agent, (; reward=1.0))
         second_action = simulate_timestep!(agent, (; reward=NoValue()))
 
-        @test agent.history.inputs ==
+        @test agent.trajectories.inputs ==
             [(; reward=BeforeFirstTimestep()), (; reward=1.0), (; reward=NoValue())]
-        @test agent.history.outputs ==
+        @test agent.trajectories.outputs ==
             [(; choice=BeforeFirstTimestep()), first_action, second_action]
-        @test agent.history.output_distributions == [
+        @test agent.trajectories.output_distributions == [
             (; choice=BeforeFirstTimestep()),
             (;
                 choice=CommonTestFunctionality.BernoulliByHand(
@@ -3354,7 +3385,7 @@ end
                 )
             ),
         ]
-        @test agent.history.states ==
+        @test agent.trajectories.states ==
             [(; expected_reward=0.5), (; expected_reward=0.75), (; expected_reward=0.75)]
     end
 
@@ -3362,18 +3393,18 @@ end
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate_timestep!(agent, (; reward=1.0))
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
         simulate_timestep!(agent, (; reward=0.0))
-        @test length(agent.history.inputs) ==
-            length(agent.history.outputs) ==
-            length(agent.history.output_distributions) ==
-            length(agent.history.states) ==
+        @test length(agent.trajectories.inputs) ==
+            length(agent.trajectories.outputs) ==
+            length(agent.trajectories.output_distributions) ==
+            length(agent.trajectories.states) ==
             6
-        @test agent.history.states[end] == agent.state
+        @test agent.trajectories.states[end] == agent.state
     end
 
     @testset "It stays empty by default" begin
@@ -3383,10 +3414,10 @@ end
         simulation = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3
         )
-        @test isempty(agent.history.inputs)
-        @test isempty(agent.history.outputs)
-        @test isempty(agent.history.output_distributions)
-        @test isempty(agent.history.states)
+        @test isempty(agent.trajectories.inputs)
+        @test isempty(agent.trajectories.outputs)
+        @test isempty(agent.trajectories.output_distributions)
+        @test isempty(agent.trajectories.states)
         #The agent is still updated, and the simulation still returns empty NamedTuples for each timestep
         @test agent.state != (; expected_reward=0.5)
         @test simulation.states == fill((;), 3)
@@ -3398,7 +3429,9 @@ end
         for model in
             (StateChangedInPlaceSavedWithDeepcopy(ByHand()), StateChangedInPlace(ByHand()))
             agent = InstantiatedModel(
-                model, BASELINE_PARAMETERS; save_history=SaveHistory(SaveEverything())
+                model,
+                BASELINE_PARAMETERS;
+                save_trajectories=SaveTrajectories(SaveEverything()),
             )
             environment = InstantiatedModel(
                 FixedObservationsEnvironment((; reward=[1.0, 0.0])), (;)
@@ -3412,9 +3445,9 @@ end
             )
             simulate_timestep!(agent, (; reward=1.0))
             #The initial state is copied by the same method
-            @test [state.expected_reward[1] for state in agent.history.states] == [0.5, 0.75, 0.375, 0.6875]
+            @test [state.expected_reward[1] for state in agent.trajectories.states] == [0.5, 0.75, 0.375, 0.6875]
             @test allunique(
-                objectid(state.expected_reward) for state in agent.history.states
+                objectid(state.expected_reward) for state in agent.trajectories.states
             )
         end
     end
@@ -3423,44 +3456,46 @@ end
         agent = InstantiatedModel(
             LearnsInPlace(state -> (; first_value=state.values[1])),
             LEARNING;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulate_timestep!(agent, (; reward=1.0))
-        @test agent.history.states == [(; first_value=0.5), (; first_value=0.75)]
+        @test agent.trajectories.states == [(; first_value=0.5), (; first_value=0.75)]
     end
 
     @testset "The initial state is the same object as the agent's, with a method which does nothing" begin
         agent = InstantiatedModel(
-            LearnsInPlace(identity), LEARNING; save_history=SaveHistory(SaveEverything())
+            LearnsInPlace(identity),
+            LEARNING;
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
-        @test agent.history.states[1].values === agent.state.values
+        @test agent.trajectories.states[1].values === agent.state.values
     end
 
     @testset "Later simulations don't change it" begin
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
-        states_so_far = copy(agent.history.states)
+        states_so_far = copy(agent.trajectories.states)
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=3)
-        @test agent.history.states[1:4] == states_so_far
+        @test agent.trajectories.states[1:4] == states_so_far
     end
 
     @testset "It has the size of each timestep, when anything is saved" begin
         agent = InstantiatedModel(
-            SavesTimestepSize(), (;); save_history=SaveHistory(; outputs=:choice)
+            SavesTimestepSize(), (;); save_trajectories=SaveTrajectories(; outputs=:choice)
         )
         environment = InstantiatedModel(
             ObservesTimestepSize(),
             (;);
-            save_history=SaveHistory(; outputs=SaveEverything()),
+            save_trajectories=SaveTrajectories(; outputs=SaveEverything()),
         )
-        #A new history starts with the marker for before the first timestep, as the rest of it
-        @test agent.history.timestep_sizes == [BeforeFirstTimestep()] &&
-            environment.history.timestep_sizes == [BeforeFirstTimestep()]
+        #New trajectories start with the marker for before the first timestep, as the rest of them
+        @test agent.trajectories.timestep_sizes == [BeforeFirstTimestep()] &&
+            environment.trajectories.timestep_sizes == [BeforeFirstTimestep()]
         #A vector of sizes, and one size for every timestep
         simulate_session!(
             agent,
@@ -3472,27 +3507,31 @@ end
         simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=2, timestep_sizes=4
         )
-        @test agent.history.timestep_sizes == [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4]
-        @test environment.history.timestep_sizes ==
+        @test agent.trajectories.timestep_sizes ==
+            [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4]
+        @test environment.trajectories.timestep_sizes ==
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4]
         #One entry for each entry of the outputs, which start with the previous output
-        @test length(agent.history.outputs) == length(agent.history.timestep_sizes)
+        @test length(agent.trajectories.outputs) ==
+            length(agent.trajectories.timestep_sizes)
         #They are the sizes the environment gave the model as observations, its outputs
-        @test [observation.timestep_size for observation in environment.history.outputs] == agent.history.timestep_sizes
+        @test [
+            observation.timestep_size for observation in environment.trajectories.outputs
+        ] == agent.trajectories.timestep_sizes
         #A single input adds the size of its timestep, which is 1 by default
         simulate_timestep!(agent, (; timestep_size=NoValue()); timestep_size=1.5)
         simulate_timestep!(agent, (; timestep_size=NoValue()))
-        @test agent.history.timestep_sizes ==
+        @test agent.trajectories.timestep_sizes ==
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25, 4, 4, 1.5, 1]
         #reset! starts from the marker again
         reset!(agent)
-        @test agent.history.timestep_sizes == [BeforeFirstTimestep()]
+        @test agent.trajectories.timestep_sizes == [BeforeFirstTimestep()]
         #Nothing is kept when nothing is saved, on either side
         agent = InstantiatedModel(SavesTimestepSize(), (;))
         environment = InstantiatedModel(
             ObservesTimestepSize(),
             (;);
-            save_history=SaveHistory(; outputs=SaveEverything()),
+            save_trajectories=SaveTrajectories(; outputs=SaveEverything()),
         )
         simulate_session!(
             agent,
@@ -3502,54 +3541,64 @@ end
             timestep_sizes=[0.5, 2.0, 0.25],
         )
         simulate_timestep!(agent, (; timestep_size=1.0); timestep_size=1.5)
-        @test isempty(agent.history.timestep_sizes)
-        @test environment.history.timestep_sizes == [BeforeFirstTimestep(), 0.5, 2.0, 0.25]
+        @test isempty(agent.trajectories.timestep_sizes)
+        @test environment.trajectories.timestep_sizes ==
+            [BeforeFirstTimestep(), 0.5, 2.0, 0.25]
     end
 
-    @testset "The environment has a history too, with the same observations and actions as its outputs and inputs" begin
+    @testset "The environment has trajectories too, with the same observations and actions as its outputs and inputs" begin
         #BaselineEnvironment, with the means of its distributions, gives the reward for each choice exactly
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(
             BaselineEnvironment(Means()),
             REWARDS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
-        @test environment.history isa CognitiveModeling.ModelHistory
-        @test environment.history.outputs == [(; reward=BeforeFirstTimestep())]
+        @test environment.trajectories isa CognitiveModeling.TrajectoryHistory
+        @test environment.trajectories.outputs == [(; reward=BeforeFirstTimestep())]
         #It starts with the actions in its attributes as inputs, which an environment can have none of
-        @test environment.history.inputs == [(; choice=BeforeFirstTimestep())]
+        @test environment.trajectories.inputs == [(; choice=BeforeFirstTimestep())]
         @test InstantiatedModel(
             WithoutInputsEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(SaveEverything()),
-        ).history.inputs == [(;)]
-        @test environment.history.states == [(; n_timesteps=0)]
+            save_trajectories=SaveTrajectories(SaveEverything()),
+        ).trajectories.inputs == [(;)]
+        @test environment.trajectories.states == [(; n_timesteps=0)]
         #Before the first timestep, it has given nothing to sample the observations from
-        @test environment.history.output_distributions == [(; reward=BeforeFirstTimestep())]
+        @test environment.trajectories.output_distributions ==
+            [(; reward=BeforeFirstTimestep())]
         simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=3, rng=Xoshiro(1)
         )
-        @test environment.history.outputs == agent.history.inputs
-        @test environment.history.inputs[2:end] == agent.history.outputs[2:end]
-        @test environment.history.states ==
+        @test environment.trajectories.outputs == agent.trajectories.inputs
+        @test environment.trajectories.inputs[2:end] == agent.trajectories.outputs[2:end]
+        @test environment.trajectories.states ==
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2), (; n_timesteps=3)]
         #The observation distributions are what it gave its observations to be sampled from: a reward of a half for no choice,
         #before the first, and then the reward for each choice
-        @test environment.history.output_distributions == [
+        @test environment.trajectories.output_distributions == [
             (; reward=BeforeFirstTimestep()),
             (; reward=Deterministic(0.5)),
-            (; reward=Deterministic(reward_for_choice(agent.history.outputs[2].choice))),
-            (; reward=Deterministic(reward_for_choice(agent.history.outputs[3].choice))),
+            (;
+                reward=Deterministic(
+                    reward_for_choice(agent.trajectories.outputs[2].choice)
+                )
+            ),
+            (;
+                reward=Deterministic(
+                    reward_for_choice(agent.trajectories.outputs[3].choice)
+                )
+            ),
         ]
         #Its selection is its own
         environment = InstantiatedModel(
             BaselineEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(; states=:n_timesteps),
+            save_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
         simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
@@ -3557,10 +3606,10 @@ end
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
-        @test environment.history.outputs == fill((;), 3)
-        @test environment.history.inputs == fill((;), 3)
-        @test environment.history.output_distributions == fill((;), 3)
-        @test environment.history.states ==
+        @test environment.trajectories.outputs == fill((;), 3)
+        @test environment.trajectories.inputs == fill((;), 3)
+        @test environment.trajectories.output_distributions == fill((;), 3)
+        @test environment.trajectories.states ==
             [(; n_timesteps=0), (; n_timesteps=1), (; n_timesteps=2)]
         #It stays empty by default
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
@@ -3570,36 +3619,36 @@ end
             who_starts=EnvironmentStarts(),
             n_steps=2,
         )
-        @test isempty(environment.history.outputs) &&
-            isempty(environment.history.inputs) &&
-            isempty(environment.history.output_distributions) &&
-            isempty(environment.history.states)
+        @test isempty(environment.trajectories.outputs) &&
+            isempty(environment.trajectories.inputs) &&
+            isempty(environment.trajectories.output_distributions) &&
+            isempty(environment.trajectories.states)
     end
 end
 
 @testset "reset!" begin
-    @testset "An agent goes back to where a new one starts, with a new history" begin
+    @testset "An agent goes back to where a new one starts, with new trajectories" begin
         agent = InstantiatedModel(
             Baseline(ByHand()),
             BASELINE_PARAMETERS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(BaselineEnvironment(ByHand()), REWARDS)
         first_simulation = simulate_session!(
             agent, environment; who_starts=EnvironmentStarts(), n_steps=5, rng=Xoshiro(2)
         )
-        history = agent.history
+        trajectories = agent.trajectories
         @test reset!(agent) === agent
         @test agent.state === (; expected_reward=0.5)
         @test agent.previous_output === (; choice=BeforeFirstTimestep())
         @test agent.parameters === BASELINE_PARAMETERS
-        #The history is a new one, and the one from before is as it was
-        @test agent.history !== history
-        @test length(history.states) == 6
-        @test agent.history.inputs == [(; reward=BeforeFirstTimestep())]
-        @test agent.history.outputs == [(; choice=BeforeFirstTimestep())]
-        @test agent.history.output_distributions == [(; choice=BeforeFirstTimestep())]
-        @test agent.history.states == [(; expected_reward=0.5)]
+        #The trajectories are new ones, and those from before are as they were
+        @test agent.trajectories !== trajectories
+        @test length(trajectories.states) == 6
+        @test agent.trajectories.inputs == [(; reward=BeforeFirstTimestep())]
+        @test agent.trajectories.outputs == [(; choice=BeforeFirstTimestep())]
+        @test agent.trajectories.output_distributions == [(; choice=BeforeFirstTimestep())]
+        @test agent.trajectories.states == [(; expected_reward=0.5)]
         #With the environment reset too, simulating again gives the same
         reset!(environment)
         @test isequal(
@@ -3618,14 +3667,14 @@ end
         agent = InstantiatedModel(
             WithDefaultParameters(ByHand()),
             (; learning_rate=0.3);
-            save_history=SaveHistory(; states=SaveEverything()),
+            save_trajectories=SaveTrajectories(; states=SaveEverything()),
         )
         parameters = agent.parameters
         simulate_timestep!(agent, (; reward=1.0))
         reset!(agent)
         @test agent.parameters === parameters
-        @test agent.save_history === SaveHistory(; states=SaveEverything())
-        @test agent.history.inputs == [(;)] && length(agent.history.states) == 1
+        @test agent.save_trajectories === SaveTrajectories(; states=SaveEverything())
+        @test agent.trajectories.inputs == [(;)] && length(agent.trajectories.states) == 1
         #A state that is changed in place is made again
         agent = InstantiatedModel(
             StateChangedInPlaceSavedWithDeepcopy(ByHand()), BASELINE_PARAMETERS
@@ -3635,10 +3684,10 @@ end
         reset!(agent)
         @test agent.state.expected_reward == [0.5]
         @test agent.state.expected_reward !== expected_reward_vector
-        #A history that saves nothing stays empty
-        @test isempty(agent.history.inputs) &&
-            isempty(agent.history.outputs) &&
-            isempty(agent.history.states)
+        #Trajectories that nothing is selected for stay empty
+        @test isempty(agent.trajectories.inputs) &&
+            isempty(agent.trajectories.outputs) &&
+            isempty(agent.trajectories.states)
     end
 
     @testset "An agent that was given a state of its own goes back to the initial state" begin
@@ -3653,11 +3702,11 @@ end
         @test agent.previous_output === (; choice=BeforeFirstTimestep())
     end
 
-    @testset "An environment goes back to where a new one starts, with a new history" begin
+    @testset "An environment goes back to where a new one starts, with new trajectories" begin
         environment = InstantiatedModel(
             FixedObservationsEnvironment((; reward=[1.0, 0.0, 1.0])),
             (;);
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulate_session!(
             InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS),
@@ -3666,22 +3715,23 @@ end
             n_steps=2,
             action_map=NameMap(),
         )
-        history = environment.history
+        trajectories = environment.trajectories
         @test reset!(environment) === environment
         @test environment.state === (; n_observations_given=0)
         @test environment.previous_output === (; reward=BeforeFirstTimestep())
-        @test environment.history !== history
-        @test length(history.states) == 3
-        @test environment.history.outputs == [(; reward=BeforeFirstTimestep())]
-        @test environment.history.inputs == [(;)]
-        @test environment.history.output_distributions == [(; reward=BeforeFirstTimestep())]
-        @test environment.history.states == [(; n_observations_given=0)]
+        @test environment.trajectories !== trajectories
+        @test length(trajectories.states) == 3
+        @test environment.trajectories.outputs == [(; reward=BeforeFirstTimestep())]
+        @test environment.trajectories.inputs == [(;)]
+        @test environment.trajectories.output_distributions ==
+            [(; reward=BeforeFirstTimestep())]
+        @test environment.trajectories.states == [(; n_observations_given=0)]
         #It can then be simulated from the start again
         (; observations) = simulate_session!(
             InstantiatedModel(
                 Baseline(ByHand()),
                 BASELINE_PARAMETERS;
-                save_history=SaveHistory(SaveEverything()),
+                save_trajectories=SaveTrajectories(SaveEverything()),
             ),
             environment;
             who_starts=EnvironmentStarts(),
@@ -3698,7 +3748,7 @@ end
         environment = InstantiatedModel(
             BaselineEnvironment(ByHand()),
             REWARDS;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test agent.n_timesteps == environment.n_timesteps == 0
         simulate_timestep!(agent, (; reward=1.0))
@@ -3785,7 +3835,7 @@ end
         #With timestep 0, it is all that is kept
         with_initial = simulate_turning_invalid(;
             cognitive_parameters=(; learning_rate=1.0, inverse_temperature=2.0),
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
             warn_on_invalid_parameters=false,
         )
         @test with_initial.states == [(; expected_reward=0.5)]
@@ -3814,7 +3864,7 @@ end
         agent = InstantiatedModel(
             WithInvalidParameters(ByHand()),
             turning_invalid;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         environment = InstantiatedModel(always_rewarded, (;))
         simulation = @test_logs (:warn, r"on timestep 2, so the simulation stopped") simulate_session!(
@@ -3827,7 +3877,7 @@ end
         @test simulation.parameters_valid === false && simulation.n_timesteps == 1
         @test agent.state == (; expected_reward=0.975)
         @test agent.n_timesteps == environment.n_timesteps == 1
-        @test length(agent.history.states) == 2
+        @test length(agent.trajectories.states) == 2
         @test simulation.last_timestep.state.expected_reward ≈ 0.99875
         @test_logs simulate_session!(
             agent,
@@ -3866,7 +3916,7 @@ end
         agent = InstantiatedModel(
             WithInvalidParameters(ByHand()),
             (; learning_rate=1.0, inverse_temperature=2.0);
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test_logs (
             :warn,
@@ -3874,7 +3924,7 @@ end
         ) simulate_timestep!(agent, (; reward=1.0))
         @test agent.state == (; expected_reward=0.5) &&
             agent.n_timesteps == 0 &&
-            length(agent.history.states) == 1
+            length(agent.trajectories.states) == 1
         @test_logs simulate_timestep!(
             agent, (; reward=1.0); warn_on_invalid_parameters=false
         )
@@ -3990,7 +4040,7 @@ end
                 cognitive_parameters,
                 environment_parameters,
                 rng=Xoshiro(seed),
-                cognitive_save_history=SaveHistory(
+                save_cognitive_trajectories=SaveTrajectories(
                     SaveEverything(); save_initial_timestep_values
                 ),
                 timestep_sizes=collect(1.0:10.0),

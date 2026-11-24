@@ -55,7 +55,7 @@ end
 #The actions in the data are scored once, against the distributions of their timesteps
 actions_to_condition_on ~ product_distribution(action_distributions)
 
-#The parameters as they were given, and the trajectories over the timesteps that the save histories select
+#The parameters as they were given, and the trajectories over the timesteps that the SaveTrajectories select
 return (; cognitive_parameters, environment_parameters, saved_trajectories)
 ```
 
@@ -89,41 +89,40 @@ for any other, and only a number or a `Bool` can be, so a value in the data that
 gives as another kind of `Deterministic` is an error, and so is one where the model gave
 nothing, [`NoValue`](@ref). When the session doesn't include its environment, as the
 `include_environment` of `session_info` decides, which by default is when nothing in the
-data is `ImputedMissingValue()` or `SimulatedMissingValue()` and the environment's history
-isn't saved, the session is the same as one without an environment, with the same variables.
-The [`stopping_criterion`](@ref) of the models is checked before every timestep, as
-[`SessionInfo`](@ref) describes, so that a session from [`decondition_sessions`](@ref) can
-end early, as a simulation does.
+data is `ImputedMissingValue()` or `SimulatedMissingValue()` and the environment's
+trajectories aren't saved, the session is the same as one without an environment, with the
+same variables. The [`stopping_criterion`](@ref) of the models is checked before every
+timestep, as [`SessionInfo`](@ref) describes, so that a session from
+[`decondition_sessions`](@ref) can end early, as a simulation does.
 
 # What it returns
 A `NamedTuple` with `cognitive_parameters` and `environment_parameters`, the parameters as
 they were given, without the default values of the models, and `saved_trajectories`, the
-trajectories that the save histories of `session_info` select, which
-`returned(model, chain)` gives for each sample. The trajectories are a
-[`SessionTrajectories`](@ref), as [`simulate_session`](@ref) returns: `states`,
-`observations`, `actions` and `action_distributions` of the cognitive model, `environment`
-with the `states`, `observations`, `actions` and `observation_distributions` of the
-environment when the session has one, which are empty when it didn't run, and
-[`NoEnvironment`](@ref) when it has none, and `timestep_sizes`. Each is a vector with one
-element for timestep 0, before the first timestep, and one for each timestep that ran.
-Timestep 0 has the previous observation and action, which are [`BeforeFirstTimestep`](@ref)
-unless others are given, `BeforeFirstTimestep()` for every distribution, and the initial
-states, which can depend on the parameters. Element `t + 1` is then timestep `t`, and a
-[`SaveHistory`](@ref) with `save_initial_timestep_values = false` leaves timestep 0 out. The
-returned actions and observations are those the models received, with the imputed values.
-`timestep_sizes` has the size of each timestep, after `BeforeFirstTimestep()` for timestep 0
-when it is there, when anything is selected, and is empty otherwise. `n_timesteps` is the
-number of timesteps that ran, and `last_timestep` is `nothing`. `parameters_valid` is a
-`Bool`, whether the parameters stayed valid, also for models that can't set it in their
-[`ModelOutput`](@ref), since a [`stopping_criterion`](@ref) met while the data continues
-counts as parameters that turned invalid. When a model sets it to `false`, or such a
-criterion is met, the session gives the parameters a log density of
-`-Inf`, ends before that timestep and scores nothing, so the trajectories end before it, and
-the variables of the later timesteps don't exist for that sample, which can keep a sampler
-from starting, as [`turing_full_model`](@ref) describes. Any latent variable in a session,
-imputed or from a
-model which samples within a timestep, greatly increases the amount of estimated variables,
-which will generally make fitting the model much slower.
+trajectories that the `SaveTrajectories` of `session_info` select, which `returned(model,
+chain)` gives for each sample. The trajectories are a [`SessionTrajectories`](@ref), as
+[`simulate_session`](@ref) returns: `states`, `observations`, `actions` and
+`action_distributions` of the cognitive model, `environment` with the `states`,
+`observations`, `actions` and `observation_distributions` of the environment when the
+session has one, which are empty when it didn't run, and [`NoEnvironment`](@ref) when it has
+none, and `timestep_sizes`. Each is a vector with one element for timestep 0, before the
+first timestep, and one for each timestep that ran. Timestep 0 has the previous observation
+and action, which are [`BeforeFirstTimestep`](@ref) unless others are given,
+`BeforeFirstTimestep()` for every distribution, and the initial states, which can depend on
+the parameters. Element `t + 1` is then timestep `t`, and a [`SaveTrajectories`](@ref) with
+`save_initial_timestep_values = false` leaves timestep 0 out. The returned actions and
+observations are those the models received, with the imputed values. `timestep_sizes` has
+the size of each timestep, after `BeforeFirstTimestep()` for timestep 0 when it is there,
+when anything is selected, and is empty otherwise. `n_timesteps` is the number of timesteps
+that ran, and `last_timestep` is `nothing`. `parameters_valid` is a `Bool`, whether the
+parameters stayed valid, also for models that can't set it in their [`ModelOutput`](@ref),
+since a [`stopping_criterion`](@ref) met while the data continues counts as parameters that
+turned invalid. When a model sets it to `false`, or such a criterion is met, the session
+gives the parameters a log density of `-Inf`, ends before that timestep and scores nothing,
+so the trajectories end before it, and the variables of the later timesteps don't exist for
+that sample, which can keep a sampler from starting, as [`turing_full_model`](@ref)
+describes. Any latent variable in a session, imputed or from a model which samples within a
+timestep, greatly increases the amount of estimated variables, which will generally make
+fitting the model much slower.
 
 # Examples
 ```julia
@@ -161,7 +160,7 @@ session_info = SessionInfo(
     (; reward = [1.0, 0.0, 1.0, 1.0]),
     (; choice = [true, false, ImputedMissingValue(), true]);
     who_starts = EnvironmentStarts(),
-    cognitive_save_history = SaveHistory(; states = :expected_reward),
+    save_cognitive_trajectories = SaveTrajectories(; states = :expected_reward),
 )
 
 #Priors on the parameters, and the session as a submodel
@@ -321,11 +320,11 @@ this happens, and what to do.
 
 Saving states adds a cost to gradient calculations. Without a downstream model that needs
 them, a fit is fastest with sessions that save nothing, and the trajectories are then read
-from the chain afterwards with [`get_session_trajectories`](@ref), or with `returned` on
-the model of a copy of the sessions that saves them,
-`MultipleSessionsInfo(sessions_info; cognitive_save_history = SaveHistory(; states = :expected_reward))`,
-since the two models have the same variables. A warning says so when the sessions save
-anything and there is no downstream model.
+from the chain afterwards with [`get_session_trajectories`](@ref), or with `returned` on the
+model of a copy of the sessions that saves them, `MultipleSessionsInfo(sessions_info;
+save_cognitive_trajectories = SaveTrajectories(; states = :expected_reward))`, since the two
+models have the same variables. A warning says so when the sessions save anything and there
+is no downstream model.
 
 # Examples
 ```julia
@@ -347,7 +346,7 @@ sessions_info = MultipleSessionsInfo(
     action_columns = :choice,
     session_columns = :id,
     who_starts = EnvironmentStarts(),
-    cognitive_save_history = SaveHistory(; states = :expected_reward),
+    save_cognitive_trajectories = SaveTrajectories(; states = :expected_reward),
 )
 
 #Each session has its own parameters, from the same priors
@@ -366,7 +365,7 @@ returned_values[1].saved_trajectories[2].states
 
 #The same fit without saving, and the states read from the chain afterwards
 sessions_without_saving = MultipleSessionsInfo(
-    sessions_info; cognitive_save_history = SaveHistory(),
+    sessions_info; save_cognitive_trajectories = SaveTrajectories(),
 )
 unsaved = full_model(TuringBackend(), cognitive_parameters_model, sessions_without_saving)
 chain = sample(unsaved, NUTS(), 1000)

@@ -83,7 +83,7 @@ simulations = map(enumerate(simulated_learning_rates)) do (participant, learning
         n_steps=50,
         cognitive_parameters=(; learning_rate, inverse_temperature=5.0),
         environment_parameters=(; reward_probability=0.7),
-        cognitive_save_history=SaveHistory(;
+        save_cognitive_trajectories=SaveTrajectories(;
             inputs=:reward, outputs=:choice, save_initial_timestep_values=false
         ),
         rng=Xoshiro(participant),
@@ -173,7 +173,7 @@ parameters = get_session_parameters(returned(model, chain), sessions_info)
 # [`get_session_trajectories`](@ref) makes a chain of what the sessions saved:
 
 saving_sessions = MultipleSessionsInfo(
-    sessions_info; cognitive_save_history=SaveHistory(; states=:expected_reward)
+    sessions_info; save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward)
 )
 trajectories = get_session_trajectories(
     returned(hierarchical_learning_rates(saving_sessions), chain), sessions_info
@@ -195,7 +195,7 @@ session_info = SessionInfo(
     (; reward=table.reward[101:150]),
     (; choice=table.choice[101:150]);
     who_starts=EnvironmentStarts(),
-    cognitive_save_history=SaveHistory(; states=:expected_reward),
+    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
 )
 
 @model function one_session(session_info)

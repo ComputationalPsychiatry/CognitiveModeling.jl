@@ -2,14 +2,14 @@
 """
     SaveEverything()
 
-Marker for saving every attribute of a kind, used in [`SaveHistory`](@ref).
+Marker for saving every attribute of a kind, used in [`SaveTrajectories`](@ref).
 """
 struct SaveEverything end
 
 """
-    SaveHistory(; states=(), inputs=(), outputs=(), output_distributions=(),
-                save_initial_timestep_values=true)
-    SaveHistory(SaveEverything(); save_initial_timestep_values=true)
+    SaveTrajectories(; states=(), inputs=(), outputs=(), output_distributions=(),
+                     save_initial_timestep_values=true)
+    SaveTrajectories(SaveEverything(); save_initial_timestep_values=true)
 
 Which states, inputs, outputs and output distributions of a model a simulation or a fitted
 session saves, by name, and whether it saves them from before the first timestep too.
@@ -21,9 +21,9 @@ from [`attribute_names`](@ref): for a cognitive model the inputs are its observa
 the outputs its actions, and for an environment model the inputs are the actions it receives
 and the outputs the observations it gives. The output distributions are what the model gave
 its outputs to be sampled from, named like the outputs. A kind that isn't given saves
-nothing, so `SaveHistory()` saves nothing, which is the default everywhere, and
-`SaveHistory(SaveEverything())` saves everything. The selections are read as properties,
-such as `save_history.states`.
+nothing, so `SaveTrajectories()` saves nothing, which is the default everywhere, and
+`SaveTrajectories(SaveEverything())` saves everything. The selections are read as
+properties, such as `save_trajectories.states`.
 
 A model with submodels keeps the state of each submodel under the submodel's name, which
 selects all of that state. Some of its states are selected with the name of the submodel,
@@ -46,33 +46,33 @@ saving none gives an empty one, `(;)`. Before the first timestep there is no out
 distribution, so timestep 0 has `BeforeFirstTimestep()` for each name that is saved.
 
 Each model of a simulation has one: [`simulate_session`](@ref) and [`SessionInfo`](@ref)
-take `cognitive_save_history` and `environment_save_history`, and an
-[`InstantiatedModel`](@ref) takes `save_history`. The trajectories that a simulation or a
-session returns are named by their role: the cognitive model's inputs as `observations` and
-outputs as `actions`, and the environment's inputs as `actions` and outputs as
+take `save_cognitive_trajectories` and `save_environment_trajectories`, and an
+[`InstantiatedModel`](@ref) takes `save_trajectories`. The trajectories that a simulation or
+a session returns are named by their role: the cognitive model's inputs as `observations`
+and outputs as `actions`, and the environment's inputs as `actions` and outputs as
 `observations` under `environment`, as [`simulate_session`](@ref) describes.
 
 # Examples
 ```jldoctest
-julia> save_history = SaveHistory(; outputs = :choice, states = (:expected_reward, :surprise))
-SaveHistory
+julia> save_trajectories = SaveTrajectories(; outputs = :choice, states = (:expected_reward, :surprise))
+SaveTrajectories
 States: expected_reward, surprise
 Inputs: none
 Outputs: choice
 Output distributions: none
 Initial timestep values: saved
 
-julia> save_history.states
+julia> save_trajectories.states
 (:expected_reward, :surprise)
 
-julia> SaveHistory(SaveEverything()).inputs
+julia> SaveTrajectories(SaveEverything()).inputs
 SaveEverything()
 
-julia> SaveHistory(SaveEverything(); save_initial_timestep_values = false).save_initial_timestep_values
+julia> SaveTrajectories(SaveEverything(); save_initial_timestep_values = false).save_initial_timestep_values
 false
 
-julia> SaveHistory(; states = (:surprise, :perception => :expected_reward))
-SaveHistory
+julia> SaveTrajectories(; states = (:surprise, :perception => :expected_reward))
+SaveTrajectories
 States: surprise, perception.expected_reward
 Inputs: none
 Outputs: none
@@ -80,19 +80,19 @@ Output distributions: none
 Initial timestep values: saved
 ```
 """
-struct SaveHistory{
+struct SaveTrajectories{
     Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
 } end
 
 #Takes the names by keyword, and puts each selection in the type, and whether the initial timestep values are saved
-function SaveHistory(;
+function SaveTrajectories(;
     states=(),
     inputs=(),
     outputs=(),
     output_distributions=(),
     save_initial_timestep_values::Bool=true,
 )
-    return SaveHistory{
+    return SaveTrajectories{
         as_state_selection(states),
         as_selection(inputs),
         as_selection(outputs),
@@ -102,8 +102,8 @@ function SaveHistory(;
 end
 
 #Saves everything of every kind
-function SaveHistory(::SaveEverything; save_initial_timestep_values::Bool=true)
-    return SaveHistory(;
+function SaveTrajectories(::SaveEverything; save_initial_timestep_values::Bool=true)
+    return SaveTrajectories(;
         states=SaveEverything(),
         inputs=SaveEverything(),
         outputs=SaveEverything(),
@@ -115,9 +115,9 @@ end
 """
     as_selection(names)
 
-Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it:
+Return `names` as a selection, which is how a [`SaveTrajectories`](@ref) keeps it:
 [`SaveEverything`](@ref) as it is, and otherwise a `Tuple` of `Symbol`s, as
-[`as_tuple`](@ref) makes it. Used by the constructor of [`SaveHistory`](@ref).
+[`as_tuple`](@ref) makes it. Used by the constructor of [`SaveTrajectories`](@ref).
 """
 as_selection(::SaveEverything) = SaveEverything()
 as_selection(names) = as_tuple(names)::Tuple{Vararg{Symbol}}
@@ -126,13 +126,13 @@ as_selection(names) = as_tuple(names)::Tuple{Vararg{Symbol}}
 """
     as_state_selection(states)
 
-Return `states` as the selection of states that a [`SaveHistory`](@ref) keeps:
+Return `states` as the selection of states that a [`SaveTrajectories`](@ref) keeps:
 [`SaveEverything`](@ref) as it is, and otherwise a `Tuple` with an entry for each of them,
 as [`as_state_entries`](@ref) makes them: a `Symbol` for a state that is saved whole, and
 for a submodel that some states are saved of, a `Tuple` of its name and the selection of
 its states, in the same form. `(:surprise, :perception => :expected_reward)` is kept as
 `(:surprise, (:perception, (:expected_reward,)))`. Used by the constructor of
-[`SaveHistory`](@ref).
+[`SaveTrajectories`](@ref).
 """
 as_state_selection(::SaveEverything) = SaveEverything()
 as_state_selection(states::Union{Symbol,Tuple{Vararg{Symbol}}}) = as_tuple(states)
@@ -143,7 +143,7 @@ as_state_selection(states) = as_state_entries(as_tuple(states))
     as_state_entries(states::Tuple)
     as_state_entry(state)
 
-Return the entries of a selection of states, as a [`SaveHistory`](@ref) keeps them, for
+Return the entries of a selection of states, as a [`SaveTrajectories`](@ref) keeps them, for
 `states`, and for one of them, `state`, in a tuple: a `Symbol` as it is, for a state that
 is saved whole, and `:submodel => states` as a `Tuple` of the name of the submodel and the
 selection of its states, from [`as_state_selection`](@ref). A submodel with
@@ -166,10 +166,10 @@ as_state_entry(state) = (state::Union{Symbol,Pair{Symbol}},)
     state_selection_as_given(selection)
     state_entry_as_given(entry)
 
-Return the selection of states that a [`SaveHistory`](@ref) keeps, `selection`, and one
+Return the selection of states that a [`SaveTrajectories`](@ref) keeps, `selection`, and one
 entry of it, `entry`, in the form that they are given in: the states of a submodel as
 `:submodel => states`, from the tuple that [`as_state_selection`](@ref) keeps them as. Used
-to read `save_history.states`, and to display a `SaveHistory`.
+to read `save_trajectories.states`, and to display a `SaveTrajectories`.
 """
 state_selection_as_given(selection::SaveEverything) = selection
 state_selection_as_given(selection::Tuple{Vararg{Symbol}}) = selection
@@ -181,7 +181,7 @@ end
 
 #Reads the selections in the type as properties, and whether the initial timestep values are saved
 function Base.getproperty(
-    save_history::SaveHistory{
+    save_trajectories::SaveTrajectories{
         Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values
     },
     name::Symbol,
@@ -197,11 +197,11 @@ function Base.getproperty(
     elseif name === :save_initial_timestep_values
         return Tsave_initial_timestep_values
     else
-        throw(FieldError(typeof(save_history), name))
+        throw(FieldError(typeof(save_trajectories), name))
     end
 end
 
-function Base.propertynames(::SaveHistory)
+function Base.propertynames(::SaveTrajectories)
     return (
         :states, :inputs, :outputs, :output_distributions, :save_initial_timestep_values
     )
@@ -210,18 +210,18 @@ end
 ## What was saved of an instantiated model ##
 
 """
-    ModelHistory(states, inputs, outputs, output_distributions, timestep_sizes)
+    TrajectoryHistory(states, inputs, outputs, output_distributions, timestep_sizes)
 
-What has happened to an [`InstantiatedModel`](@ref), which [`simulate_session!`](@ref) adds
-to.
+The trajectories that an [`InstantiatedModel`](@ref) has saved so far, which
+[`simulate_session!`](@ref) and [`simulate_timestep!`](@ref) add to.
 
-Each argument is kept in a field of the same name, such as `history.states`. The names are
-the model's own: for a cognitive model the inputs are its observations and the outputs its
-actions, and for an environment model the inputs are the actions it received and the outputs
-the observations it gave. The model's [`SaveHistory`](@ref) selects what is kept of each
-kind, and when it selects nothing at all, the vectors stay empty. Each vector starts with
-timestep 0, where the model started, when the `SaveHistory` saves the initial timestep
-values, which it does by default, so that element `t + 1` is timestep `t`.
+Each argument is kept in a field of the same name, such as `trajectories.states`. The names
+are the model's own: for a cognitive model the inputs are its observations and the outputs
+its actions, and for an environment model the inputs are the actions it received and the
+outputs the observations it gave. The model's [`SaveTrajectories`](@ref) selects what is
+kept of each kind, and when it selects nothing at all, the vectors stay empty. Each vector
+starts with timestep 0, where the model started, when the `SaveTrajectories` saves the
+initial timestep values, which it does by default, so that element `t + 1` is timestep `t`.
 
 The vectors hold values of any type, since what is saved can change type from one timestep
 to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a value.
@@ -242,7 +242,7 @@ to the next, as an output does from `BeforeFirstTimestep()` at timestep 0 to a v
   `BeforeFirstTimestep()` for timestep 0, so that it has an entry for each entry of the
   other vectors.
 """
-struct ModelHistory
+struct TrajectoryHistory
     states::Vector{Any}
     inputs::Vector{Any}
     outputs::Vector{Any}
@@ -264,8 +264,8 @@ fitted session returns one for each sample.
 Each argument is kept in a field of the same name, such as `trajectories.states`. The
 trajectories of each kind are a vector with one element for each timestep, after one for
 timestep 0, before the first timestep, when it is saved. Each element is a `NamedTuple` with
-what the [`SaveHistory`](@ref) of its model selects of that kind, which is empty when it
-selects nothing. `NamedTuple(trajectories)` gives the fields in a `NamedTuple`.
+what the [`SaveTrajectories`](@ref) of its model selects of that kind, which is empty when
+it selects nothing. `NamedTuple(trajectories)` gives the fields in a `NamedTuple`.
 
 In the REPL, the trajectories of a session show the number of timesteps, the names of what
 was saved of each kind, for the cognitive model and for the environment, with the states of
@@ -329,7 +329,7 @@ julia> trajectories = simulate_session(
            cognitive_parameters = (; learning_rate = 0.5),
            environment_parameters = (;),
            action_map = NameMap(),
-           cognitive_save_history = SaveHistory(; states = :expected_reward, outputs = :choice),
+           save_cognitive_trajectories = SaveTrajectories(; states = :expected_reward, outputs = :choice),
        )
 SessionTrajectories
 Timesteps: 3, after timestep 0

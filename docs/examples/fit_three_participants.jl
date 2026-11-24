@@ -125,7 +125,7 @@ chain = sample(model, NUTS(), 1000)
 #with sessions that save them, and gives a chain with the expected values of each participant, named after them, as
 #P1.expected_value. get_session_parameters gives the parameters of each participant the same way, as P1.learning_rate
 session_trajectories = get_session_trajectories(
-    model, chain; cognitive_save_history=SaveHistory(; states=:expected_value)
+    model, chain; save_cognitive_trajectories=SaveTrajectories(; states=:expected_value)
 )
 session_parameters = get_session_parameters(model, chain)
 

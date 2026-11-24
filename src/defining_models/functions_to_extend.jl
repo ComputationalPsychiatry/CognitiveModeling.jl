@@ -154,10 +154,11 @@ isn't affected.
 
 # Implementation
 A model can add a method of this function. The default returns `state` as it is, so nothing
-is copied, apart from the state of each submodel, which the submodel's own method prepares. One which changes an object in its state in place must add a method which copies
-it, or all the saved states show the final values, with no error. The method must return the
-state with the names in the model's attributes, since a [`SaveHistory`](@ref) selects states
-by those names. Nothing checks this while the model runs.
+is copied, apart from the state of each submodel, which the submodel's own method prepares.
+One which changes an object in its state in place must add a method which copies it, or all
+the saved states show the final values, with no error. The method must return the state with
+the names in the model's attributes, since a [`SaveTrajectories`](@ref) selects states by
+those names. Nothing checks this while the model runs.
 
 # Examples
 ```jldoctest
@@ -322,17 +323,18 @@ of simulating all of `n_steps`.
 
 [`simulate_session`](@ref) and [`simulate_session!`](@ref) check it for both models before
 each timestep, with the states that the timestep before left. When it returns `true` for
-either, no further timestep is simulated, and what is returned and added to the histories
-has the timesteps that were simulated. When the environment starts, the cognitive model has
-then made its last observation and acted on it, and the environment doesn't receive that
-action. When the cognitive model starts, the environment has then responded to the last
-action with an observation, and the cognitive model doesn't receive that observation. A
-model whose criterion is already met before the first timestep can't be simulated, and
-throws an error: a new simulation starts from the initial state, and [`reset!`](@ref) puts
-an [`InstantiatedModel`](@ref) back there. A fitted session checks it before every timestep
-too, and throws the same error when it is met before the first, as [`SessionInfo`](@ref)
-describes. Under a compiler like Reactant.jl, a criterion on traced values returns a traced
-Bool, and the simulation is then masked instead of stopped, as `simulate_session` describes.
+either, no further timestep is simulated, and what is returned, and added to the
+trajectories of instantiated models, has the timesteps that were simulated. When the
+environment starts, the cognitive model has then made its last observation and acted on it,
+and the environment doesn't receive that action. When the cognitive model starts, the
+environment has then responded to the last action with an observation, and the cognitive
+model doesn't receive that observation. A model whose criterion is already met before the
+first timestep can't be simulated, and throws an error: a new simulation starts from the
+initial state, and [`reset!`](@ref) puts an [`InstantiatedModel`](@ref) back there. A fitted
+session checks it before every timestep too, and throws the same error when it is met before
+the first, as [`SessionInfo`](@ref) describes. Under a compiler like Reactant.jl, a
+criterion on traced values returns a traced Bool, and the simulation is then masked instead
+of stopped, as `simulate_session` describes.
 
 # Implementation
 A model can add a method of this function. The default returns `false`, so a simulation

@@ -249,14 +249,14 @@ end
         )
     end
 
-    @testset "What is saved of a submodel's state is prepared by its own method, and a history selects the state of a submodel by its name" begin
+    @testset "What is saved of a submodel's state is prepared by its own method, and a SaveTrajectories selects the state of a submodel by its name" begin
         model = LearnerWithSubmodels{LearnsInPlace,ChoosesByExpectedReward,false}(
             LearnsInPlace(), ChoosesByExpectedReward()
         )
         simulation = simulate_with(
             model,
             flat_parameters;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:perception, save_initial_timestep_values=false
             ),
         )
@@ -264,14 +264,14 @@ end
             state -> state.expected_reward,
             simulate_with(LearnerInOne(), flat_parameters).states,
         )
-        @test_throws "The SaveHistory selects the states (:expected_reward,)" simulate_with(
+        @test_throws "The SaveTrajectories selects the states (:expected_reward,)" simulate_with(
             model,
             flat_parameters;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
     end
 
-    @testset "A history selects some of the states of a submodel with the name of the submodel, and they are saved under it" begin
+    @testset "A SaveTrajectories selects some of the states of a submodel with the name of the submodel, and they are saved under it" begin
         model = LearnerWithSubmodels{LearnsAndKeepsChange,ChoosesByExpectedReward,false}(
             LearnsAndKeepsChange(), ChoosesByExpectedReward()
         )
@@ -279,7 +279,7 @@ end
         saving(states) = simulate_with(
             model,
             flat_parameters;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states, save_initial_timestep_values=false
             ),
         )
@@ -297,16 +297,18 @@ end
         with_timestep_0 = simulate_with(
             model,
             flat_parameters;
-            cognitive_save_history=SaveHistory(; states=:perception => :expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(;
+                states=:perception => :expected_reward
+            ),
         )
         @test first(with_timestep_0.states) == (; perception=(; expected_reward=0.5))
         @test length(with_timestep_0.states) == 6
-        #The selection is in the type of the SaveHistory, so the return type is known
-        saving_change = SaveHistory(;
+        #The selection is in the type of the SaveTrajectories, so the return type is known
+        saving_change = SaveTrajectories(;
             states=:perception => :change, save_initial_timestep_values=false
         )
         @inferred simulate_with(
-            model, flat_parameters; cognitive_save_history=saving_change
+            model, flat_parameters; save_cognitive_trajectories=saving_change
         )
     end
 
@@ -318,7 +320,7 @@ end
         saved_in_place = simulate_with(
             in_place,
             flat_parameters;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:perception => :expected_reward, save_initial_timestep_values=false
             ),
         )
@@ -327,7 +329,7 @@ end
         nested = simulate_with(
             LearnerWithNestedSubmodels(),
             flat_parameters;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:perception => :learning => :expected_reward,
                 save_initial_timestep_values=false,
             ),
@@ -335,19 +337,19 @@ end
         @test map(state -> state.perception.learning, nested.states) == in_one.states
     end
 
-    @testset "An instantiated model keeps the states that are selected of a submodel in its history" begin
+    @testset "An instantiated model keeps the states that are selected of a submodel in its trajectories" begin
         model = LearnerWithSubmodels{LearnsAndKeepsChange,ChoosesByExpectedReward,false}(
             LearnsAndKeepsChange(), ChoosesByExpectedReward()
         )
         agent = InstantiatedModel(
             model,
             flat_parameters;
-            save_history=SaveHistory(; states=:perception => :expected_reward),
+            save_trajectories=SaveTrajectories(; states=:perception => :expected_reward),
         )
         simulate_timestep!(agent, (; reward=1.0))
-        @test agent.history.states[1] == (; perception=(; expected_reward=0.5))
-        @test keys(agent.history.states[2].perception) == (:expected_reward,)
-        @test agent.history.states[2].perception.expected_reward ≈ 0.65
+        @test agent.trajectories.states[1] == (; perception=(; expected_reward=0.5))
+        @test keys(agent.trajectories.states[2].perception) == (:expected_reward,)
+        @test agent.trajectories.states[2].perception.expected_reward ≈ 0.65
         #The state itself has all of the submodel's state
         @test keys(agent.state.perception) == (:expected_reward, :change)
     end
@@ -357,15 +359,19 @@ end
             LearnsAndKeepsChange(), ChoosesByExpectedReward()
         )
         @test_throws ":change is a state of the submodel :perception, which is selected with :perception => :change." simulate_with(
-            model, flat_parameters; cognitive_save_history=SaveHistory(; states=:change)
-        )
-        @test_throws "The SaveHistory selects the states (:value,) of the submodel perception, but the states in the attributes of a submodel of type LearnsAndKeepsChange are (:expected_reward, :change)." simulate_with(
             model,
             flat_parameters;
-            cognitive_save_history=SaveHistory(; states=:perception => :value),
+            save_cognitive_trajectories=SaveTrajectories(; states=:change),
         )
-        @test_throws "The SaveHistory selects the states (:value,) of the submodel perception" InstantiatedModel(
-            model, flat_parameters; save_history=SaveHistory(; states=:perception => :value)
+        @test_throws "The SaveTrajectories selects the states (:value,) of the submodel perception, but the states in the attributes of a submodel of type LearnsAndKeepsChange are (:expected_reward, :change)." simulate_with(
+            model,
+            flat_parameters;
+            save_cognitive_trajectories=SaveTrajectories(; states=:perception => :value),
+        )
+        @test_throws "The SaveTrajectories selects the states (:value,) of the submodel perception" InstantiatedModel(
+            model,
+            flat_parameters;
+            save_trajectories=SaveTrajectories(; states=:perception => :value),
         )
     end
 
@@ -373,7 +379,7 @@ end
         agent = InstantiatedModel(
             LearnerWithSubmodels(),
             flat_parameters;
-            save_history=SaveHistory(SaveEverything()),
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test agent.parameters == (; learning_rate=0.3, inverse_temperature=2.0)
         @test agent.state == (; perception=(; expected_reward=0.5))
@@ -461,7 +467,7 @@ end
         #The simulation says which states hold the states of submodels, down through the submodels
         @test nested.submodel_states ==
             (; cognitive_model=(; perception=(; learning=(;))), environment=(;))
-        #An instantiated model has the nested state, and a history selects it by the outer submodel's name
+        #An instantiated model has the nested state, and a SaveTrajectories selects it by the outer submodel's name
         agent = InstantiatedModel(LearnerWithNestedSubmodels(), flat_parameters)
         @test agent.state == (; perception=(; learning=(; expected_reward=0.5)))
         simulate_timestep!(agent, (; reward=1.0))
@@ -469,7 +475,7 @@ end
         saving_perception = simulate_with(
             LearnerWithNestedSubmodels(),
             flat_parameters;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:perception, save_initial_timestep_values=false
             ),
         )

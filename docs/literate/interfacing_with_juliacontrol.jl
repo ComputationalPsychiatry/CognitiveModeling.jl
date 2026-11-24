@@ -153,7 +153,7 @@ simulation = simulate_session(
     n_steps=150,
     cognitive_parameters=(; K=2.0, Ti=1.0, Td=0.1, motor_noise=0.2),
     environment_parameters=(; observation_noise=0.05),
-    cognitive_save_history=SaveHistory(;
+    save_cognitive_trajectories=SaveTrajectories(;
         inputs=(:target, :position), outputs=:force, save_initial_timestep_values=false
     ),
     rng=Xoshiro(1),
@@ -177,7 +177,7 @@ simulations = map(enumerate(true_parameters)) do (session, parameters)
         n_steps=150,
         cognitive_parameters=parameters,
         environment_parameters=(; observation_noise=0.05),
-        cognitive_save_history=SaveHistory(;
+        save_cognitive_trajectories=SaveTrajectories(;
             inputs=(:target, :position), outputs=:force, save_initial_timestep_values=false
         ),
         rng=Xoshiro(20 + session),
@@ -319,7 +319,7 @@ tracking = simulate_session(
     n_steps=100,
     cognitive_parameters=(; assumed_drift=0.3, assumed_cue_noise=0.5, motor_noise=0.1),
     environment_parameters=(; drift=0.3, cue_noise=0.5),
-    cognitive_save_history=SaveHistory(;
+    save_cognitive_trajectories=SaveTrajectories(;
         inputs=:cue, outputs=:report, save_initial_timestep_values=false
     ),
     rng=Xoshiro(2),

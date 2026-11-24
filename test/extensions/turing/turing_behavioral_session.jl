@@ -471,7 +471,7 @@ end
     @testset "The log density is the sum over the actions in the data, with the agent or the environment starting" begin
         for who_starts in (EnvironmentStarts(), AgentStarts())
             model = session_for_test(;
-                who_starts, cognitive_save_history=SaveHistory(SaveEverything())
+                who_starts, save_cognitive_trajectories=SaveTrajectories(SaveEverything())
             )
             expected, states = session_by_hand(
                 SESSION_REWARDS.reward, SESSION_CHOICES.choice, 0.3, 2.0, who_starts
@@ -480,13 +480,13 @@ end
             @test loglikelihood(model, (;)) ≈ expected
             #There are no latents, and what is returned is what happened, after timestep 0 with where the session started
             @test isempty(keys(rand(Xoshiro(1), model)))
-            history = returned(model, (;)).saved_trajectories
-            @test [state.expected_reward for state in history.states] ≈ [0.5; states]
-            @test history.actions == [
+            trajectories = returned(model, (;)).saved_trajectories
+            @test [state.expected_reward for state in trajectories.states] ≈ [0.5; states]
+            @test trajectories.actions == [
                 (; choice=BeforeFirstTimestep()),
                 ((; choice) for choice in SESSION_CHOICES.choice)...,
             ]
-            @test history.observations == [
+            @test trajectories.observations == [
                 (; reward=BeforeFirstTimestep()),
                 ((; reward) for reward in SESSION_REWARDS.reward)...,
             ]
@@ -562,7 +562,7 @@ end
                 (; reward=[1.0, 0.0]),
                 (; choice=[NoValue(), NoValue()]);
                 who_starts,
-                cognitive_save_history=SaveHistory(; states=:who_starts),
+                save_cognitive_trajectories=SaveTrajectories(; states=:who_starts),
             )
             @test returned(model, (;)).saved_trajectories.states[end] === (; who_starts)
         end
@@ -576,7 +576,7 @@ end
         model = session_for_test(
             StartsFromParameter(),
             (; learning_rate=0.3, initial_value=0.2);
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         _, states = session_by_hand(
             SESSION_REWARDS.reward, SESSION_CHOICES.choice, 0.3, 2.0, EnvironmentStarts()
@@ -590,7 +590,7 @@ end
             (; learning_rate=0.3, initial_value=0.5),
             (; reward=[1.0, 0.0]),
             (; choice=[0.2, 0.4]);
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test collect(keys(rand(Xoshiro(1), model))) ==
             [@varname(initial_cognitive_state.start_noise)]
@@ -650,7 +650,7 @@ end
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
             impute_missing_observations=false,
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test unimputed.observations.reward[2] === UnimputedMissingValue()
         unimputed_model = turing_behavioral_session(unimputed, SESSION_PARAMETERS)
@@ -660,31 +660,32 @@ end
         @test saved.states[3] == saved.states[2]
     end
 
-    @testset "cognitive_save_history selects what is returned, in the model's own names, and nothing by default" begin
+    @testset "save_cognitive_trajectories selects what is returned, in the model's own names, and nothing by default" begin
         #Timestep 0 and the five timesteps
-        history = returned(session_for_test(), (;)).saved_trajectories
-        @test history.observations == fill((;), 6) &&
-            history.actions == fill((;), 6) &&
-            history.states == fill((;), 6)
+        trajectories = returned(session_for_test(), (;)).saved_trajectories
+        @test trajectories.observations == fill((;), 6) &&
+            trajectories.actions == fill((;), 6) &&
+            trajectories.states == fill((;), 6)
         #The model's outputs are selected, which the session returns as its actions
-        history = returned(
+        trajectories = returned(
             session_for_test(;
-                cognitive_save_history=SaveHistory(;
+                save_cognitive_trajectories=SaveTrajectories(;
                     states=:expected_reward, outputs=:choice
                 ),
             ),
             (;),
         ).saved_trajectories
-        @test history.observations == fill((;), 6)
-        @test history.actions == [
+        @test trajectories.observations == fill((;), 6)
+        @test trajectories.actions == [
             (; choice=BeforeFirstTimestep()),
             ((; choice) for choice in SESSION_CHOICES.choice)...,
         ]
-        @test history.states[1:2] == [(; expected_reward=0.5), (; expected_reward=0.65)]
+        @test trajectories.states[1:2] ==
+            [(; expected_reward=0.5), (; expected_reward=0.65)]
         #Without timestep 0, element t is timestep t
-        history = returned(
+        trajectories = returned(
             session_for_test(;
-                cognitive_save_history=SaveHistory(;
+                save_cognitive_trajectories=SaveTrajectories(;
                     states=:expected_reward,
                     outputs=:choice,
                     save_initial_timestep_values=false,
@@ -692,16 +693,17 @@ end
             ),
             (;),
         ).saved_trajectories
-        @test history.actions == [(; choice) for choice in SESSION_CHOICES.choice]
-        @test history.states[1] == (; expected_reward=0.65) && length(history.states) == 5
+        @test trajectories.actions == [(; choice) for choice in SESSION_CHOICES.choice]
+        @test trajectories.states[1] == (; expected_reward=0.65) &&
+            length(trajectories.states) == 5
         #An input that isn't in the model's attributes can't be selected, which the session checks when it is prepared
-        @test_throws "The SaveHistory selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type TwoContinuousActions are (:reward,)." returned(
+        @test_throws "The SaveTrajectories selects the inputs (:cue,), but the inputs in the attributes of a cognitive model of type TwoContinuousActions are (:reward,)." returned(
             session_for_test(
                 TwoContinuousActions(),
                 (; learning_rate=0.3),
                 SESSION_REWARDS,
                 (; choice=ones(5), bet=ones(5));
-                cognitive_save_history=SaveHistory(; inputs=:cue),
+                save_cognitive_trajectories=SaveTrajectories(; inputs=:cue),
             ),
             (;),
         )
@@ -712,7 +714,7 @@ end
         @test isequal(
             returned(
                 session_for_test(;
-                    cognitive_save_history=SaveHistory(; states=:expected_reward)
+                    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward)
                 ),
                 (;),
             ).saved_trajectories.timestep_sizes,
@@ -722,7 +724,9 @@ end
             returned(
                 session_for_test(;
                     timestep_sizes=0.5,
-                    cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
+                    save_cognitive_trajectories=SaveTrajectories(;
+                        outputs=SaveEverything()
+                    ),
                 ),
                 (;),
             ).saved_trajectories.timestep_sizes,
@@ -733,7 +737,7 @@ end
             returned(
                 session_for_test(;
                     timestep_sizes=sizes,
-                    cognitive_save_history=SaveHistory(SaveEverything()),
+                    save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
                 ),
                 (;),
             ).saved_trajectories.timestep_sizes,
@@ -742,7 +746,7 @@ end
         @test returned(
             session_for_test(;
                 timestep_sizes=sizes,
-                cognitive_save_history=SaveHistory(
+                save_cognitive_trajectories=SaveTrajectories(
                     SaveEverything(); save_initial_timestep_values=false
                 ),
             ),
@@ -761,7 +765,9 @@ end
         #The action distributions are saved when the model's output distributions are selected, with BeforeFirstTimestep at timestep 0
         distributions = returned(
             session_for_test(;
-                cognitive_save_history=SaveHistory(; output_distributions=:choice)
+                save_cognitive_trajectories=SaveTrajectories(;
+                    output_distributions=:choice
+                ),
             ),
             (;),
         ).saved_trajectories.action_distributions
@@ -782,7 +788,7 @@ end
             (; learning_rate=0.3),
             (; reward=[1.0, 0.0, 1.0, 1.0]),
             actions;
-            cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=SaveEverything()),
         )
         #One latent for each missing action
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
@@ -853,7 +859,7 @@ end
             rewards,
             actions;
             impute_missing_actions=false,
-            cognitive_save_history=SaveHistory(; outputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; outputs=SaveEverything()),
         )
         @test isempty(keys(rand(Xoshiro(1), model)))
         #Only the actions in the data are scored
@@ -908,7 +914,7 @@ end
             choices;
             impute_missing_actions=false,
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
             [(; reward=0.5), (; reward=1.0), (; reward=0.5)]
@@ -932,7 +938,7 @@ end
             with_missing,
             SESSION_CHOICES;
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test logjoint(model, (;)) ≈ logjoint(reference, (;))
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
@@ -957,7 +963,7 @@ end
             SESSION_CHOICES;
             environment=RewardsPreviousChoice(),
             environment_parameters=(; scale=2.0),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test returned(scaled, (;)).saved_trajectories.observations[2:end] == [
             (; reward=0.5), (; reward=2.0), (; reward=0.0), (; reward=2.0), (; reward=1.0)
@@ -977,7 +983,7 @@ end
             SESSION_CHOICES;
             who_starts=AgentStarts(),
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
             [(; reward=float(choice)) for choice in SESSION_CHOICES.choice]
@@ -995,18 +1001,18 @@ end
             (; reward=fill(ImputedMissingValue(), 3)),
             (; choice=[true, false, true]);
             environment=RewardsAfterFirstChoice(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         @test returned(model, (;)).saved_trajectories.observations[2:end] ==
             [(; reward=NoValue()), (; reward=1.0), (; reward=0.0)]
     end
 
-    @testset "With maps of names, a session is the same, with the environment's variables and history in its own names" begin
+    @testset "With maps of names, a session is the same, with the environment's variables and trajectories in its own names" begin
         choices = (; choice=[true, false, true])
         rewards = (; reward=[ImputedMissingValue(), 1.0, ImputedMissingValue()])
         saves_everything = (;
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         )
         for who_starts in (EnvironmentStarts(), AgentStarts())
             without_maps = session_for_test(
@@ -1046,7 +1052,7 @@ end
             )
             @test logjoint(with_maps, mapped_values) ≈
                 logjoint(without_maps, unmapped_values)
-            #Each model's history is in its own names
+            #Each model's trajectories are in its own names
             saved = @test_logs match_mode = :any returned(with_maps, mapped_values).saved_trajectories
             @test saved.observations[2:end] ==
                 [(; reward=0.7), (; reward=1.0), (; reward=-0.4)]
@@ -1067,7 +1073,7 @@ end
             (; reward=[ImputedMissingValue(), 1.0, ImputedMissingValue()]),
             choices;
             environment=NoisyRewards(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
@@ -1186,8 +1192,8 @@ end
         )
     end
 
-    @testset "environment_save_history saves the environment's record under environment, and makes it run" begin
-        #With nothing missing, the environment runs only because its history is saved, and its scores of the rewards are added
+    @testset "save_environment_trajectories saves the environment's record under environment, and makes it run" begin
+        #With nothing missing, the environment runs only because its trajectories are saved, and its scores of the rewards are added
         rewards = (; reward=[0.5, 1.0, 0.0])
         choices = (; choice=[true, false, true])
         model = session_for_test(
@@ -1196,8 +1202,8 @@ end
             rewards,
             choices;
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
-            environment_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
+            save_environment_trajectories=SaveTrajectories(;
                 states=:n_timesteps, outputs=:reward, output_distributions=:reward
             ),
         )
@@ -1230,7 +1236,7 @@ end
             rewards,
             choices;
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test returned(not_running, (;)).saved_trajectories.environment == (;
             states=fill((;), 4),
@@ -1254,10 +1260,10 @@ end
             rewards,
             choices;
             environment=RewardsPreviousChoice(),
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:expected_reward, save_initial_timestep_values=false
             ),
-            environment_save_history=SaveHistory(; states=:n_timesteps),
+            save_environment_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
         @test returned(from_first, (;)).saved_trajectories.environment.states ==
             [(; n_timesteps=t) for t in 1:3]
@@ -1274,8 +1280,10 @@ end
             choices;
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=3),
-            cognitive_save_history=SaveHistory(; states=:expected_reward, outputs=:choice),
-            environment_save_history=SaveHistory(; states=:pulls),
+            save_cognitive_trajectories=SaveTrajectories(;
+                states=:expected_reward, outputs=:choice
+            ),
+            save_environment_trajectories=SaveTrajectories(; states=:pulls),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), predictive)
         @test Set(keys(values)) == Set([@varname(timesteps[t].choice.imputed) for t in 1:3])
@@ -1291,7 +1299,7 @@ end
             choices;
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=10),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         saved_sure = @test_logs match_mode = :any returned(sure, rand(Xoshiro(1), sure)).saved_trajectories
         @test [state.expected_reward for state in saved_sure.states] == [0.5, 0.75, 0.875]
@@ -1303,7 +1311,7 @@ end
             (; choice=fill(true, 5));
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=3),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test length(returned(fitted, (;)).saved_trajectories.states) == 6
         #With the environment included, a criterion met while the data continues counts as parameters that turned invalid:
@@ -1316,7 +1324,7 @@ end
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=3),
             include_environment=true,
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test logjoint(ends_early, (;)) == -Inf
         ended = returned(ends_early, (;)).saved_trajectories
@@ -1342,7 +1350,7 @@ end
             (; choice=fill(SimulatedMissingValue(), 2));
             environment=EndsAfterPulls(),
             environment_parameters=(; last_pull=0),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test_throws ArgumentError rand(Xoshiro(1), without_data)
         #Also for the cognitive model's criterion: sure at 0.4, it is sure already with its initial expected reward of 0.5
@@ -1382,7 +1390,7 @@ end
                     environment=EndsAfterPulls(),
                     environment_parameters=(; last_pull=3),
                     include_environment=true,
-                    cognitive_save_history=SaveHistory(; states=:expected_reward),
+                    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
                 ),
                 (;),
             ).saved_trajectories.states,
@@ -1396,7 +1404,7 @@ end
             (; reward=fill(ImputedMissingValue(), 2)),
             (; choice=[true, false]);
             environment=DriftingRewards(),
-            cognitive_save_history=SaveHistory(; inputs=SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
@@ -1436,7 +1444,7 @@ end
             (; noise_scale=1.0),
             (; reward=[1.0, 0.0, 1.0]),
             (; choice=[0.2, 0.4, 0.6]);
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         values = @test_logs match_mode = :any rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
@@ -1466,16 +1474,16 @@ end
             (;),
             actions;
             timestep_sizes=[0.5, 1.0, 1.5, 2.0],
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         )
         @test logjoint(model, (;)) ≈
             logpdf(Bernoulli(0.7), true) + logpdf(Bernoulli(0.7), false)
-        history = returned(model, (;)).saved_trajectories
-        @test history.actions[2:end] == [
+        trajectories = returned(model, (;)).saved_trajectories
+        @test trajectories.actions[2:end] == [
             (; choice=NoValue()), (; choice=true), (; choice=NoValue()), (; choice=false)
         ]
-        @test [state.timestep_size for state in history.states[2:end]] == [0.5, 1.0, 1.5, 2.0]
-        @test history.observations == fill((;), 5)
+        @test [state.timestep_size for state in trajectories.states[2:end]] == [0.5, 1.0, 1.5, 2.0]
+        @test trajectories.observations == fill((;), 5)
         #The data can also have NoValue where the model acts, which isn't scored either
         @test logjoint(
             session_for_test(
@@ -1513,7 +1521,9 @@ end
             (;),
         )
         #The sizes of the timesteps are returned with what is saved
-        @test isequal(history.timestep_sizes, [BeforeFirstTimestep(), 0.5, 1.0, 1.5, 2.0])
+        @test isequal(
+            trajectories.timestep_sizes, [BeforeFirstTimestep(), 0.5, 1.0, 1.5, 2.0]
+        )
         #With a single size, every timestep gets it
         @test [
             state.timestep_size for state in returned(
@@ -1523,7 +1533,7 @@ end
                     (;),
                     actions;
                     timestep_sizes=0.25,
-                    cognitive_save_history=SaveHistory(; states=:timestep_size),
+                    save_cognitive_trajectories=SaveTrajectories(; states=:timestep_size),
                 ),
                 (;),
             ).saved_trajectories.states[2:end]
@@ -1532,13 +1542,13 @@ end
 
     @testset "A session whose parameters turn invalid gives a log density of -Inf, ends before that timestep, and scores nothing" begin
         actions = (; choice=[0.2, 0.4, 0.6, 0.8, 1.0])
-        saving_states = SaveHistory(; states=:expected_reward)
+        saving_states = SaveTrajectories(; states=:expected_reward)
         rejecting(learning_rate; keywords...) = session_for_test(
             RejectsHighExpectedReward(),
             (; learning_rate),
             SESSION_REWARDS,
             actions;
-            cognitive_save_history=saving_states,
+            save_cognitive_trajectories=saving_states,
             keywords...,
         )
         #With a learning rate of 0.95 and the rewards 1, 0, 1, 1, the expected reward is above 0.99 on the fourth timestep
@@ -1619,7 +1629,7 @@ end
             SESSION_REWARDS,
             SESSION_CHOICES;
             who_starts=EnvironmentStarts(),
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         Turing.@model function fit_one_session(session_info)
             learning_rate ~ Beta(2, 2)

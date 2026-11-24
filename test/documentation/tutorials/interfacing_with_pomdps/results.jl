@@ -15,7 +15,7 @@ using Random: Xoshiro
         cognitive_parameters=(; inverse_temperature=2.0),
         environment_parameters=(;),
         observation_map=NameMap(:observation),
-        cognitive_save_history=SaveHistory(SaveEverything()),
+        save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
         rng=Xoshiro(1),
     )
     @test length(simulation.states) == 31

@@ -354,8 +354,8 @@ function simulate_pair(
         cognitive_parameters=pair.cognitive_parameters,
         environment_parameters=pair.environment_parameters,
         rng,
-        cognitive_save_history=SaveHistory(SaveEverything()),
-        environment_save_history=SaveHistory(SaveEverything()),
+        save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+        save_environment_trajectories=SaveTrajectories(SaveEverything()),
         keywords...,
         simulation_keywords...,
     )

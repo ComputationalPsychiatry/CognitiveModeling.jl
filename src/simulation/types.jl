@@ -60,10 +60,10 @@ received_name(names::Pair{Symbol,Symbol}) = last(names)
 ## Instantiated models ##
 
 """
-    InstantiatedModel(model, parameters; save_history=SaveHistory(),
+    InstantiatedModel(model, parameters; save_trajectories=SaveTrajectories(),
                       check_parameter_domains=true)
     InstantiatedModel(model, parameters, state, previous_output;
-                      save_history=SaveHistory(), check_parameter_domains=true)
+                      save_trajectories=SaveTrajectories(), check_parameter_domains=true)
 
 A cognitive model or an environment model with its parameters, current state and previous
 output, which [`simulate_session!`](@ref) and [`simulate_timestep!`](@ref) can update
@@ -78,15 +78,15 @@ output being [`BeforeFirstTimestep`](@ref). The previous output and the state mu
 `NamedTuple`s, and the names of the parameters, of the previous output and of the state must
 be those in the model's attributes, from [`attribute_names`](@ref), or an error is thrown.
 
-`agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
-timestep 0, and everything that happens to it, as selected by `save_history`, a
-[`SaveHistory`](@ref). By default nothing is selected and the vectors in `agent.history`
-stay empty, and `SaveHistory(SaveEverything())` saves everything. States, inputs and outputs
-can only be selected by name among those in the model's attributes, since the history starts
-from those names. `agent.n_timesteps` counts the timesteps the model has simulated, whatever
-is saved. The parameters are checked against their domains in [`parameter_domains`](@ref),
-where a value outside its domain throws a [`ParameterDomainError`](@ref), unless
-`check_parameter_domains` is `false`.
+`agent.trajectories` holds a [`TrajectoryHistory`](@ref) with where the model started, which
+is timestep 0, and everything that happens to it, as selected by `save_trajectories`, a
+[`SaveTrajectories`](@ref). By default nothing is selected and the vectors in
+`agent.trajectories` stay empty, and `SaveTrajectories(SaveEverything())` saves everything.
+States, inputs and outputs can only be selected by name among those in the model's
+attributes, since the trajectories start from those names. `agent.n_timesteps` counts the
+timesteps the model has simulated, whatever is saved. The parameters are checked against
+their domains in [`parameter_domains`](@ref), where a value outside its domain throws a
+[`ParameterDomainError`](@ref), unless `check_parameter_domains` is `false`.
 
 In the REPL, an instantiated model shows the kind and the type of its model, how many
 timesteps it has simulated, and the values of its parameters and of its state, with only how
@@ -97,7 +97,7 @@ kind of its model and how many timesteps it has simulated.
 
 An instantiated model is a convenience, and isn't type stable, by design: its state and its
 previous output can change type, as an output does from `BeforeFirstTimestep()` to a `Bool`,
-and so can what its history saves, so they are kept untyped. Each call of
+and so can what its trajectories hold, so they are kept untyped. Each call of
 `simulate_session!` or `simulate_timestep!` on it is therefore dynamically dispatched, and
 the compiler doesn't know what it returns, whatever is saved. Where that matters, use
 [`simulate_timestep`](@ref) or [`simulate_session`](@ref) on the models themselves, one
@@ -137,15 +137,15 @@ LearnsRewards (instantiated cognitive model, 1 timestep simulated)
 ```
 """
 mutable struct InstantiatedModel{
-    Tmodel<:AbstractTimestepModel,Tparameters,Tsave_history<:SaveHistory
+    Tmodel<:AbstractTimestepModel,Tparameters,Tsave_trajectories<:SaveTrajectories
 }
     model::Tmodel
     parameters::Tparameters
     #Not typed, because they can change type, for example from BeforeFirstTimestep() to a Bool inside the output
     state::Any
     previous_output::Any
-    history::ModelHistory
-    save_history::Tsave_history
+    trajectories::TrajectoryHistory
+    save_trajectories::Tsave_trajectories
     n_timesteps::Int
 end
 
@@ -153,7 +153,7 @@ end
 function InstantiatedModel(
     model::AbstractTimestepModel,
     parameters;
-    save_history::SaveHistory=SaveHistory(),
+    save_trajectories::SaveTrajectories=SaveTrajectories(),
     check_parameter_domains::Bool=true,
 )
     parameters = merge_default_parameters(model, parameters)
@@ -162,18 +162,18 @@ function InstantiatedModel(
         parameters,
         initialize_state(model, bundle_parameters(model, parameters)),
         output_before_first_timestep(model);
-        save_history,
+        save_trajectories,
         check_parameter_domains,
     )
 end
 
-#Fills in the default parameters, checks the names, and starts the history where the model starts, with what is selected of it
+#Fills in the default parameters, checks the names, and starts the trajectories where the model starts, with what is selected of it
 function InstantiatedModel(
     model::AbstractTimestepModel,
     parameters,
     state,
     previous_output;
-    save_history::SaveHistory=SaveHistory(),
+    save_trajectories::SaveTrajectories=SaveTrajectories(),
     check_parameter_domains::Bool=true,
 )
 
@@ -187,44 +187,48 @@ function InstantiatedModel(
     #Put the parameters in the order of the model's attributes, whichever of them were given and whichever are defaults
     parameters = NamedTuple{get_attribute_names(model).parameters}(parameters)
 
-    #Check that the inputs and outputs selected for the history are among those in the model's attributes
-    check_savehistory_selection_names(save_history, model)
+    #Check that the inputs and outputs selected for the trajectories are among those in the model's attributes
+    check_savetrajectories_selection_names(save_trajectories, model)
 
-    #Start the history from where the model starts
-    history = starting_history(model, state, previous_output, save_history)
+    #Start the trajectories from where the model starts
+    trajectories = starting_trajectories(model, state, previous_output, save_trajectories)
 
     return InstantiatedModel(
-        model, parameters, state, previous_output, history, save_history, 0
+        model, parameters, state, previous_output, trajectories, save_trajectories, 0
     )
 end
 
 """
-    starting_history(model, state, previous_output, save_history)
+    starting_trajectories(model, state, previous_output, save_trajectories)
 
-Return the history that an [`InstantiatedModel`](@ref) starts with: a [`ModelHistory`](@ref)
-with what `save_history` selects of where it starts, as timestep 0, and
-[`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has been simulated
-yet. When nothing is selected, or `save_history` doesn't save the initial timestep values,
-the vectors are empty.
+Return the trajectories that an [`InstantiatedModel`](@ref) starts with: a
+[`TrajectoryHistory`](@ref) with what `save_trajectories` selects of where it starts, as
+timestep 0, and [`BeforeFirstTimestep`](@ref) as the size of the timestep, since none has
+been simulated yet. When nothing is selected, or `save_trajectories` doesn't save the
+initial timestep values, the vectors are empty.
 
 A model hasn't received anything when it starts, so that entry has every input in the
 model's attributes as `BeforeFirstTimestep()`, and so has every output distribution.
-[`reset!`](@ref) starts from the same history as the constructors.
+[`reset!`](@ref) starts from the same trajectories as the constructors.
 """
-function starting_history(
-    model::AbstractTimestepModel, state, previous_output, save_history::SaveHistory
+function starting_trajectories(
+    model::AbstractTimestepModel,
+    state,
+    previous_output,
+    save_trajectories::SaveTrajectories,
 )
-    if saves_nothing(save_history) || !saves_initial_timestep_values(save_history)
-        return ModelHistory(Any[], Any[], Any[], Any[], Any[])
+    if saves_nothing(save_trajectories) || !saves_initial_timestep_values(save_trajectories)
+        return TrajectoryHistory(Any[], Any[], Any[], Any[], Any[])
     end
-    return ModelHistory(
-        Any[select_state_to_save(model, state, state_selection(save_history))],
+    return TrajectoryHistory(
+        Any[select_state_to_save(model, state, state_selection(save_trajectories))],
         Any[select_names(
-            input_before_first_timestep(model), input_selection(save_history)
+            input_before_first_timestep(model), input_selection(save_trajectories)
         )],
-        Any[select_names(previous_output, output_selection(save_history))],
+        Any[select_names(previous_output, output_selection(save_trajectories))],
         Any[select_names(
-            output_before_first_timestep(model), output_distribution_selection(save_history)
+            output_before_first_timestep(model),
+            output_distribution_selection(save_trajectories),
         )],
         Any[BeforeFirstTimestep()],
     )
@@ -237,10 +241,10 @@ Put `instantiated_model` back to where a new one starts, and return it.
 
 The state becomes the output of [`initialize_state`](@ref) with the parameters it has, the
 previous output has every output as [`BeforeFirstTimestep`](@ref) again, and `n_timesteps`
-is 0. The history is a new one which starts from there, as timestep 0 when the
-[`SaveHistory`](@ref) saves the initial timestep values, so a history that was read before
-the reset, as in `history = agent.history`, is kept as it was. The model, the parameters and
-the `SaveHistory` stay the same.
+is 0. The trajectories are new ones which start from there, as timestep 0 when the
+[`SaveTrajectories`](@ref) saves the initial timestep values, so trajectories that were read
+before the reset, as in `trajectories = agent.trajectories`, are kept as they were. The
+model, the parameters and the `SaveTrajectories` stay the same.
 
 An instantiated model that was created with a state or a previous output of its own doesn't
 return to those. Create a new one for that.
@@ -266,13 +270,13 @@ function CognitiveModeling.attribute_names(model::RescorlaWagner)
     return ModelAttributes(; parameters = :learning_rate, states = :expected_reward, inputs = :reward, outputs = :choice)
 end
 
-agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
+agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_trajectories = SaveTrajectories(SaveEverything()))
 
 simulate_timestep!(agent, (; reward = 1.0))
 simulate_timestep!(agent, (; reward = 1.0))
 reset!(agent)
 
-agent.state, agent.previous_output, agent.history.states
+agent.state, agent.previous_output, agent.trajectories.states
 
 # output
 
@@ -287,11 +291,11 @@ function reset!(instantiated_model::InstantiatedModel)
     instantiated_model.previous_output = output_before_first_timestep(
         instantiated_model.model
     )
-    instantiated_model.history = starting_history(
+    instantiated_model.trajectories = starting_trajectories(
         instantiated_model.model,
         instantiated_model.state,
         instantiated_model.previous_output,
-        instantiated_model.save_history,
+        instantiated_model.save_trajectories,
     )
     instantiated_model.n_timesteps = 0
     return instantiated_model

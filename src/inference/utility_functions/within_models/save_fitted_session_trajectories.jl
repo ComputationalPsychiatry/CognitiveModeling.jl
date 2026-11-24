@@ -4,7 +4,7 @@
     select_timestep_values_to_save(session_info, timestep_values)
 
 Return what a session saves of the values of one timestep, or of where it starts, as the
-save histories of `session_info` select it, arranged as the session returns it: the
+`SaveTrajectories` of `session_info` select it, arranged as the session returns it: the
 cognitive model's `states`, `observations`, `actions` and `action_distributions`, and with
 an environment its `states`, `observations`, `actions` and `observation_distributions` under
 `environment`, as [`map_saved`](@ref) arranges them. `timestep_values` has the cognitive
@@ -16,7 +16,9 @@ function select_timestep_values_to_save(
     session_info::SessionInfo{<:Any,NoEnvironment}, timestep_values
 )
     return select_cognitive_timestep_values_to_save(
-        session_info.cognitive_model, timestep_values, session_info.cognitive_save_history
+        session_info.cognitive_model,
+        timestep_values,
+        session_info.save_cognitive_trajectories,
     )
 end
 
@@ -27,25 +29,26 @@ function select_timestep_values_to_save(
         select_cognitive_timestep_values_to_save(
             session_info.cognitive_model,
             timestep_values,
-            session_info.cognitive_save_history,
+            session_info.save_cognitive_trajectories,
         ),
         build_named_entry(
             Val(:environment),
             select_environment_timestep_values_to_save(
                 session_info.environment,
                 timestep_values.environment,
-                session_info.environment_save_history,
+                session_info.save_environment_trajectories,
             ),
         ),
     )
 end
 
 """
-    select_cognitive_timestep_values_to_save(cognitive_model, timestep_values, save_history)
+    select_cognitive_timestep_values_to_save(cognitive_model, timestep_values,
+                                             save_trajectories)
     select_environment_timestep_values_to_save(environment, environment_timestep_values,
-                                               save_history)
+                                               save_trajectories)
 
-Return what `save_history` selects of one model's part of the values of a timestep: the
+Return what `save_trajectories` selects of one model's part of the values of a timestep: the
 `states`, `observations`, `actions` and `action_distributions` of the cognitive model, or
 the `states`, `observations`, `actions` and `observation_distributions` of the environment,
 from the values of the environment alone. The observation and the action can have one of
@@ -53,56 +56,58 @@ two types, so they go in through [`build_named_entry`](@ref). Used by
 [`select_timestep_values_to_save`](@ref).
 """
 function select_cognitive_timestep_values_to_save(
-    cognitive_model, timestep_values, save_history
+    cognitive_model, timestep_values, save_trajectories
 )
     return merge(
         (;
             states=select_state_to_save(
-                cognitive_model, timestep_values.state, state_selection(save_history)
+                cognitive_model, timestep_values.state, state_selection(save_trajectories)
             ),
         ),
         build_named_entry(
             Val(:observations),
-            select_names(timestep_values.observation, input_selection(save_history)),
+            select_names(timestep_values.observation, input_selection(save_trajectories)),
         ),
         build_named_entry(
             Val(:actions),
-            select_names(timestep_values.action, output_selection(save_history)),
+            select_names(timestep_values.action, output_selection(save_trajectories)),
         ),
         (;
             action_distributions=select_names(
                 timestep_values.action_distribution,
-                output_distribution_selection(save_history),
+                output_distribution_selection(save_trajectories),
             ),
         ),
     )
 end
 
 function select_environment_timestep_values_to_save(
-    environment, environment_timestep_values, save_history
+    environment, environment_timestep_values, save_trajectories
 )
     return merge(
         (;
             states=select_state_to_save(
                 environment,
                 environment_timestep_values.state,
-                state_selection(save_history),
+                state_selection(save_trajectories),
             ),
         ),
         build_named_entry(
             Val(:observations),
             select_names(
-                environment_timestep_values.observation, output_selection(save_history)
+                environment_timestep_values.observation, output_selection(save_trajectories)
             ),
         ),
         build_named_entry(
             Val(:actions),
-            select_names(environment_timestep_values.action, input_selection(save_history)),
+            select_names(
+                environment_timestep_values.action, input_selection(save_trajectories)
+            ),
         ),
         (;
             observation_distributions=select_names(
                 environment_timestep_values.observation_distribution,
-                output_distribution_selection(save_history),
+                output_distribution_selection(save_trajectories),
             ),
         ),
     )
