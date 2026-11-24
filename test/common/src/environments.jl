@@ -55,6 +55,52 @@ function log_likelihood_by_hand(
     return log_likelihood
 end
 
+## Submodels ##
+#The schedule of the baseline's rewards as a submodel: it has the probability of a reward as its parameter, and counts
+#the timesteps as its state
+struct RewardSchedule <: AbstractSubmodel end
+CognitiveModeling.initialize_state(schedule::RewardSchedule, parameters) = (; n_timesteps=0)
+function CognitiveModeling.attribute_names(schedule::RewardSchedule)
+    return ModelAttributes(;
+        parameters=:reward_probability, states=:n_timesteps, inputs=(), outputs=()
+    )
+end
+
+#The baseline with its schedule as a submodel, whose parameter it is given flat, and whose state it keeps under the name
+#of the field
+struct WithSubmodelsEnvironment{Tdistributions} <: AbstractEnvironmentModel
+    distributions::Tdistributions
+    schedule::RewardSchedule
+end
+function WithSubmodelsEnvironment(distributions)
+    return WithSubmodelsEnvironment(distributions, RewardSchedule())
+end
+CognitiveModeling.submodel_fields(environment::WithSubmodelsEnvironment) = (:schedule,)
+function CognitiveModeling.attribute_names(environment::WithSubmodelsEnvironment)
+    return ModelAttributes(; parameters=(), states=(), inputs=:choice, outputs=:reward)
+end
+function CognitiveModeling.initialize_state(
+    environment::WithSubmodelsEnvironment, parameters
+)
+    return (; schedule=initialize_state(environment.schedule, parameters.schedule))
+end
+function CognitiveModeling.timestep_model(
+    environment::WithSubmodelsEnvironment, context::ModelContext
+)
+    probability = reward_probability(
+        context.input.choice, context.parameters.schedule.reward_probability
+    )
+    return ModelOutput(
+        (; reward=bernoulli(environment.distributions, probability)),
+        (; schedule=(; n_timesteps=context.previous_state.schedule.n_timesteps + 1)),
+    )
+end
+function log_likelihood_by_hand(
+    environment::WithSubmodelsEnvironment, parameters, timesteps, latents=(;)
+)
+    return log_likelihood_by_hand(BaselineEnvironment(ByHand()), parameters, timesteps)
+end
+
 ## Without one kind of attribute ##
 #The baseline without its count of timesteps
 struct WithoutStatesEnvironment{Tdistributions} <: AbstractEnvironmentModel

@@ -632,6 +632,65 @@ function simulation_cases(distributions)
         )
     end
 
+    #The model with submodels in the other ways of simulating it: saving one state of its perception, also when the
+    #perception changes its state in place, continuing from a given state of its perception, and as an agent
+    with_submodels = pair_named("WithSubmodels")
+    with_submodels_parts = (;
+        model=WithSubmodels(distributions),
+        environment=BaselineEnvironment(distributions),
+        with_submodels.cognitive_parameters,
+        with_submodels.environment_parameters,
+    )
+    for (who_starts, starts) in WHO_STARTS
+        append!(
+            cases,
+            [
+                simulate_case(
+                    "WithSubmodels saving one state of its perception, $starts",
+                    distributions;
+                    with_submodels_parts...,
+                    who_starts,
+                    n_steps=10,
+                    save_cognitive_trajectories=SaveTrajectories(;
+                        states=:perception => :expected_reward
+                    ),
+                ),
+                simulate_case(
+                    "WithSubmodelChangedInPlace saving one state of its perception, $starts",
+                    distributions;
+                    merge(
+                        with_submodels_parts,
+                        (; model=WithSubmodelChangedInPlace(distributions)),
+                    )...,
+                    who_starts,
+                    n_steps=10,
+                    save_cognitive_trajectories=SaveTrajectories(;
+                        states=:perception => :expected_reward
+                    ),
+                ),
+                simulate_case(
+                    "WithSubmodels continuing from a given state of its perception, $starts",
+                    distributions;
+                    with_submodels_parts...,
+                    who_starts,
+                    n_steps=10,
+                    previous_cognitive_state=(; perception=(; expected_reward=0.7)),
+                    SAVE_BOTH...,
+                ),
+                instantiated_case(
+                    "An agent with submodels and an environment, $starts",
+                    distributions;
+                    with_submodels_parts...,
+                    save_trajectories=SaveTrajectories(;
+                        states=:perception => :expected_reward
+                    ),
+                    who_starts,
+                    n_steps=10,
+                ),
+            ],
+        )
+    end
+
     #The models simulated on one observation at a time
     append!(
         cases,
@@ -655,6 +714,20 @@ function simulation_cases(distributions)
                 distributions;
                 model=StateChangedInPlace(distributions),
                 parameters=baseline.cognitive_parameters,
+                inputs=SINGLE_REWARDS,
+            ),
+            single_inputs_case(
+                "WithSubmodels on single observations",
+                distributions;
+                model=WithSubmodels(distributions),
+                parameters=with_submodels.cognitive_parameters,
+                inputs=SINGLE_REWARDS,
+            ),
+            instantiated_single_inputs_case(
+                "An agent with submodels on single observations",
+                distributions;
+                model=WithSubmodels(distributions),
+                parameters=with_submodels.cognitive_parameters,
                 inputs=SINGLE_REWARDS,
             ),
             instantiated_single_inputs_case(

@@ -93,6 +93,7 @@ makedocs(;
             "generated/custom_turing_models.md",
             "generated/predictive_checks_and_parameter_recovery.md",
             "generated/discrete_parameters.md",
+            "generated/models_with_submodels.md",
             "generated/cognitive_abm_with_agents.md",
             "generated/interfacing_with_common_rl.md",
             "generated/interfacing_with_reinforcement_learning.md",

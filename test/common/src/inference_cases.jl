@@ -71,7 +71,7 @@ function session_log_density_by_hand(
     (; model, environment, observations, actions, who_starts, n_timesteps) = case
     session_info = case.session_info
     cognitive_parameters = merge(
-        CognitiveModeling.default_parameters(model), cognitive_parameters
+        CognitiveModeling.get_default_parameters(model), cognitive_parameters
     )
 
     #The data with the imputed values, in the cognitive model's names
@@ -123,7 +123,7 @@ function session_log_density_by_hand(
     #The environment receives the actions and gives the observations in its own names, the action of the timestep before
     #when it starts, and that of the timestep when the agent starts
     environment_parameters = merge(
-        CognitiveModeling.default_parameters(environment), environment_parameters
+        CognitiveModeling.get_default_parameters(environment), environment_parameters
     )
     action_names = names_passed_on(case.action_map, keys(actions))
     environment_actions = [renamed(action, action_names) for action in filled_actions]
@@ -732,6 +732,15 @@ function full_model_cases(distributions; missing_values=true)
                     distributions, fill(beta(distributions, 2, 2), 3)
                 ),
                 noise=log_normal(distributions, -1, 0.5),
+            )),
+        ),
+        case(
+            "A model with submodels, with prefixes",
+            distributions;
+            pair=pair_named("WithSubmodels, with prefixes"),
+            parameters_model=IndependentParameters((;
+                perception__learning_rate=beta(distributions, 2, 2),
+                response__inverse_temperature=log_normal(distributions, 0, 0.5),
             )),
         ),
         case(

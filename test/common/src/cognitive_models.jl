@@ -1070,6 +1070,165 @@ function log_likelihood_by_hand(model::StateChangesType, parameters, timesteps, 
     )
 end
 
+## Submodels ##
+#The baseline as a perception and a response, which are its submodels. The model is given the parameters of both flat,
+#and reads those of each under the name of its field, and it keeps the state of the perception under that name too
+
+#The perception learns the expected reward of choosing true, from an initial value which has a default, and with a
+#learning rate which has a domain
+struct LearnsRewards <: AbstractSubmodel end
+function CognitiveModeling.initialize_state(perception::LearnsRewards, parameters)
+    return (; expected_reward=parameters.initial_value)
+end
+function CognitiveModeling.attribute_names(perception::LearnsRewards)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :initial_value),
+        states=:expected_reward,
+        inputs=(),
+        outputs=(),
+    )
+end
+CognitiveModeling.default_parameters(perception::LearnsRewards) = (; initial_value=0.5)
+function CognitiveModeling.parameter_domains(perception::LearnsRewards)
+    return (; learning_rate=Domain(; lower=0, upper=1))
+end
+
+#The state of a perception after a reward, and the expected reward that it has learned, which every perception below
+#has methods of
+function perceive(perception::LearnsRewards, parameters, state, reward)
+    return (;
+        expected_reward=learn(state.expected_reward, parameters.learning_rate, reward)
+    )
+end
+expected_reward_of(perception::LearnsRewards, state) = state.expected_reward
+
+#The response chooses true with a probability that grows with the expected reward. It has no state
+struct ChoosesByRewards{Tdistributions} <: AbstractSubmodel
+    distributions::Tdistributions
+end
+function CognitiveModeling.attribute_names(response::ChoosesByRewards)
+    return ModelAttributes(;
+        parameters=:inverse_temperature, states=(), inputs=(), outputs=()
+    )
+end
+function respond(response::ChoosesByRewards, parameters, expected_reward)
+    logit = choice_logit(expected_reward, parameters.inverse_temperature)
+    return bernoulli_logit(response.distributions, logit)
+end
+
+#The model with the two, whose flat names of the submodels' parameters start with the names of the submodels when it is
+#made with prefixes, as in perception__learning_rate, and which can be made with another perception
+struct WithSubmodels{Tperception,Tresponse,prefixes} <: AbstractCognitiveModel
+    perception::Tperception
+    response::Tresponse
+end
+function WithSubmodels(distributions; prefixes=false, perception=LearnsRewards())
+    response = ChoosesByRewards(distributions)
+    return WithSubmodels{typeof(perception),typeof(response),prefixes}(perception, response)
+end
+CognitiveModeling.submodel_fields(model::WithSubmodels) = (:perception, :response)
+function CognitiveModeling.uses_submodel_prefixes(
+    model::WithSubmodels{<:Any,<:Any,prefixes}
+) where {prefixes}
+    return prefixes
+end
+function CognitiveModeling.attribute_names(model::WithSubmodels)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
+end
+function CognitiveModeling.initialize_state(model::WithSubmodels, parameters)
+    return (; perception=initialize_state(model.perception, parameters.perception))
+end
+function CognitiveModeling.timestep_model(model::WithSubmodels, context::ModelContext)
+    perception = perceive(
+        model.perception,
+        context.parameters.perception,
+        context.previous_state.perception,
+        context.input.reward,
+    )
+    choice = respond(
+        model.response,
+        context.parameters.response,
+        expected_reward_of(model.perception, perception),
+    )
+    return ModelOutput((; choice), (; perception))
+end
+
+#A parameter of a submodel among the flat parameters of a model, under its name with the prefix of the submodel or
+#without it, or a default when it isn't given
+function parameter_of_submodel(parameters, submodel, name, default=nothing)
+    prefixed_name = Symbol(submodel, :__, name)
+    haskey(parameters, prefixed_name) && return parameters[prefixed_name]
+    return get(parameters, name, default)
+end
+function log_likelihood_by_hand(model::WithSubmodels, parameters, timesteps, latents=(;))
+    return log_likelihood_by_hand(
+        InitialStateFromParameter(ByHand()),
+        (;
+            learning_rate=parameter_of_submodel(parameters, :perception, :learning_rate),
+            inverse_temperature=parameter_of_submodel(
+                parameters, :response, :inverse_temperature
+            ),
+            initial_value=parameter_of_submodel(
+                parameters, :perception, :initial_value, 0.5
+            ),
+        ),
+        timesteps,
+    )
+end
+
+#A perception whose learning is a submodel of its own, so that the model with it has a submodel within a submodel. It
+#keeps the state of its learning under the name of the field
+struct PerceivesThroughLearning <: AbstractSubmodel
+    learning::LearnsRewards
+end
+PerceivesThroughLearning() = PerceivesThroughLearning(LearnsRewards())
+CognitiveModeling.submodel_fields(perception::PerceivesThroughLearning) = (:learning,)
+function CognitiveModeling.attribute_names(perception::PerceivesThroughLearning)
+    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=())
+end
+function CognitiveModeling.initialize_state(
+    perception::PerceivesThroughLearning, parameters
+)
+    return (; learning=initialize_state(perception.learning, parameters.learning))
+end
+function perceive(perception::PerceivesThroughLearning, parameters, state, reward)
+    return (;
+        learning=perceive(perception.learning, parameters.learning, state.learning, reward)
+    )
+end
+function expected_reward_of(perception::PerceivesThroughLearning, state)
+    return expected_reward_of(perception.learning, state.learning)
+end
+function WithNestedSubmodels(distributions)
+    return WithSubmodels(distributions; perception=PerceivesThroughLearning())
+end
+
+#A perception which keeps its expected reward in a vector that it changes in place, and copies the vector when it is
+#saved, so that what is saved of a submodel's state is prepared by the submodel's own method. The vector has the number
+#type of the parameters, so that it can hold numbers of automatic differentiation
+struct LearnsRewardsInPlace <: AbstractSubmodel end
+function CognitiveModeling.initialize_state(perception::LearnsRewardsInPlace, parameters)
+    return (; expected_reward=[0.5 * one(parameters.learning_rate)])
+end
+function CognitiveModeling.attribute_names(perception::LearnsRewardsInPlace)
+    return ModelAttributes(;
+        parameters=:learning_rate, states=:expected_reward, inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.prepare_state_for_saving(perception::LearnsRewardsInPlace, state)
+    return (; expected_reward=copy(state.expected_reward))
+end
+function perceive(perception::LearnsRewardsInPlace, parameters, state, reward)
+    state.expected_reward[1] = learn(
+        state.expected_reward[1], parameters.learning_rate, reward
+    )
+    return state
+end
+expected_reward_of(perception::LearnsRewardsInPlace, state) = state.expected_reward[1]
+function WithSubmodelChangedInPlace(distributions)
+    return WithSubmodels(distributions; perception=LearnsRewardsInPlace())
+end
+
 ## Methods from a supertype ##
 #A family of models, which defines the methods of its members once for all of them: each runs as the baseline
 abstract type BaselineFamily <: AbstractCognitiveModel end

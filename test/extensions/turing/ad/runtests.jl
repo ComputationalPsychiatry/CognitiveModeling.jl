@@ -86,6 +86,7 @@ const KNOWN_FAILURES = [
             "A parameter that is a vector, without missing values",
             "Every feature with a regression, without missing values",
             "Parameters that can turn invalid, without missing values",
+            "A model with submodels, with prefixes, without missing values",
             "A parameter that is a vector",
             "Every feature with a regression",
         ],
