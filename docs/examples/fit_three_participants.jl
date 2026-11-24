@@ -113,7 +113,7 @@ cognitive_parameters_model = IndependentParameters((;
     learning_rate=Beta(2, 2), noise=LogNormal(-2, 1)
 ))
 
-model = full_model(TuringBackend(), cognitive_parameters_model, sessions_info)
+model = full_model(TuringBackend(), sessions_info, cognitive_parameters_model)
 
 ## Fitting ##
 

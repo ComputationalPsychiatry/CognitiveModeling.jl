@@ -199,7 +199,7 @@ sessions_info = MultipleSessionsInfo(
     who_starts=EnvironmentStarts(),
 )
 priors = (; learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5))
-fitted_model = full_model(TuringBackend(), IndependentParameters(priors), sessions_info)
+fitted_model = full_model(TuringBackend(), sessions_info, IndependentParameters(priors))
 chain = sample(Xoshiro(3), fitted_model, NUTS(), 300; progress=false)
 
 # The trajectories of the fit have an entry for each state of a submodel that is saved,

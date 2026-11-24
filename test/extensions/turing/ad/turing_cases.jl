@@ -158,8 +158,8 @@ function turing_cases()
     for case in full_models
         model = full_model(
             TuringBackend(),
-            case.parameters_model,
-            case.sessions_info;
+            case.sessions_info,
+            case.parameters_model;
             case.full_model_keywords...,
         )
         push!(cases, log_density_case(case.name, model, InitFromPrior()))

@@ -154,10 +154,10 @@ SUITE["turing"]["single session"] = benchmark_turing_model(
 SUITE["turing"]["full model, independent sessions"] = benchmark_turing_model(
     full_model(
         TuringBackend(),
+        BENCHMARK_SESSIONS,
         IndependentParameters((;
             learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 1)
         )),
-        BENCHMARK_SESSIONS,
     ),
 )
 
@@ -168,6 +168,7 @@ const STUDY_SESSIONS = sessions_of(simulate_table(50, 200))
 SUITE["turing"]["study of 50 sessions of 200 timesteps, parameters by group"] = benchmark_turing_model(
     full_model(
         TuringBackend(),
+        STUDY_SESSIONS,
         HierarchicalGroupedParameters((;
             learning_rate=HierarchicalParameter(
                 (; mean=Normal(0, 1), sd=Exponential(1));
@@ -180,6 +181,5 @@ SUITE["turing"]["study of 50 sessions of 200 timesteps, parameters by group"] = 
                 group_by=:group,
             ),
         )),
-        STUDY_SESSIONS,
     ),
 )

@@ -100,7 +100,7 @@ sessions_info = MultipleSessionsInfo(
 parameters_model = IndependentParameters((;
     learning_rate=Beta(2, 2), uses_rewards=Bernoulli(0.5)
 ))
-model = full_model(TuringBackend(), parameters_model, sessions_info)
+model = full_model(TuringBackend(), sessions_info, parameters_model)
 
 # The names of the variables of each kind can be read from the model. DynamicPPL.jl, which
 # Turing.jl is built on, gives the distribution that every variable is sampled from, and a
@@ -146,7 +146,7 @@ parameters_model = HierarchicalRegressionParameters((;
         family=BernoulliLogit,
     ),
 ))
-model = full_model(TuringBackend(), parameters_model, sessions_info)
+model = full_model(TuringBackend(), sessions_info, parameters_model)
 
 # A distribution which takes the sum of the regression as it is, such as `BernoulliLogit`,
 # is the safe choice. With `transformation = logistic` and `Bernoulli`, a sampler which

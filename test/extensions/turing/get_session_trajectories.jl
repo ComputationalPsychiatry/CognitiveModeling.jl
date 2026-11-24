@@ -21,13 +21,13 @@ const DIFFERENT_LENGTHS_TABLE = (;
 function some_sessions_running_environment()
     return full_model(
         TuringBackend(),
-        IndependentParameters(FULL_PRIORS),
         sessions_for_test(
             WithDefaultParameters(DistributionsJl()),
             TWO_MISSING_REWARDS_TABLE;
             environment=RewardsAroundMean(),
             impute_missing_actions=false,
-        );
+        ),
+        IndependentParameters(FULL_PRIORS);
         fixed_environment_parameters=(; mean_reward=0.6),
     )
 end
@@ -35,7 +35,7 @@ end
 @testset "get_session_trajectories" begin
     #A full model of the sessions of the table, where S3's missing choice isn't imputed, so that NUTS samples the parameters alone
     sessions_info = sessions_for_test(; impute_missing_actions=false)
-    model = full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info)
+    model = full_model(TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS))
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "The chain from a fitted full model has the saved trajectories of each session, numbered as the fit, and the parameters are a chain of their own" begin
@@ -251,8 +251,8 @@ end
         )
         imputing = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(WithDefaultParameters(DistributionsJl()), table),
+            IndependentParameters(FULL_PRIORS),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(
@@ -266,10 +266,10 @@ end
     @testset "Sessions of different lengths each keep their own timesteps, also with values imputed at timesteps that the sessions before them don't have" begin
         different_lengths = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(
                 WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
             ),
+            IndependentParameters(FULL_PRIORS),
         )
         prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(

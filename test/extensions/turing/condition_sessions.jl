@@ -5,7 +5,7 @@
         WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
     )
     imputing = full_model(
-        TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info
+        TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS)
     )
     deconditioned = decondition_sessions(imputing)
     draw = @test_logs match_mode = :any rand(Xoshiro(1), deconditioned)

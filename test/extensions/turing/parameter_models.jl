@@ -269,7 +269,7 @@ end
             ),
             inverse_temperature=HierarchicalParameter(GROUP_PRIORS; transformation=exp),
         ))
-        model = full_model(TuringBackend(), hierarchical, sessions_info)
+        model = full_model(TuringBackend(), sessions_info, hierarchical)
         values = Dict(
             @varname(learning_rate.mean.group) => (; a=0.5, b=-1.0),
             @varname(learning_rate.sd.group) => (; a=1.0, b=2.0),
@@ -542,7 +542,7 @@ end
     end
 
     @testset "The full model fits the sessions with the parameters of their regressions, for the cognitive model and for the environment" begin
-        model = full_model(TuringBackend(), regression, sessions_info)
+        model = full_model(TuringBackend(), sessions_info, regression)
         @test returned(model, values).cognitive_parameters.learning_rate ≈ learning_rates
         @test logjoint(model, values) ≈
             log_prior + sessions_by_hand(FULL_TABLE, learning_rates, fill(exp(0.7), 3))
@@ -551,12 +551,12 @@ end
         #A parameter that is fixed is given next to those of the regression
         with_fixed = full_model(
             TuringBackend(),
+            sessions_info,
             HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(
                     Intercept(Normal(0, 1)); transformation=to_unit_interval
                 ),
-            )),
-            sessions_info;
+            ));
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
         @test returned(
@@ -572,8 +572,8 @@ end
         )
         model = full_model(
             TuringBackend(),
-            FixedParameters((; learning_rate=0.3)),
-            with_environment;
+            with_environment,
+            FixedParameters((; learning_rate=0.3));
             environment_parameters_model=HierarchicalRegressionParameters((;
                 mean_reward=RegressionParameter(
                     Intercept(Normal(0, 1)), CategoricalPredictor(:group, Normal(0, 2))
@@ -698,8 +698,8 @@ end
         )
         model = full_model(
             TuringBackend(),
-            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
             discrete_sessions,
+            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
         )
         given = Dict(
             @varname(learning_rate.coef) => (; intercept=0.2),
@@ -747,13 +747,13 @@ end
         #A discrete parameter needs a family distribution: without one, the value of a session isn't one that its domain takes, which stops the evaluation
         without_family = full_model(
             TuringBackend(),
+            discrete_sessions,
             HierarchicalRegressionParameters((;
                 learning_rate,
                 uses_rewards=RegressionParameter(
                     Intercept(Normal(0, 1)); transformation=to_unit_interval
                 ),
             )),
-            discrete_sessions,
         )
         @test_throws "of type Float64, but its domain takes true and false, or 0 and 1." logjoint(
             without_family,
@@ -772,13 +772,13 @@ end
         )
         model = full_model(
             TuringBackend(),
+            bounded_sessions,
             HierarchicalRegressionParameters((;
                 learning_rate=RegressionParameter(Intercept(Normal(0, 1))),
                 inverse_temperature=RegressionParameter(
                     Intercept(Normal(0, 1)); transformation=exp
                 ),
             )),
-            bounded_sessions,
         )
         given_intercept(intercept) = Dict(
             @varname(learning_rate.coef) => (; intercept),

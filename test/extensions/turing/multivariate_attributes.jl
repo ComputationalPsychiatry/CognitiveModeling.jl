@@ -138,7 +138,7 @@ const OPTIONS_VALUES = Dict(
         @test sessions_info.sessions[1].actions ==
             (; ratings=[[0.7, 0.2, 2.4], [0.6, 1.1, 2.8]], choice=[3, 3])
         model = full_model(
-            TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters(OPTIONS_PRIORS)
         )
         sampled = rand(Xoshiro(1), model)
         @test size(sampled[@varname(learning_rates.sessions)]) == (3, 3)
@@ -176,7 +176,6 @@ const OPTIONS_VALUES = Dict(
         )
         model = full_model(
             TuringBackend(),
-            IndependentParameters(OPTIONS_PRIORS),
             MultipleSessionsInfo(
                 RatesAndChoosesOptions(),
                 table_of_vectors;
@@ -185,6 +184,7 @@ const OPTIONS_VALUES = Dict(
                 session_columns=:id,
                 who_starts=EnvironmentStarts(),
             ),
+            IndependentParameters(OPTIONS_PRIORS),
         )
         @test logjoint(model, OPTIONS_VALUES) ≈
             options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
@@ -198,7 +198,7 @@ const OPTIONS_VALUES = Dict(
         )
         table.rating_2[4] = missing
         imputed = full_model(
-            TuringBackend(), IndependentParameters(OPTIONS_PRIORS), options_sessions(table)
+            TuringBackend(), options_sessions(table), IndependentParameters(OPTIONS_PRIORS)
         )
         imputed_name = @varname(sessions[2].timesteps[2].ratings.imputed)
         @test Set(keys(rand(Xoshiro(1), imputed))) ==
@@ -215,8 +215,8 @@ const OPTIONS_VALUES = Dict(
         #Left out, the choice of the row still counts
         left_out = full_model(
             TuringBackend(),
-            IndependentParameters(OPTIONS_PRIORS),
             options_sessions(table; impute_missing_actions=false),
+            IndependentParameters(OPTIONS_PRIORS),
         )
         @test logjoint(left_out, OPTIONS_VALUES) ≈
             options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
@@ -258,7 +258,7 @@ const OPTIONS_VALUES = Dict(
         @test eltype(sessions_info.sessions[1].actions.ratings) ==
             Union{ImputedMissingValue,Vector{Float64}}
         imputed = full_model(
-            TuringBackend(), IndependentParameters(OPTIONS_PRIORS), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters(OPTIONS_PRIORS)
         )
         imputed_name = @varname(sessions[2].timesteps[2].ratings.imputed)
         values_with_imputed = merge(OPTIONS_VALUES, Dict(imputed_name => [0.1, 0.2, 0.3]))
@@ -271,8 +271,8 @@ const OPTIONS_VALUES = Dict(
         )
         left_out = full_model(
             TuringBackend(),
-            IndependentParameters(OPTIONS_PRIORS),
             sessions_with_a_column_of_ratings(; impute_missing_actions=false),
+            IndependentParameters(OPTIONS_PRIORS),
         )
         @test logjoint(left_out, OPTIONS_VALUES) ≈
             options_prior(OPTIONS_LEARNING_RATES, OPTIONS_RATING_NOISES) +
@@ -283,7 +283,7 @@ const OPTIONS_VALUES = Dict(
 
     @testset "A fit with NUTS gives the trajectories of the vector states and actions of each session, which follow from each draw" begin
         model = full_model(
-            TuringBackend(), IndependentParameters(OPTIONS_PRIORS), options_sessions()
+            TuringBackend(), options_sessions(), IndependentParameters(OPTIONS_PRIORS)
         )
         chain = sample(Xoshiro(1), model, NUTS(), 30; progress=false)
         trajectories = get_session_trajectories(

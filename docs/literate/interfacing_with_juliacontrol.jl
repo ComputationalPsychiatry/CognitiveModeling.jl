@@ -202,13 +202,13 @@ sessions_info = MultipleSessionsInfo(
 )
 model = full_model(
     TuringBackend(),
+    sessions_info,
     IndependentParameters((;
         K=LogNormal(0, 1),
         Ti=LogNormal(0, 1),
         Td=LogNormal(-2, 1),
         motor_noise=LogNormal(-1, 1),
     )),
-    sessions_info,
 )
 chain = sample(Xoshiro(11), model, NUTS(300, 0.65), 300; progress=false)
 

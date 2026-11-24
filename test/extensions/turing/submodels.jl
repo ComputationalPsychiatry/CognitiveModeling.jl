@@ -188,11 +188,11 @@ end
     priors = (; learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5))
     baseline = full_model(
         TuringBackend(),
-        IndependentParameters(priors),
         sessions_of(Baseline(DistributionsJl())),
+        IndependentParameters(priors),
     )
     with_submodels = full_model(
-        TuringBackend(), IndependentParameters(priors), sessions_of(BaselineOfSubmodels())
+        TuringBackend(), sessions_of(BaselineOfSubmodels()), IndependentParameters(priors)
     )
     values = Dict(
         @varname(learning_rate.sessions) => [0.3, 0.5, 0.7],
@@ -204,11 +204,11 @@ end
         #With prefixes, the flat names start with the submodels' names
         prefixed = full_model(
             TuringBackend(),
+            sessions_of(BaselineOfSubmodels(; prefixes=true)),
             IndependentParameters((;
                 perception__learning_rate=Beta(2, 2),
                 response__inverse_temperature=LogNormal(0, 0.5),
             )),
-            sessions_of(BaselineOfSubmodels(; prefixes=true)),
         )
         @test logjoint(
             prefixed,
@@ -220,8 +220,8 @@ end
         #A parameter model must give the flat names
         @test_throws "gives the parameters (:learning_rate, :inverse_temperature), which aren't in the attributes" full_model(
             TuringBackend(),
-            IndependentParameters(priors),
             sessions_of(BaselineOfSubmodels(; prefixes=true)),
+            IndependentParameters(priors),
         )
     end
 
@@ -247,8 +247,8 @@ end
     @testset "A SaveTrajectories selects some of the states of a submodel, and the trajectories of a fit have entries for those only" begin
         keeping_changes = full_model(
             TuringBackend(),
-            IndependentParameters(priors),
             sessions_of(BaselineKeepingChanges()),
+            IndependentParameters(priors),
         )
         @test logjoint(keeping_changes, values) ≈ logjoint(baseline, values)
         chain = sample(Xoshiro(1), keeping_changes, Prior(), 5; progress=false)
@@ -292,18 +292,18 @@ end
     @testset "A submodel can have submodels of its own, which are fitted with their parameters flat, and whose states have entries named after both" begin
         nested = full_model(
             TuringBackend(),
-            IndependentParameters(priors),
             sessions_of(BaselineOfNestedSubmodels()),
+            IndependentParameters(priors),
         )
         @test logjoint(nested, values) ≈ logjoint(baseline, values)
         #With prefixes on both levels, the flat names start with the names of both submodels
         nested_prefixed = full_model(
             TuringBackend(),
+            sessions_of(BaselineOfNestedSubmodels(; prefixes=true)),
             IndependentParameters((;
                 perception__learning__learning_rate=Beta(2, 2),
                 response__inverse_temperature=LogNormal(0, 0.5),
             )),
-            sessions_of(BaselineOfNestedSubmodels(; prefixes=true)),
         )
         @test logjoint(
             nested_prefixed,

@@ -19,7 +19,7 @@ end
         WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
     )
     imputing = full_model(
-        TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info
+        TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS)
     )
     parameter_names = [
         @varname(learning_rate.sessions), @varname(inverse_temperature.sessions)
@@ -123,7 +123,7 @@ end
     @testset "Turing.jl's predict simulates every choice with the parameters of the chain, also those that the fit imputed" begin
         #S3's choice at timestep 3 is imputed in the fit
         fitted = full_model(
-            TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_for_test()
+            TuringBackend(), sessions_for_test(), IndependentParameters(FULL_PRIORS)
         )
         prior_chain = sample(Xoshiro(4), fitted, Prior(), 20; progress=false)
         predictions = @test_logs match_mode = :any predict(
@@ -215,8 +215,8 @@ end
             pair = pair_named(model_name)
             sampling = full_model(
                 TuringBackend(),
-                FixedParameters(pair.cognitive_parameters),
                 sessions_for_test(pair.model(DistributionsJl()), FULL_TABLE),
+                FixedParameters(pair.cognitive_parameters),
             )
             prior_chain = sample(Xoshiro(11), sampling, Prior(), 5; progress=false)
             predictions = @test_logs match_mode = :any predict(
