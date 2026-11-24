@@ -1,17 +1,17 @@
 ## Preparing the parts of a full model ##
 
 """
-    prepare_full_model(cognitive_parameters_model, sessions_info::MultipleSessionsInfo;
+    prepare_full_model(sessions_info::MultipleSessionsInfo, cognitive_parameters_model;
                        environment_parameters_model=NoParameters(),
                        downstream_model=NoDownstreamModel(),
                        fixed_cognitive_parameters=(;),
                        fixed_environment_parameters=(;))
 
 Prepare the parts of a full model once, before an inference backend makes its model of
-them, and return them in a `NamedTuple` with `cognitive_parameters_model`,
-`environment_parameters_model`, `downstream_model` and `sessions_info`. Useful for an
-inference backend, whose full model calls it, so that what doesn't change between the
-evaluations of the model is worked out once.
+them, and return them in a `NamedTuple` with `sessions_info`, `cognitive_parameters_model`,
+`environment_parameters_model` and `downstream_model`. Useful for an inference backend,
+whose full model calls it, so that what doesn't change between the evaluations of the
+model is worked out once.
 
 A parameter model can be given as a tuple of parameter models, or a `NamedTuple` of them,
 which is made into a [`CompositeParameters`](@ref) of them by [`as_parameters_model`](@ref),
@@ -32,8 +32,8 @@ estimates parameters, every session with an environment includes it in the retur
 to use what they save.
 """
 function prepare_full_model(
-    cognitive_parameters_model,
-    sessions_info::MultipleSessionsInfo;
+    sessions_info::MultipleSessionsInfo,
+    cognitive_parameters_model;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
     fixed_cognitive_parameters::NamedTuple=(;),
@@ -82,6 +82,7 @@ function prepare_full_model(
 
     #Prepare each parameter model for the sessions
     return (;
+        sessions_info,
         cognitive_parameters_model=prepare_parameters_model(
             cognitive_parameters_model, sessions_info
         ),
@@ -89,7 +90,6 @@ function prepare_full_model(
             environment_parameters_model, sessions_info
         ),
         downstream_model,
-        sessions_info,
     )
 end
 
