@@ -38,6 +38,31 @@ Environment observation distributions: none
 Parameters valid: true"""
     end
 
+    @testset "The states of a submodel are shown with the name of the submodel and a dot before them, down through its submodels" begin
+        #The perception's state has a state of its own, the state of its submodel learning, and beliefs, a NamedTuple which
+        #isn't the state of a submodel
+        state = (;
+            surprise=0.1,
+            perception=(; expected_reward=0.5, learning=(; mean=1.0), beliefs=(; cue=1)),
+        )
+        with_submodels = SessionTrajectories(
+            fill(state, 3),
+            fill((;), 3),
+            fill((;), 3),
+            fill((;), 3),
+            NoEnvironment(),
+            1,
+            ValidByDefault(),
+            2,
+            nothing,
+            (; cognitive_model=(; perception=(; learning=(;))), environment=(;)),
+        )
+        @test occursin(
+            "\nStates: surprise, perception.expected_reward, perception.learning.mean, perception.beliefs\n",
+            repr("text/plain", with_submodels),
+        )
+    end
+
     @testset "Trajectories without timestep 0 show the timesteps alone" begin
         without_timestep_0 = SessionTrajectories(
             [(; expected_reward=0.75), (; expected_reward=0.6)],

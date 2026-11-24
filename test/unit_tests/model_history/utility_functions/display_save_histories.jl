@@ -20,4 +20,19 @@ Outputs: everything
 Output distributions: everything
 Initial timestep values: not saved"""
     end
+
+    @testset "The states of a submodel are shown with the name of the submodel and a dot before them" begin
+        @test repr(
+            "text/plain",
+            SaveHistory(;
+                states=(:surprise, :perception => (:expected_reward, :learning => :mean))
+            ),
+        ) == """
+SaveHistory
+States: surprise, perception.expected_reward, perception.learning.mean
+Inputs: none
+Outputs: none
+Output distributions: none
+Initial timestep values: saved"""
+    end
 end

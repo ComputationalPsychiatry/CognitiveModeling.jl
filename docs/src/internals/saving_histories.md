@@ -53,3 +53,14 @@ Modules = [CognitiveModeling]
 Public = false
 Pages = ["model_history/utility_functions/storage.jl"]
 ```
+
+### Displaying what is selected and what was saved
+
+```@autodocs
+Modules = [CognitiveModeling]
+Public = false
+Pages = [
+    "model_history/utility_functions/display_save_histories.jl",
+    "model_history/utility_functions/display_session_trajectories.jl",
+]
+```

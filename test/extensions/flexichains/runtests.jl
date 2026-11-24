@@ -425,6 +425,19 @@ end
             ["perception.expected_value", "perception.inner.count", "beliefs"]
         @test entry(chain, "perception.expected_value")[1] == [0.0, 0.5, 0.75]
         @test entry(chain, "beliefs")[1] == [(; cue=1), (; cue=2), (; cue=3)]
+        #When only some of the states of a submodel were saved, those have entries
+        saved_in_part = saved_by_session(
+            2;
+            states=map(state -> (; perception=(; state.perception.expected_value)), states),
+            submodel_states=(;
+                cognitive_model=(; perception=(; inner=(;))), environment=(;)
+            ),
+        )
+        chain_in_part = get_session_trajectories(
+            reshape([single_session_result((; learning_rate=0.5), saved_in_part)], 1, 1)
+        )
+        @test entry_names(chain_in_part) == ["perception.expected_value"]
+        @test entry(chain_in_part, "perception.expected_value")[1] == [0.0, 0.5, 0.75]
     end
 
     @testset "Identifiers from several session columns are named by each column's name and value" begin
