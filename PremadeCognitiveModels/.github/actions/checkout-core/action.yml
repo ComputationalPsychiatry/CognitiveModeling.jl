@@ -1,0 +1,14 @@
+name: Check out CognitiveModeling.jl
+description: Puts the core package next to this repo, where the [sources] entry in Project.toml expects it
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        repository: ComputationalPsychiatry/CognitiveModeling.jl
+        # main and pull requests into main use the core's main; everything else uses its dev
+        ref: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'main' || 'dev' }}
+        path: CognitiveModeling.jl
+    - run: mv CognitiveModeling.jl ../CognitiveModeling.jl
+      shell: bash

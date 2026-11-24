@@ -1,0 +1,21 @@
+name = "PremadeCognitiveModels"
+uuid = "777b1ad2-0eb2-4796-98eb-b0853ac7a31d"
+authors = ["Peter Thestrup Waade <peter@waade.net>"]
+version = "0.1.0-DEV"
+
+[workspace]
+projects = ["test", "docs"]
+
+[deps]
+CognitiveModeling = "fb591072-6176-4d65-bab3-e9e4c4edc80d"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+
+[sources]
+CognitiveModeling = {path = "../CognitiveModeling.jl"}
+
+[compat]
+CognitiveModeling = "0.1"
+Distributions = "0.25"
+LogExpFunctions = "0.3"
+julia = "1.13"

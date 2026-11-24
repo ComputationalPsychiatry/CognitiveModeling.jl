@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Julia packages can be added here once CognitiveModeling.jl is registered, because
+  # Dependabot can't see the copy of it that Project.toml expects next to this repo
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/checkout-core"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

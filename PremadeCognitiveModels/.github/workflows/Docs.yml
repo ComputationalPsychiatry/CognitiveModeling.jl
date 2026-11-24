@@ -1,0 +1,37 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Cancel superseded runs on pull requests
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: write # lets Documenter push to gh-pages
+      statuses: write # lets Documenter report the preview link
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/checkout-core
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-docdeploy@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
