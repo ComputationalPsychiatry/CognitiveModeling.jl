@@ -37,3 +37,29 @@ jobs:
           # The builds of a release, those of a tag and of a pull request into main, also run the tutorials that only
           # releases run, as docs/how_scripts_are_run.toml says. Other builds show only their code
           DOCUMENTATION_FOR_A_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') || github.base_ref == 'main' }}
+  # The documentation of PremadeCognitiveModels, a package of its own in this repository, which goes to the folder
+  # PremadeCognitiveModels of the same site. It runs after the core's, so that the two don't push to gh-pages at once
+  premade_docs:
+    name: Documentation of PremadeCognitiveModels
+    needs: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Reports whether the documentation of the premade models builds, without failing the build, like their tests
+    continue-on-error: true
+    permissions:
+      actions: write # lets julia-actions/cache delete old caches
+      contents: write # lets Documenter push to gh-pages
+      statuses: write # lets Documenter report the preview link
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Install the documentation's environment
+        run: julia --color=yes --project=PremadeCognitiveModels/docs -e 'using Pkg; Pkg.instantiate()'
+      - name: Build and deploy the documentation
+        run: julia --color=yes --project=PremadeCognitiveModels/docs PremadeCognitiveModels/docs/make.jl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
