@@ -254,6 +254,9 @@ function CognitiveModeling.attribute_names(environment::DriftingTarget)
     )
 end
 
+#It samples within its timesteps, so a fit with it would need a Turing.jl version of its timestep
+CognitiveModeling.is_stochastic(environment::DriftingTarget) = true
+
 # The filter is made from the parameters, with a starting belief of the parameters' number
 # type, since a filter keeps the types it starts with. Its matrices are fixed and already in
 # discrete time, so its check of them, which computes their eigenvalues, is turned off.

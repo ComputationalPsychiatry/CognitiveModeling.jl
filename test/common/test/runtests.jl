@@ -236,6 +236,18 @@ end
             first_timestep(false) ==
             first_timestep(BeforeFirstTimestep())
 
+        #The models which sample within their timesteps say so, and the others don't
+        for sampling in (
+            SamplingWithinTimestep(ByHand()),
+            EveryFeature(ByHand()),
+            SamplingWithinTimestepEnvironment(ByHand()),
+            EveryFeatureEnvironment(ByHand()),
+        )
+            @test CognitiveModeling.is_stochastic(sampling)
+        end
+        @test !CognitiveModeling.is_stochastic(EveryFeatureWithoutSampling(ByHand()))
+        @test !CognitiveModeling.is_stochastic(Baseline(ByHand()))
+
         #MethodsFromSupertype has the methods of its family, and none of its own
         @test MethodsFromSupertype(ByHand()) isa BaselineFamily
         @test CognitiveModeling.attribute_names(MethodsFromSupertype(ByHand())) ==

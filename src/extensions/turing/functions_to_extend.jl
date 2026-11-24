@@ -11,7 +11,9 @@ needs Turing.jl to be loaded.
 A model can add a method of this function. The default calls [`timestep_model`](@ref). A
 model which samples within a timestep needs to add a method, however; or if any other
 changes are desired within Turing. It must sample with `~` instead of from `context.rng`.
-Otherwise the model has a different log density each time it is evaluated, with no error.
+Otherwise the model has a different log density each time it is evaluated. Such a model
+says that it samples with a method of [`CognitiveModeling.is_stochastic`](@ref), and the
+default then throws an error instead of running it.
 The same holds for an environment model, which fitting uses to fill in observations that are
 [`ImputedMissingValue`](@ref) in the data: what it samples itself, such as a change of its
 state, must be sampled with `~`, while fitting samples the observations from what it
@@ -26,6 +28,9 @@ using CognitiveModeling
 using Turing
 
 struct NoisyRescorlaWagner <: AbstractCognitiveModel end
+
+#It samples noise within its timesteps
+CognitiveModeling.is_stochastic(model::NoisyRescorlaWagner) = true
 
 Turing.@model function CognitiveModeling.turing_timestep_model(
         model::NoisyRescorlaWagner,

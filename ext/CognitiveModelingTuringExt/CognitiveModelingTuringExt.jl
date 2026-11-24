@@ -66,6 +66,7 @@ using CognitiveModeling:
 using CognitiveModeling:
     stopping_criterion_of_either_model, check_stopping_criterion_not_met
 using CognitiveModeling: data_continues_after, session_parameters_valid
+using CognitiveModeling: is_stochastic, describe_model
 using CognitiveModeling: bundle_parameters, submodel_states_of
 using CognitiveModeling:
     parameters_are_valid, combine_parameters_valid, parameters_valid_in_every_session

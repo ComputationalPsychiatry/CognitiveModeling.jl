@@ -1,11 +1,29 @@
 ### DEFAULT METHODS OF THE FUNCTIONS THAT MODELS AND THE PARTS OF A FULL MODEL IMPLEMENT ###
 
 #Default implementation of turing_timestep_model for both kinds of model, which just calls the normal timestep_model function
-#Can be extended for specific cognitive models or environment models that sample within a timestep
+#Can be extended for specific cognitive models or environment models that sample within a timestep, and must be for those
+#that say they do, which is decided by their type, so the check costs nothing for the others
 Turing.@model function CognitiveModeling.turing_timestep_model(
     model::AbstractTimestepModel, context
 )
+    is_stochastic(model) && throw_without_turing_timestep_model(model)
     return timestep_model(model, context)
+end
+
+"""
+    throw_without_turing_timestep_model(model)
+
+Throw an informative error for `model`, a cognitive model or an environment model which
+samples within its timesteps, as its method of [`CognitiveModeling.is_stochastic`](@ref)
+says, but which has no method of [`CognitiveModeling.turing_timestep_model`](@ref) of its
+own. Used by the default of `turing_timestep_model`.
+"""
+@noinline function throw_without_turing_timestep_model(model)
+    return throw(
+        ArgumentError(
+            "$(uppercasefirst(describe_model(model))) samples within its timesteps, as its method of CognitiveModeling.is_stochastic says, but it has no method of CognitiveModeling.turing_timestep_model. Give it one which samples with ~ what its timestep_model samples from context.rng, so that each of those values is a variable of the fit.",
+        ),
+    )
 end
 
 #Default implementation of turing_initialize_state for both kinds of model, which just calls the normal initialize_state function

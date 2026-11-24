@@ -35,6 +35,7 @@ CognitiveModeling.parameter_domains
 CognitiveModeling.input_domains
 CognitiveModeling.output_domains
 CognitiveModeling.stopping_criterion
+CognitiveModeling.is_stochastic
 ```
 
 ## Functions that a model with submodels implements
