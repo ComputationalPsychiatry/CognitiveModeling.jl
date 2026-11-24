@@ -102,7 +102,6 @@ makedocs(;
             "generated/interfacing_with_sequential_sampling_models.md",
             "generated/compiling_with_reactant.md",
         ],
-        "Planned tutorials and interfaces" => "planned.md",
         "Automatic differentiation and Reactant" => "ad_and_reactant.md",
         "API" => [
             "Overview" => "api/index.md",
