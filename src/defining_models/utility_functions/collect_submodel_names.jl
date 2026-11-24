@@ -1,7 +1,7 @@
 ## The names of a model with submodels ##
 
 """
-    get_attribute_names(model::AbstractSubmodel)::ModelAttributes
+    get_attribute_names(model; with_default_parameters=true)::ModelAttributes
 
 Return the names of the attributes of `model` together with those of its submodels, in a
 [`ModelAttributes`](@ref): the parameters of the model and of every submodel, under the flat
@@ -12,8 +12,11 @@ the model's own inputs and outputs. For a model without submodels, these are the
 [`attribute_names`](@ref) gives.
 
 These are the names that a model is given its parameters and its state with, so they are
-the ones to give priors and fixed values for. Before the names are collected, the
-submodels are checked, as [`check_submodels`](@ref) describes.
+the ones to give priors and fixed values for. With `with_default_parameters = false`, the
+parameters with a default value in [`default_parameters`](@ref) of the model or of its
+submodel are left out, which leaves those that a fit needs priors or fixed values for.
+Before the names are collected, the submodels are checked, as [`check_submodels`](@ref)
+describes.
 
 # Examples
 ```jldoctest
@@ -27,6 +30,8 @@ julia> struct Response <: AbstractSubmodel end
 julia> CognitiveModeling.attribute_names(::Response) = ModelAttributes(;
            parameters = :inverse_temperature, states = (), inputs = (), outputs = ());
 
+julia> CognitiveModeling.default_parameters(::Response) = (; inverse_temperature = 1.0);
+
 julia> struct PerceptionAndResponse <: AbstractCognitiveModel
            perception::Perception
            response::Response
@@ -37,17 +42,62 @@ julia> CognitiveModeling.submodel_fields(::PerceptionAndResponse) = (:perception
 julia> CognitiveModeling.attribute_names(::PerceptionAndResponse) = ModelAttributes(;
            parameters = :lapse_rate, states = (), inputs = :reward, outputs = :choice);
 
-julia> CognitiveModeling.get_attribute_names(PerceptionAndResponse(Perception(), Response()))
+julia> model = PerceptionAndResponse(Perception(), Response());
+
+julia> CognitiveModeling.get_attribute_names(model)
 ModelAttributes
 Parameters: lapse_rate, learning_rate, inverse_temperature
 States: perception
 Inputs: reward
 Outputs: choice
+
+julia> CognitiveModeling.get_attribute_names(model; with_default_parameters = false)
+ModelAttributes
+Parameters: lapse_rate, learning_rate
+States: perception
+Inputs: reward
+Outputs: choice
 ```
 """
-function get_attribute_names(model::AbstractSubmodel)
+function get_attribute_names(model::AbstractSubmodel; with_default_parameters::Bool=true)
+    return checked_attribute_names(model, Val(with_default_parameters))
+end
+
+#A method for each value of the keyword, so that the names with every parameter, which the checks of a simulation and
+#of a fitted session read, compile to the same code as without the keyword
+"""
+    checked_attribute_names(model::AbstractSubmodel, ::Val{with_default_parameters})
+
+Return the names that [`get_attribute_names`](@ref) gives for `model`, after checking its
+submodels with [`check_submodels`](@ref): with every parameter for `Val(true)`, and without
+the parameters that have a default value for `Val(false)`, as
+[`without_default_parameters`](@ref) leaves them out.
+"""
+function checked_attribute_names(model::AbstractSubmodel, ::Val{true})
     check_submodels(model)
     return collected_attribute_names(model_layout(model))
+end
+function checked_attribute_names(model::AbstractSubmodel, ::Val{false})
+    return without_default_parameters(
+        checked_attribute_names(model, Val(true)), collected_default_parameters(model)
+    )
+end
+
+#Generated, so that the names are known when the code is compiled, as those with the default parameters are
+"""
+    without_default_parameters(attributes::ModelAttributes, defaults::NamedTuple)
+
+Return `attributes` without the parameters that have a value in `defaults`, the default
+values of the parameters under their flat names, as
+[`collected_default_parameters`](@ref) gives them. Used by
+[`checked_attribute_names`](@ref), for [`get_attribute_names`](@ref) with
+`with_default_parameters = false`.
+"""
+@generated function without_default_parameters(
+    ::ModelAttributes{Tparameters,Tstates,Tinputs,Toutputs}, ::NamedTuple{default_names}
+) where {Tparameters,Tstates,Tinputs,Toutputs,default_names}
+    parameters = Tuple(name for name in Tparameters if !(name in default_names))
+    return :(ModelAttributes{$parameters,$Tstates,$Tinputs,$Toutputs}())
 end
 
 """

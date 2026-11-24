@@ -70,8 +70,9 @@ end
     collected_default_parameters(model::AbstractSubmodel)
 
 Return the default values of the parameters of `model` and of its submodels, from
-[`default_parameters`](@ref) of each, under the flat names of the parameters. Used by
-[`merge_default_parameters`](@ref).
+[`default_parameters`](@ref) of each, under the flat names of the parameters, without
+checking the submodels. Used by [`get_default_parameters`](@ref), which checks them first,
+and by [`merge_default_parameters`](@ref).
 """
 function collected_default_parameters(model::AbstractSubmodel)
     return collect_parameter_values(default_parameters, model)
@@ -82,7 +83,9 @@ end
 
 Return the [`Domain`](@ref)s of the parameters of `model` and of its submodels, from
 [`parameter_domains`](@ref) of each, which are checked against the names of each, under the
-flat names of the parameters. Used by [`CognitiveModeling.discrete_parameter_names`](@ref).
+flat names of the parameters, without checking the submodels. Used by
+[`get_parameter_domains`](@ref), which checks them first, and by
+[`discrete_parameter_names`](@ref).
 """
 function collected_parameter_domains(model::AbstractSubmodel)
     return collect_parameter_values(checked_parameter_domains, model)

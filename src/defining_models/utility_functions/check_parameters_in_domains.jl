@@ -26,8 +26,8 @@ end
 Throw an `ArgumentError` if `domains`, what [`parameter_domains`](@ref) returns for `model`,
 isn't a `NamedTuple` of [`Domain`](@ref)s, or names a parameter that isn't in the
 model's attributes, from [`attribute_names`](@ref). Used by
-[`check_parameters_in_domains`](@ref), [`discrete_parameter_names`](@ref) and the display of
-a model.
+[`check_parameters_in_domains`](@ref), [`get_parameter_domains`](@ref) and the display of a
+model.
 """
 check_domains_fit_model(::AbstractSubmodel, ::NamedTuple{()}) = nothing
 function check_domains_fit_model(

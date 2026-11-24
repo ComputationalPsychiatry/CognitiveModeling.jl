@@ -154,20 +154,51 @@ end
 ## Flat parameters to bundled parameters, and back ##
 
 """
-    bundle_parameters(model::AbstractSubmodel, flat::NamedTuple)
-    bundle_parameters(layout::ModelLayout, flat::NamedTuple)
+    bundle_parameters(model::AbstractSubmodel, parameters::NamedTuple)
 
-Return the parameters of `model` as it reads them, from `flat`, its parameters and those of
-its submodels in one `NamedTuple`, under the names that [`flat_parameter_names`](@ref)
-gives: the model's own parameters under their names, and those of each submodel bundled in a
-`NamedTuple` under the submodel's name, in the same way down through its submodels. A model
-without submodels gets its parameters as they are given. The code is generated from the
-[`ModelLayout`](@ref), so that nothing is looked up while it runs, and a parameter that
-isn't given is an informative error.
+Return the parameters of `model` as the model itself reads them, in `context.parameters` and
+in [`initialize_state`](@ref): its own parameters under their names, and those of each
+submodel bundled in a `NamedTuple` under the submodel's name, in the same way down through
+its submodels. `parameters` has every parameter of the model and of its submodels in one
+flat `NamedTuple`, under the names that [`CognitiveModeling.get_parameter_names`](@ref)
+gives, which is how a model is given its parameters everywhere else. A model without
+submodels gets its parameters as they are given, and a parameter that isn't given is an
+informative error. [`CognitiveModeling.flatten_parameters`](@ref) turns them back.
+
+Useful for calling a model's own functions by hand, such as `initialize_state`, with the
+parameters of an [`InstantiatedModel`](@ref) or of a fit.
+
+# Examples
+```jldoctest
+julia> struct Perception <: AbstractSubmodel end
+
+julia> CognitiveModeling.attribute_names(::Perception) = ModelAttributes(;
+           parameters = :learning_rate, states = (), inputs = (), outputs = ());
+
+julia> struct PerceivesAndLapses <: AbstractCognitiveModel
+           perception::Perception
+       end
+
+julia> CognitiveModeling.submodel_fields(::PerceivesAndLapses) = (:perception,);
+
+julia> CognitiveModeling.attribute_names(::PerceivesAndLapses) = ModelAttributes(;
+           parameters = :lapse_rate, states = (), inputs = (), outputs = ());
+
+julia> model = PerceivesAndLapses(Perception());
+
+julia> bundled = CognitiveModeling.bundle_parameters(
+           model, (; lapse_rate = 0.1, learning_rate = 0.3)
+       )
+(lapse_rate = 0.1, perception = (learning_rate = 0.3,))
+
+julia> CognitiveModeling.flatten_parameters(model, bundled)
+(lapse_rate = 0.1, learning_rate = 0.3)
+```
 """
-function bundle_parameters(model::AbstractSubmodel, flat::NamedTuple)
-    return bundle_parameters(model_layout(model), flat)
+function bundle_parameters(model::AbstractSubmodel, parameters::NamedTuple)
+    return bundle_parameters(model_layout(model), parameters)
 end
+#For a ModelLayout, which the code is generated from, so that nothing is looked up while it runs
 @generated function bundle_parameters(
     layout::ModelLayout{Tattributes,prefixes,Tsubmodels}, flat::NamedTuple
 ) where {Tattributes,prefixes,Tsubmodels}
@@ -199,7 +230,8 @@ end
 Return the names of the parameters of `model` and of its submodels, as they are given to it
 flat, in a tuple: its own parameters first, and then those of each submodel in the order of
 its submodels, each with the submodel's name and `__` before it when `model` uses prefixes,
-as [`CognitiveModeling.uses_submodel_prefixes`](@ref) says.
+as [`CognitiveModeling.uses_submodel_prefixes`](@ref) says. These are the names that
+[`get_parameter_names`](@ref) gives, which checks the submodels first.
 """
 function flat_parameter_names(model::AbstractSubmodel)
     return flat_parameter_names(model_layout(model))
@@ -210,14 +242,18 @@ end
 
 """
     flatten_parameters(model::AbstractSubmodel, bundled::NamedTuple)
-    flatten_parameters(layout::ModelLayout, bundled::NamedTuple)
 
-Return the parameters `bundled`, as [`bundle_parameters`](@ref) gives them, as flat ones,
-under the names that [`flat_parameter_names`](@ref) gives, so that the two undo each other.
+Return the parameters of `model` and of its submodels in one flat `NamedTuple`, under the
+names that [`CognitiveModeling.get_parameter_names`](@ref) gives and in their order, from
+`bundled`, the parameters as the model itself reads them, with those of each submodel in a
+`NamedTuple` under the submodel's name, as [`CognitiveModeling.bundle_parameters`](@ref)
+gives them. The two undo each other. Useful for giving parameters that were written in the
+bundled form to a simulation or a fit, which take them flat.
 """
 function flatten_parameters(model::AbstractSubmodel, bundled::NamedTuple)
     return flatten_parameters(model_layout(model), bundled)
 end
+#For a ModelLayout, which the code is generated from, as for bundle_parameters
 @generated function flatten_parameters(layout::ModelLayout, bundled::NamedTuple)
     entries = map(parameter_paths(layout)) do (flat_name, path)
         value = foldl(

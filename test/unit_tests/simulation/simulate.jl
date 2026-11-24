@@ -125,6 +125,24 @@ function CognitiveModeling.attribute_names(model::HasDefaults)
     )
 end
 
+#Has a default for the last of its parameters only, so that the default comes before the given parameter when the two
+#are merged
+struct HasDefaultForLastParameter <: AbstractCognitiveModel end
+function CognitiveModeling.default_parameters(model::HasDefaultForLastParameter)
+    return (; initial_value=0.5)
+end
+function CognitiveModeling.initialize_state(model::HasDefaultForLastParameter, parameters)
+    return (; expected_reward=parameters.initial_value)
+end
+function CognitiveModeling.attribute_names(model::HasDefaultForLastParameter)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :initial_value),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end
+
 #Has no names, so it can't be simulated
 struct WithoutNames <: AbstractCognitiveModel end
 CognitiveModeling.initialize_state(model::WithoutNames, parameters) = (;)
@@ -2270,6 +2288,19 @@ end
         #A model without defaults keeps the parameters as they are
         @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).parameters ===
             BASELINE_PARAMETERS
+        #The parameters are in the order of the model's attributes, whichever of them are defaults, and in whichever
+        #order they are given
+        @test InstantiatedModel(HasDefaultForLastParameter(), (; learning_rate=0.3)).parameters ===
+            (; learning_rate=0.3, initial_value=0.5)
+        @test InstantiatedModel(
+            HasDefaultForLastParameter(),
+            (; learning_rate=0.3),
+            (; expected_reward=0.2),
+            (; choice=NoValue()),
+        ).parameters === (; learning_rate=0.3, initial_value=0.5)
+        @test InstantiatedModel(
+            Baseline(ByHand()), (; inverse_temperature=2.0, learning_rate=0.5)
+        ).parameters === BASELINE_PARAMETERS
         #The model is kept as it is
         @test InstantiatedModel(Baseline(ByHand()), BASELINE_PARAMETERS).model ===
             Baseline(ByHand())

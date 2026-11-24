@@ -183,7 +183,8 @@ end
 Return the default parameter values of a cognitive model or of an environment model, such as
 `(; learning_rate = 0.1)`, which [`InstantiatedModel`](@ref) and [`simulate_session`](@ref)
 use for the parameters they aren't given. The display of a model shows each default value
-after the name of its parameter.
+after the name of its parameter, and [`CognitiveModeling.get_default_parameters`](@ref)
+gives them together with those of the model's submodels.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so
@@ -206,8 +207,10 @@ before anything runs, and a value outside its domain throws a
 [`InstantiatedModel`](@ref) or [`SessionInfo`](@ref) is given
 `check_parameter_domains = false`. [`CognitiveModeling.discrete_parameter_names`](@ref)
 gives the discrete parameters, and [`CognitiveModeling.continuous_parameter_names`](@ref)
-the continuous ones, which are sampled in different ways. The display of a model shows each domain after the name of its
-parameter.
+the continuous ones, which are sampled in different ways. The display of a model shows each
+domain after the name of its parameter, and
+[`CognitiveModeling.get_parameter_domains`](@ref) gives them together with those of the
+model's submodels.
 
 # Implementation
 A model can add a method of this function. The default is an empty `NamedTuple`, `(;)`, so

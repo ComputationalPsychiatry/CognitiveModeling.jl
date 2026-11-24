@@ -50,11 +50,26 @@ CognitiveModeling.uses_submodel_prefixes
 
 ## Reading a model's names and parameters
 
+These read a model together with its submodels, where the functions that a model implements
+give what is the model's own.
+
 ```@docs
 CognitiveModeling.get_attribute_names
 CognitiveModeling.get_parameter_names
+CognitiveModeling.get_default_parameters
+CognitiveModeling.get_parameter_domains
 CognitiveModeling.discrete_parameter_names
 CognitiveModeling.continuous_parameter_names
+```
+
+## Bundling the parameters of submodels
+
+A model is given its parameters and those of its submodels in one flat `NamedTuple`, and
+reads those of each submodel under the submodel's name. These go from one form to the other.
+
+```@docs
+CognitiveModeling.bundle_parameters
+CognitiveModeling.flatten_parameters
 ```
 
 ## Environments from other packages
