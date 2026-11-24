@@ -19,6 +19,9 @@ updates:
       - "/test/extensions/turing"
       - "/test/extensions/turing/ad"
       - "/benchmark"
+      - "/PremadeCognitiveModels"
+      - "/PremadeCognitiveModels/test/ad_and_reactant/ad"
+      - "/PremadeCognitiveModels/test/ad_and_reactant/reactant"
     target-branch: "dev"
     schedule:
       interval: "weekly"
