@@ -136,7 +136,7 @@ A downstream model is a subtype of [`AbstractDownstreamModel`](@ref) with a meth
 function, which can ignore any of the arguments. A regression of some measurement on a state
 of the cognitive model, for instance, reads the state from `saved_trajectories`, a vector
 with the [`SessionTrajectories`](@ref) of each session, as
-[`turing_behavioral_session`](@ref) returns them, so the `cognitive_save_history` of the
-sessions must select that state.
+[`turing_behavioral_session`](@ref) returns them, so the `save_cognitive_trajectories` of
+the sessions must select that state.
 """
 function turing_downstream_model end

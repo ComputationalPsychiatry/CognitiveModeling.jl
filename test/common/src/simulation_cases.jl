@@ -156,7 +156,7 @@ function ending_case(name, distributions; keywords...)
     case = simulate_case(name, distributions; keywords...)
     offset =
         if CognitiveModeling.saves_initial_timestep_values(
-            keywords[:cognitive_save_history]
+            keywords[:save_cognitive_trajectories]
         )
             1
         else
@@ -167,7 +167,7 @@ end
 
 #A case of an agent and an environment, instantiated with the real numbers of their parameters, and simulated with
 #simulate_session! once, or twice, with both models reset between the two calls or not, which returns the trajectories
-#of every call and the agent's history after them, read the way a user reads it, as vectors. The calls are written out,
+#of every call and the agent's trajectories after them, read the way a user reads it, as vectors. The calls are written out,
 #without a loop, which Reactant would turn into a traced broadcast
 function instantiated_case(
     name,
@@ -176,8 +176,8 @@ function instantiated_case(
     environment,
     cognitive_parameters,
     environment_parameters,
-    save_history=SaveHistory(SaveEverything()),
-    environment_save_history=SaveHistory(),
+    save_trajectories=SaveTrajectories(SaveEverything()),
+    save_environment_trajectories=SaveTrajectories(),
     twice=false,
     reset_between=false,
     reactant=true,
@@ -187,9 +187,9 @@ function instantiated_case(
         cognitive_values, environment_values = both_with_real_numbers(
             cognitive_parameters, environment_parameters, x
         )
-        agent = InstantiatedModel(model, cognitive_values; save_history)
+        agent = InstantiatedModel(model, cognitive_values; save_trajectories)
         environment_instance = InstantiatedModel(
-            environment, environment_values; save_history=environment_save_history
+            environment, environment_values; save_trajectories=save_environment_trajectories
         )
         call_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
         first_trajectories = simulate_session!(
@@ -207,15 +207,15 @@ function instantiated_case(
         else
             (first_trajectories,)
         end
-        history = agent.history
+        agent_trajectories = agent.trajectories
         return (;
             trajectories,
-            history=(;
-                history.states,
-                history.inputs,
-                history.outputs,
-                history.output_distributions,
-                history.timestep_sizes,
+            agent_trajectories=(;
+                agent_trajectories.states,
+                agent_trajectories.inputs,
+                agent_trajectories.outputs,
+                agent_trajectories.output_distributions,
+                agent_trajectories.timestep_sizes,
             ),
         )
     end
@@ -271,7 +271,7 @@ function single_inputs_case(
 end
 
 #A case of an agent simulated on one input at a time with simulate_timestep!, which returns its outputs, in a tuple, and
-#the states of its history. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode
+#the states of its trajectories. The tuple of the inputs is made once, outside the function, since Enzyme's forward mode
 #gives a wrong gradient, with no error, when a function maps over a tuple that it makes from a vector, whose length is
 #then only known when it runs
 function instantiated_single_inputs_case(
@@ -280,19 +280,19 @@ function instantiated_single_inputs_case(
     model,
     parameters,
     inputs,
-    save_history=SaveHistory(SaveEverything()),
+    save_trajectories=SaveTrajectories(SaveEverything()),
     reactant=true,
     keywords...,
 )
     inputs_tuple = Tuple(inputs)
     function run(x)
         parameter_values, _ = with_real_numbers(parameters, x, 1)
-        agent = InstantiatedModel(model, parameter_values; save_history)
+        agent = InstantiatedModel(model, parameter_values; save_trajectories)
         rng_keywords = with_random_number_generator(NamedTuple(keywords), distributions)
         outputs = map(
             input -> simulate_timestep!(agent, input; rng_keywords...), inputs_tuple
         )
-        return (; outputs, states=agent.history.states)
+        return (; outputs, states=agent.trajectories.states)
     end
     x = real_numbers(parameters)
     return (;
@@ -344,8 +344,8 @@ end
 ## The cases ##
 #Saving everything of both models
 const SAVE_BOTH = (;
-    cognitive_save_history=SaveHistory(SaveEverything()),
-    environment_save_history=SaveHistory(SaveEverything()),
+    save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+    save_environment_trajectories=SaveTrajectories(SaveEverything()),
 )
 
 #The models that Reactant can't compile, whose values change type between timesteps, as for NOT_INFERRED below: Reactant
@@ -480,8 +480,8 @@ function simulation_cases(distributions)
                     baseline_parts...,
                     who_starts,
                     n_steps=10,
-                    cognitive_save_history=SaveHistory(; states=:expected_reward),
-                    environment_save_history=SaveHistory(),
+                    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
+                    save_environment_trajectories=SaveTrajectories(),
                 ),
                 simulate_case(
                     "Baseline saving everything but timestep 0, $starts",
@@ -489,10 +489,10 @@ function simulation_cases(distributions)
                     baseline_parts...,
                     who_starts,
                     n_steps=10,
-                    cognitive_save_history=SaveHistory(
+                    save_cognitive_trajectories=SaveTrajectories(
                         SaveEverything(); save_initial_timestep_values=false
                     ),
-                    environment_save_history=SaveHistory(SaveEverything()),
+                    save_environment_trajectories=SaveTrajectories(SaveEverything()),
                 ),
                 simulate_case(
                     "Baseline continuing from given states, action and observation, $starts",
@@ -571,7 +571,7 @@ function simulation_cases(distributions)
                     "An agent and an environment saving the states only, $starts",
                     distributions;
                     baseline_parts...,
-                    save_history=SaveHistory(; states=:expected_reward),
+                    save_trajectories=SaveTrajectories(; states=:expected_reward),
                     who_starts,
                     n_steps=10,
                 ),
@@ -579,7 +579,7 @@ function simulation_cases(distributions)
                     "An agent and an environment simulated twice, $starts",
                     distributions;
                     baseline_parts...,
-                    environment_save_history=SaveHistory(SaveEverything()),
+                    save_environment_trajectories=SaveTrajectories(SaveEverything()),
                     twice=true,
                     who_starts,
                     n_steps=5,
@@ -615,7 +615,7 @@ function simulation_cases(distributions)
                     baseline_with(; model=StateChangedInPlace(distributions))...,
                     who_starts,
                     n_steps=10,
-                    cognitive_save_history=SaveHistory(; states=:expected_reward),
+                    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
                 ),
                 simulate_case(
                     "Baseline with OutputNotEveryTimestepEnvironment saving the states only, $starts",
@@ -626,7 +626,7 @@ function simulation_cases(distributions)
                     )...,
                     who_starts,
                     n_steps=10,
-                    cognitive_save_history=SaveHistory(; states=:expected_reward),
+                    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
                 ),
             ],
         )
@@ -658,19 +658,19 @@ function simulation_cases(distributions)
                 inputs=SINGLE_REWARDS,
             ),
             instantiated_single_inputs_case(
-                "An agent on single observations, with a history",
+                "An agent on single observations, with its trajectories",
                 distributions;
                 model=Baseline(distributions),
                 parameters=baseline.cognitive_parameters,
                 inputs=SINGLE_REWARDS,
             ),
             instantiated_single_inputs_case(
-                "An agent on single observations, without a history",
+                "An agent on single observations, without its trajectories",
                 distributions;
                 model=Baseline(distributions),
                 parameters=baseline.cognitive_parameters,
                 inputs=SINGLE_REWARDS,
-                save_history=SaveHistory(),
+                save_trajectories=SaveTrajectories(),
             ),
             instantiated_single_inputs_case(
                 "An agent with domains on single observations",
@@ -703,7 +703,7 @@ function simulation_cases(distributions)
                     "$(pair.name) as an agent with an environment, $starts",
                     distributions;
                     parts...,
-                    environment_save_history=SaveHistory(SaveEverything()),
+                    save_environment_trajectories=SaveTrajectories(SaveEverything()),
                     reactant=false,
                     who_starts,
                     n_steps=10,
@@ -717,7 +717,9 @@ function simulation_cases(distributions)
                     inferred=false,
                     who_starts,
                     n_steps=10,
-                    cognitive_save_history=SaveHistory(; states=:expected_rewards),
+                    save_cognitive_trajectories=SaveTrajectories(;
+                        states=:expected_rewards
+                    ),
                     maps...,
                 ),
                 simulate_case(

@@ -77,10 +77,10 @@ function simulate_bandit(
     action_name=:arm,
     n_steps=4,
     cognitive_parameters=(; arm_to_pull=1),
-    cognitive_save_history=SaveHistory(
+    save_cognitive_trajectories=SaveTrajectories(
         SaveEverything(); save_initial_timestep_values=false
     ),
-    environment_save_history=SaveHistory(
+    save_environment_trajectories=SaveTrajectories(
         SaveEverything(); save_initial_timestep_values=false
     ),
     keywords...,
@@ -92,8 +92,8 @@ function simulate_bandit(
         n_steps,
         cognitive_parameters,
         environment_parameters=(;),
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         keywords...,
     )
 end
@@ -136,7 +136,7 @@ end
         #The model gets the actions it took and the rewards
         @test all(action -> action === (; arm=1), simulation.actions)
         @test [state.last_reward for state in simulation.states] == [NoValue(), 1.0, 1.0, 1.0]
-        #The environment's own history has the same observations, as it gave them, and the actions it received
+        #The environment's own trajectories have the same observations, as it gave them, and the actions it received
         @test simulation.environment.observations == observations
         @test simulation.environment.actions == simulation.actions
         @test simulation.environment.observation_distributions[2] === (;
@@ -243,9 +243,9 @@ end
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
         @test rl_env.clones == 4
         #The state can be selected by its name
-        selected = SaveHistory(; states=:rl_env, save_initial_timestep_values=false)
+        selected = SaveTrajectories(; states=:rl_env, save_initial_timestep_values=false)
         environment_states =
-            simulate_bandit(CountingBandit(0, 0); environment_save_history=selected).environment.states
+            simulate_bandit(CountingBandit(0, 0); save_environment_trajectories=selected).environment.states
         @test [state.rl_env.pulls for state in environment_states] == [0, 1, 2, 3]
         rl_env = PlainBandit(0)
         environment_states = simulate_bandit(rl_env).environment.states
@@ -255,9 +255,11 @@ end
 
     @testset "Timestep 0 has the environment where the episode starts, copied like the rest" begin
         rl_env = CountingBandit(0, 0)
-        everything = SaveHistory(SaveEverything())
+        everything = SaveTrajectories(SaveEverything())
         simulation = simulate_bandit(
-            rl_env; cognitive_save_history=everything, environment_save_history=everything
+            rl_env;
+            save_cognitive_trajectories=everything,
+            save_environment_trajectories=everything,
         )
         @test simulation.observations[1] === (;
             observation=BeforeFirstTimestep(),
@@ -271,7 +273,9 @@ end
 
     @testset "Nothing is copied when the environment's states aren't saved" begin
         rl_env = CountingBandit(0, 0)
-        simulation = simulate_bandit(rl_env; environment_save_history=SaveHistory())
+        simulation = simulate_bandit(
+            rl_env; save_environment_trajectories=SaveTrajectories()
+        )
         @test rl_env.clones == 0
         @test simulation.environment.states == fill((;), 4)
     end
@@ -285,7 +289,9 @@ end
             terminated=BeforeFirstTimestep(),
         )
         agent = InstantiatedModel(
-            PullsArm(), (; arm_to_pull=1); save_history=SaveHistory(SaveEverything())
+            PullsArm(),
+            (; arm_to_pull=1);
+            save_trajectories=SaveTrajectories(SaveEverything()),
         )
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=2)
         @test environment.state === (; rl_env)
@@ -315,7 +321,7 @@ end
         agent = InstantiatedModel(
             PullsArm(),
             (; arm_to_pull=1);
-            save_history=SaveHistory(; inputs=SaveEverything()),
+            save_trajectories=SaveTrajectories(; inputs=SaveEverything()),
         )
         simulate_session!(agent, environment; who_starts=EnvironmentStarts(), n_steps=4)
         @test rl_env.pulls == 3
@@ -339,7 +345,7 @@ end
             action_map=NameMap(:second => :arm),
         )
         @test simulation.observations[2] == (; reward=0.0)
-        #The environment's history has the observations as it gave them, and the action as it received it
+        #The environment's trajectories have the observations as it gave them, and the action as it received it
         @test simulation.environment.observations[2] ==
             (; observation=1, reward=0.0, terminated=false)
         @test simulation.environment.actions[1] === (; arm=2)

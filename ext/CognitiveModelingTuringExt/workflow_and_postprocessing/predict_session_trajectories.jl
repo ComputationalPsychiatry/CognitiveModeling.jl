@@ -2,19 +2,21 @@
 
 #The copy of the model and the numbering of the samples are made by the helpers in get_session_trajectories.jl
 
-#Makes a copy of the model whose sessions are simulated and save what the save histories select, simulates them for every sample of the chain, as Turing.jl's predict would, and makes a chain of the trajectories they saved
+#Makes a copy of the model whose sessions are simulated and save what the SaveTrajectories select, simulates them for every sample of the chain, as Turing.jl's predict would, and makes a chain of the trajectories they saved
 function CognitiveModeling.predict_session_trajectories(
     rng::AbstractRNG,
     model::DynamicPPL.Model,
     chain::Turing.FlexiChains.FlexiChain;
-    cognitive_save_history::SaveHistory=SaveHistory(),
-    environment_save_history::SaveHistory=SaveHistory(),
+    save_cognitive_trajectories::SaveTrajectories=SaveTrajectories(),
+    save_environment_trajectories::SaveTrajectories=SaveTrajectories(),
 )
     #The sessions are simulated under names apart from the fit's, so that everything within them is drawn again, with the parameters of each sample
     predictive_model = with_sessions_simulated(
         model,
         info -> decondition_sessions(
-            with_save_history(info, cognitive_save_history, environment_save_history)
+            with_save_trajectories(
+                info, save_cognitive_trajectories, save_environment_trajectories
+            ),
         ),
         "predict_session_trajectories",
     )

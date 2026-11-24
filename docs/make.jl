@@ -108,7 +108,7 @@ makedocs(;
             "Overview" => "api/index.md",
             "api/defining_models.md",
             "api/simulation.md",
-            "api/saving_histories.md",
+            "api/saving_trajectories.md",
             "api/fitting.md",
             "api/parameter_models.md",
             "api/fitting_with_turing.md",
@@ -117,7 +117,7 @@ makedocs(;
             "Overview" => "internals/index.md",
             "Defining models" => "internals/defining_models.md",
             "Simulation" => "internals/simulation.md",
-            "Saving histories" => "internals/saving_histories.md",
+            "Saving trajectories" => "internals/saving_trajectories.md",
             "Fitting" => [
                 "Sessions" => "internals/fitting.md",
                 "Parameter models" => "internals/parameter_models.md",

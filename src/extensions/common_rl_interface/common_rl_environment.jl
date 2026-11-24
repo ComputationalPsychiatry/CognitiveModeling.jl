@@ -71,7 +71,7 @@ simulation = simulate_session(
     n_steps = 10,
     cognitive_parameters = (;),
     environment_parameters = (;),
-    cognitive_save_history = SaveHistory(SaveEverything()),
+    save_cognitive_trajectories = SaveTrajectories(SaveEverything()),
 )
 
 #Timestep 0, before the first timestep, and then what the environment gave on each timestep

@@ -1,8 +1,8 @@
 # Simulation
 
 Simulating a cognitive model, an environment model or the two together. What a simulation
-saves is chosen with a [`SaveHistory`](@ref), on the page
-[Saving histories](saving_histories.md).
+saves is chosen with a [`SaveTrajectories`](@ref), on the page
+[Saving trajectories](saving_trajectories.md).
 
 ```@index
 Pages = ["simulation.md"]

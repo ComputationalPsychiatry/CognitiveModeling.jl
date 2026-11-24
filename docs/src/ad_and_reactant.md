@@ -38,7 +38,7 @@ everything else is done by the package's functions, in the steps of the Turing.j
 session. They run with the agent or the environment starting, with a reward that isn't
 given on every timestep, with imputed actions, with an environment whose observations are
 imputed, which doesn't run, or which scores every observation, with maps of names, with
-saved histories, with a size for each timestep, with a session that ends when a stopping
+saved trajectories, with a size for each timestep, with a session that ends when a stopping
 criterion is met, with parameters that turn invalid and a criterion met while the data
 continues, which give a log density of `-Inf`, and with several sessions. A session whose
 flags Reactant traces is masked instead of stopped, as a simulation is, and a stand-in for a

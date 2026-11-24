@@ -215,15 +215,15 @@ end
 """
     collect_timestep_values(environment_output, cognitive_output, environment_observation,
                             observation, action, environment_action, cognitive_model,
-                            environment, cognitive_save_history, environment_save_history,
-                            previous)
+                            environment, save_cognitive_trajectories,
+                            save_environment_trajectories, previous)
 
 Collect the values of a timestep in a `NamedTuple`: the state and the action of the
 cognitive model, and under `environment` the state and the observation of the environment,
 which the next timestep starts from, whether the parameters of both models are valid, under
-`parameters_valid`, the states of both models before and after the timestep, under
-`record`, from [`record_of_timestep`](@ref), and under `saved` what `cognitive_save_history`
-and `environment_save_history` select, as [`map_saved`](@ref) arranges them.
+`parameters_valid`, the states of both models before and after the timestep, under `record`,
+from [`record_of_timestep`](@ref), and under `saved` what `save_cognitive_trajectories` and
+`save_environment_trajectories` select, as [`map_saved`](@ref) arranges them.
 
 Each side has the values in its own names: `observation` is the observation as the cognitive
 model receives it and `environment_observation` as the environment gave it, and `action` is
@@ -241,8 +241,8 @@ function collect_timestep_values(
     environment_action,
     cognitive_model,
     environment,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     previous,
 )
     #Whether the parameters of both models are valid on this timestep
@@ -264,29 +264,31 @@ function collect_timestep_values(
             states=select_state_to_save(
                 cognitive_model,
                 cognitive_output.new_state,
-                state_selection(cognitive_save_history),
+                state_selection(save_cognitive_trajectories),
             ),
-            observations=select_names(observation, input_selection(cognitive_save_history)),
-            actions=select_names(action, output_selection(cognitive_save_history)),
+            observations=select_names(
+                observation, input_selection(save_cognitive_trajectories)
+            ),
+            actions=select_names(action, output_selection(save_cognitive_trajectories)),
             action_distributions=select_names(
                 cognitive_output.output_distribution,
-                output_distribution_selection(cognitive_save_history),
+                output_distribution_selection(save_cognitive_trajectories),
             ),
             environment=(;
                 states=select_state_to_save(
                     environment,
                     environment_output.new_state,
-                    state_selection(environment_save_history),
+                    state_selection(save_environment_trajectories),
                 ),
                 observations=select_names(
-                    environment_observation, output_selection(environment_save_history)
+                    environment_observation, output_selection(save_environment_trajectories)
                 ),
                 actions=select_names(
-                    environment_action, input_selection(environment_save_history)
+                    environment_action, input_selection(save_environment_trajectories)
                 ),
                 observation_distributions=select_names(
                     environment_output.output_distribution,
-                    output_distribution_selection(environment_save_history),
+                    output_distribution_selection(save_environment_trajectories),
                 ),
             ),
         ),
@@ -354,7 +356,8 @@ environment_values(state, observation) = (; state, observation)
     collect_initial_timestep_values(save_initial_timestep_values::Val,
                                     previous_timestep_values, cognitive_model,
                                     environment, observation_map, action_map,
-                                    cognitive_save_history, environment_save_history)
+                                    save_cognitive_trajectories,
+                                    save_environment_trajectories)
 
 Return what is saved from before the first timestep, as timestep 0, arranged as the `saved`
 values of [`collect_timestep_values`](@ref), or `nothing` when
@@ -373,8 +376,8 @@ function collect_initial_timestep_values(
     environment,
     observation_map,
     action_map,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
 )
     return nothing
 end
@@ -386,43 +389,43 @@ function collect_initial_timestep_values(
     environment,
     observation_map,
     action_map,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
 )
     return (;
         states=select_state_to_save(
             cognitive_model,
             previous_timestep_values.state,
-            state_selection(cognitive_save_history),
+            state_selection(save_cognitive_trajectories),
         ),
         observations=select_names(
             map_names(previous_timestep_values.environment.observation, observation_map),
-            input_selection(cognitive_save_history),
+            input_selection(save_cognitive_trajectories),
         ),
         actions=select_names(
-            previous_timestep_values.action, output_selection(cognitive_save_history)
+            previous_timestep_values.action, output_selection(save_cognitive_trajectories)
         ),
         action_distributions=select_names(
             output_before_first_timestep(cognitive_model),
-            output_distribution_selection(cognitive_save_history),
+            output_distribution_selection(save_cognitive_trajectories),
         ),
         environment=(;
             states=select_state_to_save(
                 environment,
                 previous_timestep_values.environment.state,
-                state_selection(environment_save_history),
+                state_selection(save_environment_trajectories),
             ),
             observations=select_names(
                 previous_timestep_values.environment.observation,
-                output_selection(environment_save_history),
+                output_selection(save_environment_trajectories),
             ),
             actions=select_names(
                 map_names(previous_timestep_values.action, action_map),
-                input_selection(environment_save_history),
+                input_selection(save_environment_trajectories),
             ),
             observation_distributions=select_names(
                 output_before_first_timestep(environment),
-                output_distribution_selection(environment_save_history),
+                output_distribution_selection(save_environment_trajectories),
             ),
         ),
     )
@@ -574,7 +577,7 @@ end
 """
     simulate_timestep_both_models(::EnvironmentStarts, cognitive_model, environment,
                          cognitive_parameters, environment_parameters,
-                         cognitive_save_history, environment_save_history,
+                         save_cognitive_trajectories, save_environment_trajectories,
                          observation_map, action_map, rng, timestep_size, previous)
 
 Simulate a timestep where the environment moves first, starting from `previous`, the values
@@ -587,8 +590,8 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     environment,
     cognitive_parameters,
     environment_parameters,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     observation_map,
     action_map,
     rng,
@@ -646,7 +649,7 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
     #Sample action
     action = sample_output(rng, cognitive_output.output_distribution)
 
-    #The environment's history has the action as action_map passes it on
+    #The environment's trajectories have the action as action_map passes it on
     environment_action = map_names(action, action_map)
 
     return collect_timestep_values(
@@ -658,8 +661,8 @@ by [`simulate_all_timesteps`](@ref) and [`simulate_remaining_timesteps`](@ref).
         environment_action,
         cognitive_model,
         environment,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         previous,
     )
 end
@@ -668,7 +671,7 @@ end
 """
     simulate_timestep_both_models(::AgentStarts, cognitive_model, environment,
                          cognitive_parameters, environment_parameters,
-                         cognitive_save_history, environment_save_history,
+                         save_cognitive_trajectories, save_environment_trajectories,
                          observation_map, action_map, rng, timestep_size, previous)
 
 Simulate a timestep where the agent moves first, starting from `previous`, the values of the
@@ -681,8 +684,8 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     environment,
     cognitive_parameters,
     environment_parameters,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     observation_map,
     action_map,
     rng,
@@ -740,7 +743,7 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
     #Sample observation
     environment_observation = sample_output(rng, environment_output.output_distribution)
 
-    #The cognitive model's history has the observation as observation_map passes it on
+    #The cognitive model's trajectories have the observation as observation_map passes it on
     observation = map_names(environment_observation, observation_map)
 
     return collect_timestep_values(
@@ -752,8 +755,8 @@ timestep before, and return its values, from [`collect_timestep_values`](@ref). 
         environment_action,
         cognitive_model,
         environment,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         previous,
     )
 end
@@ -786,7 +789,7 @@ end
 """
     simulate_remaining_timesteps(storage, timestep_values, who_starts, cognitive_model,
                                  environment, cognitive_parameters, environment_parameters,
-                                 cognitive_save_history, environment_save_history,
+                                 save_cognitive_trajectories, save_environment_trajectories,
                                  observation_map, action_map, rng, timestep_sizes, n_steps,
                                  offset)
 
@@ -808,8 +811,8 @@ function simulate_remaining_timesteps(
     environment,
     cognitive_parameters,
     environment_parameters,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     observation_map,
     action_map,
     rng,
@@ -842,8 +845,8 @@ function simulate_remaining_timesteps(
                 environment,
                 cognitive_parameters,
                 environment_parameters,
-                cognitive_save_history,
-                environment_save_history,
+                save_cognitive_trajectories,
+                save_environment_trajectories,
                 observation_map,
                 action_map,
                 rng,
@@ -875,8 +878,8 @@ function simulate_remaining_timesteps(
             environment,
             cognitive_parameters,
             environment_parameters,
-            cognitive_save_history,
-            environment_save_history,
+            save_cognitive_trajectories,
+            save_environment_trajectories,
             observation_map,
             action_map,
             rng,
@@ -897,8 +900,8 @@ function simulate_remaining_timesteps(
                 environment,
                 cognitive_parameters,
                 environment_parameters,
-                cognitive_save_history,
-                environment_save_history,
+                save_cognitive_trajectories,
+                save_environment_trajectories,
                 observation_map,
                 action_map,
                 rng,
@@ -939,7 +942,7 @@ end
 """
     simulate_all_timesteps(previous_timestep_values, who_starts, cognitive_model,
                            environment, cognitive_parameters, environment_parameters,
-                           cognitive_save_history, environment_save_history,
+                           save_cognitive_trajectories, save_environment_trajectories,
                            observation_map, action_map, rng, timestep_sizes, n_steps,
                            save_initial_timestep_values::Val)
 
@@ -969,8 +972,8 @@ the first timestep isn't an error, but leaves no timestep kept.
 the action of the cognitive model, and under `environment` the state and the observation of
 the environment, each in its own names. When no timestep was kept, the last values kept are
 those of the first timestep, which turned invalid. The vectors are arranged as
-[`map_saved`](@ref) arranges them, with what `cognitive_save_history` and
-`environment_save_history` select.
+[`map_saved`](@ref) arranges them, with what `save_cognitive_trajectories` and
+`save_environment_trajectories` select.
 
 [`simulate_session!`](@ref) continues from the values of the last timestep instead of from
 what was saved, because what is saved of a state can be a selection or a copy of it, and
@@ -984,8 +987,8 @@ function simulate_all_timesteps(
     environment,
     cognitive_parameters,
     environment_parameters,
-    cognitive_save_history,
-    environment_save_history,
+    save_cognitive_trajectories,
+    save_environment_trajectories,
     observation_map,
     action_map,
     rng,
@@ -1023,8 +1026,8 @@ function simulate_all_timesteps(
         environment,
         observation_map,
         action_map,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
     )
 
     #Simulate the first timestep outside the loop, since its inputs can have other types than all the rest
@@ -1034,8 +1037,8 @@ function simulate_all_timesteps(
         environment,
         cognitive_parameters,
         environment_parameters,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         observation_map,
         action_map,
         rng,
@@ -1060,8 +1063,8 @@ function simulate_all_timesteps(
             environment,
             cognitive_parameters,
             environment_parameters,
-            cognitive_save_history,
-            environment_save_history,
+            save_cognitive_trajectories,
+            save_environment_trajectories,
             observation_map,
             action_map,
             rng,
@@ -1093,8 +1096,8 @@ function simulate_all_timesteps(
         environment,
         cognitive_parameters,
         environment_parameters,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         observation_map,
         action_map,
         rng,
@@ -1131,13 +1134,14 @@ which are [`BeforeFirstTimestep`](@ref) unless others are given, `BeforeFirstTim
 every distribution, and the states before the first timestep. Since Julia counts from 1,
 element `t + 1` is timestep `t`.
 
-`cognitive_save_history` and `environment_save_history` select what is kept of each element
-of each model, which is nothing by default: give `SaveHistory(SaveEverything())` to keep
-everything, and `SaveHistory(SaveEverything(); save_initial_timestep_values = false)` to
-leave out timestep 0, so that element `t` is timestep `t`. The vectors of both models have
-the same length, which `cognitive_save_history` decides. The sizes of the timesteps are
-returned as they were given: a single size as it is, and a vector of sizes with the sizes of
-the timesteps that were simulated, after `BeforeFirstTimestep()` for timestep 0 when it is
+`save_cognitive_trajectories` and `save_environment_trajectories` select what is kept of
+each element of each model, which is nothing by default: give
+`SaveTrajectories(SaveEverything())` to keep everything, and
+`SaveTrajectories(SaveEverything(); save_initial_timestep_values = false)` to leave out
+timestep 0, so that element `t` is timestep `t`. The vectors of both models have the same
+length, which `save_cognitive_trajectories` decides. The sizes of the timesteps are returned
+as they were given: a single size as it is, and a vector of sizes with the sizes of the
+timesteps that were simulated, after `BeforeFirstTimestep()` for timestep 0 when it is
 there.
 
 Parameters that aren't given take the values in [`default_parameters`](@ref), if
@@ -1198,24 +1202,24 @@ still differentiated.
 - `rng::AbstractRNG=default_rng()`: the random number generator to sample actions and
   observations from, which `cognitive_model` and `environment` also receive in their
   contexts.
-- `cognitive_save_history::SaveHistory=SaveHistory()`: which states, inputs, outputs and
-  output distributions of `cognitive_model` are saved, by name, and whether timestep 0 is.
-  Nothing is saved by default, and `SaveHistory(SaveEverything())` saves everything. See
-  [`SaveHistory`](@ref).
-- `environment_save_history::SaveHistory=SaveHistory()`: the same for `environment`, whose
-  inputs are the actions it receives and whose outputs are the observations it gives.
-  Whether timestep 0 is saved follows `cognitive_save_history`, so that the vectors of both
-  models have the same length.
+- `save_cognitive_trajectories::SaveTrajectories=SaveTrajectories()`: which states, inputs,
+  outputs and output distributions of `cognitive_model` are saved, by name, and whether
+  timestep 0 is. Nothing is saved by default, and `SaveTrajectories(SaveEverything())` saves
+  everything. See [`SaveTrajectories`](@ref).
+- `save_environment_trajectories::SaveTrajectories=SaveTrajectories()`: the same for
+  `environment`, whose inputs are the actions it receives and whose outputs are the
+  observations it gives. Whether timestep 0 is saved follows `save_cognitive_trajectories`,
+  so that the vectors of both models have the same length.
 - `observation_map::Union{Nothing, NameMap}=nothing`: which observations of `environment`
-  are passed on to `cognitive_model`, and under which names, as a [`NameMap`](@ref) from
-  the names `environment` gives to exactly those in the attributes of `cognitive_model`.
-  Without one, the two must have the same observations in their attributes, which
-  `cognitive_model` receives under the same names.
+  are passed on to `cognitive_model`, and under which names, as a [`NameMap`](@ref) from the
+  names `environment` gives to exactly those in the attributes of `cognitive_model`. Without
+  one, the two must have the same observations in their attributes, which `cognitive_model`
+  receives under the same names.
 - `action_map::Union{Nothing, NameMap}=nothing`: which actions of `cognitive_model` are
   passed on to `environment`, and under which names, as a `NameMap` from the names
   `cognitive_model` gives to exactly those in the attributes of `environment`. Without one,
-  the two must have the same actions in their attributes, which `environment` receives
-  under the same names.
+  the two must have the same actions in their attributes, which `environment` receives under
+  the same names.
 - `check_parameter_domains::Bool=true`: whether the parameters of the two models are checked
   against their domains in [`parameter_domains`](@ref) before the simulation, where a value
   outside its domain throws a [`ParameterDomainError`](@ref).
@@ -1281,7 +1285,7 @@ simulation = simulate_session(
     n_steps = 3,
     cognitive_parameters = (; learning_rate = 0.5),
     environment_parameters = (; reward_probability = 1.0),
-    cognitive_save_history = SaveHistory(SaveEverything()),
+    save_cognitive_trajectories = SaveTrajectories(SaveEverything()),
 )
 
 #The initial state, as timestep 0, and the state after each timestep
@@ -1318,8 +1322,8 @@ function simulate_session(
     cognitive_parameters::NamedTuple,
     environment_parameters::NamedTuple,
     rng::AbstractRNG=default_rng(),
-    cognitive_save_history::SaveHistory=SaveHistory(),
-    environment_save_history::SaveHistory=SaveHistory(),
+    save_cognitive_trajectories::SaveTrajectories=SaveTrajectories(),
+    save_environment_trajectories::SaveTrajectories=SaveTrajectories(),
     observation_map::Union{Nothing,NameMap}=nothing,
     action_map::Union{Nothing,NameMap}=nothing,
     check_parameter_domains::Bool=true,
@@ -1361,8 +1365,8 @@ function simulate_session(
         check_parameters_in_domains(cognitive_model, cognitive_parameters)
         check_parameters_in_domains(environment, environment_parameters)
     end
-    check_savehistory_selection_names(cognitive_save_history, cognitive_model)
-    check_savehistory_selection_names(environment_save_history, environment)
+    check_savetrajectories_selection_names(save_cognitive_trajectories, cognitive_model)
+    check_savetrajectories_selection_names(save_environment_trajectories, environment)
 
     #The parameters of a model with submodels are bundled, as the model reads them
     cognitive_parameters = bundle_parameters(cognitive_model, cognitive_parameters)
@@ -1375,9 +1379,9 @@ function simulate_session(
         environment=(; state=previous_environment_state, observation=previous_observation),
     )
 
-    #Simulate the timesteps, starting with timestep 0 when the cognitive model's save history saves the initial timestep values
+    #Simulate the timesteps, starting with timestep 0 when save_cognitive_trajectories saves the initial timestep values
     save_initial_timestep_values = Val(
-        saves_initial_timestep_values(cognitive_save_history)
+        saves_initial_timestep_values(save_cognitive_trajectories)
     )
     simulation = simulate_all_timesteps(
         previous_timestep_values,
@@ -1386,8 +1390,8 @@ function simulate_session(
         environment,
         cognitive_parameters,
         environment_parameters,
-        cognitive_save_history,
-        environment_save_history,
+        save_cognitive_trajectories,
+        save_environment_trajectories,
         observation_map,
         action_map,
         rng,
@@ -1427,26 +1431,27 @@ end
 
 Simulate `agent` interacting with `environment` from where they are, update them both, and
 return the trajectories of this call in a [`SessionTrajectories`](@ref), as
-[`simulate_session`](@ref) does, without timestep 0: what `agent.save_history` selects of
-the states, observations, actions and action distributions on each timestep, what
-`environment.save_history` selects of the environment's under `environment`, and the sizes
-of the timesteps. What the two select is also added to `agent.history` and
-`environment.history`, in each model's own names, together with the sizes of the timesteps,
-unless a selection is empty. A history has timestep 0 from where the model started, when its
-[`SaveHistory`](@ref) saves the initial timestep values.
+[`simulate_session`](@ref) does, without timestep 0: what `agent.save_trajectories` selects
+of the states, observations, actions and action distributions on each timestep, what
+`environment.save_trajectories` selects of the environment's under `environment`, and the
+sizes of the timesteps. What the two select is also added to `agent.trajectories` and
+`environment.trajectories`, in each model's own names, together with the sizes of the
+timesteps, unless a selection is empty. The trajectories of an instantiated model have
+timestep 0 from where it started, when its [`SaveTrajectories`](@ref) saves the initial
+timestep values.
 
 The two models must fit together, as for `simulate_session`, directly or through
-`observation_map` and `action_map`. The agent's history holds the observations as its model
-received them, and the environment's history the actions as its model did.
+`observation_map` and `action_map`. The agent's trajectories hold the observations as its
+model received them, and the environment's trajectories the actions as its model did.
 
 The simulation stops before `n_steps` timesteps if [`stopping_criterion`](@ref) of either
 model is met. A model where it is met already can't be simulated further, and throws an
 error until it is [`reset!`](@ref). The simulation also stops when either model sets
-`parameters_valid` to `false`, as for `simulate_session`:
-that timestep is left out, the agent and the environment stay where they were after the
-timestep before, and its states are under `last_timestep` in what is returned. A
-simulation that must be masked, as under a compiler like Reactant.jl, is an error, since the
-histories can't grow by a number of timesteps that isn't known: use `simulate_session`.
+`parameters_valid` to `false`, as for `simulate_session`: that timestep is left out, the
+agent and the environment stay where they were after the timestep before, and its states are
+under `last_timestep` in what is returned. A simulation that must be masked, as under a
+compiler like Reactant.jl, is an error, since the trajectories of an instantiated model
+can't grow by a number of timesteps that isn't known: use `simulate_session`.
 
 An instantiated model isn't type stable, as [`InstantiatedModel`](@ref) describes. Use
 `simulate_session` where that matters, or if most calls are for a single timestep.
@@ -1535,7 +1540,7 @@ function simulate_session!(
         environment=(; state=environment.state, observation=environment.previous_output),
     )
 
-    #Simulate the timesteps, without timestep 0, which the histories have from where the agent and the environment started
+    #Simulate the timesteps, without timestep 0, which the trajectories of the agent and of the environment have from where they started
     simulation = simulate_all_timesteps(
         previous_timestep_values,
         who_starts,
@@ -1543,8 +1548,8 @@ function simulate_session!(
         environment.model,
         bundle_parameters(agent.model, agent.parameters),
         bundle_parameters(environment.model, environment.parameters),
-        agent.save_history,
-        environment.save_history,
+        agent.save_trajectories,
+        environment.save_trajectories,
         observation_map,
         action_map,
         rng,
@@ -1553,11 +1558,11 @@ function simulate_session!(
         Val(false),
     )
 
-    #The histories and the counts of the models grow by the number of timesteps that were kept, which a masked simulation doesn't know
+    #The trajectories and the counts of the models grow by the number of timesteps that were kept, which a masked simulation doesn't know
     if simulation.masked === Val(true)
         throw(
             ArgumentError(
-                "simulate_session! can't simulate models whose parameters_valid or stopping criterion must be masked, such as a Bool that a compiler like Reactant.jl traces, since the number of timesteps that their histories and counts grow by isn't known. Use simulate_session, which returns every timestep and the number of them that were kept.",
+                "simulate_session! can't simulate models whose parameters_valid or stopping criterion must be masked, such as a Bool that a compiler like Reactant.jl traces, since the number of timesteps that their trajectories and counts grow by isn't known. Use simulate_session, which returns every timestep and the number of them that were kept.",
             ),
         )
     end
@@ -1582,7 +1587,7 @@ function simulate_session!(
     timestep_sizes_simulated = returned_timestep_sizes(
         timestep_sizes, n_timesteps_simulated, Val(false)
     )
-    sizes_for_histories = each_timestep_size(
+    sizes_for_trajectories = each_timestep_size(
         timestep_sizes_simulated, n_timesteps_simulated
     )
 
@@ -1590,25 +1595,25 @@ function simulate_session!(
     agent.n_timesteps += n_timesteps_simulated
     environment.n_timesteps += n_timesteps_simulated
 
-    #Add to the agent's history, in its own names
-    if !saves_nothing(agent.save_history)
-        append!(agent.history.states, storage.states)
-        append!(agent.history.inputs, storage.observations)
-        append!(agent.history.outputs, storage.actions)
-        append!(agent.history.output_distributions, storage.action_distributions)
-        append!(agent.history.timestep_sizes, sizes_for_histories)
+    #Add to the agent's trajectories, in its own names
+    if !saves_nothing(agent.save_trajectories)
+        append!(agent.trajectories.states, storage.states)
+        append!(agent.trajectories.inputs, storage.observations)
+        append!(agent.trajectories.outputs, storage.actions)
+        append!(agent.trajectories.output_distributions, storage.action_distributions)
+        append!(agent.trajectories.timestep_sizes, sizes_for_trajectories)
     end
 
-    #Add to the environment's history, in its own names
-    if !saves_nothing(environment.save_history)
-        append!(environment.history.states, storage.environment.states)
-        append!(environment.history.inputs, storage.environment.actions)
-        append!(environment.history.outputs, storage.environment.observations)
+    #Add to the environment's trajectories, in its own names
+    if !saves_nothing(environment.save_trajectories)
+        append!(environment.trajectories.states, storage.environment.states)
+        append!(environment.trajectories.inputs, storage.environment.actions)
+        append!(environment.trajectories.outputs, storage.environment.observations)
         append!(
-            environment.history.output_distributions,
+            environment.trajectories.output_distributions,
             storage.environment.observation_distributions,
         )
-        append!(environment.history.timestep_sizes, sizes_for_histories)
+        append!(environment.trajectories.timestep_sizes, sizes_for_trajectories)
     end
 
     #Return the trajectories that were saved, with how the simulation ended and which states hold those of submodels
@@ -1626,14 +1631,14 @@ end
 #Its own function, so that it is compiled for the types in an instantiated model's untyped fields, which makes simulate_timestep! several times faster
 """
     simulate_timestep_one_model(model, input, previous_state, previous_output, parameters,
-                       timestep_size, rng, save_history)
+                       timestep_size, rng, save_trajectories)
 
 Simulate a timestep of `model` on `input`, without the other side of a simulation, and
 return the output sampled from what it gave, its new state, whether its parameters are
-valid, as it gave it in its [`ModelOutput`](@ref), and under `saved` what `save_history`
-selects of its `states`, `inputs`, `outputs` and `output_distributions`, in a `NamedTuple`.
-The input must have the names in the attributes of `model`. [`simulate_timestep`](@ref) and
-[`simulate_timestep!`](@ref) both use this.
+valid, as it gave it in its [`ModelOutput`](@ref), and under `saved` what
+`save_trajectories` selects of its `states`, `inputs`, `outputs` and `output_distributions`,
+in a `NamedTuple`. The input must have the names in the attributes of `model`.
+[`simulate_timestep`](@ref) and [`simulate_timestep!`](@ref) both use this.
 """
 function simulate_timestep_one_model(
     model,
@@ -1643,7 +1648,7 @@ function simulate_timestep_one_model(
     parameters,
     timestep_size,
     rng,
-    save_history,
+    save_trajectories,
 )
 
     #Check that the input has the names in the model's attributes
@@ -1677,13 +1682,13 @@ function simulate_timestep_one_model(
         parameters_valid=model_output.parameters_valid,
         saved=(;
             states=select_state_to_save(
-                model, model_output.new_state, state_selection(save_history)
+                model, model_output.new_state, state_selection(save_trajectories)
             ),
-            inputs=select_names(input, input_selection(save_history)),
-            outputs=select_names(output, output_selection(save_history)),
+            inputs=select_names(input, input_selection(save_trajectories)),
+            outputs=select_names(output, output_selection(save_trajectories)),
             output_distributions=select_names(
                 model_output.output_distribution,
-                output_distribution_selection(save_history),
+                output_distribution_selection(save_trajectories),
             ),
         ),
     )
@@ -1814,7 +1819,7 @@ function simulate_timestep(
         bundle_parameters(model, parameters),
         timestep_size,
         rng,
-        SaveHistory(),
+        SaveTrajectories(),
     )
 
     #Warn when the parameters turned invalid, which nothing can branch on when the flag must be masked
@@ -1831,16 +1836,16 @@ end
                        rng=default_rng(), warn_on_invalid_parameters=true)
 
 Simulate a single timestep of `instantiated_model` on `input`, update it, and return the
-sampled output. What `instantiated_model.save_history` selects of the state, the input, the
-output and the output distribution is added to `instantiated_model.history`, together with
-the size of the timestep.
+sampled output. What `instantiated_model.save_trajectories` selects of the state, the input,
+the output and the output distribution is added to `instantiated_model.trajectories`,
+together with the size of the timestep.
 
 When the model sets `parameters_valid` to `false` in its [`ModelOutput`](@ref), the
-instantiated model is left as it was before the timestep, nothing is added to its history,
-and a warning says so, unless `warn_on_invalid_parameters` is `false`. The output is still
-returned. [`simulate_timestep`](@ref) gives the new state of such a timestep. A flag that
-must be masked, as under a compiler like Reactant.jl, is an error, since whether the
-instantiated model is updated depends on it: use `simulate_timestep`.
+instantiated model is left as it was before the timestep, nothing is added to its
+trajectories, and a warning says so, unless `warn_on_invalid_parameters` is `false`. The
+output is still returned. [`simulate_timestep`](@ref) gives the new state of such a
+timestep. A flag that must be masked, as under a compiler like Reactant.jl, is an error,
+since whether the instantiated model is updated depends on it: use `simulate_timestep`.
 
 The output is in a `NamedTuple` with the names the model gave it, as in `output.choice`, as
 for [`simulate_timestep`](@ref). The input must be a `NamedTuple` with every input in the
@@ -1876,12 +1881,12 @@ function CognitiveModeling.attribute_names(model::RescorlaWagner)
     return ModelAttributes(; parameters = :learning_rate, states = :expected_reward, inputs = :reward, outputs = :choice)
 end
 
-agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_history = SaveHistory(SaveEverything()))
+agent = InstantiatedModel(RescorlaWagner(), (; learning_rate = 0.5); save_trajectories = SaveTrajectories(SaveEverything()))
 
 simulate_timestep!(agent, (; reward = 1.0))
 simulate_timestep!(agent, (; reward = 1.0))
 
-agent.history.states
+agent.trajectories.states
 
 # output
 
@@ -1908,7 +1913,7 @@ function simulate_timestep!(
         bundle_parameters(instantiated_model.model, instantiated_model.parameters),
         timestep_size,
         rng,
-        instantiated_model.save_history,
+        instantiated_model.save_trajectories,
     )
 
     #Whether the instantiated model is updated depends on the flag, which nothing can branch on when it must be masked
@@ -1936,16 +1941,16 @@ function simulate_timestep!(
     instantiated_model.previous_output = timestep_values.output
     instantiated_model.n_timesteps += 1
 
-    #Add to its history
-    if !saves_nothing(instantiated_model.save_history)
-        push!(instantiated_model.history.states, timestep_values.saved.states)
-        push!(instantiated_model.history.inputs, timestep_values.saved.inputs)
-        push!(instantiated_model.history.outputs, timestep_values.saved.outputs)
+    #Add to its trajectories
+    if !saves_nothing(instantiated_model.save_trajectories)
+        push!(instantiated_model.trajectories.states, timestep_values.saved.states)
+        push!(instantiated_model.trajectories.inputs, timestep_values.saved.inputs)
+        push!(instantiated_model.trajectories.outputs, timestep_values.saved.outputs)
         push!(
-            instantiated_model.history.output_distributions,
+            instantiated_model.trajectories.output_distributions,
             timestep_values.saved.output_distributions,
         )
-        push!(instantiated_model.history.timestep_sizes, timestep_size)
+        push!(instantiated_model.trajectories.timestep_sizes, timestep_size)
     end
 
     return timestep_values.output

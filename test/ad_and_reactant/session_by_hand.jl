@@ -424,7 +424,7 @@ end
 
 ## The timesteps of a session ##
 
-# Runs the timesteps of a session from where it starts, saves what its save histories select, and scores the values in
+# Runs the timesteps of a session from where it starts, saves what its SaveTrajectories select, and scores the values in
 # the data against the distributions of their timesteps at the end. Returns the trajectories the session saved. A session
 # whose parameters turn invalid, or whose stopping criterion is met while its data continues, gets a log density of -Inf
 # and ends there, and a criterion met before the first timestep is an error, as in the Turing.jl session. From the first
@@ -445,7 +445,7 @@ function timesteps_by_hand(
 
     #Save what is kept from before the first timestep
     initial_saved = select_initial_timestep_values_to_save(
-        Val(saves_initial_timestep_values(session_info.cognitive_save_history)),
+        Val(saves_initial_timestep_values(session_info.save_cognitive_trajectories)),
         session_info,
         previous,
     )
@@ -1131,7 +1131,7 @@ function name_maps_session_by_hand()
         environment=NoisyPayoffsFollowLevers(),
         observation_map=NameMap(:payoff => :reward),
         action_map=NameMap(:choice => :lever),
-        environment_save_history=SaveHistory(; outputs=:payoff),
+        save_environment_trajectories=SaveTrajectories(; outputs=:payoff),
     )
     return x -> log_density_by_hand(
         session_by_hand,
@@ -1152,7 +1152,7 @@ function ending_session_by_hand()
         (; choice=[0.3, 0.6, 0.4, 0.7, fill(ImputedMissingValue(), 6)...]);
         who_starts=EnvironmentStarts(),
         environment=NoisyRewardsUntilEnd(),
-        cognitive_save_history=SaveHistory(; states=:expected_reward),
+        save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         timestep_sizes=collect(range(0.5, 1.5; length=10)),
     )
     return x -> log_density_by_hand(
@@ -1321,7 +1321,7 @@ const SESSION_BY_HAND_CASES = [
         f=plain_session_by_hand(
             EnvironmentStarts(),
             REWARDS_BY_HAND;
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
             timestep_sizes=collect(range(0.5, 1.5; length=10)),
         ),
         x=[0.3, 2.0],
@@ -1331,7 +1331,7 @@ const SESSION_BY_HAND_CASES = [
         f=plain_session_by_hand(
             AgentStarts(),
             REWARDS_BY_HAND;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 states=:expected_reward, save_initial_timestep_values=false
             ),
         ),
@@ -1353,12 +1353,12 @@ const SESSION_BY_HAND_CASES = [
         x=[0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1],
     ),
     (;
-        name="session by hand with an environment, saving the histories of both models",
+        name="session by hand with an environment, saving the trajectories of both models",
         f=environment_session_by_hand(
             EnvironmentStarts(),
             MISSING_REWARDS_BY_HAND;
-            cognitive_save_history=SaveHistory(SaveEverything()),
-            environment_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(SaveEverything()),
         ),
         x=[0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1],
     ),
@@ -1367,7 +1367,7 @@ const SESSION_BY_HAND_CASES = [
         f=environment_session_by_hand(
             EnvironmentStarts(),
             REWARDS_BY_HAND;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         ),
         x=[0.3, 2.0, 0.9, 0.6, 0.2, 0.8, -0.1],
     ),
@@ -1401,7 +1401,7 @@ const SESSION_BY_HAND_CASES = [
     (;
         name="three sessions by hand which save their states",
         f=several_sessions_by_hand(;
-            cognitive_save_history=SaveHistory(; states=:expected_reward)
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward)
         ),
         x=[0.2, 0.3, 0.4, 1.0, 2.0, 3.0],
     ),

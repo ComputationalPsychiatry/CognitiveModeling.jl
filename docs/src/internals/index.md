@@ -5,7 +5,7 @@ is under [API](@ref).
 
 - [Defining models](defining_models.md)
 - [Simulation](simulation.md)
-- [Saving histories](saving_histories.md)
+- [Saving trajectories](saving_trajectories.md)
 - [Fitting](fitting.md), with the internals of
   [parameter models](parameter_models.md), and the utility functions for
   [preparing models](preparing_models.md), [within models](within_models.md) and
@@ -15,7 +15,7 @@ is under [API](@ref).
 Pages = [
     "defining_models.md",
     "simulation.md",
-    "saving_histories.md",
+    "saving_trajectories.md",
     "fitting.md",
     "parameter_models.md",
     "preparing_models.md",

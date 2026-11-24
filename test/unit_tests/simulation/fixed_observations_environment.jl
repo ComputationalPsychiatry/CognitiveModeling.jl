@@ -44,8 +44,8 @@ function simulate_fixed_observations(environment; model=Baseline(ByHand()), keyw
         cognitive_parameters=BASELINE_PARAMETERS,
         environment_parameters=(;),
         action_map=NameMap(),
-        cognitive_save_history=EVERY_TIMESTEP,
-        environment_save_history=EVERY_TIMESTEP,
+        save_cognitive_trajectories=EVERY_TIMESTEP,
+        save_environment_trajectories=EVERY_TIMESTEP,
         keywords...,
     )
 end
@@ -138,7 +138,7 @@ end
                 n_steps=10,
                 cognitive_parameters=(;),
                 environment_parameters=(;),
-                cognitive_save_history=EVERY_TIMESTEP,
+                save_cognitive_trajectories=EVERY_TIMESTEP,
             ).observations,
         ) == 3
     end

@@ -3,12 +3,12 @@
 """
     select_names(x, selection::Val)
 
-Return what a [`SaveHistory`](@ref) selects of `x`: `x` itself for [`SaveEverything`](@ref),
-an empty `NamedTuple` for no names, and the named entries of a `NamedTuple` for a tuple of
-names. A selection with states of submodels, as [`as_state_selection`](@ref) keeps them,
-gives those under the names of their submodels, as [`select_states_of_submodels`](@ref)
-returns them. Used wherever something is saved, by simulations, instantiated models and
-fitted sessions.
+Return what a [`SaveTrajectories`](@ref) selects of `x`: `x` itself for
+[`SaveEverything`](@ref), an empty `NamedTuple` for no names, and the named entries of a
+`NamedTuple` for a tuple of names. A selection with states of submodels, as
+[`as_state_selection`](@ref) keeps them, gives those under the names of their submodels, as
+[`select_states_of_submodels`](@ref) returns them. Used wherever something is saved, by
+simulations, instantiated models and fitted sessions.
 """
 select_names(x, ::Val{SaveEverything()}) = x
 select_names(x, ::Val{()}) = (;)
@@ -21,7 +21,7 @@ function select_names(x, ::Val{names}) where {names}
         return select_states_of_submodels(x, Val(names))
     else
         error(
-            "A SaveHistory can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). The state that prepare_state_for_saving returns must be a NamedTuple with the states in the model's attributes.",
+            "A SaveTrajectories can only select names from a NamedTuple, but the value to select $names from has type $(typeof(x)). The state that prepare_state_for_saving returns must be a NamedTuple with the states in the model's attributes.",
         )
     end
 end
@@ -54,7 +54,7 @@ function state_selection_expression(state, selection::Tuple)
     allunique(names) || return :(throw(
         ArgumentError(
             $(
-                "A SaveHistory can select each state once, but it selects $names, some of them of the states of submodels."
+                "A SaveTrajectories can select each state once, but it selects $names, some of them of the states of submodels."
             ),
         ),
     ))

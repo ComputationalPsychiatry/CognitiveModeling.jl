@@ -28,7 +28,7 @@ With Turing.jl loaded, which loads FlexiChains.jl, [`get_session_trajectories`](
 
 ```julia
 chain = sample(model, NUTS(), 1000)
-session_trajectories = get_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; states = :expected_value))
+session_trajectories = get_session_trajectories(model, chain; save_cognitive_trajectories = SaveTrajectories(; states = :expected_value))
 parameters = get_session_parameters(model, chain)
 
 #The same from a model of one's own around the sessions, which returns what they return
@@ -85,7 +85,7 @@ sampled from the prior, such as `sample(model, Prior(), 1000)`.
 
 ```julia
 chain = sample(model, NUTS(), 1000)
-simulated = predict_session_trajectories(model, chain; cognitive_save_history = SaveHistory(; outputs = :choice))
+simulated = predict_session_trajectories(model, chain; save_cognitive_trajectories = SaveTrajectories(; outputs = :choice))
 
 #The simulated choices of participant P1, for every sample
 simulated[@varname(P1.choice)]

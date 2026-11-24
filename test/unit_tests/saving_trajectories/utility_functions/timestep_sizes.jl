@@ -1,11 +1,11 @@
 @testset "The sizes of the timesteps that are saved" begin
-    @testset "The sizes of the timesteps are kept with a history, one for each timestep, when anything is saved" begin
-        saves_states = SaveHistory(;
+    @testset "The sizes of the timesteps are kept with the trajectories, one for each timestep, when anything is saved" begin
+        saves_states = SaveTrajectories(;
             states=:expected_reward, save_initial_timestep_values=false
         )
         @test CognitiveModeling.saved_timestep_sizes(1, 3, saves_states) == [1, 1, 1]
         @test CognitiveModeling.saved_timestep_sizes(
-            0.5, 2, SaveHistory(SaveEverything(); save_initial_timestep_values=false)
+            0.5, 2, SaveTrajectories(SaveEverything(); save_initial_timestep_values=false)
         ) == [0.5, 0.5]
         #A vector of sizes is kept as it is, in a vector of its own
         sizes = [0.5, 2.0, 0.25]
@@ -13,28 +13,33 @@
         #With the initial timestep values, the sizes start with BeforeFirstTimestep for timestep 0
         @test isequal(
             CognitiveModeling.saved_timestep_sizes(
-                sizes, 3, SaveHistory(; states=:expected_reward)
+                sizes, 3, SaveTrajectories(; states=:expected_reward)
             ),
             [BeforeFirstTimestep(), 0.5, 2.0, 0.25],
         )
         @test isequal(
-            CognitiveModeling.saved_timestep_sizes(1, 2, SaveHistory(SaveEverything())),
+            CognitiveModeling.saved_timestep_sizes(
+                1, 2, SaveTrajectories(SaveEverything())
+            ),
             [BeforeFirstTimestep(), 1, 1],
         )
         #Nothing is kept when nothing is saved
-        @test CognitiveModeling.saved_timestep_sizes(1, 3, SaveHistory()) == Int[]
-        @test CognitiveModeling.saved_timestep_sizes(sizes, 3, SaveHistory()) == Float64[]
-        @test isempty(CognitiveModeling.saved_timestep_sizes(sizes, 3, SaveHistory())) &&
-            length(sizes) == 3
+        @test CognitiveModeling.saved_timestep_sizes(1, 3, SaveTrajectories()) == Int[]
+        @test CognitiveModeling.saved_timestep_sizes(sizes, 3, SaveTrajectories()) ==
+            Float64[]
+        @test isempty(
+            CognitiveModeling.saved_timestep_sizes(sizes, 3, SaveTrajectories())
+        ) && length(sizes) == 3
         @test @inferred(CognitiveModeling.saved_timestep_sizes(0.5, 2, saves_states)) isa
             Vector{Float64}
         @test @inferred(
             CognitiveModeling.saved_timestep_sizes(
-                0.5, 2, SaveHistory(; states=:expected_reward)
+                0.5, 2, SaveTrajectories(; states=:expected_reward)
             )
         ) isa Vector{Union{BeforeFirstTimestep,Float64}}
-        @test @inferred(CognitiveModeling.saved_timestep_sizes(0.5, 2, SaveHistory())) isa
-            Vector{Float64}
+        @test @inferred(
+            CognitiveModeling.saved_timestep_sizes(0.5, 2, SaveTrajectories())
+        ) isa Vector{Float64}
     end
 
     @testset "One size is repeated for every timestep, and a vector of sizes is kept as it is" begin

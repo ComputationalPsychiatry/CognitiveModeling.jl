@@ -289,7 +289,7 @@ const OPTIONS_VALUES = Dict(
         trajectories = get_session_trajectories(
             model,
             chain;
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 outputs=(:ratings, :choice), states=:expected_payoffs
             ),
         )

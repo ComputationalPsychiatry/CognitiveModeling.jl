@@ -50,7 +50,7 @@ end
             n_steps=200,
             cognitive_parameters,
             environment_parameters=(;),
-            cognitive_save_history=SaveHistory(SaveEverything()),
+            save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
             rng=Xoshiro(1),
         )
         #The episode ends at one end of the walk, which stops the simulation

@@ -70,7 +70,7 @@ function simulate_sampled_for_30_timesteps(x)
         cognitive_parameters=(; learning_rate=x[1], inverse_temperature=x[2]),
         environment_parameters=(; reward_probability=0.8),
         rng=Xoshiro(1),
-        cognitive_save_history=SaveHistory(SaveEverything()),
+        save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
     )
     total = zero(first(simulation.states).expected_reward)
     for state in simulation.states

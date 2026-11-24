@@ -84,14 +84,14 @@ end
         #A session with something missing runs it, and then the parameter must be given
         running = sessions_to_prepare(;
             environment=GivesReward(),
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         @test_throws "The parameter model, a NoParameters, doesn't give the parameters (:scale,) of an environment model of type GivesReward, which have no default values." CognitiveModeling.prepare_full_model(
             sampled, running
         )
         with_default = sessions_to_prepare(;
             environment=GivesRewardByDefault(),
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         #These sessions save, so preparing them warns that nothing uses what they save
         prepared = @test_logs (:warn, r"^The sessions save trajectories") CognitiveModeling.prepare_full_model(
@@ -103,11 +103,11 @@ end
     @testset "Sessions that save anything without a downstream model to use it give a warning" begin
         saving = sessions_to_prepare(;
             environment=GivesRewardByDefault(),
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         @test_logs (
             :warn,
-            "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; cognitive_save_history, environment_save_history) then gives the trajectories of every sample afterwards.",
+            "The sessions save trajectories, which adds a cost to each gradient, but there is no downstream model to use them. A fit is fastest with sessions that save nothing, and get_session_trajectories(model, chain; save_cognitive_trajectories, save_environment_trajectories) then gives the trajectories of every sample afterwards.",
         ) CognitiveModeling.prepare_full_model(sampled, saving)
         #Sessions that save nothing give none
         @test_logs CognitiveModeling.prepare_full_model(

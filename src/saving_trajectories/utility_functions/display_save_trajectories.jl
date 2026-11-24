@@ -1,12 +1,12 @@
-## Displaying save histories ##
+## Displaying SaveTrajectories ##
 
 """
     selected_names_to_show(selection::Tuple)
 
-Return the names that a [`SaveHistory`](@ref) selects of one kind, as they are shown: each
-name as it is, and each state of a submodel with the name of the submodel and a dot before
-it, as in `perception.expected_reward`, down through its submodels. Used by the display of
-a `SaveHistory`.
+Return the names that a [`SaveTrajectories`](@ref) selects of one kind, as they are shown:
+each name as it is, and each state of a submodel with the name of the submodel and a dot
+before it, as in `perception.expected_reward`, down through its submodels. Used by the
+display of a `SaveTrajectories`.
 """
 function selected_names_to_show(selection::Tuple)
     shown = String[]
@@ -23,13 +23,13 @@ function selected_names_to_show(selection::Tuple)
 end
 
 #Shows the selections on one line each in the REPL and notebooks, and whether the initial timestep values are saved
-function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
-    print(io, "SaveHistory")
+function Base.show(io::IO, ::MIME"text/plain", save_trajectories::SaveTrajectories)
+    print(io, "SaveTrajectories")
     for (kind, selection) in (
-        ("States", save_history.states),
-        ("Inputs", save_history.inputs),
-        ("Outputs", save_history.outputs),
-        ("Output distributions", save_history.output_distributions),
+        ("States", save_trajectories.states),
+        ("Inputs", save_trajectories.inputs),
+        ("Outputs", save_trajectories.outputs),
+        ("Output distributions", save_trajectories.output_distributions),
     )
         print(io, "\n", kind, ": ")
         if selection isa SaveEverything
@@ -43,7 +43,7 @@ function Base.show(io::IO, ::MIME"text/plain", save_history::SaveHistory)
     print(
         io,
         "\nInitial timestep values: ",
-        save_history.save_initial_timestep_values ? "saved" : "not saved",
+        save_trajectories.save_initial_timestep_values ? "saved" : "not saved",
     )
     return nothing
 end

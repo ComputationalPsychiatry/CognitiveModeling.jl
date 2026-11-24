@@ -1,15 +1,17 @@
 ### THE TRAJECTORIES AND THE PARAMETERS OF FITTED SESSIONS, READ FROM A CHAIN ###
 
-#Makes a copy of the model whose sessions save what the save histories select, reruns it on every sample of the chain, and makes a chain of the trajectories the sessions saved
+#Makes a copy of the model whose sessions save what the SaveTrajectories select, reruns it on every sample of the chain, and makes a chain of the trajectories the sessions saved
 function CognitiveModeling.get_session_trajectories(
     model::DynamicPPL.Model,
     chain::Turing.FlexiChains.FlexiChain;
-    cognitive_save_history::SaveHistory=SaveHistory(),
-    environment_save_history::SaveHistory=SaveHistory(),
+    save_cognitive_trajectories::SaveTrajectories=SaveTrajectories(),
+    save_environment_trajectories::SaveTrajectories=SaveTrajectories(),
 )
     saving_model = with_session_info(
         model,
-        info -> with_save_history(info, cognitive_save_history, environment_save_history),
+        info -> with_save_trajectories(
+            info, save_cognitive_trajectories, save_environment_trajectories
+        ),
         "get_session_trajectories",
     )
     returned_values = returned(saving_model, chain)
@@ -119,7 +121,7 @@ function with_session_info(
     else
         throw(
             ArgumentError(
-                "$function_name(model, chain; cognitive_save_history) takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
+                "$function_name(model, chain; save_cognitive_trajectories) takes a model made by full_model, multiple_sessions_model or session_model, but this one is made by $(model.f). For a model of one's own, give get_session_trajectories what returned(model, chain) gives instead.",
             ),
         )
     end

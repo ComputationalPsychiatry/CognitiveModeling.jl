@@ -166,7 +166,7 @@ end
 
 Turing.jl model which runs the timesteps of a session from `previous`, where it starts, each
 as [`turing_run_timestep_both_models`](@ref) with the prefix `timesteps[t]`, saves what the
-save histories of `session_info` select, and scores the actions in the data, and the
+`SaveTrajectories` of `session_info` select, and scores the actions in the data, and the
 observations in the data when the environment runs, against the distributions of their
 timesteps all at once at the end, as observed values. Before each timestep, it checks the
 [`stopping_criterion`](@ref) of the models, and ends the session there when one is met, with
@@ -202,7 +202,7 @@ Turing.@model function turing_run_all_timesteps(
 
     #Save what is kept from before the first timestep before it runs, since it can change a state in place
     initial_saved = select_initial_timestep_values_to_save(
-        Val(saves_initial_timestep_values(session_info.cognitive_save_history)),
+        Val(saves_initial_timestep_values(session_info.save_cognitive_trajectories)),
         session_info,
         previous,
     )

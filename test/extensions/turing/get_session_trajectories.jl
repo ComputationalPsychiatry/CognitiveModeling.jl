@@ -42,7 +42,9 @@ end
         session_trajectories = get_session_trajectories(
             model,
             chain;
-            cognitive_save_history=SaveHistory(; outputs=:choice, states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(;
+                outputs=:choice, states=:expected_reward
+            ),
         )
         @test Turing.FlexiChains.iter_indices(session_trajectories) ==
             Turing.FlexiChains.iter_indices(chain)
@@ -102,13 +104,13 @@ end
     end
 
     @testset "The same works for several sessions and a single session" begin
-        cognitive_save_history = SaveHistory(; states=:expected_reward)
+        save_cognitive_trajectories = SaveTrajectories(; states=:expected_reward)
         sessions = turing_multiple_behavioral_sessions(
             sessions_info,
             (; learning_rate=[0.2, 0.3, 0.4], inverse_temperature=[2.0, 2.0, 2.0]),
         )
         @test Turing.FlexiChains.get_name.(
-            keys(get_session_trajectories(sessions, chain; cognitive_save_history))
+            keys(get_session_trajectories(sessions, chain; save_cognitive_trajectories))
         ) == [
             @varname(S1.expected_reward),
             @varname(S1.parameters_valid),
@@ -118,7 +120,7 @@ end
             @varname(S3.parameters_valid),
         ]
         session_trajectories = get_session_trajectories(
-            session_for_test(), chain; cognitive_save_history
+            session_for_test(), chain; save_cognitive_trajectories
         )
         @test Turing.FlexiChains.get_name.(keys(session_trajectories)) ==
             [@varname(expected_reward), @varname(parameters_valid)]
@@ -172,7 +174,8 @@ end
         #The trajectories come from the same model with sessions that save them, and merge with the parameters
         saving_model = own_hierarchical_model(
             MultipleSessionsInfo(
-                sessions_info; cognitive_save_history=SaveHistory(; states=:expected_reward)
+                sessions_info;
+                save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
             ),
         )
         trajectories = get_session_trajectories(
@@ -214,7 +217,7 @@ end
                 SESSION_REWARDS,
                 SESSION_CHOICES;
                 who_starts=EnvironmentStarts(),
-                cognitive_save_history=SaveHistory(; states=:expected_reward),
+                save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
             ),
         )
         single_chain = sample(Xoshiro(9), single_model, Prior(), 10; progress=false)
@@ -253,7 +256,9 @@ end
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(
-            imputing, prior_chain; cognitive_save_history=SaveHistory(; outputs=:choice)
+            imputing,
+            prior_chain;
+            save_cognitive_trajectories=SaveTrajectories(; outputs=:choice),
         )
         @test length(session_trajectories[@varname(S3.choice)][1]) == 5
     end
@@ -270,7 +275,9 @@ end
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(
             different_lengths,
             prior_chain;
-            cognitive_save_history=SaveHistory(; states=:expected_reward, outputs=:choice),
+            save_cognitive_trajectories=SaveTrajectories(;
+                states=:expected_reward, outputs=:choice
+            ),
         )
         #Each entry has timestep 0 and the timesteps of its own session, for every sample
         for (name, n_timesteps) in (
@@ -304,8 +311,8 @@ end
         session_trajectories = @test_logs match_mode = :any get_session_trajectories(
             some_running,
             prior_chain;
-            cognitive_save_history=SaveHistory(; inputs=:reward),
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_cognitive_trajectories=SaveTrajectories(; inputs=:reward),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
 
         #On their second timestep, S1 and S3 observed the rewards imputed in the fit, and S2 observed those in the data
@@ -342,8 +349,8 @@ end
 
     @testset "A model of one's own is an error" begin
         Turing.@model own_model() = (x ~ Normal(); return x)
-        @test_throws "get_session_trajectories(model, chain; cognitive_save_history) takes a model made by full_model" get_session_trajectories(
-            own_model(), chain; cognitive_save_history=SaveHistory()
+        @test_throws "get_session_trajectories(model, chain; save_cognitive_trajectories) takes a model made by full_model" get_session_trajectories(
+            own_model(), chain; save_cognitive_trajectories=SaveTrajectories()
         )
     end
 
@@ -352,7 +359,7 @@ end
         @test_throws "get_session_trajectories(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." get_session_trajectories(
             model,
             not_a_chain;
-            cognitive_save_history=SaveHistory(; states=:expected_reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test_throws "get_session_parameters(model, chain) takes a FlexiChain, but the chain is of type NamedTuple." get_session_parameters(
             model, not_a_chain

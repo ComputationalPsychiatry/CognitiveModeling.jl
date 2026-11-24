@@ -108,7 +108,7 @@ trajectories = simulate_session(
     cognitive_parameters=parameters,
     environment_parameters=(;),
     rng=Xoshiro(1),
-    cognitive_save_history=SaveHistory(
+    save_cognitive_trajectories=SaveTrajectories(
         SaveEverything(); save_initial_timestep_values=false
     ),
 )
@@ -133,7 +133,7 @@ function simulate_participant(drift_rate, n_trials, seed)
         cognitive_parameters=parameters,
         environment_parameters=(;),
         rng=Xoshiro(seed),
-        cognitive_save_history=SaveHistory(
+        save_cognitive_trajectories=SaveTrajectories(
             SaveEverything(); save_initial_timestep_values=false
         ),
     )

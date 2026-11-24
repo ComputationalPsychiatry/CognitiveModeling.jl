@@ -99,7 +99,7 @@ end
         session_columns=:id,
         timestep_sizes=:dt,
         who_starts=EnvironmentStarts(),
-        cognitive_save_history=SaveHistory(; states=:n_timesteps),
+        save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
     )
 
     @testset "MultipleSessionsInfo keeps the settings that read its table, and copies of it keep them too" begin
@@ -111,8 +111,9 @@ end
         @test isequal(settings.missing_observation_values, (missing,)) &&
             settings.impute_missing_actions === true
         @test decondition_sessions(sessions_info).column_settings === settings
-        @test MultipleSessionsInfo(sessions_info; cognitive_save_history=SaveHistory()).column_settings ===
-            settings
+        @test MultipleSessionsInfo(
+            sessions_info; save_cognitive_trajectories=SaveTrajectories()
+        ).column_settings === settings
         #Sessions that are given already prepared have none
         given = MultipleSessionsInfo(sessions_info.sessions, sessions_info.session_ids)
         @test given.column_settings === nothing
@@ -136,8 +137,8 @@ end
         )
         @test conditioned.sessions[2].timestep_sizes == [1.0, 1.0, 0.5]
         @test conditioned.sessions[1].who_starts === EnvironmentStarts() &&
-            conditioned.sessions[1].cognitive_save_history ===
-              SaveHistory(; states=:n_timesteps)
+            conditioned.sessions[1].save_cognitive_trajectories ===
+              SaveTrajectories(; states=:n_timesteps)
         @test conditioned.column_settings === sessions_info.column_settings &&
             conditioned.table === other_data
     end
@@ -172,7 +173,7 @@ end
         @test conditioned.who_starts === AgentStarts() &&
             conditioned.check_parameter_domains === false
         #Other sizes of the timesteps can be given, as for data with other timesteps
-        sized = SessionInfo(session_info; cognitive_save_history=SaveHistory())
+        sized = SessionInfo(session_info; save_cognitive_trajectories=SaveTrajectories())
         @test condition_sessions(
             sized, [0.0, 1.0], [false, true]; timestep_sizes=[0.5, 2.0]
         ).timestep_sizes == [0.5, 2.0]

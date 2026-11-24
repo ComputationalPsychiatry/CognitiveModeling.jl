@@ -40,18 +40,20 @@
         )
     end
 
-    @testset "The sessions save something when a save history of any of them selects anything" begin
+    @testset "The sessions save something when a SaveTrajectories of any of them selects anything" begin
         @test !CognitiveModeling.sessions_save_anything(
             MultipleSessionsInfo([with_environment, with_environment], ["A", "B"])
         )
         saving_states = SessionInfo(
-            with_environment; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+            with_environment;
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
         @test CognitiveModeling.sessions_save_anything(
             MultipleSessionsInfo([saving_states], ["A"])
         )
         saving_rewards = SessionInfo(
-            with_environment; environment_save_history=SaveHistory(; outputs=:reward)
+            with_environment;
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         @test CognitiveModeling.sessions_save_anything(
             MultipleSessionsInfo([saving_rewards], ["A"])

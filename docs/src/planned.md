@@ -103,6 +103,7 @@ This page lists what is planned and not written yet. The list will grow.
 
 - A plot of the parameters of every fitted session, with the averages of their groups.
 - A plot of the trajectories of different fitted sessions over the timesteps.
-- Plots of a simulation, a history or a fitted session over time. The entry before the first
-  timestep is timestep 0, at time 0, and its size is `BeforeFirstTimestep()`. The time of a
-  later timestep is the sum of the sizes of the timesteps up to it.
+- Plots of the trajectories of a simulation, of an instantiated model or of a fitted session
+  over time. The entry before the first timestep is timestep 0, at time 0, and its size is
+  `BeforeFirstTimestep()`. The time of a later timestep is the sum of the sizes of the
+  timesteps up to it.

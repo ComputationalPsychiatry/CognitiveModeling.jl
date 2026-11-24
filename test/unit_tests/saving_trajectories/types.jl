@@ -1,63 +1,66 @@
-@testset "SaveHistory" begin
+@testset "SaveTrajectories" begin
     @testset "It keeps each selection as a tuple of names, or as the marker for everything" begin
-        save_history = SaveHistory(;
+        save_trajectories = SaveTrajectories(;
             inputs=SaveEverything(),
             outputs=(:choice,),
             states=(:expected_reward, :surprise),
         )
-        @test save_history.inputs === SaveEverything()
-        @test save_history.outputs === (:choice,)
-        @test save_history.states === (:expected_reward, :surprise)
-        @test propertynames(save_history) == (
+        @test save_trajectories.inputs === SaveEverything()
+        @test save_trajectories.outputs === (:choice,)
+        @test save_trajectories.states === (:expected_reward, :surprise)
+        @test propertynames(save_trajectories) == (
             :states, :inputs, :outputs, :output_distributions, :save_initial_timestep_values
         )
-        @test save_history.output_distributions === ()
-        @test_throws FieldError save_history.parameters
+        @test save_trajectories.output_distributions === ()
+        @test_throws FieldError save_trajectories.parameters
         #The kinds are named as the model's own, not by their role in a simulation
-        @test_throws FieldError save_history.observations
-        @test_throws FieldError save_history.actions
+        @test_throws FieldError save_trajectories.observations
+        @test_throws FieldError save_trajectories.actions
     end
 
     @testset "It saves the initial timestep values by default, and can leave them out" begin
-        @test SaveHistory().save_initial_timestep_values === true
-        @test SaveHistory(SaveEverything()).save_initial_timestep_values === true
-        @test SaveHistory(; states=:expected_reward, save_initial_timestep_values=false).save_initial_timestep_values ===
-            false
-        @test SaveHistory(SaveEverything(); save_initial_timestep_values=false).states ===
+        @test SaveTrajectories().save_initial_timestep_values === true
+        @test SaveTrajectories(SaveEverything()).save_initial_timestep_values === true
+        @test SaveTrajectories(;
+            states=:expected_reward, save_initial_timestep_values=false
+        ).save_initial_timestep_values === false
+        @test SaveTrajectories(SaveEverything(); save_initial_timestep_values=false).states ===
             SaveEverything()
-        @test CognitiveModeling.saves_initial_timestep_values(SaveHistory()) &&
+        @test CognitiveModeling.saves_initial_timestep_values(SaveTrajectories()) &&
             !CognitiveModeling.saves_initial_timestep_values(
-            SaveHistory(; save_initial_timestep_values=false)
+            SaveTrajectories(; save_initial_timestep_values=false)
         )
-        @test_throws TypeError SaveHistory(; save_initial_timestep_values=1)
-        @test SaveHistory(SaveEverything()).output_distributions === SaveEverything()
-        @test SaveHistory(; output_distributions=:choice).output_distributions ===
+        @test_throws TypeError SaveTrajectories(; save_initial_timestep_values=1)
+        @test SaveTrajectories(SaveEverything()).output_distributions === SaveEverything()
+        @test SaveTrajectories(; output_distributions=:choice).output_distributions ===
             (:choice,)
         @test CognitiveModeling.saves_nothing(
-            SaveHistory(; save_initial_timestep_values=false)
+            SaveTrajectories(; save_initial_timestep_values=false)
         )
     end
 
     @testset "A single name or a vector of names is put in a tuple" begin
-        save_history = SaveHistory(; outputs=:choice, states=[:expected_reward, :surprise])
-        @test save_history.outputs === (:choice,)
-        @test save_history.states === (:expected_reward, :surprise)
+        save_trajectories = SaveTrajectories(;
+            outputs=:choice, states=[:expected_reward, :surprise]
+        )
+        @test save_trajectories.outputs === (:choice,)
+        @test save_trajectories.states === (:expected_reward, :surprise)
     end
 
     @testset "A kind that isn't given saves nothing, and SaveEverything() saves everything" begin
-        @test SaveHistory().states ===
-            SaveHistory().inputs ===
-            SaveHistory().outputs ===
-            SaveHistory().output_distributions ===
+        @test SaveTrajectories().states ===
+            SaveTrajectories().inputs ===
+            SaveTrajectories().outputs ===
+            SaveTrajectories().output_distributions ===
             ()
-        @test SaveHistory(; states=:expected_reward).inputs === ()
-        everything = SaveHistory(SaveEverything())
+        @test SaveTrajectories(; states=:expected_reward).inputs === ()
+        everything = SaveTrajectories(SaveEverything())
         @test everything.states ===
             everything.inputs ===
             everything.outputs ===
             everything.output_distributions ===
             SaveEverything()
-        @test everything === SaveHistory(;
+        @test everything === SaveTrajectories(;
             states=SaveEverything(),
             inputs=SaveEverything(),
             outputs=SaveEverything(),
@@ -66,62 +69,67 @@
     end
 
     @testset "It only takes names" begin
-        @test_throws TypeError SaveHistory(; states="expected_reward")
-        @test_throws TypeError SaveHistory(; states=(:expected_reward, 1))
-        @test_throws TypeError SaveHistory(; states=true)
+        @test_throws TypeError SaveTrajectories(; states="expected_reward")
+        @test_throws TypeError SaveTrajectories(; states=(:expected_reward, 1))
+        @test_throws TypeError SaveTrajectories(; states=true)
         #Also for a submodel and for its states
-        @test_throws TypeError SaveHistory(; states=:perception => 1)
-        @test_throws TypeError SaveHistory(; states=("perception" => :expected_reward,))
-        @test_throws TypeError SaveHistory(;
+        @test_throws TypeError SaveTrajectories(; states=:perception => 1)
+        @test_throws TypeError SaveTrajectories(;
+            states=("perception" => :expected_reward,)
+        )
+        @test_throws TypeError SaveTrajectories(;
             states=:perception => (:expected_reward, "surprise")
         )
     end
 
     @testset "The states of a submodel are selected with its name and =>, down through its submodels" begin
-        save_history = SaveHistory(; states=(:surprise, :perception => :expected_reward))
-        @test save_history.states === (:surprise, :perception => (:expected_reward,))
+        save_trajectories = SaveTrajectories(;
+            states=(:surprise, :perception => :expected_reward)
+        )
+        @test save_trajectories.states === (:surprise, :perception => (:expected_reward,))
         #A single one without a tuple around it, and several states of the submodel in a tuple or a vector
-        @test SaveHistory(; states=:perception => (:expected_reward, :prediction_error)).states ===
-            (:perception => (:expected_reward, :prediction_error),)
-        @test SaveHistory(;
+        @test SaveTrajectories(;
+            states=:perception => (:expected_reward, :prediction_error)
+        ).states === (:perception => (:expected_reward, :prediction_error),)
+        @test SaveTrajectories(;
             states=[:surprise, :perception => [:expected_reward, :prediction_error]]
-        ) === SaveHistory(;
+        ) === SaveTrajectories(;
             states=(:surprise, :perception => (:expected_reward, :prediction_error))
         )
         #The states of a submodel of the submodel, with one => after the other or inside a tuple
-        nested = SaveHistory(; states=:perception => :learning => :expected_reward)
+        nested = SaveTrajectories(; states=:perception => :learning => :expected_reward)
         @test nested.states === (:perception => (:learning => (:expected_reward,),),)
         @test nested ===
-            SaveHistory(; states=(:perception => (:learning => :expected_reward,),))
+            SaveTrajectories(; states=(:perception => (:learning => :expected_reward,),))
         #In the type, a submodel is a tuple of its name and the selection of its states
         @test CognitiveModeling.state_selection(nested) ===
             Val(((:perception, ((:learning, (:expected_reward,)),)),))
-        @test CognitiveModeling.state_selection(save_history) ===
+        @test CognitiveModeling.state_selection(save_trajectories) ===
             Val((:surprise, (:perception, (:expected_reward,))))
         #A submodel with everything is saved whole, as by its name alone, and one with nothing is left out
-        @test SaveHistory(; states=(:surprise, :perception => SaveEverything())) ===
-            SaveHistory(; states=(:surprise, :perception))
-        @test SaveHistory(; states=(:surprise, :perception => ())) ===
-            SaveHistory(; states=:surprise)
-        @test CognitiveModeling.saves_nothing(SaveHistory(; states=:perception => ()))
+        @test SaveTrajectories(; states=(:surprise, :perception => SaveEverything())) ===
+            SaveTrajectories(; states=(:surprise, :perception))
+        @test SaveTrajectories(; states=(:surprise, :perception => ())) ===
+            SaveTrajectories(; states=:surprise)
+        @test CognitiveModeling.saves_nothing(SaveTrajectories(; states=:perception => ()))
         #The other kinds have no submodels
-        @test_throws TypeError SaveHistory(; inputs=:perception => :reward)
-        @test_throws TypeError SaveHistory(; outputs=(:choice, :response => :choice))
+        @test_throws TypeError SaveTrajectories(; inputs=:perception => :reward)
+        @test_throws TypeError SaveTrajectories(; outputs=(:choice, :response => :choice))
     end
 
     @testset "The selections are in the type, so constructing it from literals is inferred, and holding it costs nothing" begin
         from_literals() =
-            SaveHistory(; outputs=:choice, states=(:expected_reward, :surprise))
+            SaveTrajectories(; outputs=:choice, states=(:expected_reward, :surprise))
         @test Base.return_types(from_literals, Tuple{})[1] ===
-            SaveHistory{(:expected_reward, :surprise),(),(:choice,),(),true}
+            SaveTrajectories{(:expected_reward, :surprise),(),(:choice,),(),true}
         without_initial_values() =
-            SaveHistory(; states=:expected_reward, save_initial_timestep_values=false)
+            SaveTrajectories(; states=:expected_reward, save_initial_timestep_values=false)
         @test Base.return_types(without_initial_values, Tuple{})[1] ===
-            SaveHistory{(:expected_reward,),(),(),(),false}
-        with_states_of_submodels() = SaveHistory(;
+            SaveTrajectories{(:expected_reward,),(),(),(),false}
+        with_states_of_submodels() = SaveTrajectories(;
             states=(:surprise, :perception => (:expected_reward, :learning => :volatility)),
         )
-        @test Base.return_types(with_states_of_submodels, Tuple{})[1] === SaveHistory{
+        @test Base.return_types(with_states_of_submodels, Tuple{})[1] === SaveTrajectories{
             (:surprise, (:perception, (:expected_reward, (:learning, (:volatility,))))),
             (),
             (),
@@ -129,20 +137,20 @@
             true,
         }
         @test sizeof(with_states_of_submodels()) == 0
-        @test @inferred(SaveHistory(SaveEverything())) isa SaveHistory
-        @test @inferred(SaveHistory()) isa SaveHistory
-        @test isbitstype(typeof(SaveHistory(; states=:expected_reward)))
-        @test sizeof(SaveHistory(; states=(:expected_reward, :surprise))) == 0
+        @test @inferred(SaveTrajectories(SaveEverything())) isa SaveTrajectories
+        @test @inferred(SaveTrajectories()) isa SaveTrajectories
+        @test isbitstype(typeof(SaveTrajectories(; states=:expected_reward)))
+        @test sizeof(SaveTrajectories(; states=(:expected_reward, :surprise))) == 0
     end
 end
 
-@testset "ModelHistory" begin
+@testset "TrajectoryHistory" begin
     @testset "It keeps what was saved of each kind in a vector of its own" begin
-        history = CognitiveModeling.ModelHistory(
+        trajectories = CognitiveModeling.TrajectoryHistory(
             Any[(; expected_reward=0.5)], Any[(;)], Any[(;)], Any[(;)], Any[1]
         )
-        @test history.states == [(; expected_reward=0.5)]
-        @test fieldnames(CognitiveModeling.ModelHistory) ==
+        @test trajectories.states == [(; expected_reward=0.5)]
+        @test fieldnames(CognitiveModeling.TrajectoryHistory) ==
             (:states, :inputs, :outputs, :output_distributions, :timestep_sizes)
     end
 end

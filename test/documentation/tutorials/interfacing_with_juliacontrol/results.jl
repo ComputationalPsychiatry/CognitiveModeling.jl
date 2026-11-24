@@ -31,7 +31,7 @@ end
         n_steps=100,
         cognitive_parameters=(; assumed_drift=0.3, assumed_cue_noise=0.5, motor_noise=0.1),
         environment_parameters=(; drift=0.3, cue_noise=0.5),
-        cognitive_save_history=SaveHistory(
+        save_cognitive_trajectories=SaveTrajectories(
             SaveEverything(); save_initial_timestep_values=false
         ),
         rng=Xoshiro(2),

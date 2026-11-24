@@ -18,14 +18,14 @@ include("defining_models/utility_functions/check_attributes_against_names.jl")
 include("defining_models/utility_functions/check_parameters_in_domains.jl")
 include("defining_models/utility_functions/outputs_and_inputs_before_first_timestep.jl")
 include("defining_models/utility_functions/display_models.jl")
-include("model_history/types.jl")
-include("model_history/utility_functions/read_selection.jl")
-include("model_history/utility_functions/select_values_to_save.jl")
-include("model_history/utility_functions/check_selection_names.jl")
-include("model_history/utility_functions/timestep_sizes.jl")
-include("model_history/utility_functions/storage.jl")
-include("model_history/utility_functions/display_save_histories.jl")
-include("model_history/utility_functions/display_session_trajectories.jl")
+include("saving_trajectories/types.jl")
+include("saving_trajectories/utility_functions/read_selection.jl")
+include("saving_trajectories/utility_functions/select_values_to_save.jl")
+include("saving_trajectories/utility_functions/check_selection_names.jl")
+include("saving_trajectories/utility_functions/timestep_sizes.jl")
+include("saving_trajectories/utility_functions/storage.jl")
+include("saving_trajectories/utility_functions/display_save_trajectories.jl")
+include("saving_trajectories/utility_functions/display_session_trajectories.jl")
 include("simulation/types.jl")
 include("simulation/simulate.jl")
 include("simulation/mask_timesteps.jl")
@@ -55,7 +55,7 @@ include("inference/utility_functions/within_models/read_timestep_data.jl")
 include("inference/utility_functions/within_models/to_condition_on.jl")
 include("inference/utility_functions/within_models/save_fitted_session_trajectories.jl")
 include("inference/utility_functions/within_models/mask_fitted_timesteps.jl")
-include("inference/utility_functions/workflow_and_postprocessing/with_save_history.jl")
+include("inference/utility_functions/workflow_and_postprocessing/with_save_trajectories.jl")
 include(
     "inference/utility_functions/workflow_and_postprocessing/sessions_with_other_data.jl"
 )
@@ -78,7 +78,7 @@ export ModelContext, ModelOutput, ModelAttributes, Deterministic, ValidByDefault
 export Domain, ParameterDomainError
 export FixedObservationsEnvironment, CommonRLEnvironment
 export InstantiatedModel, AgentStarts, EnvironmentStarts, UnknownWhoStarts
-export SaveHistory, SaveEverything, SessionTrajectories, NameMap
+export SaveTrajectories, SaveEverything, SessionTrajectories, NameMap
 export simulate_session, simulate_session!, simulate_timestep, simulate_timestep!, reset!
 export SessionInfo, MultipleSessionsInfo, NoEnvironment
 export decondition_sessions, condition_sessions
@@ -119,7 +119,8 @@ public bundle_parameters, flatten_parameters
 public turing_timestep_model,
     turing_initialize_state, turing_parameters_model, turing_downstream_model
 public turing_behavioral_session, turing_multiple_behavioral_sessions, turing_full_model
-public ModelHistory, n_sessions, session_index, session_id_to_symbol, session_column_values
+public TrajectoryHistory,
+    n_sessions, session_index, session_id_to_symbol, session_column_values
 public parameter_names, estimates_parameters, prepare_parameters_model, prepare_full_model
 
 end

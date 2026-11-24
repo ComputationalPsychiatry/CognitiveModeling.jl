@@ -14,22 +14,22 @@ end
 
 """
     decide_whether_environment_is_included(include_environment, environment, observations,
-                                           actions, environment_save_history)
+                                           actions, save_environment_trajectories)
 
 Return whether a session includes its environment, as the `include_environment` of
 [`SessionInfo`](@ref) says: always with `true`, which needs an environment, never with
 `false`, and with `nothing` only when an observation or an action is
 [`ImputedMissingValue`](@ref) or [`SimulatedMissingValue`](@ref), or the environment's
-history is saved. A session without an environment never includes one. With `false`, it is
-an error when an observation is `ImputedMissingValue()` or the environment's history is
-saved, since those need the environment. Used by [`prepare_session`](@ref).
+trajectories are saved. A session without an environment never includes one. With `false`,
+it is an error when an observation is `ImputedMissingValue()` or the environment's
+trajectories are saved, since those need the environment. Used by [`prepare_session`](@ref).
 """
 function decide_whether_environment_is_included(
     include_environment::Union{Nothing,Bool},
     environment,
     observations,
     actions,
-    environment_save_history::SaveHistory,
+    save_environment_trajectories::SaveTrajectories,
 )
     #A session without an environment has none to include
     if environment isa NoEnvironment
@@ -45,8 +45,8 @@ function decide_whether_environment_is_included(
     #What can't be done without the environment
     needs_environment = if has_missing_entries(observations)
         "the data has observations that are ImputedMissingValue() or SimulatedMissingValue(), which only the environment can impute or simulate"
-    elseif !saves_nothing(environment_save_history)
-        "environment_save_history saves its history"
+    elseif !saves_nothing(save_environment_trajectories)
+        "save_environment_trajectories saves its trajectories"
     else
         nothing
     end
@@ -87,8 +87,8 @@ function remake_session_without_environment(session_info::SessionInfo)
         session_info.who_starts,
         session_info.timestep_sizes,
         session_info.saved_timestep_sizes,
-        session_info.cognitive_save_history,
-        session_info.environment_save_history,
+        session_info.save_cognitive_trajectories,
+        session_info.save_environment_trajectories,
         session_info.last_timestep_with_action,
         session_info.last_timestep_with_observation,
         session_info.check_parameter_domains,
@@ -129,8 +129,8 @@ function remake_session_including_environment(session_info::SessionInfo)
         session_info.who_starts,
         session_info.timestep_sizes,
         session_info.saved_timestep_sizes,
-        session_info.cognitive_save_history,
-        session_info.environment_save_history,
+        session_info.save_cognitive_trajectories,
+        session_info.save_environment_trajectories,
         session_info.last_timestep_with_action,
         session_info.last_timestep_with_observation,
         session_info.check_parameter_domains,

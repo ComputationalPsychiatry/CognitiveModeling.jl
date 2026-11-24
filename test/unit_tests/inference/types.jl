@@ -117,8 +117,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.who_starts === EnvironmentStarts()
         @test session_info.timestep_sizes == 1
         @test session_info.saved_timestep_sizes == Int[]
-        @test session_info.cognitive_save_history === SaveHistory()
-        @test session_info.environment_save_history === SaveHistory()
+        @test session_info.save_cognitive_trajectories === SaveTrajectories()
+        @test session_info.save_environment_trajectories === SaveTrajectories()
         @test session_info.last_timestep_with_action == 3 &&
             session_info.last_timestep_with_observation == 3
         @test session_info.check_parameter_domains === true
@@ -131,21 +131,21 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test CognitiveModeling.observation_names_to_condition_on(session_info) === Val(())
     end
 
-    @testset "A save history can only select names that the models list" begin
-        @test_throws "The SaveHistory selects the states (:surprise,), but the states in the attributes of a cognitive model of type SessionCounter" SessionInfo(
+    @testset "A SaveTrajectories can only select names that the models list" begin
+        @test_throws "The SaveTrajectories selects the states (:surprise,), but the states in the attributes of a cognitive model of type SessionCounter" SessionInfo(
             SessionCounter(),
             (; reward=[1.0, 0.0, 1.0]),
             COUNTER_CHOICES;
             who_starts=AgentStarts(),
-            cognitive_save_history=SaveHistory(; states=:surprise),
+            save_cognitive_trajectories=SaveTrajectories(; states=:surprise),
         )
-        @test_throws "The SaveHistory selects the outputs (:cue,), but the outputs in the attributes of an environment model of type GivesReward" SessionInfo(
+        @test_throws "The SaveTrajectories selects the outputs (:cue,), but the outputs in the attributes of an environment model of type GivesReward" SessionInfo(
             SessionCounter(),
             (; reward=[1.0, ImputedMissingValue(), 1.0]),
             COUNTER_CHOICES;
             who_starts=AgentStarts(),
             environment=GivesReward(),
-            environment_save_history=SaveHistory(; outputs=:cue),
+            save_environment_trajectories=SaveTrajectories(; outputs=:cue),
         )
     end
 
@@ -175,7 +175,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test session_info.observations_to_condition_on.payoff == [1.0, 0.0]
         #A copy prepared again keeps the maps
         @test SessionInfo(
-            session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+            session_info;
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         ).observation_map === NameMap(:payoff => :reward)
         @test decondition_sessions(session_info).action_map === NameMap(:choice => :pull)
         #In the deconditioned copy, the cue is simulated like the observations, also in a copy of the copy, which is
@@ -183,7 +184,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         deconditioned = decondition_sessions(session_info)
         @test deconditioned.environment_observations.cue == fill(SimulatedMissingValue(), 3)
         @test SessionInfo(
-            deconditioned; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+            deconditioned;
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         ).environment_observations.cue == fill(SimulatedMissingValue(), 3)
     end
 
@@ -221,8 +223,8 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             who_starts=AgentStarts(),
             environment=GivesReward(),
             timestep_sizes=[0.5, 1.0, 1.5],
-            cognitive_save_history=SaveHistory(; states=:n_timesteps),
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
             check_parameter_domains=false,
             previous_action=(; choice=false),
         )
@@ -233,8 +235,10 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test isequal(
             session_info.saved_timestep_sizes, [BeforeFirstTimestep(), 0.5, 1.0, 1.5]
         )
-        @test session_info.cognitive_save_history === SaveHistory(; states=:n_timesteps)
-        @test session_info.environment_save_history === SaveHistory(; outputs=:reward)
+        @test session_info.save_cognitive_trajectories ===
+            SaveTrajectories(; states=:n_timesteps)
+        @test session_info.save_environment_trajectories ===
+            SaveTrajectories(; outputs=:reward)
         @test session_info.last_timestep_with_action == 3 &&
             session_info.last_timestep_with_observation == 3
         @test session_info.check_parameter_domains === false
@@ -255,7 +259,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
     end
 
-    @testset "A copy with other save histories has the sizes it returns made again, and everything else the same" begin
+    @testset "A copy with other SaveTrajectories has the sizes it returns made again, and everything else the same" begin
         session_info = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
@@ -265,10 +269,11 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             check_parameter_domains=false,
         )
         copy = SessionInfo(
-            session_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+            session_info;
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
-        @test copy.cognitive_save_history === SaveHistory(; states=:n_timesteps)
-        @test copy.environment_save_history === SaveHistory()
+        @test copy.save_cognitive_trajectories === SaveTrajectories(; states=:n_timesteps)
+        @test copy.save_environment_trajectories === SaveTrajectories()
         @test isequal(copy.saved_timestep_sizes, [BeforeFirstTimestep(), 0.5, 0.5, 0.5]) &&
             session_info.saved_timestep_sizes == Float64[]
         @test copy.observations === session_info.observations &&
@@ -278,7 +283,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         @test copy.last_timestep_with_action == 3 &&
             copy.last_timestep_with_observation == 3
         @test copy.check_parameter_domains === false
-        #Saving the environment's history makes a session with one run its environment
+        #Saving the environment's trajectories makes a session with one run its environment
         with_environment = SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
@@ -288,11 +293,12 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
         @test !with_environment.includes_environment
         saving = SessionInfo(
-            with_environment; environment_save_history=SaveHistory(; outputs=:reward)
+            with_environment;
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         @test saving.includes_environment &&
-            saving.environment_save_history === SaveHistory(; outputs=:reward) &&
-            saving.cognitive_save_history === SaveHistory()
+            saving.save_environment_trajectories === SaveTrajectories(; outputs=:reward) &&
+            saving.save_cognitive_trajectories === SaveTrajectories()
     end
 
     @testset "The last timesteps with an action and with an observation say where the data continues, after which a stopping criterion ends a session without making the parameters invalid" begin
@@ -407,7 +413,7 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         #Such a timestep has data
         @test session_info.last_timestep_with_action == 3 &&
             session_info.last_timestep_with_observation == 3
-        #A copy with other save histories, and one for prediction, replace nothing more in the data, also when missing was kept as a value
+        #A copy with other SaveTrajectories, and one for prediction, replace nothing more in the data, also when missing was kept as a value
         kept = SessionInfo(
             SessionCounter(),
             (; reward=[1.0, missing, 1.0]),
@@ -417,7 +423,9 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
         )
         @test isequal(kept.observations.reward, [1.0, missing, 1.0])
         @test isequal(
-            SessionInfo(kept; cognitive_save_history=SaveHistory(; states=:n_timesteps)).observations.reward,
+            SessionInfo(
+                kept; save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps)
+            ).observations.reward,
             [1.0, missing, 1.0],
         )
         @test isequal(decondition_sessions(kept).observations.reward, [1.0, missing, 1.0])
@@ -523,8 +531,10 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             include_environment=false,
         )
         @test left_out.include_environment === false && !left_out.includes_environment
-        #The setting is kept in a copy with other save histories, and a copy for prediction then keeps its observations
-        @test SessionInfo(included; cognitive_save_history=SaveHistory(SaveEverything())).includes_environment
+        #The setting is kept in a copy with other SaveTrajectories, and a copy for prediction then keeps its observations
+        @test SessionInfo(
+            included; save_cognitive_trajectories=SaveTrajectories(SaveEverything())
+        ).includes_environment
         predictive = decondition_sessions(left_out)
         @test predictive.observations === left_out.observations &&
             !predictive.includes_environment
@@ -537,14 +547,14 @@ const COUNTER_CHOICES = (; choice=[true, false, true])
             environment=GivesReward(),
             include_environment=false,
         )
-        @test_throws "include_environment = false leaves the environment out of the session, but environment_save_history saves its history." SessionInfo(
+        @test_throws "include_environment = false leaves the environment out of the session, but save_environment_trajectories saves its trajectories." SessionInfo(
             SessionCounter(),
             COUNTER_REWARDS,
             COUNTER_CHOICES;
             who_starts=EnvironmentStarts(),
             environment=GivesReward(),
             include_environment=false,
-            environment_save_history=SaveHistory(; outputs=:reward),
+            save_environment_trajectories=SaveTrajectories(; outputs=:reward),
         )
         @test_throws "include_environment = true needs an environment model, but the session has none." SessionInfo(
             SessionCounter(),
@@ -873,21 +883,24 @@ const COUNTER_TABLE = (;
             session_columns=:id,
             who_starts=AgentStarts(),
             timestep_sizes=:dt,
-            cognitive_save_history=SaveHistory(; states=:n_timesteps),
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
             impute_missing_actions=false,
             check_parameter_domains=false,
         )
         @test all(
             session ->
                 session.who_starts === AgentStarts() &&
-                session.cognitive_save_history === SaveHistory(; states=:n_timesteps) &&
+                session.save_cognitive_trajectories ===
+                SaveTrajectories(; states=:n_timesteps) &&
                 session.check_parameter_domains === false,
             sessions_info.sessions,
         )
-        #A copy of the sessions with other save histories keeps the setting
+        #A copy of the sessions with other SaveTrajectories keeps the setting
         @test all(
             session -> session.check_parameter_domains === false,
-            MultipleSessionsInfo(sessions_info; cognitive_save_history=SaveHistory()).sessions,
+            MultipleSessionsInfo(
+                sessions_info; save_cognitive_trajectories=SaveTrajectories()
+            ).sessions,
         )
         @test sessions_info.sessions[1].timestep_sizes == [1.0, 0.5] &&
             sessions_info.sessions[2].timestep_sizes == [1.0, 2.0, 1.0]
@@ -931,13 +944,15 @@ const COUNTER_TABLE = (;
             impute_missing_actions=false,
         )
         @test !any(session -> session.includes_environment, nothing_missing.sessions)
-        #A copy with another save history for every session
+        #A copy with another SaveTrajectories for every session
         copy = MultipleSessionsInfo(
-            sessions_info; cognitive_save_history=SaveHistory(; states=:n_timesteps)
+            sessions_info;
+            save_cognitive_trajectories=SaveTrajectories(; states=:n_timesteps),
         )
         @test all(
             session ->
-                session.cognitive_save_history === SaveHistory(; states=:n_timesteps),
+                session.save_cognitive_trajectories ===
+                SaveTrajectories(; states=:n_timesteps),
             copy.sessions,
         ) && copy.session_ids == sessions_info.session_ids
     end
@@ -1016,10 +1031,11 @@ const COUNTER_TABLE = (;
         @test sessions_info.session_rows == [[1, 2], [3, 4, 5]]
         #The field of the table has the type of the table itself, which Reactant.jl needs to compile a function with the sessions in it
         @test fieldtype(typeof(sessions_info), :table) === typeof(COUNTER_TABLE)
-        #The copies with other save histories and for prediction keep both
+        #The copies with other SaveTrajectories and for prediction keep both
         for copy in (
             MultipleSessionsInfo(
-                sessions_info; cognitive_save_history=SaveHistory(SaveEverything())
+                sessions_info;
+                save_cognitive_trajectories=SaveTrajectories(SaveEverything()),
             ),
             decondition_sessions(sessions_info),
         )

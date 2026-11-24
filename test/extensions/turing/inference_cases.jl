@@ -55,12 +55,12 @@ end
 function test_reading_the_fit(case, model, chain)
     returned_values = returned(model, chain)
     parameters = get_session_parameters(model, chain)
-    save_everything = SaveHistory(SaveEverything())
+    save_everything = SaveTrajectories(SaveEverything())
     trajectories = get_session_trajectories(
-        model, chain; cognitive_save_history=save_everything
+        model, chain; save_cognitive_trajectories=save_everything
     )
     predicted = predict_session_trajectories(
-        model, chain; cognitive_save_history=save_everything
+        model, chain; save_cognitive_trajectories=save_everything
     )
     for (i, session_id) in enumerate(case.session_ids)
         session = case.sessions[i]

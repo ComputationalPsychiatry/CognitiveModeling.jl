@@ -1,5 +1,5 @@
 @testset "Saving what a fitted session returns" begin
-    @testset "What a session saves of a timestep is selected by the save histories, for the cognitive model alone or for both models" begin
+    @testset "What a session saves of a timestep is selected by the SaveTrajectories, for the cognitive model alone or for both models" begin
         #The values of a timestep have the cognitive model's at the top, and without an environment only an empty state under environment
         timestep_values = (;
             state=(; expected_reward=0.5),
@@ -8,13 +8,13 @@
             action_distribution=(; choice=BernoulliByHand(0.7)),
             environment=(; state=nothing),
         )
-        #The SaveHistory is in the cognitive model's own names, so the action distributions are its output distributions
+        #The SaveTrajectories is in the cognitive model's own names, so the action distributions are its output distributions
         session_info = SessionInfo(
             ScoringModel(),
             (; reward=[1.0, 0.0]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
-            cognitive_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(;
                 output_distributions=:choice, states=SaveEverything()
             ),
         )
@@ -36,7 +36,7 @@
             environment=(; state=nothing),
         )
         saving_everything = SessionInfo(
-            session_info; cognitive_save_history=SaveHistory(SaveEverything())
+            session_info; save_cognitive_trajectories=SaveTrajectories(SaveEverything())
         )
         initial = CognitiveModeling.select_initial_timestep_values_to_save(
             Val(true), saving_everything, previous
@@ -67,15 +67,15 @@
             returned_trajectories.parameters_valid === ValidByDefault() &&
             returned_trajectories.n_timesteps == 2 &&
             returned_trajectories.last_timestep === nothing
-        #With an environment, its record is saved too, as its save history selects it, under environment
+        #With an environment, its record is saved too, as its SaveTrajectories selects it, under environment
         with_environment = SessionInfo(
             ScoringModel(),
             (; reward=[1.0, 0.0]),
             (; choice=[true, false]);
             who_starts=EnvironmentStarts(),
             environment=ScoringEnvironment(),
-            cognitive_save_history=SaveHistory(; states=SaveEverything()),
-            environment_save_history=SaveHistory(;
+            save_cognitive_trajectories=SaveTrajectories(; states=SaveEverything()),
+            save_environment_trajectories=SaveTrajectories(;
                 states=:level, outputs=:reward, output_distributions=SaveEverything()
             ),
         )

@@ -126,9 +126,9 @@ end
 
 # Since the agent is changed in place, every saved state would be the same object, showing
 # the agent after the last timestep. This method saves a copy of the agent on each timestep
-# instead, made with `deepcopy`. It keeps the name `rl_agent`, since a [`SaveHistory`](@ref)
-# selects states by the names in `attribute_names`. The table of action values of a saved
-# agent is in `rl_agent.policy.learner.approximator.model`.
+# instead, made with `deepcopy`. It keeps the name `rl_agent`, since a
+# [`SaveTrajectories`](@ref) selects states by the names in `attribute_names`. The table of
+# action values of a saved agent is in `rl_agent.policy.learner.approximator.model`.
 
 function CognitiveModeling.prepare_state_for_saving(model::TemporalDifferenceAgent, state)
     return (; rl_agent=deepcopy(state.rl_agent))

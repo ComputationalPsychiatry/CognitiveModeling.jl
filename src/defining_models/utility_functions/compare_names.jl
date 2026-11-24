@@ -5,7 +5,7 @@
 
 Return whether `name` is among the tuple `names`, and whether every name in the tuple
 `names` is among `other_names`. Used by [`unique_names`](@ref), and by the checks that a
-name map, a save history or the data has names in a model's attributes.
+name map, a `SaveTrajectories` or the data has names in a model's attributes.
 """
 has_name(name::Symbol, names::Tuple{}) = false
 function has_name(name::Symbol, names::Tuple)

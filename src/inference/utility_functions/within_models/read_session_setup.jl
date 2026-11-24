@@ -98,14 +98,14 @@ end
 """
     sessions_save_anything(sessions_info)
 
-Return whether the save history of either model of any session in `sessions_info` selects
-anything. Used by the full models of the inference backends, to warn when the sessions save
-trajectories that nothing in the model uses.
+Return whether the `SaveTrajectories` of either model of any session in `sessions_info`
+selects anything. Used by the full models of the inference backends, to warn when the
+sessions save trajectories that nothing in the model uses.
 """
 function sessions_save_anything(sessions_info::MultipleSessionsInfo)
     for session in sessions_info.sessions
-        if !saves_nothing(session.cognitive_save_history) ||
-            !saves_nothing(session.environment_save_history)
+        if !saves_nothing(session.save_cognitive_trajectories) ||
+            !saves_nothing(session.save_environment_trajectories)
             return true
         end
     end
