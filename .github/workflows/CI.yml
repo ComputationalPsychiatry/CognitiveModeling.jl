@@ -143,8 +143,10 @@ jobs:
           files: lcov.info
           use_oidc: true
           fail_ci_if_error: false
+  # The premade models, a package of their own in PremadeCognitiveModels, which uses this commit of the core: its tests,
+  # and its automatic differentiation and Reactant suites, each in its own environment
   premade:
-    name: PremadeCognitiveModels
+    name: PremadeCognitiveModels - ${{ matrix.suite }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # Reports whether this commit breaks the premade models, without failing the build
@@ -152,23 +154,27 @@ jobs:
     permissions:
       actions: write # lets julia-actions/cache delete old caches
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - tests
+          - ad
+          - reactant
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: ComputationalPsychiatry/PremadeCognitiveModels.jl
-          # main and pull requests into main use the premade package's main; everything else uses its dev
-          ref: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && 'main' || 'dev' }}
-          path: PremadeCognitiveModels.jl
-      # The premade package expects this repo at ../CognitiveModeling.jl
-      - run: mv PremadeCognitiveModels.jl ../PremadeCognitiveModels.jl
-        shell: bash
       - uses: julia-actions/setup-julia@v3
         with:
           version: '1'
       - uses: julia-actions/cache@v3
-      - name: Run the premade tests against this commit
-        run: julia --color=yes --project=../PremadeCognitiveModels.jl -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+      - name: Run the premade tests
+        if: matrix.suite == 'tests'
+        run: julia --color=yes --project=PremadeCognitiveModels -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+      - name: Run the premade ${{ matrix.suite }} suite
+        if: matrix.suite != 'tests'
+        run: |
+          julia --color=yes --project=PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
+          julia --color=yes --project=PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }} PremadeCognitiveModels/test/ad_and_reactant/${{ matrix.suite }}/runtests.jl
   # One check that says whether every test job passed, whatever the matrix holds, which the protection of main and dev
   # requires. The job of the premade models reports without blocking, so it isn't among them
   all_tests_passed:
