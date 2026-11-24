@@ -286,6 +286,59 @@ end
               sessions_by_hand(FULL_TABLE, learning_rates, inverse_temperatures)
     end
 
+    @testset "A single session is fitted as a set of one session, whose entries in the chains of a fit are named after session_id" begin
+        #The first session of the table on its own
+        rewards = [1.0, 0.0, 1.0]
+        choices = [true, false, true]
+        session_info = SessionInfo(
+            WithDefaultParameters(DistributionsJl()),
+            (; reward=rewards),
+            (; choice=choices);
+            who_starts=EnvironmentStarts(),
+        )
+        model = full_model(
+            TuringBackend(), IndependentParameters(FULL_PRIORS), session_info
+        )
+        #Its variables are those that the parameter model gives one session, and its log density is that of the session
+        @test Set(keys(rand(Xoshiro(1), model))) == Set([
+            @varname(learning_rate.sessions), @varname(inverse_temperature.sessions)
+        ])
+        given = Dict(
+            @varname(learning_rate.sessions) => [0.3],
+            @varname(inverse_temperature.sessions) => [2.0],
+        )
+        @test loglikelihood(model, given) ≈
+            session_by_hand(rewards, choices, 0.3, 2.0, EnvironmentStarts())[1]
+        one_session = MultipleSessionsInfo([session_info], [:session])
+        @test logjoint(model, given) ≈ logjoint(
+            full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), one_session),
+            given,
+        )
+        entry_names(chain) = Set(string.(Turing.FlexiChains.get_name.(keys(chain))))
+        chain = sample(Xoshiro(1), model, Prior(), 5; progress=false)
+        @test entry_names(get_session_parameters(model, chain)) ==
+            Set(["session.learning_rate", "session.inverse_temperature"])
+        #With IdenticalParameters, which fits one session in the same way, and another identifier
+        identical = full_model(
+            TuringBackend(), IdenticalParameters(FULL_PRIORS), session_info; session_id="P7"
+        )
+        @test Set(keys(rand(Xoshiro(1), identical))) ==
+            Set([@varname(learning_rate.shared), @varname(inverse_temperature.shared)])
+        chain = sample(Xoshiro(1), identical, Prior(), 5; progress=false)
+        @test entry_names(get_session_parameters(identical, chain)) ==
+            Set(["P7.learning_rate", "P7.inverse_temperature"])
+        #The keywords of several sessions are passed on
+        fixed = full_model(
+            TuringBackend(),
+            IndependentParameters((; learning_rate=Beta(2, 2))),
+            session_info;
+            fixed_cognitive_parameters=(; inverse_temperature=3.0),
+        )
+        @test collect(keys(rand(Xoshiro(1), fixed))) == [@varname(learning_rate.sessions)]
+        @test loglikelihood(fixed, Dict(@varname(learning_rate.sessions) => [0.3])) ≈
+            session_by_hand(rewards, choices, 0.3, 3.0, EnvironmentStarts())[1]
+    end
+
     @testset "Fixed parameters are given to every session, next to those of the parameter model" begin
         sessions_info = sessions_for_test(; impute_missing_actions=false)
         learning_rate_priors = IndependentParameters((; learning_rate=Beta(2, 2)))

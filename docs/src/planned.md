@@ -40,9 +40,6 @@ This page lists what is planned and not written yet. The list will grow.
 
 ## Defining models
 
-- A macro that defines a cognitive model or an environment in one command, and writes the
-  methods of the functions to extend where it can deduce them, such as `attribute_names`
-  from the names the model uses.
 - Whether a trial needs to be distinguished from a timestep, and whether a model can have
   nested time scales, such as evidence that accumulates over several timesteps within each
   trial and learning between the trials.
@@ -59,7 +56,6 @@ This page lists what is planned and not written yet. The list will grow.
   that fills them in.
 - Session identifiers in the names of the variables of a fitted session, instead of
   `sessions[i]`, if a way is found that doesn't compile the session once per identifier.
-- A convenient way to fit a single session, with the full model or a variant of it.
 - Choosing a sampler for each parameter from whether it is discrete or continuous.
 - Summing out a discrete parameter with few values instead of sampling it, so that a sampler
   which uses gradients can fit the whole model, perhaps with one of the Julia packages for
