@@ -25,6 +25,15 @@ nothing, so `SaveHistory()` saves nothing, which is the default everywhere, and
 `SaveHistory(SaveEverything())` saves everything. The selections are read as properties,
 such as `save_history.states`.
 
+A model with submodels keeps the state of each submodel under the submodel's name, which
+selects all of that state. Some of its states are selected with the name of the submodel,
+`=>`, and their names, as in `states = (:surprise, :perception => :expected_reward)`.
+Several states go in a tuple, as in `:perception => (:expected_reward, :prediction_error)`,
+and the states of a submodel of the submodel are selected in the same way, as in
+`:perception => :learning => :expected_reward`. They are saved under the name of the
+submodel, as the state keeps them, such as
+`(; surprise = 0.1, perception = (; expected_reward = 0.5))`.
+
 `save_initial_timestep_values` is whether what is saved starts with timestep 0, before the
 first timestep: the initial states, and the previous input and output, which are
 [`BeforeFirstTimestep`](@ref) unless others are given. It is `true` by default, which
@@ -61,6 +70,14 @@ SaveEverything()
 
 julia> SaveHistory(SaveEverything(); save_initial_timestep_values = false).save_initial_timestep_values
 false
+
+julia> SaveHistory(; states = (:surprise, :perception => :expected_reward))
+SaveHistory
+States: surprise, perception.expected_reward
+Inputs: none
+Outputs: none
+Output distributions: none
+Initial timestep values: saved
 ```
 """
 struct SaveHistory{
@@ -76,7 +93,7 @@ function SaveHistory(;
     save_initial_timestep_values::Bool=true,
 )
     return SaveHistory{
-        as_selection(states),
+        as_state_selection(states),
         as_selection(inputs),
         as_selection(outputs),
         as_selection(output_distributions),
@@ -105,6 +122,63 @@ Return `names` as a selection, which is how a [`SaveHistory`](@ref) keeps it:
 as_selection(::SaveEverything) = SaveEverything()
 as_selection(names) = as_tuple(names)::Tuple{Vararg{Symbol}}
 
+#A Pair can't be in a type, so the states of a submodel are kept as a tuple of its name and the selection of them
+"""
+    as_state_selection(states)
+
+Return `states` as the selection of states that a [`SaveHistory`](@ref) keeps:
+[`SaveEverything`](@ref) as it is, and otherwise a `Tuple` with an entry for each of them,
+as [`as_state_entries`](@ref) makes them: a `Symbol` for a state that is saved whole, and
+for a submodel that some states are saved of, a `Tuple` of its name and the selection of
+its states, in the same form. `(:surprise, :perception => :expected_reward)` is kept as
+`(:surprise, (:perception, (:expected_reward,)))`. Used by the constructor of
+[`SaveHistory`](@ref).
+"""
+as_state_selection(::SaveEverything) = SaveEverything()
+as_state_selection(states::Union{Symbol,Tuple{Vararg{Symbol}}}) = as_tuple(states)
+as_state_selection(states) = as_state_entries(as_tuple(states))
+
+#One at a time off the front of the tuple, so that a selection from literals is inferred
+"""
+    as_state_entries(states::Tuple)
+    as_state_entry(state)
+
+Return the entries of a selection of states, as a [`SaveHistory`](@ref) keeps them, for
+`states`, and for one of them, `state`, in a tuple: a `Symbol` as it is, for a state that
+is saved whole, and `:submodel => states` as a `Tuple` of the name of the submodel and the
+selection of its states, from [`as_state_selection`](@ref). A submodel with
+[`SaveEverything`](@ref) is saved whole, and one that nothing is selected of is left out.
+Anything else is a `TypeError`. Used by [`as_state_selection`](@ref).
+"""
+as_state_entries(::Tuple{}) = ()
+function as_state_entries(states::Tuple)
+    return (as_state_entry(first(states))..., as_state_entries(Base.tail(states))...)
+end
+as_state_entry(name::Symbol) = (name,)
+as_state_entry(states::Pair{Symbol,SaveEverything}) = (first(states),)
+function as_state_entry(states::Pair{Symbol})
+    selection = as_state_selection(last(states))
+    return isempty(selection) ? () : ((first(states), selection),)
+end
+as_state_entry(state) = (state::Union{Symbol,Pair{Symbol}},)
+
+"""
+    state_selection_as_given(selection)
+    state_entry_as_given(entry)
+
+Return the selection of states that a [`SaveHistory`](@ref) keeps, `selection`, and one
+entry of it, `entry`, in the form that they are given in: the states of a submodel as
+`:submodel => states`, from the tuple that [`as_state_selection`](@ref) keeps them as. Used
+to read `save_history.states`, and to display a `SaveHistory`.
+"""
+state_selection_as_given(selection::SaveEverything) = selection
+state_selection_as_given(selection::Tuple{Vararg{Symbol}}) = selection
+state_selection_as_given(selection::Tuple) = map(state_entry_as_given, selection)
+state_entry_as_given(name::Symbol) = name
+function state_entry_as_given(entry::Tuple{Symbol,Any})
+    return first(entry) => state_selection_as_given(last(entry))
+end
+
 #Reads the selections in the type as properties, and whether the initial timestep values are saved
 function Base.getproperty(
     save_history::SaveHistory{
@@ -113,7 +187,7 @@ function Base.getproperty(
     name::Symbol,
 ) where {Tstates,Tinputs,Toutputs,Toutput_distributions,Tsave_initial_timestep_values}
     if name === :states
-        return Tstates
+        return state_selection_as_given(Tstates)
     elseif name === :inputs
         return Tinputs
     elseif name === :outputs
@@ -194,8 +268,9 @@ what the [`SaveHistory`](@ref) of its model selects of that kind, which is empty
 selects nothing. `NamedTuple(trajectories)` gives the fields in a `NamedTuple`.
 
 In the REPL, the trajectories of a session show the number of timesteps, the names of what
-was saved of each kind, for the cognitive model and for the environment, and whether the
-parameters stayed valid. On one line, as inside a vector, they show the number of timesteps.
+was saved of each kind, for the cognitive model and for the environment, with the states of
+a submodel after its name, as in `perception.expected_reward`, and whether the parameters
+stayed valid. On one line, as inside a vector, they show the number of timesteps.
 
 # Arguments
 - `states`: the states of the cognitive model after each timestep, as returned by

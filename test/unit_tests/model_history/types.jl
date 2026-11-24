@@ -69,6 +69,44 @@
         @test_throws TypeError SaveHistory(; states="expected_reward")
         @test_throws TypeError SaveHistory(; states=(:expected_reward, 1))
         @test_throws TypeError SaveHistory(; states=true)
+        #Also for a submodel and for its states
+        @test_throws TypeError SaveHistory(; states=:perception => 1)
+        @test_throws TypeError SaveHistory(; states=("perception" => :expected_reward,))
+        @test_throws TypeError SaveHistory(;
+            states=:perception => (:expected_reward, "surprise")
+        )
+    end
+
+    @testset "The states of a submodel are selected with its name and =>, down through its submodels" begin
+        save_history = SaveHistory(; states=(:surprise, :perception => :expected_reward))
+        @test save_history.states === (:surprise, :perception => (:expected_reward,))
+        #A single one without a tuple around it, and several states of the submodel in a tuple or a vector
+        @test SaveHistory(; states=:perception => (:expected_reward, :prediction_error)).states ===
+            (:perception => (:expected_reward, :prediction_error),)
+        @test SaveHistory(;
+            states=[:surprise, :perception => [:expected_reward, :prediction_error]]
+        ) === SaveHistory(;
+            states=(:surprise, :perception => (:expected_reward, :prediction_error))
+        )
+        #The states of a submodel of the submodel, with one => after the other or inside a tuple
+        nested = SaveHistory(; states=:perception => :learning => :expected_reward)
+        @test nested.states === (:perception => (:learning => (:expected_reward,),),)
+        @test nested ===
+            SaveHistory(; states=(:perception => (:learning => :expected_reward,),))
+        #In the type, a submodel is a tuple of its name and the selection of its states
+        @test CognitiveModeling.state_selection(nested) ===
+            Val(((:perception, ((:learning, (:expected_reward,)),)),))
+        @test CognitiveModeling.state_selection(save_history) ===
+            Val((:surprise, (:perception, (:expected_reward,))))
+        #A submodel with everything is saved whole, as by its name alone, and one with nothing is left out
+        @test SaveHistory(; states=(:surprise, :perception => SaveEverything())) ===
+            SaveHistory(; states=(:surprise, :perception))
+        @test SaveHistory(; states=(:surprise, :perception => ())) ===
+            SaveHistory(; states=:surprise)
+        @test CognitiveModeling.saves_nothing(SaveHistory(; states=:perception => ()))
+        #The other kinds have no submodels
+        @test_throws TypeError SaveHistory(; inputs=:perception => :reward)
+        @test_throws TypeError SaveHistory(; outputs=(:choice, :response => :choice))
     end
 
     @testset "The selections are in the type, so constructing it from literals is inferred, and holding it costs nothing" begin
@@ -80,6 +118,17 @@
             SaveHistory(; states=:expected_reward, save_initial_timestep_values=false)
         @test Base.return_types(without_initial_values, Tuple{})[1] ===
             SaveHistory{(:expected_reward,),(),(),(),false}
+        with_states_of_submodels() = SaveHistory(;
+            states=(:surprise, :perception => (:expected_reward, :learning => :volatility)),
+        )
+        @test Base.return_types(with_states_of_submodels, Tuple{})[1] === SaveHistory{
+            (:surprise, (:perception, (:expected_reward, (:learning, (:volatility,))))),
+            (),
+            (),
+            (),
+            true,
+        }
+        @test sizeof(with_states_of_submodels()) == 0
         @test @inferred(SaveHistory(SaveEverything())) isa SaveHistory
         @test @inferred(SaveHistory()) isa SaveHistory
         @test isbitstype(typeof(SaveHistory(; states=:expected_reward)))

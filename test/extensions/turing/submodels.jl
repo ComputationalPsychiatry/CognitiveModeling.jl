@@ -57,6 +57,60 @@ function CognitiveModeling.timestep_model(model::BaselineOfSubmodels, context::M
     )
 end
 
+#A perception which also keeps how much its expected reward changed, so that it has two states, and the baseline with it
+struct PerceivesRewardsAndChanges <: AbstractSubmodel end
+function CognitiveModeling.attribute_names(perception::PerceivesRewardsAndChanges)
+    return ModelAttributes(;
+        parameters=:learning_rate, states=(:expected_reward, :change), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.initialize_state(
+    perception::PerceivesRewardsAndChanges, parameters
+)
+    return (; expected_reward=0.5, change=0.0)
+end
+struct BaselineKeepingChanges <: AbstractCognitiveModel
+    perception::PerceivesRewardsAndChanges
+    response::RespondsToRewards
+end
+function BaselineKeepingChanges()
+    return BaselineKeepingChanges(PerceivesRewardsAndChanges(), RespondsToRewards())
+end
+function CognitiveModeling.submodel_fields(model::BaselineKeepingChanges)
+    return (:perception, :response)
+end
+function CognitiveModeling.attribute_names(model::BaselineKeepingChanges)
+    return ModelAttributes(; parameters=(), states=(), inputs=:reward, outputs=:choice)
+end
+function CognitiveModeling.initialize_state(model::BaselineKeepingChanges, parameters)
+    return (;
+        perception=CognitiveModeling.initialize_state(
+            model.perception, parameters.perception
+        ),
+    )
+end
+function CognitiveModeling.timestep_model(
+    model::BaselineKeepingChanges, context::ModelContext
+)
+    previous_expected_reward = context.previous_state.perception.expected_reward
+    expected_reward = CommonTestFunctionality.learn(
+        previous_expected_reward,
+        context.parameters.perception.learning_rate,
+        context.input.reward,
+    )
+    logit = CommonTestFunctionality.choice_logit(
+        expected_reward, context.parameters.response.inverse_temperature
+    )
+    return ModelOutput(
+        (; choice=bernoulli_logit(DistributionsJl(), logit)),
+        (;
+            perception=(;
+                expected_reward, change=expected_reward - previous_expected_reward
+            ),
+        ),
+    )
+end
+
 #A perception whose learning is a submodel of its own, so that the model has a submodel within a submodel, which uses
 #prefixes when it is constructed with them
 struct PerceivesRewardsThroughLearning{prefixes} <: AbstractSubmodel
@@ -190,6 +244,49 @@ end
             baseline_trajectories[@varname(S1.expected_reward)]
     end
 
+    @testset "A history selects some of the states of a submodel, and the trajectories of a fit have entries for those only" begin
+        keeping_changes = full_model(
+            TuringBackend(),
+            IndependentParameters(priors),
+            sessions_of(BaselineKeepingChanges()),
+        )
+        @test logjoint(keeping_changes, values) ≈ logjoint(baseline, values)
+        chain = sample(Xoshiro(1), keeping_changes, Prior(), 5; progress=false)
+        names_saving(states) = string.(
+            Turing.FlexiChains.get_name.(
+                keys(
+                    get_session_trajectories(
+                        keeping_changes,
+                        chain;
+                        cognitive_save_history=SaveHistory(; states),
+                    ),
+                ),
+            ),
+        )
+        @test "S1.perception.expected_reward" in names_saving(:perception) &&
+            "S1.perception.change" in names_saving(:perception)
+        only_expected_reward = names_saving(:perception => :expected_reward)
+        @test "S1.perception.expected_reward" in only_expected_reward &&
+            !("S1.perception.change" in only_expected_reward)
+        #The entries are those of the whole state of the submodel
+        whole = get_session_trajectories(
+            keeping_changes, chain; cognitive_save_history=SaveHistory(; states=:perception)
+        )
+        in_part = get_session_trajectories(
+            keeping_changes,
+            chain;
+            cognitive_save_history=SaveHistory(; states=:perception => :change),
+        )
+        @test in_part[@varname(S2.perception.change)] ==
+            whole[@varname(S2.perception.change)]
+        #A state that the submodel doesn't have is an error when the sessions are made
+        @test_throws "The SaveHistory selects the states (:value,) of the submodel perception" get_session_trajectories(
+            keeping_changes,
+            chain;
+            cognitive_save_history=SaveHistory(; states=:perception => :value),
+        )
+    end
+
     @testset "A submodel can have submodels of its own, which are fitted with their parameters flat, and whose states have entries named after both" begin
         nested = full_model(
             TuringBackend(),
@@ -229,5 +326,15 @@ end
         )
         @test trajectories[@varname(S1.perception.learning.expected_reward)] ==
             baseline_trajectories[@varname(S1.expected_reward)]
+        #The state of the innermost submodel can be selected alone, with the names of both submodels
+        selected = get_session_trajectories(
+            nested,
+            chain;
+            cognitive_save_history=SaveHistory(;
+                states=:perception => :learning => :expected_reward
+            ),
+        )
+        @test selected[@varname(S1.perception.learning.expected_reward)] ==
+            trajectories[@varname(S1.perception.learning.expected_reward)]
     end
 end
