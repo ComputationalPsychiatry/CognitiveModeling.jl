@@ -11,6 +11,10 @@
     @test_throws "There is no full_model method for TuringBackend() with arguments of the types" full_model(
         TuringBackend(), FixedParameters((; probability=0.5)), sessions_info
     )
+    #A single session is passed on as a set of one session, so the same error names the package
+    @test_throws "There is no full_model method for TuringBackend() with arguments of the types" full_model(
+        TuringBackend(), session_info, FixedParameters((; probability=0.5))
+    )
     @test_throws "There is no session_model method for TuringBackend() with arguments of the types" session_model(
         TuringBackend(), session_info, (; probability=0.5)
     )
