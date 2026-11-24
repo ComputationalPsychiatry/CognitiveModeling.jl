@@ -264,6 +264,18 @@ end
         )
         @test agent.parameters == (; learning_rate=0.3, inverse_temperature=2.0)
         @test agent.state == (; perception=(; expected_reward=0.5))
+        #Its parameters are flat and in the order of the attributes, in whichever order they are given, and are bundled
+        #as the model reads them, and flattened back
+        given_in_another_order = InstantiatedModel(
+            LearnerWithSubmodels(), (; inverse_temperature=2.0, learning_rate=0.3)
+        )
+        @test given_in_another_order.parameters === agent.parameters
+        bundled = CognitiveModeling.bundle_parameters(agent.model, agent.parameters)
+        @test bundled ===
+            (; perception=(; learning_rate=0.3), response=(; inverse_temperature=2.0))
+        @test CognitiveModeling.flatten_parameters(agent.model, bundled) ===
+            agent.parameters
+        @test CognitiveModeling.initialize_state(agent.model, bundled) == agent.state
         simulate_timestep!(agent, (; reward=1.0))
         @test agent.state.perception.expected_reward ≈ 0.65
         reset!(agent)
@@ -281,16 +293,22 @@ end
             LearnerWithSubmodels(; prefixes=true)
         ) == (:perception__learning_rate, :response__inverse_temperature)
         @test CognitiveModeling.get_parameter_names(
-            LearnerWithSubmodels(; prefixes=true); without_defaults=true
+            LearnerWithSubmodels(; prefixes=true); with_default_parameters=false
         ) == (:response__inverse_temperature,)
         @test CognitiveModeling.get_parameter_names(
-            LearnerWithSubmodels(); without_defaults=true
+            LearnerWithSubmodels(); with_default_parameters=false
         ) == (:inverse_temperature,)
         @test CognitiveModeling.get_parameter_names(LearnsExpectedReward()) ==
             (:learning_rate,)
         @test CognitiveModeling.get_parameter_names(
-            LearnsExpectedReward(); without_defaults=true
+            LearnsExpectedReward(); with_default_parameters=false
         ) == ()
+        #The default and the domain of the perception's learning rate are read under its flat name
+        @test CognitiveModeling.get_default_parameters(
+            LearnerWithSubmodels(; prefixes=true)
+        ) === (; perception__learning_rate=0.5)
+        @test CognitiveModeling.get_parameter_domains(LearnerWithSubmodels()) ===
+            (; learning_rate=Domain(; lower=0, upper=1))
     end
 
     @testset "A simulation says which of its states hold the states of submodels" begin

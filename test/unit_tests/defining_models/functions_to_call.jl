@@ -100,19 +100,203 @@ function CognitiveModeling.default_parameters(model::ModelWithDefaultParameter)
     return (; inverse_temperature=1.0)
 end
 
+#A perception with a default for one of its parameters and a domain for the other, and a response with a discrete
+#parameter that has a default, which are only ever submodels
+struct PerceptionWithDefault <: AbstractSubmodel end
+function CognitiveModeling.attribute_names(perception::PerceptionWithDefault)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :initial_value), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.default_parameters(perception::PerceptionWithDefault)
+    return (; initial_value=0.5)
+end
+function CognitiveModeling.parameter_domains(perception::PerceptionWithDefault)
+    return (; learning_rate=Domain(; lower=0, upper=1))
+end
+struct ResponseWithDiscreteDefault <: AbstractSubmodel end
+function CognitiveModeling.attribute_names(response::ResponseWithDiscreteDefault)
+    return ModelAttributes(;
+        parameters=(:inverse_temperature, :n_options), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.default_parameters(response::ResponseWithDiscreteDefault)
+    return (; n_options=2)
+end
+function CognitiveModeling.parameter_domains(response::ResponseWithDiscreteDefault)
+    return (; n_options=Domain(; type=Integer, lower=1))
+end
+
+#A cognitive model with the two as submodels, and two parameters of its own: one with a default, and a discrete one.
+#Whether the flat names of the submodels' parameters have prefixes is chosen when it is constructed
+struct ModelWithSubmodelsToRead{prefixes} <: AbstractCognitiveModel
+    perception::PerceptionWithDefault
+    response::ResponseWithDiscreteDefault
+end
+function ModelWithSubmodelsToRead(; prefixes=false)
+    return ModelWithSubmodelsToRead{prefixes}(
+        PerceptionWithDefault(), ResponseWithDiscreteDefault()
+    )
+end
+function CognitiveModeling.submodel_fields(model::ModelWithSubmodelsToRead)
+    return (:perception, :response)
+end
+function CognitiveModeling.uses_submodel_prefixes(
+    model::ModelWithSubmodelsToRead{prefixes}
+) where {prefixes}
+    return prefixes
+end
+function CognitiveModeling.attribute_names(model::ModelWithSubmodelsToRead)
+    return ModelAttributes(;
+        parameters=(:lapse_rate, :is_greedy), states=(), inputs=(), outputs=()
+    )
+end
+function CognitiveModeling.default_parameters(model::ModelWithSubmodelsToRead)
+    return (; lapse_rate=0.0)
+end
+function CognitiveModeling.parameter_domains(model::ModelWithSubmodelsToRead)
+    return (; is_greedy=Domain(; type=Bool))
+end
+
+#A model with the same perception twice and no prefixes, so that two parameters have the same flat name
+struct ModelWithTwoPerceptions <: AbstractCognitiveModel
+    first_perception::PerceptionWithDefault
+    second_perception::PerceptionWithDefault
+end
+function CognitiveModeling.submodel_fields(model::ModelWithTwoPerceptions)
+    return (:first_perception, :second_perception)
+end
+function CognitiveModeling.attribute_names(model::ModelWithTwoPerceptions)
+    return ModelAttributes(; parameters=(), states=(), inputs=(), outputs=())
+end
+
 @testset "Functions that users call to read a model" begin
     @testset "The parameters of a model, and those without a default, which a fit needs priors for" begin
         @test CognitiveModeling.get_parameter_names(ModelWithDefaultParameter()) ===
             (:learning_rate, :inverse_temperature)
         @test CognitiveModeling.get_parameter_names(
-            ModelWithDefaultParameter(); without_defaults=true
+            ModelWithDefaultParameter(); with_default_parameters=true
+        ) === (:learning_rate, :inverse_temperature)
+        @test CognitiveModeling.get_parameter_names(
+            ModelWithDefaultParameter(); with_default_parameters=false
         ) === (:learning_rate,)
         #A model without defaults has every parameter both ways, in the order of its attributes
         @test CognitiveModeling.get_parameter_names(ModelWithDiscreteParameter()) ===
             (:learning_rate, :n_options)
         @test CognitiveModeling.get_parameter_names(
-            ModelWithDiscreteParameter(); without_defaults=true
+            ModelWithDiscreteParameter(); with_default_parameters=false
         ) === (:learning_rate, :n_options)
+    end
+
+    @testset "The names of the attributes of a model leave out the parameters with a default when asked to, and keep the other names" begin
+        model = ModelWithSubmodelsToRead(; prefixes=true)
+        every_name = CognitiveModeling.get_attribute_names(model)
+        @test every_name.parameters === (
+            :lapse_rate,
+            :is_greedy,
+            :perception__learning_rate,
+            :perception__initial_value,
+            :response__inverse_temperature,
+            :response__n_options,
+        )
+        @test CognitiveModeling.get_attribute_names(model; with_default_parameters=true) ===
+            every_name
+        #The model's own default and those of its submodels are left out, under their flat names
+        without_defaults = CognitiveModeling.get_attribute_names(
+            model; with_default_parameters=false
+        )
+        @test without_defaults.parameters ===
+            (:is_greedy, :perception__learning_rate, :response__inverse_temperature)
+        @test without_defaults.states === every_name.states &&
+            without_defaults.inputs === every_name.inputs &&
+            without_defaults.outputs === every_name.outputs
+        #Without prefixes too, and a model without defaults has the same names both ways
+        @test CognitiveModeling.get_attribute_names(
+            ModelWithSubmodelsToRead(); with_default_parameters=false
+        ).parameters === (:is_greedy, :learning_rate, :inverse_temperature)
+        @test CognitiveModeling.get_attribute_names(
+            ModelWithDiscreteParameter(); with_default_parameters=false
+        ) === CognitiveModeling.get_attribute_names(ModelWithDiscreteParameter())
+        #The names are in the types, so both are inferred
+        @test @inferred(CognitiveModeling.get_attribute_names(model)) === every_name
+        @test @inferred(
+            CognitiveModeling.without_default_parameters(
+                every_name, CognitiveModeling.get_default_parameters(model)
+            )
+        ) === without_defaults
+    end
+
+    @testset "The default values and the domains of the parameters of a model are read together with those of its submodels, under the flat names" begin
+        model = ModelWithSubmodelsToRead()
+        @test CognitiveModeling.get_default_parameters(model) ===
+            (; lapse_rate=0.0, initial_value=0.5, n_options=2)
+        @test CognitiveModeling.get_parameter_domains(model) === (;
+            is_greedy=Domain(; type=Bool),
+            learning_rate=Domain(; lower=0, upper=1),
+            n_options=Domain(; type=Integer, lower=1),
+        )
+        #The model's own are what it implements, without those of its submodels
+        @test CognitiveModeling.default_parameters(model) === (; lapse_rate=0.0)
+        @test keys(CognitiveModeling.parameter_domains(model)) === (:is_greedy,)
+        #With prefixes, those of the submodels are under their flat names
+        prefixed = ModelWithSubmodelsToRead(; prefixes=true)
+        @test CognitiveModeling.get_default_parameters(prefixed) ===
+            (; lapse_rate=0.0, perception__initial_value=0.5, response__n_options=2)
+        @test keys(CognitiveModeling.get_parameter_domains(prefixed)) ===
+            (:is_greedy, :perception__learning_rate, :response__n_options)
+        #A submodel is read on its own, and a model without defaults or domains has none
+        @test CognitiveModeling.get_default_parameters(PerceptionWithDefault()) ===
+            (; initial_value=0.5)
+        @test keys(CognitiveModeling.get_parameter_domains(PerceptionWithDefault())) ===
+            (:learning_rate,)
+        @test CognitiveModeling.get_default_parameters(ModelWithoutDomains()) === (;)
+        @test CognitiveModeling.get_parameter_domains(ModelWithoutDomains()) === (;)
+        #Both are inferred
+        @test @inferred(CognitiveModeling.get_default_parameters(prefixed)) isa NamedTuple
+        @test @inferred(CognitiveModeling.get_parameter_domains(prefixed)) isa NamedTuple
+    end
+
+    @testset "The default values and the domains are read after the submodels are checked, so that two parameters with the same flat name are an error" begin
+        twice = ModelWithTwoPerceptions(PerceptionWithDefault(), PerceptionWithDefault())
+        @test_throws "has two parameters with the flat name :learning_rate: first_perception.learning_rate and second_perception.learning_rate." CognitiveModeling.get_default_parameters(
+            twice
+        )
+        @test_throws "has two parameters with the flat name :learning_rate" CognitiveModeling.get_parameter_domains(
+            twice
+        )
+        @test_throws "has two parameters with the flat name :learning_rate" CognitiveModeling.discrete_parameter_names(
+            twice
+        )
+    end
+
+    @testset "The discrete and the continuous parameters of a model are read together with those of its submodels, with or without those that have a default" begin
+        model = ModelWithSubmodelsToRead(; prefixes=true)
+        @test CognitiveModeling.discrete_parameter_names(model) ===
+            (:is_greedy, :response__n_options)
+        @test CognitiveModeling.continuous_parameter_names(model) === (
+            :lapse_rate,
+            :perception__learning_rate,
+            :perception__initial_value,
+            :response__inverse_temperature,
+        )
+        @test CognitiveModeling.discrete_parameter_names(
+            model; with_default_parameters=false
+        ) === (:is_greedy,)
+        @test CognitiveModeling.continuous_parameter_names(
+            model; with_default_parameters=false
+        ) === (:perception__learning_rate, :response__inverse_temperature)
+        #Without prefixes
+        @test CognitiveModeling.discrete_parameter_names(ModelWithSubmodelsToRead()) ===
+            (:is_greedy, :n_options)
+        #A submodel is read on its own
+        @test CognitiveModeling.discrete_parameter_names(ResponseWithDiscreteDefault()) ===
+            (:n_options,)
+        @test CognitiveModeling.continuous_parameter_names(
+            ResponseWithDiscreteDefault()
+        ) === (:inverse_temperature,)
+        @test CognitiveModeling.continuous_parameter_names(
+            PerceptionWithDefault(); with_default_parameters=false
+        ) === (:learning_rate,)
     end
 
     @testset "The discrete parameters of a model are those whose domains have a type of whole numbers, or one that isn't of real numbers" begin

@@ -71,11 +71,12 @@ iteratively.
 
 Each argument is kept in a field of the same name, such as `agent.state`. Parameters that
 aren't given take the values in [`default_parameters`](@ref), if the model provides defaults
-for them. The state defaults to the output of [`initialize_state`](@ref) with the full
-parameters, and the previous output to every output being [`BeforeFirstTimestep`](@ref). The
-previous output and the state must be `NamedTuple`s, and the names of the parameters, of the
-previous output and of the state must be those in the model's attributes, from
-[`attribute_names`](@ref), or an error is thrown.
+for them, and `agent.parameters` has them all in the order of the model's attributes, as
+[`CognitiveModeling.get_parameter_names`](@ref) gives them. The state defaults to the output
+of [`initialize_state`](@ref) with the full parameters, and the previous output to every
+output being [`BeforeFirstTimestep`](@ref). The previous output and the state must be
+`NamedTuple`s, and the names of the parameters, of the previous output and of the state must
+be those in the model's attributes, from [`attribute_names`](@ref), or an error is thrown.
 
 `agent.history` holds a [`ModelHistory`](@ref) with where the model started, which is
 timestep 0, and everything that happens to it, as selected by `save_history`, a
@@ -182,6 +183,9 @@ function InstantiatedModel(
     #Check that the parameters, the state and the previous output have the names in the model's attributes, and that each parameter is within its domain, unless that check is left out
     check_match_attribute_names(model, parameters, state, previous_output)
     check_parameter_domains && check_parameters_in_domains(model, parameters)
+
+    #Put the parameters in the order of the model's attributes, whichever of them were given and whichever are defaults
+    parameters = NamedTuple{get_attribute_names(model).parameters}(parameters)
 
     #Check that the inputs and outputs selected for the history are among those in the model's attributes
     check_savehistory_selection_names(save_history, model)
