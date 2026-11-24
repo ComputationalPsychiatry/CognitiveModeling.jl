@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="referrer" content="no-referrer"/><title>Custom Turing.jl models · CognitiveModeling.jl</title><meta name="title" content="Custom Turing.jl models · CognitiveModeling.jl"/><meta property="og:title" content="Custom Turing.jl models · CognitiveModeling.jl"/><meta property="twitter:title" content="Custom Turing.jl models · CognitiveModeling.jl"/><meta name="description" content="Documentation for CognitiveModeling.jl."/><meta property="og:description" content="Documentation for CognitiveModeling.jl."/><meta property="twitter:description" content="Documentation for CognitiveModeling.jl."/><meta property="og:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/custom_turing_models/"/><meta property="twitter:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/custom_turing_models/"/><link rel="canonical" href="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/custom_turing_models/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">CognitiveModeling.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li class="is-active"><a class="tocitem" href>Custom Turing.jl models</a><ul class="internal"><li><a class="tocitem" href="#The-model-and-the-data"><span>The model and the data</span></a></li><li><a class="tocitem" href="#A-hierarchical-model-of-one&#39;s-own"><span>A hierarchical model of one&#39;s own</span></a></li><li><a class="tocitem" href="#Reading-the-fit"><span>Reading the fit</span></a></li><li><a class="tocitem" href="#A-single-session"><span>A single session</span></a></li><li><a class="tocitem" href="#What-a-model-of-one&#39;s-own-needs"><span>What a model of one&#39;s own needs</span></a></li></ul></li><li><a class="tocitem" href="../predictive_checks_and_parameter_recovery/">Predictive checks and parameter recovery</a></li><li><a class="tocitem" href="../discrete_parameters/">Discrete parameters</a></li><li><a class="tocitem" href="../models_with_submodels/">Models with submodels</a></li><li><a class="tocitem" href="../cognitive_abm_with_agents/">Cognitive agent-based modeling with Agents.jl</a></li><li><a class="tocitem" href="../interfacing_with_common_rl/">Interfacing with CommonRLInterface.jl</a></li><li><a class="tocitem" href="../interfacing_with_reinforcement_learning/">Models from ReinforcementLearning.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_juliacontrol/">Models from control theory as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_actr_models/">Models from ACTRModels.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_sequential_sampling_models/">Models from SequentialSamplingModels.jl as cognitive models</a></li><li><a class="tocitem" href="../compiling_with_reactant/">Compiling simulations with Reactant.jl</a></li></ul></li><li><a class="tocitem" href="../../ad_and_reactant/">Automatic differentiation and Reactant</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/">Overview</a></li><li><a class="tocitem" href="../../api/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../api/simulation/">Simulation</a></li><li><a class="tocitem" href="../../api/saving_trajectories/">Saving trajectories</a></li><li><a class="tocitem" href="../../api/fitting/">Fitting</a></li><li><a class="tocitem" href="../../api/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../api/fitting_with_turing/">Fitting with Turing.jl</a></li></ul></li><li><span class="tocitem">Internals</span><ul><li><a class="tocitem" href="../../internals/">Overview</a></li><li><a class="tocitem" href="../../internals/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../internals/simulation/">Simulation</a></li><li><a class="tocitem" href="../../internals/saving_trajectories/">Saving trajectories</a></li><li><input class="collapse-toggle" id="menuitem-5-5" type="checkbox"/><label class="tocitem" for="menuitem-5-5"><span class="docs-label">Fitting</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../internals/fitting/">Sessions</a></li><li><a class="tocitem" href="../../internals/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../internals/preparing_models/">Preparing models</a></li><li><a class="tocitem" href="../../internals/within_models/">Within models</a></li><li><a class="tocitem" href="../../internals/workflow_and_postprocessing/">Workflow and postprocessing</a></li></ul></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Custom Turing.jl models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Custom Turing.jl models</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/blob/dev/docs/literate/custom_turing_models.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Custom-Turing.jl-models"><a class="docs-heading-anchor" href="#Custom-Turing.jl-models">Custom Turing.jl models</a><a id="Custom-Turing.jl-models-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Turing.jl-models" title="Permalink"></a></h1><p><em>This page is a draft.</em></p><p><a href="../../api/fitting/#CognitiveModeling.full_model"><code>full_model</code></a> fits several sessions with parameter models, which give the parameters of every session in one of the ways the package offers. A Turing.jl model of one&#39;s own can give them in any other way, and run the sessions inside it as a submodel: <a href="../../api/fitting/#CognitiveModeling.multiple_sessions_model"><code>multiple_sessions_model</code></a> with <code>TuringBackend()</code> runs several sessions, and <a href="../../api/fitting/#CognitiveModeling.session_model"><code>session_model</code></a> runs one. Both return the parameters they were given, with the trajectories the sessions saved. So when a model of one&#39;s own returns what they return, <a href="../../api/fitting/#CognitiveModeling.get_session_parameters"><code>get_session_parameters</code></a> and <a href="../../api/fitting/#CognitiveModeling.get_session_trajectories"><code>get_session_trajectories</code></a> read its fit as they read that of a full model, also when the parameters are transformations of the model&#39;s variables, which the chain itself doesn&#39;t have.</p><p>This page fits a Rescorla-Wagner model to several participants with a hierarchical model written by hand, and then to a single participant.</p><pre><code class="language-julia hljs">using CognitiveModeling
+using Distributions: Bernoulli, BernoulliLogit, Exponential, LogNormal, Normal
+using LogExpFunctions: logistic
+using Random: Xoshiro
+using Statistics: mean
+using Turing</code></pre><h2 id="The-model-and-the-data"><a class="docs-heading-anchor" href="#The-model-and-the-data">The model and the data</a><a id="The-model-and-the-data-1"></a><a class="docs-heading-anchor-permalink" href="#The-model-and-the-data" title="Permalink"></a></h2><p>The Rescorla-Wagner model learns the expected reward of an option from the rewards it gets, and chooses the option with a probability that grows with its expected reward:</p><pre><code class="language-julia hljs">struct RescorlaWagner &lt;: AbstractCognitiveModel end
+
+function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
+    return (; expected_reward=0.5)
+end
+
+function CognitiveModeling.timestep_model(model::RescorlaWagner, context::ModelContext)
+    #The expected reward before this timestep, and after its reward
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
+
+    #The higher the expected reward, the more likely the option is chosen
+    Pₜ = BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))
+    return ModelOutput((; choice=Pₜ), (; expected_reward=Vₜ))
+end
+
+function CognitiveModeling.attribute_names(model::RescorlaWagner)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end</code></pre><p>The rewards come from an environment which gives a reward with a fixed probability on every timestep:</p><pre><code class="language-julia hljs">struct BernoulliRewards &lt;: AbstractEnvironmentModel end
+
+CognitiveModeling.initialize_state(environment::BernoulliRewards, parameters) = (;)
+
+function CognitiveModeling.timestep_model(
+    environment::BernoulliRewards, context::ModelContext
+)
+    return ModelOutput((; reward=Bernoulli(context.parameters.reward_probability)))
+end
+
+function CognitiveModeling.attribute_names(environment::BernoulliRewards)
+    return ModelAttributes(;
+        parameters=:reward_probability, states=(), inputs=:choice, outputs=:reward
+    )
+end</code></pre><p>Five participants, each with a learning rate of their own, are simulated for 50 timesteps, which gives a table with a row for each timestep:</p><pre><code class="language-julia hljs">simulated_learning_rates = [0.2, 0.35, 0.5, 0.65, 0.8]
+simulations = map(enumerate(simulated_learning_rates)) do (participant, learning_rate)
+    return simulate_session(
+        RescorlaWagner(),
+        BernoulliRewards();
+        who_starts=EnvironmentStarts(),
+        n_steps=50,
+        cognitive_parameters=(; learning_rate, inverse_temperature=5.0),
+        environment_parameters=(; reward_probability=0.7),
+        save_cognitive_trajectories=SaveTrajectories(;
+            inputs=:reward, outputs=:choice, save_initial_timestep_values=false
+        ),
+        rng=Xoshiro(participant),
+    )
+end
+table = (;
+    participant=repeat([&quot;P1&quot;, &quot;P2&quot;, &quot;P3&quot;, &quot;P4&quot;, &quot;P5&quot;]; inner=50),
+    reward=[
+        float(observation.reward) for s in simulations for observation in s.observations
+    ],
+    choice=[action.choice for s in simulations for action in s.actions],
+)
+sessions_info = MultipleSessionsInfo(
+    RescorlaWagner(),
+    table;
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:participant,
+    who_starts=EnvironmentStarts(),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">MultipleSessionsInfo
+Sessions: 5
+Cognitive model: RescorlaWagner
+Environment: none
+Observations: reward
+Actions: choice</code></pre><h2 id="A-hierarchical-model-of-one&#39;s-own"><a class="docs-heading-anchor" href="#A-hierarchical-model-of-one&#39;s-own">A hierarchical model of one&#39;s own</a><a id="A-hierarchical-model-of-one&#39;s-own-1"></a><a class="docs-heading-anchor-permalink" href="#A-hierarchical-model-of-one&#39;s-own" title="Permalink"></a></h2><p>The learning rates of the participants come from a population on the logit scale: each participant&#39;s is the mean of the population plus a standardized deviation scaled by the population&#39;s standard deviation, which <code>logistic</code> then takes to between 0 and 1. The participants share one inverse temperature. The model gives <a href="../../api/fitting/#CognitiveModeling.multiple_sessions_model"><code>multiple_sessions_model</code></a> the parameters as a <code>NamedTuple</code> with a vector for each parameter, with a value for every session in the order of <code>sessions_info.session_ids</code>, and returns what that submodel returns:</p><pre><code class="language-julia hljs">@model function hierarchical_learning_rates(sessions_info)
+    n_participants = CognitiveModeling.n_sessions(sessions_info)
+
+    #The population of the learning rates, on the logit scale
+    population_mean ~ Normal(0, 1)
+    population_sd ~ Exponential(0.5)
+
+    #The learning rate of each participant, from its standardized deviation from the mean
+    standardized ~ filldist(Normal(), n_participants)
+    learning_rate = logistic.(population_mean .+ population_sd .* standardized)
+
+    #One inverse temperature for every participant
+    inverse_temperature ~ LogNormal(1, 0.5)
+
+    #The sessions, each with its own parameters, as a submodel without a prefix of its own
+    sessions ~ to_submodel(
+        multiple_sessions_model(
+            TuringBackend(),
+            sessions_info,
+            (;
+                learning_rate, inverse_temperature=fill(inverse_temperature, n_participants)
+            ),
+        ),
+        false,
+    )
+    return sessions
+end
+
+model = hierarchical_learning_rates(sessions_info)
+chain = sample(Xoshiro(1), model, NUTS(), 500; progress=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 251:750</span>                                                            <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (4)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64        </span>  population_mean, population_sd, inverse_temperature        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  standardized <span class="sgr37">(5,)</span>                                          <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (14)</span>                                                                  <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Int64  </span>  n_steps, tree_depth                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool   </span>  is_accept, numerical_error                                         <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  acceptance_rate, log_density, hamiltonian_energy                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>           hamiltonian_energy_error, max_hamiltonian_energy_error, step_size  <span class="sgr90">│</span>
+<span class="sgr90">│</span>           nom_step_size, logprior, loglikelihood, logjoint                   <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><h2 id="Reading-the-fit"><a class="docs-heading-anchor" href="#Reading-the-fit">Reading the fit</a><a id="Reading-the-fit-1"></a><a class="docs-heading-anchor-permalink" href="#Reading-the-fit" title="Permalink"></a></h2><p>The chain has the variables of the model: the population&#39;s mean and standard deviation, the standardized deviations and the inverse temperature, but not the learning rates, which the model computes from them. <code>returned</code> gives what the model returned for each sample, and <a href="../../api/fitting/#CognitiveModeling.get_session_parameters"><code>get_session_parameters</code></a> makes a chain of it with the parameters of each session, named after the session, such as <code>P3.learning_rate</code>:</p><pre><code class="language-julia hljs">parameters = get_session_parameters(returned(model, chain), sessions_info)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 1:500</span>                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (10)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                       <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  P1.learning_rate, P1.inverse_temperature, P2.learning_rate         <span class="sgr90">│</span>
+<span class="sgr90">│</span>           P2.inverse_temperature, P3.learning_rate, P3.inverse_temperature   <span class="sgr90">│</span>
+<span class="sgr90">│</span>           P4.learning_rate, P4.inverse_temperature, P5.learning_rate         <span class="sgr90">│</span>
+<span class="sgr90">│</span>           P5.inverse_temperature                                             <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (0)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr90"> (none)</span>                                                                      <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>The mean learning rate of each participant, next to the one they were simulated with:</p><pre><code class="language-julia hljs">[
+    (;
+        participant,
+        simulated,
+        fitted=mean(parameters[@varname($participant.learning_rate)]),
+    ) for (participant, simulated) in
+    zip(Symbol.(sessions_info.session_ids), simulated_learning_rates)
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{@NamedTuple{participant::Symbol, simulated::Float64, fitted::Float64}}:
+ (participant = :P1, simulated = 0.2, fitted = 0.4892782127488753)
+ (participant = :P2, simulated = 0.35, fitted = 0.5024303816407346)
+ (participant = :P3, simulated = 0.5, fitted = 0.4937624332274658)
+ (participant = :P4, simulated = 0.65, fitted = 0.8295736315933949)
+ (participant = :P5, simulated = 0.8, fitted = 0.7549145442761862)</code></pre><p>The trajectories are read the same way. A fit is fastest when the sessions save nothing, and the same model with a copy of the sessions that save the expected rewards has the same variables, so <code>returned</code> runs it on the samples of the chain, and <a href="../../api/fitting/#CognitiveModeling.get_session_trajectories"><code>get_session_trajectories</code></a> makes a chain of what the sessions saved:</p><pre><code class="language-julia hljs">saving_sessions = MultipleSessionsInfo(
+    sessions_info; save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward)
+)
+trajectories = get_session_trajectories(
+    returned(hierarchical_learning_rates(saving_sessions), chain), sessions_info
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 1:500</span>                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (10)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                       <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  P1.expected_reward <span class="sgr37">(51,)</span>, P2.expected_reward <span class="sgr37">(51,)</span>         <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P3.expected_reward <span class="sgr37">(51,)</span>, P4.expected_reward <span class="sgr37">(51,)</span>         <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P5.expected_reward <span class="sgr37">(51,)</span>                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool           </span>  P1.parameters_valid, P2.parameters_valid                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P3.parameters_valid, P4.parameters_valid                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P5.parameters_valid                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (0)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr90"> (none)</span>                                                                      <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>Each entry holds, for every sample, the expected rewards of a participant over the timesteps, from timestep 0. The two chains have the samples of the fit, and merge into one:</p><pre><code class="language-julia hljs">merge(parameters, trajectories)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 1:500</span>                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (20)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                       <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64        </span>  P1.learning_rate, P1.inverse_temperature, P2.learning_rate <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P2.inverse_temperature, P3.learning_rate                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P3.inverse_temperature, P4.learning_rate                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P4.inverse_temperature, P5.learning_rate                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P5.inverse_temperature                                     <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  P1.expected_reward <span class="sgr37">(51,)</span>, P2.expected_reward <span class="sgr37">(51,)</span>         <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P3.expected_reward <span class="sgr37">(51,)</span>, P4.expected_reward <span class="sgr37">(51,)</span>         <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P5.expected_reward <span class="sgr37">(51,)</span>                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool           </span>  P1.parameters_valid, P2.parameters_valid                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P3.parameters_valid, P4.parameters_valid                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   P5.parameters_valid                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (0)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr90"> (none)</span>                                                                      <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><h2 id="A-single-session"><a class="docs-heading-anchor" href="#A-single-session">A single session</a><a id="A-single-session-1"></a><a class="docs-heading-anchor-permalink" href="#A-single-session" title="Permalink"></a></h2><p>A single session goes in a model of one&#39;s own with <a href="../../api/fitting/#CognitiveModeling.session_model"><code>session_model</code></a>, with a prefix of its own, here with the learning rate sampled on the logit scale:</p><pre><code class="language-julia hljs">session_info = SessionInfo(
+    RescorlaWagner(),
+    (; reward=table.reward[101:150]),
+    (; choice=table.choice[101:150]);
+    who_starts=EnvironmentStarts(),
+    save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
+)
+
+@model function one_session(session_info)
+    #The learning rate on the logit scale, and the inverse temperature
+    learning_rate_logit ~ Normal(0, 1)
+    inverse_temperature ~ LogNormal(1, 0.5)
+
+    #The session, with its variables under the prefix session
+    session ~ to_submodel(
+        prefix(
+            session_model(
+                TuringBackend(),
+                session_info,
+                (; learning_rate=logistic(learning_rate_logit), inverse_temperature),
+            ),
+            @varname(session),
+        ),
+        false,
+    )
+    return session
+end
+
+single_model = one_session(session_info)
+single_chain = sample(Xoshiro(2), single_model, NUTS(), 500; progress=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 251:750</span>                                                            <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (2)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  learning_rate_logit, inverse_temperature                           <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (14)</span>                                                                  <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Int64  </span>  n_steps, tree_depth                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool   </span>  is_accept, numerical_error                                         <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  acceptance_rate, log_density, hamiltonian_energy                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>           hamiltonian_energy_error, max_hamiltonian_energy_error, step_size  <span class="sgr90">│</span>
+<span class="sgr90">│</span>           nom_step_size, logprior, loglikelihood, logjoint                   <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>Without a session info, the chains name the parameters and the trajectories without a session, such as <code>learning_rate</code> and <code>expected_reward</code>:</p><pre><code class="language-julia hljs">single_results = returned(single_model, single_chain)
+merge(get_session_parameters(single_results), get_session_trajectories(single_results))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (500 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 1:500</span>                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (4)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64        </span>  learning_rate, inverse_temperature                         <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  expected_reward <span class="sgr37">(51,)</span>                                      <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool           </span>  parameters_valid                                           <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (0)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr90"> (none)</span>                                                                      <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><h2 id="What-a-model-of-one&#39;s-own-needs"><a class="docs-heading-anchor" href="#What-a-model-of-one&#39;s-own-needs">What a model of one&#39;s own needs</a><a id="What-a-model-of-one&#39;s-own-needs-1"></a><a class="docs-heading-anchor-permalink" href="#What-a-model-of-one&#39;s-own-needs" title="Permalink"></a></h2><ul><li>It returns what <a href="../../api/fitting/#CognitiveModeling.multiple_sessions_model"><code>multiple_sessions_model</code></a> or <a href="../../api/fitting/#CognitiveModeling.session_model"><code>session_model</code></a> returns, as it is, for <code>returned</code> to give it to <a href="../../api/fitting/#CognitiveModeling.get_session_parameters"><code>get_session_parameters</code></a> and <a href="../../api/fitting/#CognitiveModeling.get_session_trajectories"><code>get_session_trajectories</code></a>.</li><li>The parameters of several sessions are a <code>NamedTuple</code> with one vector for each parameter, with a value for every session in the order of <code>sessions_info.session_ids</code>. <a href="../../api/fitting/#CognitiveModeling.session_index"><code>CognitiveModeling.session_index</code></a> gives the place of a session&#39;s data identifier.</li><li>The variables of the sessions are under <code>sessions[i]</code>, or under the prefix of a single session, so the model&#39;s own variables need other names.</li><li>The forms of the two functions which take a model and a chain only take the package&#39;s own models, which know their sessions, so a model of one&#39;s own gives them its returned values.</li></ul><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../getting_started/">« Getting started</a><a class="docs-footer-nextpage" href="../predictive_checks_and_parameter_recovery/">Predictive checks and parameter recovery »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Tuesday 24 November 2026 18:55">Tuesday 24 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

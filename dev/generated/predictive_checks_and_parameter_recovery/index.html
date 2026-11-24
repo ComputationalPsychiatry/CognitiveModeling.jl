@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="referrer" content="no-referrer"/><title>Predictive checks and parameter recovery · CognitiveModeling.jl</title><meta name="title" content="Predictive checks and parameter recovery · CognitiveModeling.jl"/><meta property="og:title" content="Predictive checks and parameter recovery · CognitiveModeling.jl"/><meta property="twitter:title" content="Predictive checks and parameter recovery · CognitiveModeling.jl"/><meta name="description" content="Documentation for CognitiveModeling.jl."/><meta property="og:description" content="Documentation for CognitiveModeling.jl."/><meta property="twitter:description" content="Documentation for CognitiveModeling.jl."/><meta property="og:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/predictive_checks_and_parameter_recovery/"/><meta property="twitter:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/predictive_checks_and_parameter_recovery/"/><link rel="canonical" href="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/predictive_checks_and_parameter_recovery/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">CognitiveModeling.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../custom_turing_models/">Custom Turing.jl models</a></li><li class="is-active"><a class="tocitem" href>Predictive checks and parameter recovery</a><ul class="internal"><li><a class="tocitem" href="#The-model-and-the-data"><span>The model and the data</span></a></li><li><a class="tocitem" href="#Prior-predictive-checks"><span>Prior predictive checks</span></a></li><li><a class="tocitem" href="#Posterior-predictive-checks"><span>Posterior predictive checks</span></a></li><li><a class="tocitem" href="#Parameter-recovery"><span>Parameter recovery</span></a></li><li><a class="tocitem" href="#Comparing-models"><span>Comparing models</span></a></li><li><a class="tocitem" href="#Turing.jl&#39;s-functions-or-the-package&#39;s"><span>Turing.jl&#39;s functions or the package&#39;s</span></a></li></ul></li><li><a class="tocitem" href="../discrete_parameters/">Discrete parameters</a></li><li><a class="tocitem" href="../models_with_submodels/">Models with submodels</a></li><li><a class="tocitem" href="../cognitive_abm_with_agents/">Cognitive agent-based modeling with Agents.jl</a></li><li><a class="tocitem" href="../interfacing_with_common_rl/">Interfacing with CommonRLInterface.jl</a></li><li><a class="tocitem" href="../interfacing_with_reinforcement_learning/">Models from ReinforcementLearning.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_juliacontrol/">Models from control theory as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_actr_models/">Models from ACTRModels.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_sequential_sampling_models/">Models from SequentialSamplingModels.jl as cognitive models</a></li><li><a class="tocitem" href="../compiling_with_reactant/">Compiling simulations with Reactant.jl</a></li></ul></li><li><a class="tocitem" href="../../ad_and_reactant/">Automatic differentiation and Reactant</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/">Overview</a></li><li><a class="tocitem" href="../../api/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../api/simulation/">Simulation</a></li><li><a class="tocitem" href="../../api/saving_trajectories/">Saving trajectories</a></li><li><a class="tocitem" href="../../api/fitting/">Fitting</a></li><li><a class="tocitem" href="../../api/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../api/fitting_with_turing/">Fitting with Turing.jl</a></li></ul></li><li><span class="tocitem">Internals</span><ul><li><a class="tocitem" href="../../internals/">Overview</a></li><li><a class="tocitem" href="../../internals/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../internals/simulation/">Simulation</a></li><li><a class="tocitem" href="../../internals/saving_trajectories/">Saving trajectories</a></li><li><input class="collapse-toggle" id="menuitem-5-5" type="checkbox"/><label class="tocitem" for="menuitem-5-5"><span class="docs-label">Fitting</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../internals/fitting/">Sessions</a></li><li><a class="tocitem" href="../../internals/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../internals/preparing_models/">Preparing models</a></li><li><a class="tocitem" href="../../internals/within_models/">Within models</a></li><li><a class="tocitem" href="../../internals/workflow_and_postprocessing/">Workflow and postprocessing</a></li></ul></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Predictive checks and parameter recovery</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Predictive checks and parameter recovery</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/blob/dev/docs/literate/predictive_checks_and_parameter_recovery.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Predictive-checks-and-parameter-recovery"><a class="docs-heading-anchor" href="#Predictive-checks-and-parameter-recovery">Predictive checks and parameter recovery</a><a id="Predictive-checks-and-parameter-recovery-1"></a><a class="docs-heading-anchor-permalink" href="#Predictive-checks-and-parameter-recovery" title="Permalink"></a></h1><p>A model that is fitted to the data of some sessions can also simulate that data. With parameters drawn from their priors, the simulated data shows what the model expects before it is fitted, a prior predictive check, and with the parameters of a fit, how well the fitted model describes the data, a posterior predictive check. Data simulated with known parameters can also be fitted again, to see whether the fit finds the parameters that simulated it: a parameter recovery. This page does all three with Turing.jl.</p><p>The package&#39;s models of the sessions take their data as arguments, and Turing.jl&#39;s <code>decondition</code> and <code>condition</code> work on the variables of a model, so they leave that data as it is. <a href="../../api/fitting/#CognitiveModeling.decondition_sessions-Tuple{SessionInfo}"><code>decondition_sessions</code></a> takes the data out of the sessions, so that the model simulates every action as a variable, and <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a> puts values of those variables back in the sessions as data. Turing.jl&#39;s own functions can then simulate, and its <code>condition</code> can condition the model on the same variables. The page does each step in both ways, and compares them at the end.</p><pre><code class="language-julia hljs">using CognitiveModeling
+using Distributions: Bernoulli, BernoulliLogit, Beta, LogNormal, Normal
+using LogExpFunctions: logsumexp
+using PosteriorStats: compare, loo
+using Random: Xoshiro
+using Statistics: mean, var
+using Turing
+using Turing: DynamicPPL</code></pre><h2 id="The-model-and-the-data"><a class="docs-heading-anchor" href="#The-model-and-the-data">The model and the data</a><a id="The-model-and-the-data-1"></a><a class="docs-heading-anchor-permalink" href="#The-model-and-the-data" title="Permalink"></a></h2><p>The Rescorla-Wagner model learns the expected reward of an option from the rewards it gets, and chooses the option with a probability that grows with its expected reward:</p><pre><code class="language-julia hljs">struct RescorlaWagner &lt;: AbstractCognitiveModel end
+
+function CognitiveModeling.initialize_state(model::RescorlaWagner, parameters)
+    return (; expected_reward=0.5)
+end
+
+function CognitiveModeling.timestep_model(model::RescorlaWagner, context::ModelContext)
+    #The expected reward before this timestep, and after its reward
+    V₋₁ = context.previous_state.expected_reward
+    Vₜ = V₋₁ + context.parameters.learning_rate * (context.input.reward - V₋₁)
+
+    #The higher the expected reward, the more likely the option is chosen
+    Pₜ = BernoulliLogit(context.parameters.inverse_temperature * (Vₜ - 0.5))
+    return ModelOutput((; choice=Pₜ), (; expected_reward=Vₜ))
+end
+
+function CognitiveModeling.attribute_names(model::RescorlaWagner)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :inverse_temperature),
+        states=:expected_reward,
+        inputs=:reward,
+        outputs=:choice,
+    )
+end</code></pre><p>The rewards come from an environment which gives a reward with a fixed probability on every timestep:</p><pre><code class="language-julia hljs">struct BernoulliRewards &lt;: AbstractEnvironmentModel end
+
+CognitiveModeling.initialize_state(environment::BernoulliRewards, parameters) = (;)
+
+function CognitiveModeling.timestep_model(
+    environment::BernoulliRewards, context::ModelContext
+)
+    return ModelOutput((; reward=Bernoulli(context.parameters.reward_probability)))
+end
+
+function CognitiveModeling.attribute_names(environment::BernoulliRewards)
+    return ModelAttributes(;
+        parameters=:reward_probability, states=(), inputs=:choice, outputs=:reward
+    )
+end</code></pre><p>Three participants, each with a learning rate of their own, are simulated for 40 timesteps, which gives a table with a row for each timestep:</p><pre><code class="language-julia hljs">simulated_learning_rates = [0.2, 0.5, 0.8]
+simulations = map(enumerate(simulated_learning_rates)) do (participant, learning_rate)
+    return simulate_session(
+        RescorlaWagner(),
+        BernoulliRewards();
+        who_starts=EnvironmentStarts(),
+        n_steps=40,
+        cognitive_parameters=(; learning_rate, inverse_temperature=5.0),
+        environment_parameters=(; reward_probability=0.7),
+        save_cognitive_trajectories=SaveTrajectories(;
+            inputs=:reward, outputs=:choice, save_initial_timestep_values=false
+        ),
+        rng=Xoshiro(participant),
+    )
+end
+table = (;
+    participant=repeat([&quot;P1&quot;, &quot;P2&quot;, &quot;P3&quot;]; inner=40),
+    reward=[
+        float(observation.reward) for s in simulations for observation in s.observations
+    ],
+    choice=[action.choice for s in simulations for action in s.actions],
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(participant = [&quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;  …  &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;], reward = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  …  1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0], choice = Bool[1, 1, 1, 0, 1, 1, 1, 1, 1, 1  …  1, 0, 1, 1, 1, 1, 1, 0, 0, 1])</code></pre><p>The full model fits a learning rate and an inverse temperature to each participant. The rewards are observations in the data, so the sessions need no environment:</p><pre><code class="language-julia hljs">sessions_info = MultipleSessionsInfo(
+    RescorlaWagner(),
+    table;
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:participant,
+    who_starts=EnvironmentStarts(),
+)
+model = full_model(
+    TuringBackend(),
+    sessions_info,
+    IndependentParameters((;
+        learning_rate=Beta(2, 2), inverse_temperature=LogNormal(1, 0.5)
+    )),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">DynamicPPL.Model{typeof(CognitiveModeling.turing_full_model), (:sessions_info, :cognitive_parameters_model), (:environment_parameters_model, :downstream_model, :parallelization, :include_submodel_prefixes), (), Tuple{MultipleSessionsInfo{Vector{SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}}, Vector{String}, @NamedTuple{participant::Vector{String}, reward::Vector{Float64}, choice::Vector{Bool}}, @NamedTuple{observation_columns::Symbol, action_columns::Symbol, session_columns::Symbol, timestep_sizes::Int64, missing_observation_values::Tuple{Missing}, missing_action_values::Tuple{Missing}, impute_missing_observations::Bool, impute_missing_actions::Bool}}, IndependentParameters{@NamedTuple{learning_rate::Distributions.Beta{Float64}, inverse_temperature::Distributions.LogNormal{Float64}}}}, Tuple{NoParameters, NoDownstreamModel, SerialSessions, Bool}, DynamicPPL.DefaultContext, false}(CognitiveModeling.turing_full_model, (sessions_info = MultipleSessionsInfo{Vector{SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}}, Vector{String}, @NamedTuple{participant::Vector{String}, reward::Vector{Float64}, choice::Vector{Bool}}, @NamedTuple{observation_columns::Symbol, action_columns::Symbol, session_columns::Symbol, timestep_sizes::Int64, missing_observation_values::Tuple{Missing}, missing_action_values::Tuple{Missing}, impute_missing_observations::Bool, impute_missing_actions::Bool}}(SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}[SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}(RescorlaWagner (cognitive model), NoEnvironment(), nothing, nothing, nothing, false, (reward = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  …  0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],), (choice = Bool[1, 1, 1, 0, 1, 1, 1, 1, 1, 1  …  0, 1, 0, 1, 0, 0, 1, 0, 0, 0],), (reward = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  …  0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],), (choice = Bool[1, 1, 1, 0, 1, 1, 1, 1, 1, 1  …  0, 1, 0, 1, 0, 0, 1, 0, 0, 0],), (reward = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  …  0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],), 40, EnvironmentStarts(), 1, Int64[], SaveTrajectories{(), (), (), (), true}(), SaveTrajectories{(), (), (), (), true}(), 40, 40, true, (reward = BeforeFirstTimestep(),), (choice = BeforeFirstTimestep(),), (reward = BeforeFirstTimestep(),)), SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}(RescorlaWagner (cognitive model), NoEnvironment(), nothing, nothing, nothing, false, (reward = [1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0  …  1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0],), (choice = Bool[1, 0, 0, 1, 0, 0, 0, 1, 1, 1  …  1, 1, 1, 0, 1, 0, 1, 1, 1, 1],), (reward = [1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0  …  1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0],), (choice = Bool[1, 0, 0, 1, 0, 0, 0, 1, 1, 1  …  1, 1, 1, 0, 1, 0, 1, 1, 1, 1],), (reward = [1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0  …  1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0],), 40, EnvironmentStarts(), 1, Int64[], SaveTrajectories{(), (), (), (), true}(), SaveTrajectories{(), (), (), (), true}(), 40, 40, true, (reward = BeforeFirstTimestep(),), (choice = BeforeFirstTimestep(),), (reward = BeforeFirstTimestep(),)), SessionInfo{Main.RescorlaWagner, NoEnvironment, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{choice::Vector{Bool}}, @NamedTuple{reward::Vector{Float64}}, EnvironmentStarts, Int64, Vector{Int64}, SaveTrajectories{(), (), (), (), true}, SaveTrajectories{(), (), (), (), true}, @NamedTuple{reward::BeforeFirstTimestep}, @NamedTuple{choice::BeforeFirstTimestep}, Nothing, Nothing, @NamedTuple{reward::Vector{Float64}}, @NamedTuple{reward::BeforeFirstTimestep}, Nothing}(RescorlaWagner (cognitive model), NoEnvironment(), nothing, nothing, nothing, false, (reward = [1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0  …  1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0],), (choice = Bool[0, 1, 1, 0, 0, 0, 1, 0, 1, 1  …  1, 0, 1, 1, 1, 1, 1, 0, 0, 1],), (reward = [1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0  …  1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0],), (choice = Bool[0, 1, 1, 0, 0, 0, 1, 0, 1, 1  …  1, 0, 1, 1, 1, 1, 1, 0, 0, 1],), (reward = [1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0  …  1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0],), 40, EnvironmentStarts(), 1, Int64[], SaveTrajectories{(), (), (), (), true}(), SaveTrajectories{(), (), (), (), true}(), 40, 40, true, (reward = BeforeFirstTimestep(),), (choice = BeforeFirstTimestep(),), (reward = BeforeFirstTimestep(),))], [&quot;P1&quot;, &quot;P2&quot;, &quot;P3&quot;], (participant = [&quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;, &quot;P1&quot;  …  &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;, &quot;P3&quot;], reward = [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0  …  1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0], choice = Bool[1, 1, 1, 0, 1, 1, 1, 1, 1, 1  …  1, 0, 1, 1, 1, 1, 1, 0, 0, 1]), [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  31, 32, 33, 34, 35, 36, 37, 38, 39, 40], [41, 42, 43, 44, 45, 46, 47, 48, 49, 50  …  71, 72, 73, 74, 75, 76, 77, 78, 79, 80], [81, 82, 83, 84, 85, 86, 87, 88, 89, 90  …  111, 112, 113, 114, 115, 116, 117, 118, 119, 120]], (observation_columns = :reward, action_columns = :choice, session_columns = :participant, timestep_sizes = 1, missing_observation_values = (missing,), missing_action_values = (missing,), impute_missing_observations = true, impute_missing_actions = true)), cognitive_parameters_model = IndependentParameters{@NamedTuple{learning_rate::Distributions.Beta{Float64}, inverse_temperature::Distributions.LogNormal{Float64}}}((learning_rate = Beta(2.0, 2.0), inverse_temperature = LogNormal(1.0, 0.5)))), (environment_parameters_model = NoParameters(), downstream_model = NoDownstreamModel(), parallelization = SerialSessions(), include_submodel_prefixes = false), DynamicPPL.DefaultContext())</code></pre><h2 id="Prior-predictive-checks"><a class="docs-heading-anchor" href="#Prior-predictive-checks">Prior predictive checks</a><a id="Prior-predictive-checks-1"></a><a class="docs-heading-anchor-permalink" href="#Prior-predictive-checks" title="Permalink"></a></h2><p>The sessions of <a href="../../api/fitting/#CognitiveModeling.decondition_sessions-Tuple{SessionInfo}"><code>decondition_sessions</code></a> have <a href="../../api/fitting/#CognitiveModeling.SimulatedMissingValue"><code>SimulatedMissingValue</code></a> in place of every choice, so that the model simulates each choice as a variable. They have the rewards of the data, since they have no environment that could simulate the rewards:</p><pre><code class="language-julia hljs">decondition_sessions(sessions_info).sessions[1].actions.choice[1:3]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SimulatedMissingValue}:
+ SimulatedMissingValue()
+ SimulatedMissingValue()
+ SimulatedMissingValue()</code></pre><p>Given the full model, it returns a copy whose sessions are deconditioned. Turing.jl&#39;s <code>sample</code> with <code>Prior()</code> then simulates a data set for each draw of the parameters from their priors. The chain has the parameters and the simulated choices, as variables named such as <code>simulated_sessions[1].timesteps[3].choice.simulated</code>, since the deconditioned sessions are named apart from the fitted ones, <code>sessions[1]</code> and the others:</p><pre><code class="language-julia hljs">deconditioned_model = decondition_sessions(model)
+prior_predictions = sample(Xoshiro(1), deconditioned_model, Prior(), 200; progress=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (200 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 1:200</span>                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (122)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                      <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  learning_rate.sessions <span class="sgr37">(3,)</span>                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   inverse_temperature.sessions <span class="sgr37">(3,)</span>                          <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool           </span>  simulated_sessions[1].timesteps[1].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[2].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[3].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[4].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[5].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[6].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[7].choice.simulated        <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[1].timesteps[8].choice.simulated, …     <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[34].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[35].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[36].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[37].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[38].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[39].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   simulated_sessions[3].timesteps[40].choice.simulated       <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (3)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  logprior, loglikelihood, logjoint                                  <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>The share of the timesteps on which each participant chose the option, in the data and in each simulated data set:</p><pre><code class="language-julia hljs">participants = (:P1, :P2, :P3)
+share_in_data = [mean(table.choice[(40 * (i - 1) + 1):(40 * i)]) for i in 1:3]
+prior_shares = [
+    vec(
+        mean(
+            prior_predictions[@varname(
+                simulated_sessions[i].timesteps[t].choice.simulated
+            )] for t in 1:40
+        ),
+    ) for i in 1:3
+]
+[
+    (; participant, data=share_in_data[i], simulated=extrema(prior_shares[i])) for
+    (i, participant) in enumerate(participants)
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{@NamedTuple{participant::Symbol, data::Float64, simulated::Tuple{Float64, Float64}}}:
+ (participant = :P1, data = 0.675, simulated = (0.45, 0.875))
+ (participant = :P2, data = 0.725, simulated = (0.425, 0.9))
+ (participant = :P3, data = 0.575, simulated = (0.325, 0.75))</code></pre><p><a href="../../api/fitting/#CognitiveModeling.predict_session_trajectories"><code>predict_session_trajectories</code></a> does the same from a chain of the parameters&#39; priors, and returns the trajectories that the sessions save, named after the participants, as <a href="../../api/fitting/#CognitiveModeling.get_session_trajectories"><code>get_session_trajectories</code></a> names them, here the choices:</p><pre><code class="language-julia hljs">prior_chain = sample(Xoshiro(2), model, Prior(), 200; progress=false)
+prior_trajectories = predict_session_trajectories(
+    Xoshiro(3),
+    model,
+    prior_chain;
+    save_cognitive_trajectories=SaveTrajectories(;
+        outputs=:choice, save_initial_timestep_values=false
+    ),
+)
+[
+    extrema(mean.(prior_trajectories[@varname($participant.choice)])) for
+    participant in participants
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Tuple{Float64, Float64}}:
+ (0.4, 0.85)
+ (0.325, 0.875)
+ (0.325, 0.775)</code></pre><h2 id="Posterior-predictive-checks"><a class="docs-heading-anchor" href="#Posterior-predictive-checks">Posterior predictive checks</a><a id="Posterior-predictive-checks-1"></a><a class="docs-heading-anchor-permalink" href="#Posterior-predictive-checks" title="Permalink"></a></h2><p>A posterior predictive check simulates the data with the parameters of each sample of a fit. Turing.jl&#39;s <code>predict</code> does it with the deconditioned model, and <a href="../../api/fitting/#CognitiveModeling.predict_session_trajectories"><code>predict_session_trajectories</code></a> with the model itself:</p><pre><code class="language-julia hljs">chain = sample(Xoshiro(4), model, NUTS(), 300; progress=false)
+posterior_predictions = predict(Xoshiro(5), deconditioned_model, chain)
+posterior_trajectories = predict_session_trajectories(
+    Xoshiro(6),
+    model,
+    chain;
+    save_cognitive_trajectories=SaveTrajectories(;
+        outputs=:choice, save_initial_timestep_values=false
+    ),
+)
+[
+    (;
+        participant,
+        data=share_in_data[i],
+        with_predict=mean(
+            mean(
+                posterior_predictions[@varname(
+                    simulated_sessions[i].timesteps[t].choice.simulated
+                )],
+            ) for t in 1:40
+        ),
+        with_predict_session_trajectories=mean(
+            mean.(posterior_trajectories[@varname($participant.choice)])
+        ),
+    ) for (i, participant) in enumerate(participants)
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{@NamedTuple{participant::Symbol, data::Float64, with_predict::Float64, with_predict_session_trajectories::Float64}}:
+ (participant = :P1, data = 0.675, with_predict = 0.6595833333333334, with_predict_session_trajectories = 0.66925)
+ (participant = :P2, data = 0.725, with_predict = 0.7137499999999999, with_predict_session_trajectories = 0.7130833333333333)
+ (participant = :P3, data = 0.575, with_predict = 0.5861666666666665, with_predict_session_trajectories = 0.5929166666666664)</code></pre><h2 id="Parameter-recovery"><a class="docs-heading-anchor" href="#Parameter-recovery">Parameter recovery</a><a id="Parameter-recovery-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-recovery" title="Permalink"></a></h2><p>A draw from the prior of the deconditioned model has parameters, and choices simulated with them. <code>DynamicPPL.subset</code> keeps the variables within the sessions, the simulated choices, and leaves out the parameters, which the fit is to find:</p><pre><code class="language-julia hljs">simulated = rand(Xoshiro(7), deconditioned_model)
+simulated_choices = DynamicPPL.subset(simulated, [@varname(simulated_sessions)])
+simulated_parameters = DynamicPPL.subset(
+    simulated, [@varname(learning_rate), @varname(inverse_temperature)]
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">VarNamedTuple
+├─ <span class="sgr36">learning_rate</span> =&gt; VarNamedTuple
+│                   └─ <span class="sgr31">sessions</span> =&gt; [0.7852291303977103, 0.4299395914226317, 0.285129727639455]
+└─ <span class="sgr36">inverse_temperature</span> =&gt; VarNamedTuple
+                          └─ <span class="sgr31">sessions</span> =&gt; [8.80883994241489, 1.2834142514054387, 1.2897602189277872]</code></pre><p>Turing.jl&#39;s <code>condition</code> conditions the deconditioned model on the simulated choices, as variables, and <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a> puts them in the data of its sessions, where they are scored as data from a table is. The two models give the same log joint at any parameters, here at those that simulated the choices:</p><pre><code class="language-julia hljs">turing_recovery_model = condition(deconditioned_model, simulated_choices)
+package_recovery_model = condition_sessions(deconditioned_model, simulated_choices)
+(
+    logjoint(turing_recovery_model, simulated_parameters),
+    logjoint(package_recovery_model, simulated_parameters),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(-69.81377989283365, -69.81377989283367)</code></pre><p>Either is then fitted as any model is. The learning rate that the fit finds for each participant, next to the one that simulated the choices:</p><pre><code class="language-julia hljs">recovered = sample(Xoshiro(8), package_recovery_model, NUTS(), 300; progress=false)
+recovered_parameters = get_session_parameters(package_recovery_model, recovered)
+[
+    (;
+        participant,
+        simulated=simulated[@varname(learning_rate.sessions)][i],
+        recovered=mean(recovered_parameters[@varname($participant.learning_rate)]),
+    ) for (i, participant) in enumerate(participants)
+]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{@NamedTuple{participant::Symbol, simulated::Float64, recovered::Float64}}:
+ (participant = :P1, simulated = 0.7852291303977103, recovered = 0.7501897657871723)
+ (participant = :P2, simulated = 0.4299395914226317, recovered = 0.6718813618420093)
+ (participant = :P3, simulated = 0.285129727639455, recovered = 0.3191906832670312)</code></pre><h2 id="Comparing-models"><a class="docs-heading-anchor" href="#Comparing-models">Comparing models</a><a id="Comparing-models-1"></a><a class="docs-heading-anchor-permalink" href="#Comparing-models" title="Permalink"></a></h2><p>How well a fitted model predicts data it wasn&#39;t fitted to can be estimated from the fit itself, with leave-one-out cross-validation by Pareto-smoothed importance sampling, PSIS-LOO. It needs the log-likelihood of each data point with the parameters of each sample. Turing.jl&#39;s <code>pointwise_loglikelihoods</code> gives them with <code>factorize = true</code>: each session scores its choices together, and <code>factorize</code> splits them into a value for each choice, in the order of the timesteps that have one:</p><pre><code class="language-julia hljs">pointwise = pointwise_loglikelihoods(model, chain; factorize=true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (300 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 151:450</span>                                                            <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (3)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">@NamedTuple{choice::Vector{Float64}}</span>  sessions[1].session_info.actions_to_condition_on <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                        sessions[2].session_info.actions_to_condition_on <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                        sessions[3].session_info.actions_to_condition_on <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (0)</span>                                                                   <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr90"> (none)</span>                                                                      <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>The <code>loo</code> of <a href="https://github.com/arviz-devs/PosteriorStats.jl">PosteriorStats.jl</a>, which smooths with PSIS.jl, and which ArviZ.jl includes, takes them in an array of samples by chains by data points:</p><pre><code class="language-julia hljs">function log_likelihood_array(pointwise, output)
+    session_names = collect(keys(pointwise))
+    n_samples, n_chains = size(pointwise[first(session_names)])
+    return stack(
+        [
+            getproperty(pointwise[session_name][sample_index, chain_index], output)[i] for
+            sample_index in 1:n_samples, chain_index in 1:n_chains
+        ] for session_name in session_names for
+        i in eachindex(getproperty(pointwise[session_name][1, 1], output))
+    )
+end
+log_likelihood = log_likelihood_array(pointwise, :choice)
+rescorla_wagner_loo = loo(log_likelihood)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">PSISLOOResult with estimates
+<span class="sgr1">   elpd  se_elpd    p  se_p </span>
+ -5e+01      5.4  3.1  0.48
+
+and PSISResult with 300 draws, 1 chains, and 120 parameters
+Pareto shape (k) diagnostic values:
+<span class="sgr1">                    Count         Min. ESS</span>
+ (-Inf, 0.5]  good  120 (100.0%)  149</code></pre><p>A model that doesn&#39;t learn, and chooses the option with the same probability on every timestep, is fitted to the same data, and the two are compared by their PSIS-LOO estimates:</p><pre><code class="language-julia hljs">struct FixedPreference &lt;: AbstractCognitiveModel end
+
+CognitiveModeling.initialize_state(model::FixedPreference, parameters) = (;)
+
+function CognitiveModeling.timestep_model(model::FixedPreference, context::ModelContext)
+    return ModelOutput((; choice=BernoulliLogit(context.parameters.preference)), (;))
+end
+
+function CognitiveModeling.attribute_names(model::FixedPreference)
+    return ModelAttributes(;
+        parameters=:preference, states=(), inputs=:reward, outputs=:choice
+    )
+end
+
+fixed_preference_model = full_model(
+    TuringBackend(),
+    MultipleSessionsInfo(
+        FixedPreference(),
+        table;
+        observation_columns=:reward,
+        action_columns=:choice,
+        session_columns=:participant,
+        who_starts=EnvironmentStarts(),
+    ),
+    IndependentParameters((; preference=Normal(0, 2))),
+)
+fixed_preference_chain = sample(
+    Xoshiro(9), fixed_preference_model, NUTS(), 300; progress=false
+)
+fixed_preference_loo = loo(
+    log_likelihood_array(
+        pointwise_loglikelihoods(
+            fixed_preference_model, fixed_preference_chain; factorize=true
+        ),
+        :choice,
+    ),
+)
+comparison = compare((;
+    rescorla_wagner=rescorla_wagner_loo, fixed_preference=fixed_preference_loo
+))</code></pre><table><thead><tr class = "title"><td colspan = "9" style = "font-size: x-large; font-weight: bold; text-align: center;">ModelComparisonResult with Stacking weights</td></tr><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: left;"></th><th style = "font-weight: bold; text-align: right;">rank</th><th style = "font-weight: bold; text-align: right;">elpd</th><th style = "font-weight: bold; text-align: right;">se_elpd</th><th style = "font-weight: bold; text-align: right;">elpd_diff</th><th style = "font-weight: bold; text-align: right;">se_elpd_diff</th><th style = "font-weight: bold; text-align: right;">weight</th><th style = "font-weight: bold; text-align: right;">p</th><th style = "font-weight: bold; text-align: right;">se_p</th></tr></thead><tbody><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: left;">rescorla_wagner</td><td style = "text-align: right;">1</td><td style = "text-align: right;">-5e+01</td><td style = "text-align: right;">5.4</td><td style = "text-align: right;">0</td><td style = "text-align: right;">0.0</td><td style = "text-align: right;">1.0</td><td style = "text-align: right;">3.1</td><td style = "text-align: right;">0.48</td></tr><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: left;">fixed_preference</td><td style = "text-align: right;">2</td><td style = "text-align: right;">-79</td><td style = "text-align: right;">3.8</td><td style = "text-align: right;">3e+01</td><td style = "text-align: right;">5.1</td><td style = "text-align: right;">0.0</td><td style = "text-align: right;">3.0</td><td style = "text-align: right;">0.20</td></tr></tbody></table><p>WAIC estimates the same as PSIS-LOO, with a larger error and without its diagnostics, so PosteriorStats.jl no longer computes it. From the same array, by hand:</p><pre><code class="language-julia hljs">function waic_estimate(log_likelihood)
+    draws = reshape(log_likelihood, :, size(log_likelihood, 3))
+    log_pointwise_predictive_density = sum(
+        logsumexp(draws[:, i]) - log(size(draws, 1)) for i in axes(draws, 2)
+    )
+    effective_number_of_parameters = sum(var(draws[:, i]) for i in axes(draws, 2))
+    return (;
+        elpd=log_pointwise_predictive_density - effective_number_of_parameters,
+        effective_number_of_parameters,
+    )
+end
+waic = waic_estimate(log_likelihood)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(elpd = -52.91116797396812, effective_number_of_parameters = 3.004744685690726)</code></pre><p>AIC and BIC need the maximum of the log-likelihood, which Turing.jl&#39;s <code>maximum_likelihood</code> finds, the number of parameters, which is the length of the vector it found the maximum at, and for BIC the number of data points:</p><pre><code class="language-julia hljs">maximum_likelihood_estimate = maximum_likelihood(Xoshiro(10), model)
+n_parameters = length(maximum_likelihood_estimate.optim_result.u)
+n_data_points = size(log_likelihood, 3)
+information_criteria = (;
+    aic=2 * n_parameters - 2 * maximum_likelihood_estimate.lp,
+    bic=n_parameters * log(n_data_points) - 2 * maximum_likelihood_estimate.lp,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(aic = 108.20793014474356, bic = 124.93288060143584)</code></pre><h2 id="Turing.jl&#39;s-functions-or-the-package&#39;s"><a class="docs-heading-anchor" href="#Turing.jl&#39;s-functions-or-the-package&#39;s">Turing.jl&#39;s functions or the package&#39;s</a><a id="Turing.jl&#39;s-functions-or-the-package&#39;s-1"></a><a class="docs-heading-anchor-permalink" href="#Turing.jl&#39;s-functions-or-the-package&#39;s" title="Permalink"></a></h2><table><tr><th style="text-align: left"></th><th style="text-align: left">Turing.jl&#39;s functions</th><th style="text-align: left">The package&#39;s functions</th></tr><tr><td style="text-align: left">Prior predictive check</td><td style="text-align: left"><code>sample(decondition_sessions(model), Prior(), n)</code></td><td style="text-align: left"><code>predict_session_trajectories(model, sample(model, Prior(), n))</code></td></tr><tr><td style="text-align: left">Posterior predictive check</td><td style="text-align: left"><code>predict(decondition_sessions(model), chain)</code></td><td style="text-align: left"><code>predict_session_trajectories(model, chain)</code></td></tr><tr><td style="text-align: left">Parameter recovery</td><td style="text-align: left"><code>condition(decondition_sessions(model), values)</code></td><td style="text-align: left"><code>condition_sessions(decondition_sessions(model), values)</code></td></tr></table><p>They give the same results in most cases:</p><ul><li>The predictive checks simulate every action and observation of the sessions again, also those that a fit imputed, and what a model samples of its own, at its start or within a timestep, with the same distributions, so only the random numbers differ.</li><li>The two models of a parameter recovery have the same log joint, and so the same posterior, when the sessions have no environment, or one whose parameters are fitted.</li></ul><p>They differ in what they return, and in a few cases:</p><ul><li>Turing.jl&#39;s functions return the simulated actions and observations as variables of a chain, and <a href="../../api/fitting/#CognitiveModeling.predict_session_trajectories"><code>predict_session_trajectories</code></a> returns what the sessions save, such as the states of the models, as <a href="../../api/fitting/#CognitiveModeling.get_session_trajectories"><code>get_session_trajectories</code></a> does.</li><li>A session with an environment whose parameters are fixed scores the conditioned observations against the environment&#39;s distributions with Turing.jl&#39;s <code>condition</code>, and leaves its environment out with <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a>, since nothing in it is simulated. The log joints then differ by the same amount at every value of the parameters, so the posteriors are the same.</li><li>Turing.jl&#39;s <code>condition</code> leaves out a value whose variable the model doesn&#39;t have, such as one with a misspelled name, while <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a> throws an error for it, and for a value of any variable that isn&#39;t an action or an observation of the sessions, such as a parameter.</li><li>With a <a href="../../api/defining_models/#CognitiveModeling.stopping_criterion"><code>CognitiveModeling.stopping_criterion</code></a>, a deconditioned session with an environment checks it before every timestep, also with Turing.jl&#39;s <code>condition</code>. Such a session then ends where the criterion is met at the parameters of each evaluation: before its last value, which leaves out the values after it with no error, or after it, with a variable for every action and observation that follows. <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a> ends each session after its last timestep with a value, and doesn&#39;t check the criterion, as a fit to a table of that data doesn&#39;t.</li></ul><p>How fast they are differs more. With 20 sessions of 100 timesteps, and the values given with a concrete type each, as <code>rand</code> and <code>DynamicPPL.subset</code> give them:</p><ul><li>Fitting: with Turing.jl&#39;s <code>condition</code>, each evaluation of the log density took about 4 times as long as with <a href="../../api/fitting/#CognitiveModeling.condition_sessions"><code>condition_sessions</code></a>, and each gradient about 1 to 10 times as long, depending on the automatic differentiation backend. With an environment, whose observations it conditioned on too, each evaluation took about 10 times as long, and each gradient about 1.5 to 20 times.</li><li>Simulating: <code>sample</code> with <code>Prior()</code> on the deconditioned model took about 50 times as long per draw as <a href="../../api/fitting/#CognitiveModeling.predict_session_trajectories"><code>predict_session_trajectories</code></a>, and its chain has a variable for every simulated choice. <code>predict</code> took about one and a half times as long as <a href="../../api/fitting/#CognitiveModeling.predict_session_trajectories"><code>predict_session_trajectories</code></a>. <a href="../../api/simulation/#CognitiveModeling.simulate_session-Tuple{CognitiveModeling.AbstractTimestepModel, CognitiveModeling.AbstractTimestepModel}"><code>simulate_session</code></a> took about a hundredth of that, with the parameters given for each session instead of read from a chain.</li></ul><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../custom_turing_models/">« Custom Turing.jl models</a><a class="docs-footer-nextpage" href="../discrete_parameters/">Discrete parameters »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Tuesday 24 November 2026 18:55">Tuesday 24 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

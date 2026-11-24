@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="referrer" content="no-referrer"/><title>Models with submodels · CognitiveModeling.jl</title><meta name="title" content="Models with submodels · CognitiveModeling.jl"/><meta property="og:title" content="Models with submodels · CognitiveModeling.jl"/><meta property="twitter:title" content="Models with submodels · CognitiveModeling.jl"/><meta name="description" content="Documentation for CognitiveModeling.jl."/><meta property="og:description" content="Documentation for CognitiveModeling.jl."/><meta property="twitter:description" content="Documentation for CognitiveModeling.jl."/><meta property="og:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/models_with_submodels/"/><meta property="twitter:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/models_with_submodels/"/><link rel="canonical" href="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/models_with_submodels/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">CognitiveModeling.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../custom_turing_models/">Custom Turing.jl models</a></li><li><a class="tocitem" href="../predictive_checks_and_parameter_recovery/">Predictive checks and parameter recovery</a></li><li><a class="tocitem" href="../discrete_parameters/">Discrete parameters</a></li><li class="is-active"><a class="tocitem" href>Models with submodels</a><ul class="internal"><li><a class="tocitem" href="#The-submodels"><span>The submodels</span></a></li><li><a class="tocitem" href="#The-model"><span>The model</span></a></li><li><a class="tocitem" href="#The-names-of-the-parameters"><span>The names of the parameters</span></a></li><li><a class="tocitem" href="#Simulating"><span>Simulating</span></a></li><li><a class="tocitem" href="#Fitting"><span>Fitting</span></a></li></ul></li><li><a class="tocitem" href="../cognitive_abm_with_agents/">Cognitive agent-based modeling with Agents.jl</a></li><li><a class="tocitem" href="../interfacing_with_common_rl/">Interfacing with CommonRLInterface.jl</a></li><li><a class="tocitem" href="../interfacing_with_reinforcement_learning/">Models from ReinforcementLearning.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_juliacontrol/">Models from control theory as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_actr_models/">Models from ACTRModels.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_sequential_sampling_models/">Models from SequentialSamplingModels.jl as cognitive models</a></li><li><a class="tocitem" href="../compiling_with_reactant/">Compiling simulations with Reactant.jl</a></li></ul></li><li><a class="tocitem" href="../../ad_and_reactant/">Automatic differentiation and Reactant</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/">Overview</a></li><li><a class="tocitem" href="../../api/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../api/simulation/">Simulation</a></li><li><a class="tocitem" href="../../api/saving_trajectories/">Saving trajectories</a></li><li><a class="tocitem" href="../../api/fitting/">Fitting</a></li><li><a class="tocitem" href="../../api/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../api/fitting_with_turing/">Fitting with Turing.jl</a></li></ul></li><li><span class="tocitem">Internals</span><ul><li><a class="tocitem" href="../../internals/">Overview</a></li><li><a class="tocitem" href="../../internals/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../internals/simulation/">Simulation</a></li><li><a class="tocitem" href="../../internals/saving_trajectories/">Saving trajectories</a></li><li><input class="collapse-toggle" id="menuitem-5-5" type="checkbox"/><label class="tocitem" for="menuitem-5-5"><span class="docs-label">Fitting</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../internals/fitting/">Sessions</a></li><li><a class="tocitem" href="../../internals/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../internals/preparing_models/">Preparing models</a></li><li><a class="tocitem" href="../../internals/within_models/">Within models</a></li><li><a class="tocitem" href="../../internals/workflow_and_postprocessing/">Workflow and postprocessing</a></li></ul></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Models with submodels</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Models with submodels</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/blob/dev/docs/literate/models_with_submodels.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Models-with-submodels"><a class="docs-heading-anchor" href="#Models-with-submodels">Models with submodels</a><a id="Models-with-submodels-1"></a><a class="docs-heading-anchor-permalink" href="#Models-with-submodels" title="Permalink"></a></h1><p>A cognitive model can be built from parts that are models themselves, such as a perception that learns and a response that chooses. This page shows how a model holds such submodels, how their parameters and their states are named, and how the model is simulated and fitted. An environment model holds submodels in the same way.</p><pre><code class="language-julia hljs">using CognitiveModeling
+using Distributions: BernoulliLogit, Beta, LogNormal
+using Random: Xoshiro
+using Statistics: mean
+using Turing</code></pre><h2 id="The-submodels"><a class="docs-heading-anchor" href="#The-submodels">The submodels</a><a id="The-submodels-1"></a><a class="docs-heading-anchor-permalink" href="#The-submodels" title="Permalink"></a></h2><p>A submodel is an <a href="../../api/defining_models/#CognitiveModeling.AbstractSubmodel"><code>AbstractSubmodel</code></a>. Like a cognitive model, it names its parameters and its states in <a href="../../api/defining_models/#CognitiveModeling.attribute_names"><code>CognitiveModeling.attribute_names</code></a>, and it can have an initial state, default parameters and domains. It has no inputs or outputs of its own, and no timestep: the model that holds it decides when it is used, and with what.</p><p>This perception learns the expected reward of an option, and keeps its last prediction error. Its initial value has a default, and its learning rate has a domain:</p><pre><code class="language-julia hljs">struct Perception &lt;: AbstractSubmodel end
+
+function CognitiveModeling.attribute_names(perception::Perception)
+    return ModelAttributes(;
+        parameters=(:learning_rate, :initial_value),
+        states=(:expected_reward, :prediction_error),
+        inputs=(),
+        outputs=(),
+    )
+end
+
+CognitiveModeling.default_parameters(perception::Perception) = (; initial_value=0.5)
+
+function CognitiveModeling.parameter_domains(perception::Perception)
+    return (; learning_rate=Domain(; lower=0, upper=1))
+end
+
+function CognitiveModeling.initialize_state(perception::Perception, parameters)
+    return (; expected_reward=parameters.initial_value, prediction_error=0.0)
+end</code></pre><p>What a submodel does is written as functions of one&#39;s own, with any names and arguments. This one gives the state of the perception after a reward:</p><pre><code class="language-julia hljs">function update_perception(perception::Perception, parameters, state, reward)
+    α = parameters.learning_rate
+    δ = reward - state.expected_reward
+    return (; expected_reward=state.expected_reward + α * δ, prediction_error=δ)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">update_perception (generic function with 1 method)</code></pre><p>The response chooses the option with a probability that grows with its expected reward. It has a parameter, and no state:</p><pre><code class="language-julia hljs">struct Response &lt;: AbstractSubmodel end
+
+function CognitiveModeling.attribute_names(response::Response)
+    return ModelAttributes(;
+        parameters=:inverse_temperature, states=(), inputs=(), outputs=()
+    )
+end
+
+function choice_distribution(response::Response, parameters, expected_reward)
+    return BernoulliLogit(parameters.inverse_temperature * (expected_reward - 0.5))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">choice_distribution (generic function with 1 method)</code></pre><h2 id="The-model"><a class="docs-heading-anchor" href="#The-model">The model</a><a id="The-model-1"></a><a class="docs-heading-anchor-permalink" href="#The-model" title="Permalink"></a></h2><p>The model holds the two in fields, and names those fields in <a href="../../api/defining_models/#CognitiveModeling.submodel_fields"><code>CognitiveModeling.submodel_fields</code></a>. Its own attributes are only what is its own: here the reward it receives, the choice it gives, and a count of its rewards as a state.</p><pre><code class="language-julia hljs">struct PerceivesAndResponds &lt;: AbstractCognitiveModel
+    perception::Perception
+    response::Response
+end
+
+CognitiveModeling.submodel_fields(model::PerceivesAndResponds) = (:perception, :response)
+
+function CognitiveModeling.attribute_names(model::PerceivesAndResponds)
+    return ModelAttributes(;
+        parameters=(), states=:n_rewards, inputs=:reward, outputs=:choice
+    )
+end</code></pre><p>The model reads the parameters of each submodel under the name of its field, as in <code>parameters.perception</code>, and keeps the state of each submodel that has one under that name too:</p><pre><code class="language-julia hljs">function CognitiveModeling.initialize_state(model::PerceivesAndResponds, parameters)
+    return (;
+        n_rewards=0,
+        perception=CognitiveModeling.initialize_state(
+            model.perception, parameters.perception
+        ),
+    )
+end
+
+function CognitiveModeling.timestep_model(
+    model::PerceivesAndResponds, context::ModelContext
+)
+    perception = update_perception(
+        model.perception,
+        context.parameters.perception,
+        context.previous_state.perception,
+        context.input.reward,
+    )
+    choice = choice_distribution(
+        model.response, context.parameters.response, perception.expected_reward
+    )
+    n_rewards = context.previous_state.n_rewards + (context.input.reward &gt; 0)
+    return ModelOutput((; choice), (; n_rewards, perception))
+end
+
+model = PerceivesAndResponds(Perception(), Response())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-- Cognitive model --
+Type: PerceivesAndResponds
+Fields: perception = Perception (submodel), response = Response (submodel)
+Submodels: perception (Perception), response (Response)
+Parameters: learning_rate, initial_value, inverse_temperature
+States: n_rewards, perception
+Inputs: reward
+Outputs: choice</code></pre><h2 id="The-names-of-the-parameters"><a class="docs-heading-anchor" href="#The-names-of-the-parameters">The names of the parameters</a><a id="The-names-of-the-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#The-names-of-the-parameters" title="Permalink"></a></h2><p>Everywhere outside the model, its parameters are flat: those of the model and of its submodels in one <code>NamedTuple</code>. <a href="../../api/defining_models/#CognitiveModeling.get_parameter_names"><code>CognitiveModeling.get_parameter_names</code></a> gives their names:</p><pre><code class="language-julia hljs">parameter_names = CognitiveModeling.get_parameter_names(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:learning_rate, :initial_value, :inverse_temperature)</code></pre><p>With <code>with_default_parameters = false</code>, it gives those without a default value, which a simulation or a fit must be given:</p><pre><code class="language-julia hljs">names_to_give = CognitiveModeling.get_parameter_names(model; with_default_parameters=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(:learning_rate, :inverse_temperature)</code></pre><p>The default values and the domains of the submodels are read with the model&#39;s in the same way, by <a href="../../api/defining_models/#CognitiveModeling.get_default_parameters"><code>CognitiveModeling.get_default_parameters</code></a> and <a href="../../api/defining_models/#CognitiveModeling.get_parameter_domains"><code>CognitiveModeling.get_parameter_domains</code></a>:</p><pre><code class="language-julia hljs">default_parameters = CognitiveModeling.get_default_parameters(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(initial_value = 0.5,)</code></pre><p>Two submodels with a parameter of the same name need prefixes. When <a href="../../api/defining_models/#CognitiveModeling.uses_submodel_prefixes"><code>CognitiveModeling.uses_submodel_prefixes</code></a> returns <code>true</code> for a model, the flat names of its submodels&#39; parameters start with the name of the submodel, as in <code>perception__learning_rate</code>.</p><p><a href="../../api/defining_models/#CognitiveModeling.bundle_parameters"><code>CognitiveModeling.bundle_parameters</code></a> gives flat parameters as the model itself reads them, which is useful for calling its functions by hand:</p><pre><code class="language-julia hljs">bundled_parameters = CognitiveModeling.bundle_parameters(
+    model, (; learning_rate=0.3, initial_value=0.5, inverse_temperature=3.0)
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(perception = (learning_rate = 0.3, initial_value = 0.5), response = (inverse_temperature = 3.0,))</code></pre><h2 id="Simulating"><a class="docs-heading-anchor" href="#Simulating">Simulating</a><a id="Simulating-1"></a><a class="docs-heading-anchor-permalink" href="#Simulating" title="Permalink"></a></h2><p>A simulation takes the flat parameters. Two participants with different learning rates each see 80 rewards, which come with a probability of 0.8:</p><pre><code class="language-julia hljs">learning_rates = [0.1, 0.6]
+simulations = map(1:2) do participant
+    rewards = Float64.(rand(Xoshiro(participant), 80) .&lt; 0.8)
+    return simulate_session(
+        model,
+        FixedObservationsEnvironment((; reward=rewards));
+        who_starts=EnvironmentStarts(),
+        n_steps=80,
+        cognitive_parameters=(;
+            learning_rate=learning_rates[participant], inverse_temperature=3.0
+        ),
+        environment_parameters=(;),
+        action_map=NameMap(),
+        save_cognitive_trajectories=SaveTrajectories(;
+            states=(:n_rewards, :perception =&gt; :expected_reward),
+            inputs=:reward,
+            outputs=:choice,
+            save_initial_timestep_values=false,
+        ),
+        rng=Xoshiro(participant),
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{SessionTrajectories{Vector{@NamedTuple{n_rewards::Int64, perception::@NamedTuple{expected_reward::Float64}}}, Vector{@NamedTuple{reward::Float64}}, Vector{@NamedTuple{choice::Bool}}, Vector{@NamedTuple{}}, @NamedTuple{states::Vector{@NamedTuple{}}, observations::Vector{@NamedTuple{}}, actions::Vector{@NamedTuple{}}, observation_distributions::Vector{@NamedTuple{}}}, Int64, Bool, Int64, Nothing, @NamedTuple{cognitive_model::@NamedTuple{perception::@NamedTuple{}}, environment::@NamedTuple{}}}}:
+ SessionTrajectories (80 timesteps)
+ SessionTrajectories (80 timesteps)</code></pre><p>The state of a submodel is saved under the name of the submodel. The name alone selects all of it, and here the <a href="../../api/saving_trajectories/#CognitiveModeling.SaveTrajectories"><code>SaveTrajectories</code></a> selects one of its two states with <code>:perception =&gt; :expected_reward</code>, so the prediction errors aren&#39;t saved:</p><pre><code class="language-julia hljs">last_saved_state = simulations[1].states[end]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(n_rewards = 63, perception = (expected_reward = 0.9305544428250853,))</code></pre><h2 id="Fitting"><a class="docs-heading-anchor" href="#Fitting">Fitting</a><a id="Fitting-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting" title="Permalink"></a></h2><p>The priors of a fit are given under the flat names too:</p><pre><code class="language-julia hljs">table = (;
+    participant=repeat([&quot;P1&quot;, &quot;P2&quot;]; inner=80),
+    reward=[observation.reward for s in simulations for observation in s.observations],
+    choice=[action.choice for s in simulations for action in s.actions],
+)
+sessions_info = MultipleSessionsInfo(
+    model,
+    table;
+    observation_columns=:reward,
+    action_columns=:choice,
+    session_columns=:participant,
+    who_starts=EnvironmentStarts(),
+)
+priors = (; learning_rate=Beta(2, 2), inverse_temperature=LogNormal(0, 0.5))
+fitted_model = full_model(TuringBackend(), sessions_info, IndependentParameters(priors))
+chain = sample(Xoshiro(3), fitted_model, NUTS(), 300; progress=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr90">╭─</span><span class="sgr1">FlexiChain (300 iterations, 1 chain)</span><span class="sgr90"> ────────────────────────────────────────╮</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#ff875f">↓ iter  = 151:450</span>                                                            <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr38_5" style="color:#0087d7">→ chain = 1:1</span>                                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Parameters (2)</span><span class="sgr90"> ── AbstractPPL.VarName</span>                                        <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Vector{Float64}</span>  learning_rate.sessions <span class="sgr37">(2,)</span>                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>                   inverse_temperature.sessions <span class="sgr37">(2,)</span>                          <span class="sgr90">│</span>
+<span class="sgr90">│</span>                                                                              <span class="sgr90">│</span>
+<span class="sgr90">│</span> <span class="sgr1">Extras (14)</span>                                                                  <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Int64  </span>  n_steps, tree_depth                                                <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Bool   </span>  is_accept, numerical_error                                         <span class="sgr90">│</span>
+<span class="sgr90">│</span>  <span class="sgr32">Float64</span>  acceptance_rate, log_density, hamiltonian_energy                   <span class="sgr90">│</span>
+<span class="sgr90">│</span>           hamiltonian_energy_error, max_hamiltonian_energy_error, step_size  <span class="sgr90">│</span>
+<span class="sgr90">│</span>           nom_step_size, logprior, loglikelihood, logjoint                   <span class="sgr90">│</span>
+<span class="sgr90">╰──────────────────────────────────────────────────────────────────────────────╯</span></code></pre><p>The trajectories of the fit have an entry for each state of a submodel that is saved, named after the session, the submodel and the state, beside whether the parameters of each session stayed valid:</p><pre><code class="language-julia hljs">fitted_trajectories = get_session_trajectories(
+    fitted_model,
+    chain;
+    save_cognitive_trajectories=SaveTrajectories(; states=:perception =&gt; :expected_reward),
+)
+trajectory_names = string.(Turing.FlexiChains.get_name.(keys(fitted_trajectories)))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{String}:
+ &quot;P1.perception.expected_reward&quot;
+ &quot;P1.parameters_valid&quot;
+ &quot;P2.perception.expected_reward&quot;
+ &quot;P2.parameters_valid&quot;</code></pre><p>The expected reward of the first participant after the last timestep, averaged over the samples:</p><pre><code class="language-julia hljs">final_expected_reward = mean(
+    last, fitted_trajectories[@varname(P1.perception.expected_reward)]
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.982137389102889</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../discrete_parameters/">« Discrete parameters</a><a class="docs-footer-nextpage" href="../cognitive_abm_with_agents/">Cognitive agent-based modeling with Agents.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Tuesday 24 November 2026 18:55">Tuesday 24 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

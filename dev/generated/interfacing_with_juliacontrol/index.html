@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="referrer" content="no-referrer"/><title>Models from control theory as cognitive models · CognitiveModeling.jl</title><meta name="title" content="Models from control theory as cognitive models · CognitiveModeling.jl"/><meta property="og:title" content="Models from control theory as cognitive models · CognitiveModeling.jl"/><meta property="twitter:title" content="Models from control theory as cognitive models · CognitiveModeling.jl"/><meta name="description" content="Documentation for CognitiveModeling.jl."/><meta property="og:description" content="Documentation for CognitiveModeling.jl."/><meta property="twitter:description" content="Documentation for CognitiveModeling.jl."/><meta property="og:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_juliacontrol/"/><meta property="twitter:url" content="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_juliacontrol/"/><link rel="canonical" href="https://ComputationalPsychiatry.github.io/CognitiveModeling.jl/generated/interfacing_with_juliacontrol/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">CognitiveModeling.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../custom_turing_models/">Custom Turing.jl models</a></li><li><a class="tocitem" href="../predictive_checks_and_parameter_recovery/">Predictive checks and parameter recovery</a></li><li><a class="tocitem" href="../discrete_parameters/">Discrete parameters</a></li><li><a class="tocitem" href="../models_with_submodels/">Models with submodels</a></li><li><a class="tocitem" href="../cognitive_abm_with_agents/">Cognitive agent-based modeling with Agents.jl</a></li><li><a class="tocitem" href="../interfacing_with_common_rl/">Interfacing with CommonRLInterface.jl</a></li><li><a class="tocitem" href="../interfacing_with_reinforcement_learning/">Models from ReinforcementLearning.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_pomdps/">Models from POMDPs.jl as cognitive models</a></li><li class="is-active"><a class="tocitem" href>Models from control theory as cognitive models</a><ul class="internal"><li><a class="tocitem" href="#The-plant-as-the-environment"><span>The plant as the environment</span></a></li><li><a class="tocitem" href="#A-PID-controller-as-the-agent"><span>A PID controller as the agent</span></a></li><li><a class="tocitem" href="#Simulating"><span>Simulating</span></a></li><li><a class="tocitem" href="#Fitting"><span>Fitting</span></a></li><li><a class="tocitem" href="#A-Kalman-filter-as-perception"><span>A Kalman filter as perception</span></a></li><li><a class="tocitem" href="#Model-predictive-control"><span>Model predictive control</span></a></li></ul></li><li><a class="tocitem" href="../interfacing_with_actr_models/">Models from ACTRModels.jl as cognitive models</a></li><li><a class="tocitem" href="../interfacing_with_sequential_sampling_models/">Models from SequentialSamplingModels.jl as cognitive models</a></li><li><a class="tocitem" href="../compiling_with_reactant/">Compiling simulations with Reactant.jl</a></li></ul></li><li><a class="tocitem" href="../../ad_and_reactant/">Automatic differentiation and Reactant</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../api/">Overview</a></li><li><a class="tocitem" href="../../api/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../api/simulation/">Simulation</a></li><li><a class="tocitem" href="../../api/saving_trajectories/">Saving trajectories</a></li><li><a class="tocitem" href="../../api/fitting/">Fitting</a></li><li><a class="tocitem" href="../../api/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../api/fitting_with_turing/">Fitting with Turing.jl</a></li></ul></li><li><span class="tocitem">Internals</span><ul><li><a class="tocitem" href="../../internals/">Overview</a></li><li><a class="tocitem" href="../../internals/defining_models/">Defining models</a></li><li><a class="tocitem" href="../../internals/simulation/">Simulation</a></li><li><a class="tocitem" href="../../internals/saving_trajectories/">Saving trajectories</a></li><li><input class="collapse-toggle" id="menuitem-5-5" type="checkbox"/><label class="tocitem" for="menuitem-5-5"><span class="docs-label">Fitting</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../internals/fitting/">Sessions</a></li><li><a class="tocitem" href="../../internals/parameter_models/">Parameter models</a></li><li><a class="tocitem" href="../../internals/preparing_models/">Preparing models</a></li><li><a class="tocitem" href="../../internals/within_models/">Within models</a></li><li><a class="tocitem" href="../../internals/workflow_and_postprocessing/">Workflow and postprocessing</a></li></ul></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Models from control theory as cognitive models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Models from control theory as cognitive models</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ComputationalPsychiatry/CognitiveModeling.jl/blob/dev/docs/literate/interfacing_with_juliacontrol.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Models-from-control-theory-as-cognitive-models"><a class="docs-heading-anchor" href="#Models-from-control-theory-as-cognitive-models">Models from control theory as cognitive models</a><a id="Models-from-control-theory-as-cognitive-models-1"></a><a class="docs-heading-anchor-permalink" href="#Models-from-control-theory-as-cognitive-models" title="Permalink"></a></h1><p>Control theory describes how a system is steered towards a goal from what is observed of it, which also makes it a model of behavior, such as of tracking a moving target with a hand. The packages of the JuliaControl organization give the parts: DiscretePIDs.jl a PID controller, LowLevelParticleFilters.jl Kalman filters and particle filters, which can model perception, and ControlSystemsBase.jl linear systems, which can model what is controlled.</p><p>This page shows a PID controller as a cognitive model, which controls a simulated plant as its environment, and fits its gains with Turing.jl. It then shows a Kalman filter as the perception of a cognitive model, and ends with how a model with a controller of ModelPredictiveControl.jl is fitted. Its code isn&#39;t run when the documentation is built, to keep the documentation&#39;s environment small. The package&#39;s tests run it instead, with DiscretePIDs.jl 1.0, ControlSystemsBase.jl 1.25 and LowLevelParticleFilters.jl 3.38.</p><pre><code class="language-julia hljs">using CognitiveModeling
+using ControlSystemsBase: ss, c2d
+using DiscretePIDs: DiscretePID
+using Distributions: Normal, LogNormal
+using LowLevelParticleFilters: KalmanFilter, SimpleMvNormal, correct!, predict!
+using Random: Xoshiro
+using Turing</code></pre><h2 id="The-plant-as-the-environment"><a class="docs-heading-anchor" href="#The-plant-as-the-environment">The plant as the environment</a><a id="The-plant-as-the-environment-1"></a><a class="docs-heading-anchor-permalink" href="#The-plant-as-the-environment" title="Permalink"></a></h2><p>The environment is what the agent controls: a first-order lag from a force to a position, made with ControlSystemsBase.jl as a system in continuous time and discretized with the size of a timestep. Its state is the plant&#39;s state and the number of the timestep. On each timestep it applies the agent&#39;s force, and gives the target, which moves along two sines, and the position, observed with noise.</p><pre><code class="language-julia hljs">struct FirstOrderPlant{Tsystem} &lt;: AbstractEnvironmentModel
+    system::Tsystem
+end
+
+function FirstOrderPlant(; time_constant=0.5, timestep_size=0.1)
+    return FirstOrderPlant(
+        c2d(ss(-1 / time_constant, 1 / time_constant, 1, 0), timestep_size)
+    )
+end
+
+function target_at(timestep, timestep_size)
+    return sin(0.5 * timestep * timestep_size) + 0.5 * sin(1.3 * timestep * timestep_size)
+end
+
+function CognitiveModeling.initialize_state(environment::FirstOrderPlant, parameters)
+    return (; plant_state=zeros(environment.system.nx), timestep=0)
+end</code></pre><p>On the first timestep the agent hasn&#39;t acted yet, which <a href="../../api/defining_models/#CognitiveModeling.AbstractNoValue"><code>AbstractNoValue</code></a> covers, and no force is applied.</p><pre><code class="language-julia hljs">function CognitiveModeling.timestep_model(
+    environment::FirstOrderPlant, context::ModelContext
+)
+
+    # Unpack the context ##
+    (; plant_state, timestep) = context.previous_state
+    force = context.input.force isa AbstractNoValue ? 0.0 : context.input.force
+    (; A, B, C) = environment.system
+
+    # Update state ##
+    #The plant&#39;s state after the force has acted for one timestep
+    xₜ = A * plant_state + B * [force]
+
+    # Compute observations ##
+    #The position, observed with noise, and the target of the next timestep
+    position = only(C * xₜ)
+    target = target_at(timestep + 1, environment.system.Ts)
+
+    return ModelOutput(
+        (;
+            target=Deterministic(target),
+            position=Normal(position, context.parameters.observation_noise),
+        ),
+        (; plant_state=xₜ, timestep=timestep + 1),
+    )
+end
+
+function CognitiveModeling.attribute_names(environment::FirstOrderPlant)
+    return ModelAttributes(;
+        parameters=:observation_noise,
+        states=(:plant_state, :timestep),
+        inputs=:force,
+        outputs=(:target, :position),
+    )
+end</code></pre><h2 id="A-PID-controller-as-the-agent"><a class="docs-heading-anchor" href="#A-PID-controller-as-the-agent">A PID controller as the agent</a><a id="A-PID-controller-as-the-agent-1"></a><a class="docs-heading-anchor-permalink" href="#A-PID-controller-as-the-agent" title="Permalink"></a></h2><p>The agent sees the target and the position, and pushes with the force its PID controller gives, with motor noise. The controller&#39;s gains are the agent&#39;s parameters: the proportional gain <code>K</code>, the integral time <code>Ti</code> and the derivative time <code>Td</code>. Its state is the controller of DiscretePIDs.jl, made from the parameters when the state is initialized, so that its numbers are of the type the parameters have when a model is fitted.</p><pre><code class="language-julia hljs">struct PIDController &lt;: AbstractCognitiveModel
+    timestep_size::Float64
+end</code></pre><p>The limits of the force are given, since the controller&#39;s default limits need a number type that ReverseDiff.jl&#39;s tracked numbers don&#39;t have.</p><pre><code class="language-julia hljs">function CognitiveModeling.initialize_state(model::PIDController, parameters)
+    (; K, Ti, Td) = parameters
+    return (; pid=DiscretePID(; K, Ti, Td, Ts=model.timestep_size, umin=(-Inf), umax=Inf))
+end
+
+function CognitiveModeling.timestep_model(model::PIDController, context::ModelContext)
+
+    # Unpack the context ##
+    pid = context.previous_state.pid
+    σ = context.parameters.motor_noise
+
+    # Update state and compute the action ##
+    #The controller&#39;s force for the target and the position, which updates the integral and the derivative it keeps
+    uₜ = pid(context.input.target, context.input.position)
+
+    return ModelOutput((; force=Normal(uₜ, σ)), (; pid))
+end
+
+function CognitiveModeling.attribute_names(model::PIDController)
+    return ModelAttributes(;
+        parameters=(:K, :Ti, :Td, :motor_noise),
+        states=:pid,
+        inputs=(:target, :position),
+        outputs=:force,
+    )
+end</code></pre><p>The controller is changed in place on each timestep, so each state that is saved must be a copy.</p><pre><code class="language-julia hljs">function CognitiveModeling.prepare_state_for_saving(model::PIDController, state)
+    return (; pid=deepcopy(state.pid))
+end</code></pre><p>The controller could also be kept as its three numbers, its integral, its derivative and its previous error, and made again on each timestep from them and the parameters, with <code>DiscretePID(; K, Ti, Td, Ts, I, D, yold)</code>. Then nothing is changed in place, and nothing needs copying.</p><h2 id="Simulating"><a class="docs-heading-anchor" href="#Simulating">Simulating</a><a id="Simulating-1"></a><a class="docs-heading-anchor-permalink" href="#Simulating" title="Permalink"></a></h2><p>A session of the agent controlling the plant, with the observations and the actions saved:</p><pre><code class="language-julia hljs">timestep_size = 0.1
+simulation = simulate_session(
+    PIDController(timestep_size),
+    FirstOrderPlant(; timestep_size);
+    who_starts=EnvironmentStarts(),
+    n_steps=150,
+    cognitive_parameters=(; K=2.0, Ti=1.0, Td=0.1, motor_noise=0.2),
+    environment_parameters=(; observation_noise=0.05),
+    save_cognitive_trajectories=SaveTrajectories(;
+        inputs=(:target, :position), outputs=:force, save_initial_timestep_values=false
+    ),
+    rng=Xoshiro(1),
+)</code></pre><h2 id="Fitting"><a class="docs-heading-anchor" href="#Fitting">Fitting</a><a id="Fitting-1"></a><a class="docs-heading-anchor-permalink" href="#Fitting" title="Permalink"></a></h2><p>Three sessions with different gains, simulated the same way, make a table with one row for each timestep:</p><pre><code class="language-julia hljs">true_parameters = [
+    (; K=2.0, Ti=1.0, Td=0.1, motor_noise=0.2),
+    (; K=1.0, Ti=0.5, Td=0.05, motor_noise=0.2),
+    (; K=1.5, Ti=2.0, Td=0.05, motor_noise=0.2),
+]
+simulations = map(enumerate(true_parameters)) do (session, parameters)
+    return simulate_session(
+        PIDController(timestep_size),
+        FirstOrderPlant(; timestep_size);
+        who_starts=EnvironmentStarts(),
+        n_steps=150,
+        cognitive_parameters=parameters,
+        environment_parameters=(; observation_noise=0.05),
+        save_cognitive_trajectories=SaveTrajectories(;
+            inputs=(:target, :position), outputs=:force, save_initial_timestep_values=false
+        ),
+        rng=Xoshiro(20 + session),
+    )
+end
+table = (;
+    id=repeat([&quot;S1&quot;, &quot;S2&quot;, &quot;S3&quot;]; inner=150),
+    target=[observation.target for s in simulations for observation in s.observations],
+    position=[observation.position for s in simulations for observation in s.observations],
+    force=[action.force for s in simulations for action in s.actions],
+)</code></pre><p>The gains of each session are fitted with a prior of their own, and NUTS samples them:</p><pre><code class="language-julia hljs">sessions_info = MultipleSessionsInfo(
+    PIDController(timestep_size),
+    table;
+    observation_columns=(:target, :position),
+    action_columns=:force,
+    session_columns=:id,
+    who_starts=EnvironmentStarts(),
+)
+model = full_model(
+    TuringBackend(),
+    sessions_info,
+    IndependentParameters((;
+        K=LogNormal(0, 1),
+        Ti=LogNormal(0, 1),
+        Td=LogNormal(-2, 1),
+        motor_noise=LogNormal(-1, 1),
+    )),
+)
+chain = sample(Xoshiro(11), model, NUTS(300, 0.65), 300; progress=false)</code></pre><p>The chain has the gains of each session under <code>K.sessions</code>, <code>Ti.sessions</code> and <code>Td.sessions</code>.</p><p>NUTS needs the gradient of the log density. ForwardDiff.jl, which is Turing.jl&#39;s default, ReverseDiff.jl and Mooncake.jl 0.5 gave the right gradient for this model, when checked against finite differences. Enzyme.jl 0.13 failed: with runtime activity it stopped Julia with an error from its type analysis, and without it, it threw an error for the controller that is changed in place.</p><h2 id="A-Kalman-filter-as-perception"><a class="docs-heading-anchor" href="#A-Kalman-filter-as-perception">A Kalman filter as perception</a><a id="A-Kalman-filter-as-perception-1"></a><a class="docs-heading-anchor-permalink" href="#A-Kalman-filter-as-perception" title="Permalink"></a></h2><p>A cognitive model can also perceive with a filter. In this task a target drifts as a random walk, the agent sees it only through noisy cues, and it reports where it believes the target is. The agent&#39;s belief is a Kalman filter of LowLevelParticleFilters.jl, which assumes a random walk with the agent&#39;s own drift and cue noise, its parameters.</p><pre><code class="language-julia hljs">struct DriftingTarget &lt;: AbstractEnvironmentModel end
+
+function CognitiveModeling.initialize_state(environment::DriftingTarget, parameters)
+    return (; target_position=0.0)
+end
+
+function CognitiveModeling.timestep_model(
+    environment::DriftingTarget, context::ModelContext
+)
+    #The target drifts, which is sampled with the generator of the context
+    target_position =
+        context.previous_state.target_position +
+        context.parameters.drift * randn(context.rng)
+    return ModelOutput(
+        (; cue=Normal(target_position, context.parameters.cue_noise)), (; target_position)
+    )
+end
+
+function CognitiveModeling.attribute_names(environment::DriftingTarget)
+    return ModelAttributes(;
+        parameters=(:drift, :cue_noise),
+        states=:target_position,
+        inputs=:report,
+        outputs=:cue,
+    )
+end
+
+#It samples within its timesteps, so a fit with it would need a Turing.jl version of its timestep
+CognitiveModeling.is_stochastic(environment::DriftingTarget) = true</code></pre><p>The filter is made from the parameters, with a starting belief of the parameters&#39; number type, since a filter keeps the types it starts with. Its matrices are fixed and already in discrete time, so its check of them, which computes their eigenvalues, is turned off.</p><pre><code class="language-julia hljs">struct KalmanTracker &lt;: AbstractCognitiveModel end
+
+function CognitiveModeling.initialize_state(model::KalmanTracker, parameters)
+    (; assumed_drift, assumed_cue_noise) = parameters
+    T = typeof(assumed_drift * assumed_cue_noise)
+    starting_belief = SimpleMvNormal(zeros(T, 1), ones(T, 1, 1))
+    kalman_filter = KalmanFilter(
+        [1.0;;],
+        [0.0;;],
+        [1.0;;],
+        [0.0;;],
+        fill(assumed_drift^2, 1, 1),
+        fill(assumed_cue_noise^2, 1, 1),
+        starting_belief;
+        check=false,
+    )
+    return (; kalman_filter)
+end
+
+function CognitiveModeling.timestep_model(model::KalmanTracker, context::ModelContext)
+
+    # Unpack the context ##
+    kalman_filter = context.previous_state.kalman_filter
+    no_input = zero(kalman_filter.x)
+
+    # Update state ##
+    #Correct the belief with the cue, as a vector of the belief&#39;s number type, keep its mean, and predict the next timestep
+    correct!(kalman_filter, no_input, [context.input.cue] .+ zero(kalman_filter.x))
+    believed_position = kalman_filter.x[1]
+    predict!(kalman_filter, no_input)
+
+    # Compute the action ##
+    #The report is where the agent believes the target is, with motor noise
+    return ModelOutput(
+        (; report=Normal(believed_position, context.parameters.motor_noise)),
+        (; kalman_filter),
+    )
+end
+
+function CognitiveModeling.attribute_names(model::KalmanTracker)
+    return ModelAttributes(;
+        parameters=(:assumed_drift, :assumed_cue_noise, :motor_noise),
+        states=:kalman_filter,
+        inputs=:cue,
+        outputs=:report,
+    )
+end
+
+function CognitiveModeling.prepare_state_for_saving(model::KalmanTracker, state)
+    return (; kalman_filter=deepcopy(state.kalman_filter))
+end</code></pre><p>A session of the tracker:</p><pre><code class="language-julia hljs">tracking = simulate_session(
+    KalmanTracker(),
+    DriftingTarget();
+    who_starts=EnvironmentStarts(),
+    n_steps=100,
+    cognitive_parameters=(; assumed_drift=0.3, assumed_cue_noise=0.5, motor_noise=0.1),
+    environment_parameters=(; drift=0.3, cue_noise=0.5),
+    save_cognitive_trajectories=SaveTrajectories(;
+        inputs=:cue, outputs=:report, save_initial_timestep_values=false
+    ),
+    rng=Xoshiro(2),
+)</code></pre><p>For a filter of one dimension, as here, the filter written by hand is faster. The package earns its place for the extended and unscented Kalman filters and the particle filters, which are more work to write.</p><h2 id="Model-predictive-control"><a class="docs-heading-anchor" href="#Model-predictive-control">Model predictive control</a><a id="Model-predictive-control-1"></a><a class="docs-heading-anchor-permalink" href="#Model-predictive-control" title="Permalink"></a></h2><p>ModelPredictiveControl.jl gives controllers that plan the next actions by optimizing them over a horizon, together with state estimators and plant models. Its controllers run inside a cognitive model in the same way, but their gradients can&#39;t be computed yet, so a model with one is fitted with a sampler that needs no gradient, such as a slice sampler from SliceSampling.jl, or Turing.jl&#39;s <code>MH</code> with a covariance matrix, for a random walk. Turing.jl computes one gradient when it looks for initial values for such a sampler, so give it an <code>adtype</code> of finite differences, which only evaluates the model with ordinary numbers:</p><pre><code class="language-julia hljs">using FiniteDifferences: central_fdm
+using SliceSampling: RandPermGibbs, SliceSteppingOut
+
+sampler = externalsampler(
+    RandPermGibbs(SliceSteppingOut(2.0));
+    adtype = AutoFiniteDifferences(; fdm = central_fdm(3, 1)),
+)</code></pre><p>Each step of these samplers evaluates the whole model, so they suit a single session, or sessions fitted one at a time, better than a hierarchical model of many sessions. A <code>LinMPC</code> with soft constraints warns about the conditioning of its problem every time it is made, which is on every evaluation of the model. When only the actions are bounded, hard bounds, with <code>Cwt = Inf</code>, give the same controller without the warning.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../interfacing_with_pomdps/">« Models from POMDPs.jl as cognitive models</a><a class="docs-footer-nextpage" href="../interfacing_with_actr_models/">Models from ACTRModels.jl as cognitive models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Tuesday 24 November 2026 18:55">Tuesday 24 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
