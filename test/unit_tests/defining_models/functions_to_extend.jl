@@ -58,6 +58,9 @@ end
             EnvironmentWithoutMethods(), state, (; last_timestep=0)
         ) === false
         @test CognitiveModeling.stopping_criterion(model, nothing, (;)) === false
+        #Neither kind of model samples within its timesteps by default
+        @test CognitiveModeling.is_stochastic(model) === false
+        @test CognitiveModeling.is_stochastic(EnvironmentWithoutMethods()) === false
     end
 
     @testset "A missing method for the names gives an informative error" begin
@@ -77,6 +80,7 @@ end
             :prepare_state_for_saving,
             :default_parameters,
             :stopping_criterion,
+            :is_stochastic,
             :turing_timestep_model,
         )
             @test Base.ispublic(CognitiveModeling, name)

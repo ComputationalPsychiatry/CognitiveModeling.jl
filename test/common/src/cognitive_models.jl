@@ -852,6 +852,7 @@ end
 struct SamplingWithinTimestep{Tdistributions} <: AbstractCognitiveModel
     distributions::Tdistributions
 end
+CognitiveModeling.is_stochastic(model::SamplingWithinTimestep) = true
 function CognitiveModeling.initialize_state(model::SamplingWithinTimestep, parameters)
     return (; expected_reward=0.5, noise=0.0)
 end
@@ -1109,6 +1110,7 @@ abstract type EveryFeatureFamily <: AbstractCognitiveModel end
 struct EveryFeature{Tdistributions} <: EveryFeatureFamily
     distributions::Tdistributions
 end
+CognitiveModeling.is_stochastic(model::EveryFeature) = true
 
 #Every feature whose outputs have means, so that it runs with the means of its distributions too, and which samples
 #nothing of its own: it has no noise, no offset, and no response or side

@@ -63,6 +63,63 @@ function CognitiveModeling.timestep_model(
     )
 end
 
+#Samples noise from the random number generator within its timesteps, and says so, but has no Turing version
+struct SamplesWithoutTuringVersion <: AbstractCognitiveModel end
+CognitiveModeling.is_stochastic(model::SamplesWithoutTuringVersion) = true
+function CognitiveModeling.initialize_state(model::SamplesWithoutTuringVersion, parameters)
+    return (; total=0.0)
+end
+function CognitiveModeling.timestep_model(
+    model::SamplesWithoutTuringVersion, context::ModelContext
+)
+    noise = randn(context.rng)
+    return ModelOutput(
+        (; choice=Bernoulli(0.5)),
+        (; total=context.previous_state.total + context.input.reward + noise),
+    )
+end
+function CognitiveModeling.attribute_names(model::SamplesWithoutTuringVersion)
+    return ModelAttributes(; parameters=(), states=:total, inputs=:reward, outputs=:choice)
+end
+
+#The same with its Turing version, which samples the noise with ~
+struct SamplesWithTuringVersion <: AbstractCognitiveModel end
+CognitiveModeling.is_stochastic(model::SamplesWithTuringVersion) = true
+function CognitiveModeling.initialize_state(model::SamplesWithTuringVersion, parameters)
+    return (; total=0.0)
+end
+Turing.@model function CognitiveModeling.turing_timestep_model(
+    model::SamplesWithTuringVersion, context::ModelContext
+)
+    noise ~ Normal(0, 1)
+    return ModelOutput(
+        (; choice=Bernoulli(0.5)),
+        (; total=context.previous_state.total + context.input.reward + noise),
+    )
+end
+function CognitiveModeling.attribute_names(model::SamplesWithTuringVersion)
+    return ModelAttributes(; parameters=(), states=:total, inputs=:reward, outputs=:choice)
+end
+
+#An environment which says it samples within its timesteps, without a Turing version
+struct EnvironmentSamplesWithoutTuringVersion <: AbstractEnvironmentModel end
+CognitiveModeling.is_stochastic(environment::EnvironmentSamplesWithoutTuringVersion) = true
+function CognitiveModeling.initialize_state(
+    environment::EnvironmentSamplesWithoutTuringVersion, parameters
+)
+    return (;)
+end
+function CognitiveModeling.timestep_model(
+    environment::EnvironmentSamplesWithoutTuringVersion, context::ModelContext
+)
+    return ModelOutput((; reward=Bernoulli(rand(context.rng))))
+end
+function CognitiveModeling.attribute_names(
+    environment::EnvironmentSamplesWithoutTuringVersion
+)
+    return ModelAttributes(; parameters=(), states=(), inputs=:choice, outputs=:reward)
+end
+
 #A model without methods of its own
 struct ModelWithoutMethods <: AbstractCognitiveModel end
 
@@ -165,6 +222,46 @@ end
     @testset "A model's own method is used instead of the default" begin
         @test @varname(noise) in keys(
             rand(Xoshiro(1), turing_timestep_model(SamplesWithinTimestep(), context))
+        )
+    end
+
+    @testset "A model which says it samples within its timesteps needs a Turing version of its timestep, or the default throws" begin
+        @test_throws "A cognitive model of type SamplesWithoutTuringVersion samples within its timesteps, as its method of CognitiveModeling.is_stochastic says, but it has no method of CognitiveModeling.turing_timestep_model. Give it one which samples with ~" turing_timestep_model(
+            SamplesWithoutTuringVersion(), context
+        )()
+        #So does a fitted session of it, when it is evaluated
+        rewards = (; reward=[1.0, 0.0])
+        choices = (; choice=[true, false])
+        session_info = SessionInfo(
+            SamplesWithoutTuringVersion(), rewards, choices; who_starts=EnvironmentStarts()
+        )
+        @test_throws "samples within its timesteps" logjoint(
+            session_model(TuringBackend(), session_info, (;)), (;)
+        )
+        #With its Turing version, the noise of each timestep is a variable
+        with_turing_version = session_model(
+            TuringBackend(),
+            SessionInfo(
+                SamplesWithTuringVersion(), rewards, choices; who_starts=EnvironmentStarts()
+            ),
+            (;),
+        )
+        @test Set(keys(rand(Xoshiro(1), with_turing_version))) ==
+            Set([@varname(timesteps[1].noise), @varname(timesteps[2].noise)])
+        #An environment that says it samples throws in a session that runs it, and not in one that doesn't
+        with_environment(include_environment) = SessionInfo(
+            OnlyNormalFunction(),
+            rewards,
+            choices;
+            who_starts=EnvironmentStarts(),
+            environment=EnvironmentSamplesWithoutTuringVersion(),
+            include_environment,
+        )
+        @test_throws "An environment model of type EnvironmentSamplesWithoutTuringVersion samples within its timesteps" logjoint(
+            session_model(TuringBackend(), with_environment(true), (;)), (;)
+        )
+        @test isfinite(
+            logjoint(session_model(TuringBackend(), with_environment(false), (;)), (;))
         )
     end
 

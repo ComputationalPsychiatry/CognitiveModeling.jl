@@ -356,6 +356,35 @@ function stopping_criterion(model::AbstractTimestepModel, state, parameters)
     return false
 end
 
+"""
+    is_stochastic(model::AbstractTimestepModel)
+
+Return whether `model`, a cognitive model or an environment model, samples randomly within
+its timesteps, from the random number generator in its context, such as noise in how its
+state changes. The outputs that it gives distributions for are sampled whatever this
+returns.
+
+# Implementation
+A model which samples within its timesteps must add a method of this function which returns
+`true`. The default returns `false`. Such a model also needs, for each inference backend it
+is fitted with, a method of that backend's version of [`timestep_model`](@ref), such as
+[`CognitiveModeling.turing_timestep_model`](@ref), which samples the same values as
+variables of the fit. A fit of a model which returns `true` without one is an error.
+
+# Examples
+```jldoctest
+julia> struct LearnsWithNoise <: AbstractCognitiveModel end
+
+julia> CognitiveModeling.is_stochastic(model::LearnsWithNoise) = true;
+
+julia> CognitiveModeling.is_stochastic(LearnsWithNoise())
+true
+```
+"""
+function is_stochastic(model::AbstractTimestepModel)
+    return false
+end
+
 ## Functions that a model with submodels implements ##
 
 """

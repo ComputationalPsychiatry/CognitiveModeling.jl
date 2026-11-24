@@ -284,6 +284,7 @@ end
 struct SamplingWithinTimestepEnvironment{Tdistributions} <: AbstractEnvironmentModel
     distributions::Tdistributions
 end
+CognitiveModeling.is_stochastic(environment::SamplingWithinTimestepEnvironment) = true
 function CognitiveModeling.initialize_state(
     environment::SamplingWithinTimestepEnvironment, parameters
 )
@@ -668,6 +669,7 @@ end
 struct EveryFeatureEnvironment{Tdistributions} <: AbstractEnvironmentModel
     distributions::Tdistributions
 end
+CognitiveModeling.is_stochastic(environment::EveryFeatureEnvironment) = true
 function CognitiveModeling.initialize_state(
     environment::EveryFeatureEnvironment, parameters
 )
