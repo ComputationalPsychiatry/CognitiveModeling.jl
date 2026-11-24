@@ -101,7 +101,7 @@ const RATES = [2.0, 3.0, 1.5]
         @test eltype(first(sessions_info.sessions).actions.response) ==
             @NamedTuple{choice::Int64, rt::Float64}
         model = full_model(
-            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters(RESPONSE_PRIORS)
         )
         values = Dict(
             @varname(choice_probability.sessions) => PROBABILITIES,
@@ -118,8 +118,8 @@ const RATES = [2.0, 3.0, 1.5]
         table.rt[2] = missing
         model = full_model(
             TuringBackend(),
-            IndependentParameters(RESPONSE_PRIORS),
             response_sessions(table; impute_missing_actions=false),
+            IndependentParameters(RESPONSE_PRIORS),
         )
         values = Dict(
             @varname(choice_probability.sessions) => PROBABILITIES,
@@ -135,7 +135,7 @@ const RATES = [2.0, 3.0, 1.5]
 
     @testset "NUTS fits the model" begin
         model = full_model(
-            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), response_sessions()
+            TuringBackend(), response_sessions(), IndependentParameters(RESPONSE_PRIORS)
         )
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
         @test all(isfinite, vec(chain[:logjoint]))
@@ -161,7 +161,7 @@ const RATES = [2.0, 3.0, 1.5]
         )
         @test eltype(first(sessions_info.sessions).actions.report) == Vector{Float64}
         model = full_model(
-            TuringBackend(), IndependentParameters((; mean=Normal(0, 1))), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters((; mean=Normal(0, 1)))
         )
         values = Dict(@varname(mean.sessions) => [0.2, -0.1])
         @test logjoint(model, values) ≈
@@ -174,7 +174,7 @@ const RATES = [2.0, 3.0, 1.5]
 
     @testset "pointwise_loglikelihoods with factorize = true gives the log-likelihood of each response and each confidence" begin
         model = full_model(
-            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), response_sessions()
+            TuringBackend(), response_sessions(), IndependentParameters(RESPONSE_PRIORS)
         )
         chain = sample(Xoshiro(1), model, Prior(), 3; progress=false)
         pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
@@ -204,7 +204,7 @@ const RATES = [2.0, 3.0, 1.5]
 
     @testset "PosteriorStats.jl's PSIS-LOO takes the log-likelihood of each response and each confidence" begin
         model = full_model(
-            TuringBackend(), IndependentParameters(RESPONSE_PRIORS), response_sessions()
+            TuringBackend(), response_sessions(), IndependentParameters(RESPONSE_PRIORS)
         )
         chain = sample(Xoshiro(1), model, NUTS(), 100; progress=false)
         pointwise = pointwise_loglikelihoods(model, chain; factorize=true)
@@ -248,7 +248,7 @@ const RATES = [2.0, 3.0, 1.5]
             who_starts=EnvironmentStarts(),
         )
         model = full_model(
-            TuringBackend(), IndependentParameters((; mean=Normal(0, 1))), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters((; mean=Normal(0, 1)))
         )
         chain = sample(Xoshiro(1), model, Prior(), 2; progress=false)
         pointwise = pointwise_loglikelihoods(model, chain; factorize=true)

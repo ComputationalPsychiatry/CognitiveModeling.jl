@@ -261,7 +261,7 @@ end
     @testset "IndependentParameters samples each parameter for every session from its prior, named after the parameter" begin
         sessions_info = sessions_for_test(; impute_missing_actions=false)
         model = full_model(
-            TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info
+            TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS)
         )
         values = rand(Xoshiro(1), model)
         @test Set(keys(values)) == Set([
@@ -311,7 +311,7 @@ end
             session_by_hand(rewards, choices, 0.3, 2.0, EnvironmentStarts())[1]
         one_session = MultipleSessionsInfo([session_info], [:session])
         @test logjoint(model, given) ≈ logjoint(
-            full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), one_session),
+            full_model(TuringBackend(), one_session, IndependentParameters(FULL_PRIORS)),
             given,
         )
         entry_names(chain) = Set(string.(Turing.FlexiChains.get_name.(keys(chain))))
@@ -328,7 +328,7 @@ end
         @test entry_names(get_session_parameters(identical, chain)) ==
             Set(["P7.learning_rate", "P7.inverse_temperature"])
         #The parameter model comes after the session, and before it the error says so
-        @test_throws "or a SessionInfo and a parameter model" full_model(
+        @test_throws "give a MultipleSessionsInfo or a SessionInfo, and then a parameter model" full_model(
             TuringBackend(), IndependentParameters(FULL_PRIORS), session_info
         )
         #The keywords of several sessions are passed on
@@ -348,8 +348,8 @@ end
         learning_rate_priors = IndependentParameters((; learning_rate=Beta(2, 2)))
         model = full_model(
             TuringBackend(),
-            learning_rate_priors,
-            sessions_info;
+            sessions_info,
+            learning_rate_priors;
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
         learning_rates = [0.2, 0.3, 0.4]
@@ -364,17 +364,17 @@ end
         #It is the composite of the parameter model and the fixed values
         by_hand = full_model(
             TuringBackend(),
+            sessions_info,
             CompositeParameters(
                 learning_rate_priors, FixedParameters((; inverse_temperature=3.0))
             ),
-            sessions_info,
         )
         @test logjoint(model, given) ≈ logjoint(by_hand, given)
         #A part of a composite given with a name has its variables under that name, also next to the fixed values
         named_model = full_model(
             TuringBackend(),
-            CompositeParameters(; learning=learning_rate_priors),
-            sessions_info;
+            sessions_info,
+            CompositeParameters(; learning=learning_rate_priors);
             fixed_cognitive_parameters=(; inverse_temperature=3.0),
         )
         @test collect(keys(rand(Xoshiro(1), named_model))) ==
@@ -385,16 +385,16 @@ end
         #A parameter model of one's own takes them too, and a parameter can't be both fixed and given
         with_own_model = full_model(
             TuringBackend(),
-            SharedLearningRate(),
-            sessions_for_test(StartsFromParameter(); impute_missing_actions=false);
+            sessions_for_test(StartsFromParameter(); impute_missing_actions=false),
+            SharedLearningRate();
             fixed_cognitive_parameters=(; initial_value=0.3),
         )
         @test returned(with_own_model, rand(Xoshiro(2), with_own_model)).cognitive_parameters.initial_value ==
             fill(0.3, 3)
         @test_throws "fixed_cognitive_parameters fixes the parameters (:learning_rate,), which the parameter model, a IndependentParameters, gives too. A parameter is either fixed or given by the parameter model." full_model(
             TuringBackend(),
-            learning_rate_priors,
-            sessions_info;
+            sessions_info,
+            learning_rate_priors;
             fixed_cognitive_parameters=(; learning_rate=0.3),
         )
     end
@@ -404,7 +404,7 @@ end
             impute_missing_actions=false,
             save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
-        model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
+        model = saving_full_model(sessions_info, IndependentParameters(FULL_PRIORS))
         given = Dict(
             @varname(learning_rate.sessions) => [0.2, 0.3, 0.4],
             @varname(inverse_temperature.sessions) => [1.0, 2.0, 3.0],
@@ -432,8 +432,8 @@ end
         )
         model = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
             include_submodel_prefixes=true,
         )
@@ -444,8 +444,8 @@ end
         ])
         without = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         @test Set(keys(rand(Xoshiro(1), without))) == Set([
@@ -470,7 +470,7 @@ end
 
     @testset "A parameter model of one's own gives the parameters in the same form" begin
         sessions_info = sessions_for_test(; impute_missing_actions=false)
-        model = full_model(TuringBackend(), SharedLearningRate(), sessions_info)
+        model = full_model(TuringBackend(), sessions_info, SharedLearningRate())
         @test Set(keys(rand(Xoshiro(1), model))) ==
             Set([@varname(learning_rate), @varname(inverse_temperature)])
         given = Dict(
@@ -489,8 +489,8 @@ end
         measurements = [0.4, 0.6, 0.5]
         model = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             downstream_model=MeasurementRegression(measurements),
         )
         @test @varname(slope) in keys(rand(Xoshiro(1), model))
@@ -516,9 +516,9 @@ end
         temperature = IdenticalParameters((;
             inverse_temperature=FULL_PRIORS.inverse_temperature
         ))
-        from_tuple = full_model(TuringBackend(), (learning, temperature), sessions_info)
+        from_tuple = full_model(TuringBackend(), sessions_info, (learning, temperature))
         composite = full_model(
-            TuringBackend(), CompositeParameters(learning, temperature), sessions_info
+            TuringBackend(), sessions_info, CompositeParameters(learning, temperature)
         )
         values = Dict(
             @varname(learning_rate.sessions) => [0.2, 0.5, 0.8],
@@ -527,7 +527,7 @@ end
         @test Set(keys(rand(Xoshiro(1), from_tuple))) == Set(keys(values))
         @test logjoint(from_tuple, values) ≈ logjoint(composite, values)
         from_named_tuple = full_model(
-            TuringBackend(), (; learning, temperature), sessions_info
+            TuringBackend(), sessions_info, (; learning, temperature)
         )
         named_values = Dict(
             @varname(learning.learning_rate.sessions) => [0.2, 0.5, 0.8],
@@ -542,23 +542,23 @@ end
         #The parts are checked when the model is made
         @test_throws "The sessions have no environment model, but the parameter model of the environment, a FixedParameters, gives the parameters (:scale,)." full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=FixedParameters((; scale=2.0)),
         )
         @test_throws "A parameter model must be a subtype of AbstractParametersModel" full_model(
-            TuringBackend(), FULL_PRIORS, sessions_info
+            TuringBackend(), sessions_info, FULL_PRIORS
         )
         @test_throws "The downstream model must be a subtype of AbstractDownstreamModel" full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             downstream_model=:none,
         )
         @test_throws "A parameter model must be a subtype of AbstractParametersModel" full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=(; scale=2.0),
         )
     end
@@ -570,8 +570,8 @@ end
         shared = IdenticalParameters((; mean_reward=Normal(0, 1)))
         model = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=shared,
         )
         @test Set(keys(rand(Xoshiro(1), model))) == Set([
@@ -597,8 +597,8 @@ end
         #With the parameters given, sessions with nothing missing run without the environment
         fixed = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=FixedParameters((; mean_reward=0.6)),
         )
         @test loglikelihood(
@@ -611,8 +611,8 @@ end
         #With the prefixes, its variables are under environment_parameters_model
         prefixed = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=shared,
             include_submodel_prefixes=true,
         )
@@ -629,7 +629,7 @@ end
             save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         same = saving_full_model(
-            FixedParameters((; learning_rate=0.3, inverse_temperature=2.0)), sessions_info
+            sessions_info, FixedParameters((; learning_rate=0.3, inverse_temperature=2.0))
         )
         @test isempty(keys(rand(Xoshiro(1), same)))
         @test logjoint(same, (;)) ≈ sessions_by_hand(FULL_TABLE, fill(0.3, 3), fill(2.0, 3))
@@ -637,12 +637,12 @@ end
             (; learning_rate=fill(0.3, 3), inverse_temperature=fill(2.0, 3))
         #By session, the values are found by the session's data identifier, in any order
         by_session = saving_full_model(
+            sessions_info,
             SessionwiseFixedParameters((;
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),
                 S3=(; learning_rate=0.4, inverse_temperature=3.0),
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
             )),
-            sessions_info,
         )
         @test isempty(keys(rand(Xoshiro(1), by_session)))
         @test logjoint(by_session, (;)) ≈
@@ -652,11 +652,11 @@ end
         #A session without values is an error when the model is made, since the values are looked up then
         @test_logs SAVING_WARNING @test_throws "SessionwiseFixedParameters has no parameters for the session S3." full_model(
             TuringBackend(),
+            sessions_info,
             SessionwiseFixedParameters((;
                 S1=(; learning_rate=0.2, inverse_temperature=1.0),
                 S2=(; learning_rate=0.3, inverse_temperature=2.0),
             )),
-            sessions_info,
         )
     end
 
@@ -666,29 +666,29 @@ end
             save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         @test_logs SAVING_WARNING full_model(
-            TuringBackend(), IndependentParameters(FULL_PRIORS), saving
+            TuringBackend(), saving, IndependentParameters(FULL_PRIORS)
         )
         #The environment's trajectories count too, and with a downstream model or without saving there is no warning
         @test_logs SAVING_WARNING full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(;
                 impute_missing_actions=false,
                 environment=RewardsAroundMean(),
                 save_environment_trajectories=SaveTrajectories(; outputs=:reward),
-            );
+            ),
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=FixedParameters((; mean_reward=0.5)),
         )
         @test_logs full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            saving;
+            saving,
+            IndependentParameters(FULL_PRIORS);
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         @test_logs full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(; impute_missing_actions=false),
+            IndependentParameters(FULL_PRIORS),
         )
     end
 
@@ -698,8 +698,8 @@ end
         )
         shared = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=IdenticalParameters((; mean_reward=Normal(0, 1))),
         )
         given = Dict(
@@ -710,8 +710,8 @@ end
         @test returned(shared, given).environment_parameters == (; mean_reward=fill(0.6, 3))
         by_session = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=SessionwiseFixedParameters((;
                 S1=(; mean_reward=0.1), S2=(; mean_reward=0.2), S3=(; mean_reward=0.3)
             )),
@@ -720,14 +720,14 @@ end
             (; mean_reward=[0.1, 0.2, 0.3])
         #Without environment parameters there are none
         @test returned(
-            full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info),
+            full_model(TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS)),
             given,
         ).environment_parameters === (;)
     end
 
     @testset "IdenticalParameters gives every session the same sampled cognitive parameters, as name.shared" begin
         sessions_info = sessions_for_test(; impute_missing_actions=false)
-        model = full_model(TuringBackend(), IdenticalParameters(FULL_PRIORS), sessions_info)
+        model = full_model(TuringBackend(), sessions_info, IdenticalParameters(FULL_PRIORS))
         @test Set(keys(rand(Xoshiro(1), model))) ==
             Set([@varname(learning_rate.shared), @varname(inverse_temperature.shared)])
         given = Dict(
@@ -756,8 +756,8 @@ end
         )
         model = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             environment_parameters_model=SessionwiseFixedParameters((;
                 S1=(; mean_reward=0.6), S2=(; mean_reward=0.0), S3=(; mean_reward=1.0)
             )),
@@ -793,8 +793,8 @@ end
         )
         @test [session.includes_environment for session in sessions_info.sessions] == [true, false, true]
         in_sequence = saving_full_model(
-            IndependentParameters(FULL_PRIORS),
-            sessions_info;
+            sessions_info,
+            IndependentParameters(FULL_PRIORS);
             fixed_environment_parameters=(; mean_reward=0.6),
         )
         given = Dict(
@@ -827,8 +827,8 @@ end
         #In parallel, the log density and what the sessions saved are the same
         in_parallel = Turing.DynamicPPL.setthreadsafe(
             saving_full_model(
-                IndependentParameters(FULL_PRIORS),
-                sessions_info;
+                sessions_info,
+                IndependentParameters(FULL_PRIORS);
                 fixed_environment_parameters=(; mean_reward=0.6),
                 parallelization=ParallelSessions(),
             ),
@@ -848,7 +848,7 @@ end
         )
         shared = IdenticalParameters((; learning_rate=Beta(2, 2)))
         model = @test_logs warning full_model(
-            TuringBackend(), shared, sessions_info; environment_parameters_model=shared
+            TuringBackend(), sessions_info, shared; environment_parameters_model=shared
         )
         #The warning is given when the model is made, and not when it runs, since the model is differentiated
         values = @test_logs rand(Xoshiro(1), model)
@@ -862,8 +862,8 @@ end
         #With the prefixes, no warning, and the parameters are kept apart
         prefixed = @test_logs full_model(
             TuringBackend(),
-            shared,
-            sessions_info;
+            sessions_info,
+            shared;
             environment_parameters_model=shared,
             include_submodel_prefixes=true,
         )
@@ -874,26 +874,26 @@ end
         #No warning when the environment's parameters are fixed, nor when the cognitive parameters are
         @test_logs full_model(
             TuringBackend(),
-            shared,
-            sessions_info;
+            sessions_info,
+            shared;
             environment_parameters_model=FixedParameters((; learning_rate=0.5)),
         )
         @test_logs full_model(
             TuringBackend(),
-            FixedParameters((; learning_rate=0.5, inverse_temperature=1.0)),
-            sessions_info;
+            sessions_info,
+            FixedParameters((; learning_rate=0.5, inverse_temperature=1.0));
             environment_parameters_model=shared,
         )
         #No warning when the two models' parameters have different names, nor without an environment
         @test_logs full_model(
             TuringBackend(),
-            shared,
             sessions_for_test(;
                 environment=RewardsAroundMean(), impute_missing_actions=false
-            );
+            ),
+            shared;
             environment_parameters_model=IdenticalParameters((; mean_reward=Normal())),
         )
-        @test_logs full_model(TuringBackend(), shared, sessions_for_test())
+        @test_logs full_model(TuringBackend(), sessions_for_test(), shared)
     end
 
     @testset "It can be sampled, and returned gives the parameters and the states of every session for each sample" begin
@@ -901,7 +901,7 @@ end
             impute_missing_actions=false,
             save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
-        model = saving_full_model(IndependentParameters(FULL_PRIORS), sessions_info)
+        model = saving_full_model(sessions_info, IndependentParameters(FULL_PRIORS))
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
         @test size(chain, 1) == 50
         @test Set(Turing.FlexiChains.parameters(chain)) == Set([
@@ -915,7 +915,7 @@ end
         ] == [4, 3, 5]
         #With the missing choice imputed, its latent is sampled too, by a sampler for discrete variables
         with_imputed = full_model(
-            TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_for_test()
+            TuringBackend(), sessions_for_test(), IndependentParameters(FULL_PRIORS)
         )
         chain = @test_logs match_mode = :any sample(
             Xoshiro(1),
@@ -957,8 +957,8 @@ end
         #The full model doesn't run its downstream model for such a sample, and returns the rest
         model = full_model(
             TuringBackend(),
-            IndependentParameters((; learning_rate=Uniform(0, 2))),
-            sessions_info;
+            sessions_info,
+            IndependentParameters((; learning_rate=Uniform(0, 2)));
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         rejected = Dict(
@@ -975,7 +975,7 @@ end
             returned(model, accepted).downstream_values == 0.8
         #A sampler starts when most first draws are rejected
         without_downstream = saving_full_model(
-            IndependentParameters((; learning_rate=Uniform(0, 2))), sessions_info
+            sessions_info, IndependentParameters((; learning_rate=Uniform(0, 2)))
         )
         for seed in 1:3
             chain = sample(Xoshiro(seed), without_downstream, NUTS(), 10; progress=false)
@@ -998,8 +998,8 @@ end
         #A model that never sets parameters_valid has such an entry too, since a stopping criterion can make the parameters
         #invalid, and it is true for every sample
         plain = saving_full_model(
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(; save_cognitive_trajectories=saving_states),
+            IndependentParameters(FULL_PRIORS),
         )
         plain_chain = sample(Xoshiro(5), plain, Prior(), 5; progress=false)
         plain_names = Turing.FlexiChains.get_name.(
@@ -1029,8 +1029,8 @@ end
         )
         with_downstream(prior) = full_model(
             TuringBackend(),
-            IndependentParameters((; learning_rate=prior)),
-            sessions_info;
+            sessions_info,
+            IndependentParameters((; learning_rate=prior));
             downstream_model=MeasurementRegression([0.4, 0.6, 0.5]),
         )
         #Priors under which no session turns invalid: NUTS, MAP and MLE start, also with the downstream model's variable
@@ -1051,8 +1051,8 @@ end
         #session invalid
         plain = full_model(
             TuringBackend(),
-            IndependentParameters((; learning_rate=Uniform(0, 2))),
             sessions_for_test(RejectsHighExpectedReward(), table),
+            IndependentParameters((; learning_rate=Uniform(0, 2))),
         )
         start_without_downstream = InitFromParams((;
             learning_rate=(; sessions=fill(0.3, 3))
@@ -1098,8 +1098,8 @@ end
         #The full model passes it on
         full = Turing.DynamicPPL.setthreadsafe(
             saving_full_model(
-                IndependentParameters(FULL_PRIORS),
-                sessions_info;
+                sessions_info,
+                IndependentParameters(FULL_PRIORS);
                 parallelization=ParallelSessions(),
             ),
             true,
@@ -1119,9 +1119,9 @@ end
             save_cognitive_trajectories=SaveTrajectories(; states=:expected_reward),
         )
         unsaved = full_model(
-            TuringBackend(), IndependentParameters(FULL_PRIORS), unsaved_sessions
+            TuringBackend(), unsaved_sessions, IndependentParameters(FULL_PRIORS)
         )
-        saving = saving_full_model(IndependentParameters(FULL_PRIORS), saving_sessions)
+        saving = saving_full_model(saving_sessions, IndependentParameters(FULL_PRIORS))
         chain = sample(Xoshiro(2), unsaved, NUTS(), 20; progress=false)
         returned_values = returned(saving, chain)
         @test length(returned_values) == 20
@@ -1145,10 +1145,10 @@ end
         end
         model_with(n_timesteps) = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(
                 WithDefaultParameters(DistributionsJl()), table_with(n_timesteps)
             ),
+            IndependentParameters(FULL_PRIORS),
         )
         given = Dict(
             @varname(learning_rate.sessions) => [0.2, 0.3],
@@ -1196,7 +1196,7 @@ end
     outside_domains = FixedParameters((; learning_rate=1.5, inverse_temperature=2.0))
 
     @testset "A value outside its domain stops the evaluation" begin
-        model = @test_logs full_model(TuringBackend(), within_domains, sessions_info)
+        model = @test_logs full_model(TuringBackend(), sessions_info, within_domains)
         @test isfinite(
             logjoint(
                 model,
@@ -1233,12 +1233,12 @@ end
     @testset "A fixed value outside its domain is an error when the sessions run" begin
         @test_throws ParameterDomainError(
             "The parameter learning_rate of a cognitive model of type WithDomains{DistributionsJl} is 1.5, which is outside its domain, from 0 to 1.",
-        ) logjoint(full_model(TuringBackend(), outside_domains, sessions_info), (;))
+        ) logjoint(full_model(TuringBackend(), sessions_info, outside_domains), (;))
         @test_throws ParameterDomainError logjoint(
             full_model(
                 TuringBackend(),
-                IndependentParameters((; inverse_temperature=LogNormal(0, 0.5))),
-                sessions_info;
+                sessions_info,
+                IndependentParameters((; inverse_temperature=LogNormal(0, 0.5)));
                 fixed_cognitive_parameters=(; learning_rate=1.5),
             ),
             Dict(@varname(inverse_temperature.sessions) => fill(2.0, 3)),
@@ -1247,15 +1247,15 @@ end
 
     @testset "Sessions that don't check the domains run with any value" begin
         unchecked = logjoint(
-            full_model(TuringBackend(), outside_domains, unchecked_sessions), (;)
+            full_model(TuringBackend(), unchecked_sessions, outside_domains), (;)
         )
         @test isfinite(unchecked)
         #The log density is that of the same model without domains
         @test unchecked == logjoint(
             full_model(
                 TuringBackend(),
-                outside_domains,
                 sessions_for_test(; impute_missing_actions=false),
+                outside_domains,
             ),
             (;),
         )
@@ -1275,8 +1275,8 @@ end
             logjoint(
                 full_model(
                     TuringBackend(),
-                    cognitive_parameters,
-                    with_environment;
+                    with_environment,
+                    cognitive_parameters;
                     environment_parameters_model=FixedParameters((; mean_reward=0.5)),
                 ),
                 (;),
@@ -1288,8 +1288,8 @@ end
         ) logjoint(
             full_model(
                 TuringBackend(),
-                cognitive_parameters,
-                with_environment;
+                with_environment,
+                cognitive_parameters;
                 environment_parameters_model=FixedParameters((; mean_reward=2.0)),
             ),
             (;),
@@ -1297,8 +1297,8 @@ end
         #A value that a sampler proposes is checked when the sessions run, for both models
         sampled = full_model(
             TuringBackend(),
-            within_domains,
-            with_environment;
+            with_environment,
+            within_domains;
             environment_parameters_model=IdenticalParameters((; mean_reward=Beta(2, 2))),
         )
         @test_throws ParameterDomainError(
@@ -1342,7 +1342,7 @@ end
             learning_rate=Normal(0, 1), inverse_temperature=LogNormal(0, 0.5)
         ))
         #The model is made without an error or a warning
-        model = @test_logs full_model(TuringBackend(), outside_priors, sessions_info)
+        model = @test_logs full_model(TuringBackend(), sessions_info, outside_priors)
         #A value within the domain is evaluated, and a value outside it stops the evaluation
         @test isfinite(
             logjoint(
@@ -1373,8 +1373,8 @@ end
     @test !any(session -> session.includes_environment, sessions_info.sessions)
     model = full_model(
         TuringBackend(),
-        IndependentParameters(FULL_PRIORS),
-        sessions_info;
+        sessions_info,
+        IndependentParameters(FULL_PRIORS);
         environment_parameters_model=IdenticalParameters((; mean_reward=Normal())),
     )
     @test all(session -> session.includes_environment, model.args.sessions_info.sessions)

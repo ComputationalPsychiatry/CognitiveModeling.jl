@@ -1,7 +1,7 @@
 @testset "predict_session_trajectories" begin
     #The full model of the sessions of the table, fitted as in the tests of get_session_trajectories
     sessions_info = sessions_for_test(; impute_missing_actions=false)
-    model = full_model(TuringBackend(), IndependentParameters(FULL_PRIORS), sessions_info)
+    model = full_model(TuringBackend(), sessions_info, IndependentParameters(FULL_PRIORS))
     chain = sample(Xoshiro(1), model, NUTS(), 20; progress=false)
 
     @testset "predict_session_trajectories simulates every action again with the parameters of each sample" begin
@@ -27,8 +27,8 @@
         #RewardsPreviousChoice gives the previous choice as the reward, and 0.5 before the first
         with_environment = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(; environment=RewardsPreviousChoice()),
+            IndependentParameters(FULL_PRIORS),
         )
         simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(3),
@@ -69,8 +69,8 @@
         )
         imputing = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(WithDefaultParameters(DistributionsJl()), table),
+            IndependentParameters(FULL_PRIORS),
         )
         prior_chain = sample(Xoshiro(6), imputing, Prior(), 5; progress=false)
         #predict_session_trajectories simulates the imputed choices again, like the others, from the parameters of each sample
@@ -91,8 +91,8 @@
         pair = pair_named("SampledInitialState")
         sampling = full_model(
             TuringBackend(),
-            FixedParameters(pair.cognitive_parameters),
             sessions_for_test(pair.model(DistributionsJl()), FULL_TABLE),
+            FixedParameters(pair.cognitive_parameters),
         )
         prior_chain = sample(Xoshiro(13), sampling, Prior(), 5; progress=false)
         simulated = @test_logs match_mode = :any predict_session_trajectories(
@@ -111,10 +111,10 @@
     @testset "Sessions of different lengths are simulated with their own timesteps, with an environment too" begin
         different_lengths = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(
                 WithDefaultParameters(DistributionsJl()), DIFFERENT_LENGTHS_TABLE
             ),
+            IndependentParameters(FULL_PRIORS),
         )
         prior_chain = sample(Xoshiro(8), different_lengths, Prior(), 5; progress=false)
         simulated = @test_logs match_mode = :any predict_session_trajectories(
@@ -137,12 +137,12 @@
         #With an environment, the rewards are simulated on each timestep of each session too, from the simulated choices
         with_environment = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(
                 WithDefaultParameters(DistributionsJl()),
                 DIFFERENT_LENGTHS_TABLE;
                 environment=RewardsPreviousChoice(),
             ),
+            IndependentParameters(FULL_PRIORS),
         )
         simulated = @test_logs match_mode = :any predict_session_trajectories(
             Xoshiro(10),

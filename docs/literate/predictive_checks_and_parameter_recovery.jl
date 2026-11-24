@@ -112,10 +112,10 @@ sessions_info = MultipleSessionsInfo(
 )
 model = full_model(
     TuringBackend(),
+    sessions_info,
     IndependentParameters((;
         learning_rate=Beta(2, 2), inverse_temperature=LogNormal(1, 0.5)
     )),
-    sessions_info,
 )
 
 # ## Prior predictive checks
@@ -291,7 +291,6 @@ end
 
 fixed_preference_model = full_model(
     TuringBackend(),
-    IndependentParameters((; preference=Normal(0, 2))),
     MultipleSessionsInfo(
         FixedPreference(),
         table;
@@ -300,6 +299,7 @@ fixed_preference_model = full_model(
         session_columns=:participant,
         who_starts=EnvironmentStarts(),
     ),
+    IndependentParameters((; preference=Normal(0, 2))),
 )
 fixed_preference_chain = sample(
     Xoshiro(9), fixed_preference_model, NUTS(), 300; progress=false

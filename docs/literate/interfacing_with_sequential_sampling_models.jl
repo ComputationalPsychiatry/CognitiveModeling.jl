@@ -185,7 +185,7 @@ priors = (;
 )
 
 #The full model, and the samples of its posterior
-model = full_model(TuringBackend(), IndependentParameters(priors), sessions_info)
+model = full_model(TuringBackend(), sessions_info, IndependentParameters(priors))
 chain = sample(Xoshiro(1), model, NUTS(), 500)
 
 # The fitted parameters of each participant, as averages over the samples:
@@ -257,7 +257,7 @@ unreliable_responses, fastest_responses
 # so the model that gives each their own predicts their responses better:
 
 model_with_identical_parameters = full_model(
-    TuringBackend(), IdenticalParameters(priors), sessions_info
+    TuringBackend(), sessions_info, IdenticalParameters(priors)
 )
 chain_with_identical_parameters = sample(
     Xoshiro(3), model_with_identical_parameters, NUTS(), 500
@@ -395,7 +395,7 @@ first(sessions_info_with_parts.sessions).actions.response[4:7]
 # The model is fitted as before, and the two trials count with the part they have:
 
 model_with_parts = full_model(
-    TuringBackend(), IndependentParameters(priors), sessions_info_with_parts
+    TuringBackend(), sessions_info_with_parts, IndependentParameters(priors)
 )
 chain_with_parts = sample(Xoshiro(2), model_with_parts, NUTS(), 500)
 

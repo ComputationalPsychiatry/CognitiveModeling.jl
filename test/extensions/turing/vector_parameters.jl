@@ -68,8 +68,8 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
     @testset "A vector shared by every session: IdenticalParameters" begin
         model = full_model(
             TuringBackend(),
-            IdenticalParameters((; choice_probabilities=Dirichlet(ones(3)))),
             choice_sessions(),
+            IdenticalParameters((; choice_probabilities=Dirichlet(ones(3)))),
         )
         @test Set(keys(rand(Xoshiro(1), model))) ==
             Set([@varname(choice_probabilities.shared)])
@@ -85,8 +85,8 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
     @testset "A vector for each session: IndependentParameters gives each session its column, as a vector of its own" begin
         model = full_model(
             TuringBackend(),
-            IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
             choice_sessions(),
+            IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
         )
         #The vectors of the sessions are the columns of one variable
         sampled = rand(Xoshiro(1), model)
@@ -113,7 +113,7 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
                     (; concentration=CONCENTRATION_PRIOR); distribution=Dirichlet, group_by
                 ),
             ))
-            model = full_model(TuringBackend(), parameters_model, choice_sessions())
+            model = full_model(TuringBackend(), choice_sessions(), parameters_model)
             #Without groups the concentrations are one vector, which isn't taken for values of groups, and with groups one vector for each group, under its name
             if group_by === nothing
                 concentration_values = Dict(
@@ -154,7 +154,7 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
             IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
             IdenticalParameters((; lapse_rate=Beta(1, 9))),
         )
-        model = full_model(TuringBackend(), parameters_model, choice_sessions())
+        model = full_model(TuringBackend(), choice_sessions(), parameters_model)
         values = Dict(
             @varname(choice_probabilities.sessions) => reduce(hcat, CHOICE_PROBABILITIES),
             @varname(lapse_rate.shared) => 0.1,
@@ -171,19 +171,19 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
     @testset "Fixed vectors: FixedParameters for every session, and SessionwiseFixedParameters for each" begin
         shared = full_model(
             TuringBackend(),
-            FixedParameters((; choice_probabilities=[0.2, 0.3, 0.5])),
             choice_sessions(),
+            FixedParameters((; choice_probabilities=[0.2, 0.3, 0.5])),
         )
         @test logjoint(shared, (;)) ≈ choices_by_hand(fill([0.2, 0.3, 0.5], 3))
         each = full_model(
             TuringBackend(),
+            choice_sessions(),
             SessionwiseFixedParameters(
                 Dict(
                     id => (; choice_probabilities=p) for
                     (id, p) in zip(["S1", "S2", "S3"], CHOICE_PROBABILITIES)
                 ),
             ),
-            choice_sessions(),
         )
         @test logjoint(each, (;)) ≈ choices_by_hand(CHOICE_PROBABILITIES)
     end
@@ -191,8 +191,8 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
     @testset "The domain of a vector is checked inside the model, and an element outside it is named by its position" begin
         model = full_model(
             TuringBackend(),
-            IdenticalParameters((; choice_probabilities=filldist(Normal(0.3, 0.3), 3))),
             choice_sessions(),
+            IdenticalParameters((; choice_probabilities=filldist(Normal(0.3, 0.3), 3))),
         )
         @test_throws ParameterDomainError(
             "The parameter choice_probabilities of a cognitive model of type ChoosesWithProbabilities has choice_probabilities[2] = -0.1, which is outside its domain, from 0 to 1.",
@@ -200,8 +200,8 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
         #A number where the domain takes a vector is named too
         number_model = full_model(
             TuringBackend(),
-            IdenticalParameters((; choice_probabilities=Beta(2, 2))),
             choice_sessions(),
+            IdenticalParameters((; choice_probabilities=Beta(2, 2))),
         )
         @test_throws ParameterDomainError(
             "The parameter choice_probabilities of a cognitive model of type ChoosesWithProbabilities is 0.5, of type Float64, but its domain takes values of type AbstractVector{Real}.",
@@ -211,8 +211,8 @@ const CONCENTRATION_PRIOR = filldist(Gamma(2, 2), 3)
     @testset "A fit with NUTS gives each session its vector, which get_session_parameters reads" begin
         model = full_model(
             TuringBackend(),
-            IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
             choice_sessions(),
+            IndependentParameters((; choice_probabilities=Dirichlet(ones(3)))),
         )
         chain = sample(Xoshiro(1), model, NUTS(), 50; progress=false)
         session_parameters = get_session_parameters(model, chain)

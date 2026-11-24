@@ -9,8 +9,8 @@ make the full model of one, such as [`TuringBackend`](@ref).
 abstract type AbstractInferenceBackend end
 
 """
-    full_model(backend::AbstractInferenceBackend, cognitive_parameters_model,
-               sessions_info::MultipleSessionsInfo;
+    full_model(backend::AbstractInferenceBackend, sessions_info::MultipleSessionsInfo,
+               cognitive_parameters_model;
                environment_parameters_model=NoParameters(),
                downstream_model=NoDownstreamModel(), fixed_cognitive_parameters=(;),
                fixed_environment_parameters=(;), keywords...)
@@ -35,23 +35,21 @@ function full_model end
 function full_model(backend::AbstractInferenceBackend, arguments...; keywords...)
     return throw(
         ArgumentError(
-            "There is no full_model method for $(nameof(typeof(backend)))() with arguments of the types $(map(typeof, arguments)). Load the package of the inference backend, such as Turing.jl for TuringBackend(), and give a parameter model and a MultipleSessionsInfo, or a SessionInfo and a parameter model.",
+            "There is no full_model method for $(nameof(typeof(backend)))() with arguments of the types $(map(typeof, arguments)). Load the package of the inference backend, such as Turing.jl for TuringBackend(), and give a MultipleSessionsInfo or a SessionInfo, and then a parameter model.",
         ),
     )
 end
 
-#A single session is fitted as a set of one session, whose data identifier names its entries in the chains of a fit. The
-#parameter model is a parameter model, or a tuple or a NamedTuple of them, which keeps the method apart from those of the
-#backends, which take the parameter model first
+#A single session is fitted as a set of one session, whose data identifier names its entries in the chains of a fit
 function full_model(
     backend::AbstractInferenceBackend,
     session_info::SessionInfo,
-    cognitive_parameters_model::Union{AbstractParametersModel,Tuple,NamedTuple};
+    cognitive_parameters_model;
     session_id=:session,
     keywords...,
 )
     sessions_info = MultipleSessionsInfo([session_info], [session_id])
-    return full_model(backend, cognitive_parameters_model, sessions_info; keywords...)
+    return full_model(backend, sessions_info, cognitive_parameters_model; keywords...)
 end
 
 """

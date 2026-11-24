@@ -9,7 +9,7 @@
     )
     sessions_info = MultipleSessionsInfo([session_info], ["S1"])
     @test_throws "There is no full_model method for TuringBackend() with arguments of the types" full_model(
-        TuringBackend(), FixedParameters((; probability=0.5)), sessions_info
+        TuringBackend(), sessions_info, FixedParameters((; probability=0.5))
     )
     #A single session is passed on as a set of one session, so the same error names the package
     @test_throws "There is no full_model method for TuringBackend() with arguments of the types" full_model(

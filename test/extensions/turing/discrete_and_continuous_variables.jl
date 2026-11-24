@@ -34,8 +34,8 @@ end
         ))
         model = full_model(
             TuringBackend(),
-            parameters_model,
             sessions_for_test(LearnsOrNot(); impute_missing_actions=true),
+            parameters_model,
         )
         priors = Turing.DynamicPPL.extract_priors(model)
         names = collect(keys(priors))
@@ -78,10 +78,10 @@ end
         uses_rewards = RegressionParameter(Intercept(Normal(0, 1)); family=BernoulliLogit)
         model = full_model(
             TuringBackend(),
-            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
             sessions_for_test(
                 LearnsOrNot(), REGRESSION_FULL_TABLE; impute_missing_actions=false
             ),
+            HierarchicalRegressionParameters((; learning_rate, uses_rewards)),
         )
         priors = Turing.DynamicPPL.extract_priors(model)
         names = collect(keys(priors))
@@ -99,8 +99,8 @@ end
     @testset "A model without discrete variables has none" begin
         model = full_model(
             TuringBackend(),
-            IndependentParameters(FULL_PRIORS),
             sessions_for_test(; impute_missing_actions=false),
+            IndependentParameters(FULL_PRIORS),
         )
         priors = Turing.DynamicPPL.extract_priors(model)
         names = collect(keys(priors))

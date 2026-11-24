@@ -121,8 +121,8 @@ end
                                                        full_model_cases(DistributionsJl())
         model = full_model(
             TuringBackend(),
-            case.parameters_model,
-            case.sessions_info;
+            case.sessions_info,
+            case.parameters_model;
             case.full_model_keywords...,
         )
         values = rand(Xoshiro(2), model)

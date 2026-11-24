@@ -4,8 +4,8 @@
 #The warnings and the preparation are done here, when the model is made, and not in the model, whose body is differentiated and runs on every evaluation: a warning holds a try block, which Mooncake can't differentiate
 function CognitiveModeling.full_model(
     ::TuringBackend,
-    cognitive_parameters_model,
-    sessions_info::MultipleSessionsInfo;
+    sessions_info::MultipleSessionsInfo,
+    cognitive_parameters_model;
     environment_parameters_model=NoParameters(),
     downstream_model=NoDownstreamModel(),
     fixed_cognitive_parameters::NamedTuple=(;),

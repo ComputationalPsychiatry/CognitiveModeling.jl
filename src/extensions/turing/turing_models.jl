@@ -232,8 +232,8 @@ variables into the parameters.
 function turing_multiple_behavioral_sessions end
 
 """
-    full_model(::TuringBackend, cognitive_parameters_model,
-               sessions_info::MultipleSessionsInfo;
+    full_model(::TuringBackend, sessions_info::MultipleSessionsInfo,
+               cognitive_parameters_model;
                environment_parameters_model=NoParameters(),
                downstream_model=NoDownstreamModel(), fixed_cognitive_parameters=(;),
                fixed_environment_parameters=(;), parallelization=SerialSessions(),
@@ -249,14 +249,14 @@ the model is [`turing_full_model`](@ref) of the prepared parts. This needs Turin
 loaded.
 
 # Arguments
+- `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
+  [`MultipleSessionsInfo`](@ref).
 - `cognitive_parameters_model`: the parameter model of the cognitive model, which gives or
   estimates its parameters for every session: a subtype of
   [`AbstractParametersModel`](@ref), such as [`IndependentParameters`](@ref) with a prior
   for each parameter. A tuple of parameter models, or a `NamedTuple` of them, is made into a
   [`CompositeParameters`](@ref) of them, with each part of a `NamedTuple` under its name. So
   is a tuple or a `NamedTuple` given as `environment_parameters_model`.
-- `sessions_info::MultipleSessionsInfo`: the sessions, prepared once with
-  [`MultipleSessionsInfo`](@ref).
 - `environment_parameters_model=NoParameters()`: the parameter model of the environment
   model of the sessions, when they have one. By default the environment's parameters take
   its default values, and [`FixedParameters`](@ref) gives others. When they are estimated,
@@ -355,7 +355,7 @@ cognitive_parameters_model = IndependentParameters((;
     inverse_temperature = LogNormal(0, 1),
 ))
 
-model = full_model(TuringBackend(), cognitive_parameters_model, sessions_info)
+model = full_model(TuringBackend(), sessions_info, cognitive_parameters_model)
 chain = sample(model, NUTS(), 1000)
 
 #The parameters and the expected rewards of every session, for each sample
@@ -367,12 +367,12 @@ returned_values[1].saved_trajectories[2].states
 sessions_without_saving = MultipleSessionsInfo(
     sessions_info; save_cognitive_trajectories = SaveTrajectories(),
 )
-unsaved = full_model(TuringBackend(), cognitive_parameters_model, sessions_without_saving)
+unsaved = full_model(TuringBackend(), sessions_without_saving, cognitive_parameters_model)
 chain = sample(unsaved, NUTS(), 1000)
 returned_values = returned(model, chain)
 ```
 """
-full_model(::TuringBackend, cognitive_parameters_model, sessions_info::MultipleSessionsInfo)
+full_model(::TuringBackend, sessions_info::MultipleSessionsInfo, cognitive_parameters_model)
 
 #The parts are prepared by full_model, outside the model's body, which is differentiated
 """
